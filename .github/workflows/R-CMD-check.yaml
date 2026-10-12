@@ -28,4 +28,5 @@ jobs:
       - uses: r-lib/actions/setup-renv@v2
 
       - name: Run tests
-        run: Rscript tests/testthat.R
+        run: shiny::runTests(".", filter = "^testthat\\.R$")
+        shell: Rscript {0}
