@@ -5,5 +5,4 @@
 .Renviron
 .DS_Store
 *.Rproj
-renv/*
 .env
