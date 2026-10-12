@@ -1,0 +1,6 @@
+write_history_id,item_number,entity_name,record_identifier,action,attribute_name,old_value,new_value
+1,1,wave,"{""wave_id"":1}",Update,respondent_count,1400,1450
+1,2,wave,"{""wave_id"":1}",Update,name,Wave 1,Baseline
+2,1,subject,"{""subject_id"":5}",Insert,name,NA,Respondent's Parents
+3,1,wave,"{""wave_id"":2}",Update,name,Wave 2,Round 2
+4,1,answer_option,"{""answer_option_id"":39}",Delete,standardized_label,Sometimes,NA

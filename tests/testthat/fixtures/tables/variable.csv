@@ -1,0 +1,10 @@
+variable_key,questionnaire_id,component_id,matr_id,display_order,label,respondent_count,subject_id
+1,1,3,AH01DB,1,Date of birth,1450,1
+2,1,4,AH02SM,1,Smokes now,1450,1
+3,1,5,AH02CG,1,Cigarettes per day,310,1
+4,1,7,AH03DR,1,Doctor visits,1450,
+5,2,9,KQ01SD,1,Felt sad,640,1
+6,3,9,KP01SD,1,Felt sad,598,1
+7,4,11,MQ01SP,1,Smoked while pregnant,610,1
+8,4,4,MQ02SM,1,Smokes now,610,1
+9,4,14,MQ03CH,1,Number of children,610,3

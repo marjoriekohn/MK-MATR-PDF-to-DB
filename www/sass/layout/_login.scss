@@ -1,0 +1,74 @@
+// The login screen, and the menu under the signed-in name
+.login-screen {
+  position: fixed;
+  inset: 0;
+  z-index: 1500;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1.5rem;
+  background: $vcu-white;
+}
+
+.login-card {
+  width: 100%;
+  max-width: 24rem;
+  padding: 2rem;
+  border: 1px solid rgba($vcu-gray, 0.35);
+  border-top: 6px solid $vcu-gold;
+  border-radius: $border-radius;
+  background: $vcu-white;
+  box-shadow: 0 0.75rem 2rem rgba($vcu-black, 0.08);
+}
+.login-brand {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 1.25rem;
+  color: $vcu-gray;
+  font-size: 0.85rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+.login-brand-mark { width: 0.75rem; height: 0.75rem; background: $vcu-gold; }
+.login-title { margin: 0 0 0.25rem; font-size: 1.6rem; }
+.login-text { margin: 0 0 1.25rem; color: $vcu-gray; }
+.login-field.shiny-input-container { width: 100% !important; margin-bottom: 0.9rem; }
+.login-button {
+  margin-top: 0.25rem;
+  .spinner-border { margin-right: 0.35rem; vertical-align: -0.15em; }
+}
+// While a link is on its way, or the one it brought back is signing in (www/js/site.js): the button
+// can't be pressed again.
+.login-card.is-busy .login-button:disabled { opacity: 0.85; cursor: progress; }
+.login-message:empty { display: none; }
+.login-note {
+  margin: 1rem 0 0;
+  padding: 0.6rem 0.8rem;
+  border-left: 4px solid $vcu-gold;
+  border-radius: $border-radius;
+  background: rgba($vcu-gold, 0.15);
+  font-size: 0.9rem;
+  &.is-problem { border-left-color: $vcu-red; background: rgba($vcu-red, 0.08); }
+}
+
+// ------ The menu under the signed-in name ------------------------------------
+.navbar-user-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.4rem 0.6rem;
+  border: 0;
+  color: $vcu-white;
+  font-size: 0.9rem;
+  &:hover, &:focus-visible, &.show { color: $vcu-gold; }
+}
+.navbar-user-menu {
+  min-width: 15rem;
+  border: 2px solid $vcu-black;
+  .dropdown-item { padding: 0.5rem 1rem; &:hover, &:focus { background: rgba($vcu-gold, 0.25); color: $vcu-black; } }
+}
+.navbar-user-who { padding: 0.5rem 1rem; }
+.navbar-user-email { color: $vcu-gray; font-size: 0.85rem; overflow-wrap: anywhere; }
+.navbar-user-role { color: $vcu-gray; font-size: 0.8rem; letter-spacing: 0.04em; text-transform: uppercase; }

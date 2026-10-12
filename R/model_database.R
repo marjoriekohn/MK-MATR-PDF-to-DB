@@ -1,11 +1,12 @@
 # ------ The MATR database ----------------------------------------------------------
 # The live tables (REGISTRY, STUDY, QUESTIONNAIRE, WAVE...) and the drafts staff
 # are still working on (DRAFT and its detail tables) are in a PostgreSQL database that
-# Supabase hosts. The site talks to it through Supabase's REST API:
+# Supabase hosts. The site talks to it through Supabase's REST API, as this does
+# from a terminal:
 #   curl "$SUPABASE_URL/rest/v1/registry?select=name,abbreviation" -H "apikey: $SUPABASE_SECRET_KEY"
-#
-# The secret key gets past Row Level Security, which hides STAFF, WRITE_HISTORY
-# and the drafts from the publishable key, so it never goes to a browser or into
+# Only this server holds the key; the browser never talks to the database. The
+# secret key gets past Row Level Security, which hides STAFF, WRITE_HISTORY and
+# the drafts from the publishable key, so it never goes to a browser or into
 # a log.
 #
 # This file is the only place that makes requests to the database. Every other
@@ -270,11 +271,11 @@ database_problem <- function(response) {
     ))
   }
   switch(as.character(status),
-         "401" = ,
-         "403" = "The MATR database turned down the key. Check SUPABASE_SECRET_KEY in the .env file.",
-         "404" = paste("The MATR database doesn't have that table:", message),
-         "409" = paste("The MATR database wouldn't save that:", message),
-         sprintf("The MATR database had a problem (%s): %s", status, message)
+    "401" = ,
+    "403" = "The MATR database turned down the key. Check SUPABASE_SECRET_KEY in the .env file.",
+    "404" = paste("The MATR database doesn't have that table:", message),
+    "409" = paste("The MATR database wouldn't save that:", message),
+    sprintf("The MATR database had a problem (%s): %s", status, message)
   )
 }
 

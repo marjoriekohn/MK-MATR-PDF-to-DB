@@ -1,0 +1,8 @@
+.form-control, .form-select, .selectize-input {
+  border: 1px solid $vcu-gray;
+  border-radius: $border-radius;
+  color: $vcu-black;
+  background-color: $vcu-white;
+  &:focus { border-color: $vcu-gold; box-shadow: 0 0 0 0.2rem rgba($vcu-gold, 0.5); }
+}
+.selectize-dropdown .active { background: $vcu-gold; color: $vcu-black; }

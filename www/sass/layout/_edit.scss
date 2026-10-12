@@ -1,0 +1,329 @@
+// Make an edit page (make_edit, edit_find and edit_change modules)
+$edit-line: rgba($vcu-gray, 0.35);
+
+.edit-page {
+  h2 { margin: 0; font-size: 1.15rem; }
+  h3 { font-size: 1rem; }
+}
+
+// ------ Steps ----------------------------------------------------------------------
+.edit-steps {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem 1.25rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: 0.9rem;
+}
+.edit-step { display: inline-flex; align-items: center; gap: 0.4rem; color: $vcu-gray; }
+.edit-step-mark {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.5rem;
+  height: 1.5rem;
+  border: 2px solid rgba($vcu-gray, 0.6);
+  border-radius: 50%;
+  font-size: 0.75rem;
+  font-weight: 700;
+}
+.edit-step.is-done .edit-step-mark { border-color: $vcu-black; background: $vcu-black; color: $vcu-white; }
+.edit-step.is-current { color: $vcu-black; font-weight: 700; }
+.edit-step.is-current .edit-step-mark { border-color: $vcu-black; background: $vcu-gold; color: $vcu-black; }
+
+// ------ The sentence ------------------------------------------------------------------
+.edit-sentence-card .card-body { padding: 1.5rem; }
+
+.edit-sentence {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.6rem 0.75rem;
+  font-weight: 500;
+  line-height: 1.3;
+
+  .shiny-input-container { width: auto; max-width: 100%; margin: 0; }
+}
+
+// The two blanks, drawn as words that can be changed
+.sentence-select {
+  width: auto;
+  max-width: 100%;
+  padding: 0.1rem 2.25rem 0.1rem 0.6rem;
+  border: 2px solid $vcu-black;
+  border-bottom: 5px solid $vcu-gold;
+  background-color: rgba($vcu-gold, 0.12);
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+  &:focus { border-color: $vcu-black; border-bottom-color: $vcu-gold; }
+}
+// Deleting is drawn in red from the moment it's picked
+.edit-sentence:has(option[value="delete"]:checked) .shiny-input-container:first-of-type .sentence-select {
+  border-bottom-color: $vcu-red;
+  background-color: rgba($vcu-red, 0.1);
+}
+
+.edit-hint { margin: 0.75rem 0 0; color: $vcu-gray; }
+
+// ------ Notes ------------------------------------------------------------------------------
+.edit-callout {
+  display: flex;
+  gap: 0.75rem;
+  margin: 0 0 1rem;
+  padding: 0.9rem 1rem;
+  border: 1px solid $edit-line;
+  border-left: 6px solid $vcu-gray;
+  border-radius: $border-radius;
+  background: rgba($vcu-gray, 0.06);
+
+  p { margin: 0 0 0.5rem; &:last-child { margin-bottom: 0; } }
+  ul { margin: 0.25rem 0 0; padding-left: 1.1rem; }
+
+  &.is-warning { border-left-color: $vcu-gold; background: rgba($vcu-gold, 0.14); }
+  &.is-danger { border-color: $vcu-red; background: rgba($vcu-red, 0.07); .edit-callout-icon { color: $vcu-red; } }
+}
+.edit-callout-icon { flex-shrink: 0; padding-top: 0.15rem; }
+.edit-callout-body { flex: 1; min-width: 0; }
+.edit-callout-title { display: block; margin-bottom: 0.25rem; }
+
+// ------ Finding the row ---------------------------------------------------------------------
+.edit-find-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.25rem 1rem;
+}
+.edit-find-count { color: $vcu-gray; font-size: 0.9rem; }
+
+.edit-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(19rem, 1fr));
+  gap: 0.9rem;
+  margin: 1rem 0;
+}
+
+.edit-card {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.5rem;
+  padding: 1rem 1.1rem;
+  border: 1px solid $edit-line;
+  border-radius: $border-radius;
+  background: $vcu-white;
+
+  &:hover:not(.is-selected) { border-color: $vcu-black; }
+  &.is-selected { border-color: $vcu-black; box-shadow: inset 5px 0 0 $vcu-gold, 0 0 0 1px $vcu-black; }
+  &.is-selected.is-danger { box-shadow: inset 5px 0 0 $vcu-red, 0 0 0 1px $vcu-black; }
+  .btn { margin-top: auto; }
+}
+.edit-card-head { display: flex; align-items: flex-start; gap: 0.5rem; width: 100%; }
+.edit-card-title { margin: 0; font-size: 1rem; font-weight: 700; overflow-wrap: anywhere; }
+.edit-card-subtitle { margin: 0; color: $vcu-gray; font-size: 0.9rem; }
+.edit-card-facts { display: flex; flex-wrap: wrap; gap: 0.35rem; }
+.edit-card-warn {
+  margin: 0;
+  padding: 0.25rem 0.5rem;
+  border-radius: $border-radius;
+  background: rgba($vcu-gold, 0.25);
+  font-size: 0.85rem;
+  font-weight: 500;
+}
+
+.edit-picked { margin: 1rem 0; .edit-card { max-width: 40rem; } }
+.edit-picked-change { margin-top: 0.5rem; }
+
+.edit-more { text-align: center; margin-bottom: 1rem; }
+.edit-empty { padding: 1.5rem; border: 2px dashed $edit-line; border-radius: $border-radius; color: $vcu-gray; text-align: center; }
+
+.btn-delete {
+  border: 1px solid $vcu-red;
+  background: $vcu-white;
+  color: $vcu-red;
+  font-weight: 500;
+  &:hover, &:focus-visible { border-color: $vcu-red; background: $vcu-red; color: $vcu-white; }
+}
+
+// ------ The form ---------------------------------------------------------------------------------
+.edit-columns {
+  display: grid;
+  grid-template-columns: minmax(0, 3fr) minmax(0, 2fr);
+  gap: 1.5rem;
+  align-items: start;
+  margin: 1rem 0;
+}
+@media (max-width: 991.98px) { .edit-columns { grid-template-columns: minmax(0, 1fr); } }
+
+// A field's help under it, and what's wrong or worth knowing
+.field-help { margin: -0.5rem 0 0.75rem; font-size: 0.8rem; }
+.edit-field .field-note:not(:empty) { margin-top: -0.5rem; }
+.field-warning {
+  color: $vcu-black;
+  font-weight: 500;
+  &::before { content: "\25B2"; margin-right: 0.35rem; color: $vcu-gold; }
+}
+
+.edit-field { margin-bottom: 0.25rem; .form-label { font-weight: 500; } }
+
+.edit-part-heading {
+  margin: 1.5rem 0 0.75rem;
+  padding-top: 1rem;
+  border-top: 1px solid $edit-line;
+  h3 { margin: 0; font-size: 1.05rem; }
+  p { margin: 0.2rem 0 0; }
+}
+
+// Written to the form as the page builds it: not for staff
+.edit-token { display: none; }
+
+.locked-field { margin-bottom: 1rem; }
+.locked-value {
+  padding: 0.375rem 0.75rem;
+  border: 1px solid $edit-line;
+  border-radius: $border-radius;
+  background: rgba($vcu-gray, 0.1);
+}
+.locked-reason { margin-top: 0.25rem; }
+
+// ------ What changed ---------------------------------------------------------------------------------
+.edit-changes {
+  margin-top: 1rem;
+  padding: 0.9rem 1rem;
+  border-radius: $border-radius;
+  background: rgba($vcu-gray, 0.08);
+  &.is-empty { color: $vcu-gray; p { margin: 0.25rem 0 0; } }
+}
+.edit-changes-title { font-size: 0.75rem; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; }
+.edit-change { margin-top: 0.5rem; }
+.edit-change-label { display: block; color: $vcu-gray; font-size: 0.8rem; }
+.edit-diff {
+  margin: 0.1rem 0 0;
+  overflow-wrap: anywhere;
+  del { background: rgba($vcu-red, 0.12); color: $vcu-red; text-decoration: line-through; }
+  ins { background: rgba($vcu-gold, 0.4); text-decoration: none; font-weight: 700; }
+}
+
+// ------ Where this appears -------------------------------------------------------------------------------
+.edit-usage-title {
+  margin: 0.75rem 0;
+  padding: 0.75rem 1rem;
+  border-radius: $border-radius;
+  background: $vcu-black;
+  color: $vcu-white;
+  font-weight: 700;
+}
+.edit-usage-list { display: flex; flex-direction: column; gap: 0.6rem; }
+.edit-use {
+  margin-top: 0.6rem;
+  padding: 0.7rem 0.9rem;
+  border: 1px solid $edit-line;
+  border-radius: $border-radius;
+  p { margin: 0.15rem 0 0; }
+}
+.edit-use-where { color: $vcu-gray; font-size: 0.9rem; }
+.edit-use-detail { font-size: 0.9rem; }
+.edit-usage-none { margin: 0.75rem 0 0; color: $vcu-gray; }
+
+// ------ Deleting ------------------------------------------------------------------------------------------
+.delete-banner {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  margin-bottom: 1rem;
+  padding: 1rem 1.25rem;
+  border-radius: $border-radius;
+  background: $vcu-red;
+  color: $vcu-white;
+  font-size: 1.5rem;
+  > div { display: flex; flex-direction: column; min-width: 0; }
+}
+.delete-banner-label { font-size: 0.85rem; letter-spacing: 0.04em; text-transform: uppercase; }
+.delete-banner-title { font-size: 1.2rem; overflow-wrap: anywhere; }
+.delete-about { font-size: 1.05rem; }
+
+.blocked-list { padding-left: 1.1rem; li { margin-bottom: 0.75rem; } }
+.blocked-fix { color: $vcu-black; }
+
+.reach-section { margin: 1.25rem 0; h3 { margin-bottom: 0.5rem; font-size: 1rem; } }
+.reach-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  > li { padding: 0.6rem 0.9rem; border: 1px solid $edit-line; border-radius: $border-radius; margin-bottom: 0.5rem; }
+  p { margin: 0.15rem 0 0; }
+}
+.reach-examples, .blocked-rows {
+  margin: 0.3rem 0 0;
+  padding-left: 1.1rem;
+  color: $vcu-gray;
+  font-size: 0.9rem;
+}
+.blocked-rows { color: $vcu-black; }
+
+.delete-confirm {
+  margin: 1.5rem 0;
+  padding: 1rem 1.25rem;
+  border: 2px solid $vcu-red;
+  border-radius: $border-radius;
+  .shiny-input-container { margin-bottom: 0.5rem; }
+  .form-check-input:checked { background-color: $vcu-red; border-color: $vcu-red; }
+}
+
+// ------ Saved edits ------------------------------------------------------------------------------------------
+.edit-drafts {
+  margin-bottom: 1rem;
+  padding: 0.75rem 1rem;
+  border: 1px solid $edit-line;
+  border-radius: $border-radius;
+  summary { cursor: pointer; font-weight: 500; }
+}
+.edit-draft {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem 1rem;
+  padding: 0.6rem 0;
+  border-top: 1px solid $edit-line;
+  &:first-of-type { margin-top: 0.75rem; }
+  > div:first-child { flex: 1 1 18rem; min-width: 0; }
+  p { margin: 0; }
+}
+.edit-draft-meta { color: $vcu-gray; font-size: 0.85rem; }
+
+// ------ After sending -------------------------------------------------------------------------------------------
+.edit-sent { max-width: 40rem; margin: 1rem 0; .btn { margin-right: 0.5rem; } }
+.edit-sent-mark {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.25rem;
+  height: 2.25rem;
+  margin-right: 0.5rem;
+  border-radius: 50%;
+  background: $vcu-green;
+  color: $vcu-white;
+}
+
+// ------ The bar at the bottom ----------------------------------------------------------------------------------
+// Why the change is being made, then the bar of buttons that stays in view
+.edit-why { margin-top: 1.5rem; }
+.edit-footer {
+  position: sticky;
+  bottom: 0;
+  z-index: 10;
+  margin-top: 1rem;
+  padding: 0.75rem 0;
+  border-top: 1px solid $edit-line;
+  background: $vcu-white;
+}
+.edit-footer-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.5rem 1rem;
+  .edit-footer-note { flex: 1 1 14rem; color: $vcu-gray; font-size: 0.9rem; text-align: right; }
+}

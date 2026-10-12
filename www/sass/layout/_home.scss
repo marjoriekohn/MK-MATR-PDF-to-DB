@@ -1,0 +1,59 @@
+// Home page: a button to each working page, and the newest requests and changes
+$home-line: rgba($vcu-gray, 0.35);
+
+.home-links {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(14rem, 1fr));
+  gap: 1rem;
+  margin: 0 0 1.5rem;
+}
+
+.home-link {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.4rem;
+  padding: 1.25rem;
+  border: 1px solid $vcu-gray;
+  border-radius: $border-radius;
+  background: $vcu-white;
+  color: $vcu-black;
+  text-align: left;
+
+  .fa { margin-bottom: 0.5rem; font-size: 1.35rem; }
+  &:hover { background: rgba($vcu-gold, 0.1); }
+  &:hover, &:focus-visible { border-color: $vcu-black; box-shadow: inset 5px 0 0 $vcu-gold, 0 0 0 1px $vcu-black; }
+  &:focus-visible { outline: 0; }
+}
+.home-link-title { font-size: 1.1rem; font-weight: 700; }
+.home-link-text { color: $vcu-gray; font-size: 0.9rem; }
+
+// ------ The two boxes: Change Requests and Edit history ----------------------
+.home-box {
+  height: 100%;
+  .card-body { display: flex; flex-direction: column; gap: 0.75rem; }
+}
+.home-box-head {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  column-gap: 0.6rem;
+  align-items: baseline;
+  .fa, svg { grid-row: 1 / span 2; font-size: 1.25rem; }
+}
+.home-box-title { margin: 0; font-size: 1.15rem; }
+.home-box-text { grid-column: 2; margin: 0; color: $vcu-gray; font-size: 0.9rem; }
+
+.home-items { display: flex; flex-direction: column; }
+.home-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.6rem;
+  padding: 0.6rem 0;
+  border-top: 1px solid $home-line;
+  .row-badge { margin-top: 0.15rem; }
+}
+.home-item-body { display: flex; flex-direction: column; min-width: 0; }
+.home-item-title { font-weight: 500; overflow-wrap: anywhere; }
+.home-item-meta { color: $vcu-gray; font-size: 0.85rem; }
+.home-empty { margin: 0; padding: 0.6rem 0; border-top: 1px solid $home-line; color: $vcu-gray; }
+.home-box-more { margin-top: auto; display: flex; justify-content: flex-end; }

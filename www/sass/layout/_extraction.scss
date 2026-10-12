@@ -1,0 +1,285 @@
+// The Extraction page: its three modes (Manual, AI-Powered, Existing Draft)
+$extraction-line: rgba($vcu-gray, 0.35);
+
+.extraction-page {
+  h2 { margin: 0; font-size: 1.15rem; }
+  .card-intro .form-text { margin: 0.35rem 0 0; }
+}
+
+// ------ Fields ---------------------------------------------------------------------
+// New or existing questionnaire
+.kind-toggle { margin-bottom: 1rem; }
+
+// * after a required field's label
+.required-mark { margin-left: 0.1rem; }
+
+// Fields side by side, wrapping on narrow screens
+.field-row {
+  display: flex;
+  flex-wrap: wrap;
+  column-gap: 0.75rem;
+  > * { flex: 1 1 11rem; min-width: 0; }
+  > .is-short { flex: 0 0 9rem; }
+  .shiny-input-container { width: 100%; }
+}
+
+// The line under a field: what to fix, if anything. With nothing to say it
+// takes no room, but stays displayed: Shiny doesn't update hidden outputs.
+.field-note {
+  display: block;
+  margin: -0.6rem 0 0.75rem;
+  font-size: 0.8rem;
+  &:empty { margin: 0; }
+}
+.field-problem {
+  color: $vcu-black;
+  font-weight: 500;
+  &::before { content: "\25CF"; margin-right: 0.35rem; color: $field-problem-red; }
+}
+// ...and then its box is outlined in red
+.form-field:has(.field-problem) .form-control {
+  border-color: $field-problem-red;
+  box-shadow: 0 0 0 1px $field-problem-red;
+  &:focus { box-shadow: 0 0 0 0.2rem rgba($field-problem-red, 0.35); }
+}
+
+// ------ Files ----------------------------------------------------------------------
+// Somewhere to drop a file, with its file input's button on the right
+.drop-zone {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.75rem 1rem;
+  margin-bottom: 1rem;
+  padding: 1rem 1.25rem;
+  border: 2px dashed $extraction-line;
+  border-radius: $border-radius;
+  background: rgba($vcu-gray, 0.04);
+
+  &.is-dragged-over { border-color: $vcu-gold; background: rgba($vcu-gold, 0.12); }
+  // as wide as its button (bslib makes inputs 300px)
+  .shiny-input-container.shiny-input-container { width: auto; margin: 0; }
+  .input-group > .form-control { display: none; }
+  .shiny-file-input-progress { margin: 0.4rem 0 0; }
+}
+.drop-zone-icon { color: $vcu-gray; font-size: 1.5rem; }
+// Small files: what's shown beside the button says it arrived
+.quiet-upload .shiny-file-input-progress { display: none; }
+.drop-zone-text { flex: 1 1 14rem; font-size: 0.9rem; }
+
+// Shiny's file buttons, drawn like the other outline buttons
+.btn-file {
+  border: 1px solid $vcu-black;
+  border-radius: $border-radius !important;
+  background: $vcu-white;
+  color: $vcu-black;
+  font-weight: 500;
+  &:hover { background: rgba($vcu-gold, 0.2); }
+}
+
+// The uploaded PDF
+.pdf-file {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  padding: 1rem;
+  border: 1px solid $extraction-line;
+  border-radius: $border-radius;
+}
+.pdf-file-icon {
+  display: flex;
+  flex-shrink: 0;
+  align-items: flex-end;
+  justify-content: center;
+  width: 2.75rem;
+  height: 3.5rem;
+  padding-bottom: 0.35rem;
+  border: 1px solid $extraction-line;
+  border-bottom: 4px solid $vcu-gold;
+  font-size: 0.65rem;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+}
+.pdf-file-name { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+
+// "Replace": a file input drawn as a link
+.pdf-file .file-link.shiny-input-container {
+  width: auto;
+  margin: 0;
+  .input-group > .form-control, .shiny-file-input-progress { display: none; }
+  .btn-file {
+    border: 0;
+    background: none;
+    text-decoration: underline;
+    text-decoration-color: $vcu-gold;
+    text-underline-offset: 0.15em;
+  }
+}
+
+// ------ Reading progress ---------------------------------------------------------------
+.reading-header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 1rem;
+  h2 { margin: 0; }
+  .shiny-text-output { color: $vcu-gray; font-variant-numeric: tabular-nums; }
+}
+
+.reading-steps {
+  display: flex;
+  flex-direction: column;
+  gap: 0.9rem;
+  margin: 1.25rem 0;
+  padding: 0;
+  list-style: none;
+}
+
+.reading-step {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.75rem;
+
+  &.is-not_started { color: $vcu-gray; strong { font-weight: 500; } }
+}
+
+.reading-step-mark {
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  width: 1.75rem;
+  height: 1.75rem;
+  border: 2px solid rgba($vcu-gray, 0.6);
+  border-radius: 50%;
+  font-size: 0.8rem;
+
+  .is-done > & { border-color: $vcu-black; background: $vcu-black; color: $vcu-white; }
+  .is-attention > & { border-color: $vcu-black; background: $vcu-gold; color: $vcu-black; }
+  .is-in_progress > & {
+    border-color: $vcu-black;
+    &::after { content: ""; width: 0.65rem; height: 0.65rem; border-radius: 50%; background: $vcu-gold; animation: reading-pulse 1.5s ease-in-out infinite; }
+  }
+}
+
+@keyframes reading-pulse { 50% { transform: scale(0.6); } }
+@media (prefers-reduced-motion: reduce) { .reading-step-mark::after { animation: none; } }
+
+.reading-note {
+  padding: 0.75rem 1rem;
+  border-radius: $border-radius;
+  background: rgba($vcu-gray, 0.08);
+  font-size: 0.9rem;
+}
+
+.extraction-footer {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-top: 1.5rem;
+  padding-top: 1.25rem;
+  border-top: 1px solid $extraction-line;
+  color: $vcu-gray;
+}
+
+// ------ Existing Draft ------------------------------------------------------------
+.progress-key {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.4rem 1.25rem;
+  margin-bottom: 1.25rem;
+  color: $vcu-gray;
+  font-size: 0.85rem;
+}
+
+.draft-card {
+  display: flex;
+  align-items: center;
+  gap: 1.5rem;
+  margin-bottom: 1rem;
+  padding: 1.25rem 1.5rem;
+  border: 1px solid $extraction-line;
+  border-radius: $border-radius;
+  background: $vcu-white;
+
+  &.is-empty { flex-direction: column; align-items: flex-start; gap: 0.25rem; }
+}
+
+// A page with lines on it
+.draft-thumbnail {
+  display: flex;
+  flex-direction: column;
+  flex-shrink: 0;
+  gap: 0.4rem;
+  width: 4rem;
+  height: 5.1rem;
+  padding: 0.75rem 0.6rem;
+  border: 1px solid $extraction-line;
+  span { height: 3px; background: rgba($vcu-gray, 0.3); }
+  span:nth-child(even) { width: 75%; }
+}
+
+.draft-body { flex: 1; min-width: 0; }
+.draft-title-row { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem; }
+.draft-title { margin: 0; font-size: 1.15rem; }
+.draft-meta { margin: 0.35rem 0 0.6rem; color: $vcu-gray; font-size: 0.9rem; }
+
+.sent-back-note {
+  margin-bottom: 0.6rem;
+  padding: 0.6rem 0.9rem;
+  border-left: 4px solid $vcu-gold;
+  border-radius: $border-radius;
+  background: rgba($vcu-gold, 0.15);
+}
+
+.draft-progress { display: flex; flex-wrap: wrap; gap: 0.35rem 1.25rem; font-size: 0.85rem; }
+.draft-actions { display: flex; flex-shrink: 0; align-items: center; gap: 0.75rem; }
+
+@media (max-width: 767.98px) {
+  .draft-card { flex-wrap: wrap; }
+  .draft-thumbnail { display: none; }
+  .draft-actions { width: 100%; justify-content: flex-end; }
+}
+
+// ------ The Extraction page: one page, three ways to start ---------------------------------
+.mode-intro {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem 1.5rem;
+  margin-bottom: 1.25rem;
+
+  .subhead { margin: 0; }
+}
+.mode-intro-aside { display: flex; align-items: center; gap: 0.75rem; }
+
+// ------ Adding what a drop-down lacks -------------------------------------------------
+// The link under a drop-down, and the pop-up it opens (the Make an edit form for one row)
+.quick-add-link {
+  margin: -0.5rem 0 0.75rem;
+  font-size: 0.85rem;
+}
+.quick-add {
+  // Only the form, without a card or a heading of its own: the pop-up's title and paragraph say what is being added
+  .edit-columns {
+    display: block;
+    margin: 0 0 1rem;
+    > .card:last-child { display: none; }
+    > .card:first-child {
+      border: 0;
+      box-shadow: none;
+      > .card-body { padding: 0; }
+      h2 { display: none; }
+    }
+  }
+  .quick-add-more { margin: 0 0 1rem; font-size: 0.9rem; }
+}
+.modal-footer .quick-add-blocker {
+  flex: 1 1 auto;
+  text-align: right;
+  margin-right: 0.5rem;
+}

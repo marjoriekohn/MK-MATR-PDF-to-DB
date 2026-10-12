@@ -1,0 +1,7 @@
+.navbar, header {
+  background: $vcu-black;
+  border-bottom: 4px solid $vcu-gold;
+  color: $vcu-white;
+  .navbar-brand, .nav-link { color: $vcu-white; &:hover, &.active { color: $vcu-gold; } }
+  .navbar-brand a { color: inherit; text-decoration: none; &:hover { color: $vcu-gold; } }
+}

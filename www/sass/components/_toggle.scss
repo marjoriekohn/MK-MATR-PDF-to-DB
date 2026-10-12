@@ -1,0 +1,12 @@
+// Toggles: side-by-side buttons that pick one value (toggle_buttons() in
+// helpers_layout.R). The buttons are labels, so they're set like the site's
+// other buttons rather than like labels, and they share the room there is
+// rather than spill out of it.
+.toggle-buttons {
+  max-width: 100%;
+  > .btn { min-width: 0; letter-spacing: normal; }
+}
+
+@media (max-width: 575.98px) {
+  .toggle-buttons > .btn { flex: 1 1 0; padding-inline: 0.5rem; }
+}

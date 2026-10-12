@@ -1,0 +1,23 @@
+// How far something has got: Done, In progress, Not started, Needs attention.
+// Each is a different shape as well as a different colour.
+.progress-dot {
+  display: inline-block;
+  flex-shrink: 0;
+  width: 0.85rem;
+  height: 0.85rem;
+  border: 2px solid $vcu-black;
+  border-radius: 50%;
+  background: $vcu-white;
+
+  &.is-done        { background: $vcu-black; }
+  &.is-in_progress { background: linear-gradient(90deg, $vcu-black 50%, $vcu-white 50%); }
+  &.is-not_started { border-color: rgba($vcu-gray, 0.6); }
+  &.is-attention   { background: $vcu-gold; }
+}
+
+.progress-step {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  white-space: nowrap;
+}

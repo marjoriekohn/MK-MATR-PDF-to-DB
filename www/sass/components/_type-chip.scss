@@ -1,0 +1,33 @@
+// Kinds of block (outline rows, details title) and the small notes beside them
+.type-chip {
+  display: inline-block;
+  padding: 0.1rem 0.45rem;
+  border: 1px solid transparent;
+  font-size: 0.75rem;
+  font-weight: 700;
+  line-height: 1.4;
+  border-radius: $border-radius;
+  white-space: nowrap;
+
+  &.is-section     { background: $vcu-gold; color: $vcu-black; }
+  &.is-question    { background: $vcu-black; color: $vcu-white; }
+
+  // Instruction, Note, Definition, Script and Intro: one look, Instruction's width
+  &.is-instruction {
+    min-width: 6.3em;
+    background: $vcu-white;
+    color: $vcu-black;
+    border-color: $vcu-black;
+    text-align: center;
+  }
+}
+
+.row-badge {
+  padding: 0.1rem 0.45rem;
+  border-radius: $border-radius;
+  background: rgba($vcu-gray, 0.12);
+  font-size: 0.75rem;
+  white-space: nowrap;
+
+  &.is-warning { background: $vcu-gold; font-weight: 700; }
+}

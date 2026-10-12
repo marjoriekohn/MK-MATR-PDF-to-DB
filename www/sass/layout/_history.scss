@@ -1,0 +1,148 @@
+// Edit history and Change Requests pages, and the list of changed rows they share
+$history-line: rgba($vcu-gray, 0.35);
+
+// ------ Edit history ---------------------------------------------------------------------
+.history-search { margin-bottom: 1.25rem; }
+
+.history-entry,
+.change-request-card {
+  display: flex;
+  align-items: center;
+  gap: 1.5rem;
+  margin-bottom: 1rem;
+  padding: 1.25rem 1.5rem;
+  border: 1px solid $history-line;
+  border-radius: $border-radius;
+  background: $vcu-white;
+
+  &.is-empty { flex-direction: column; align-items: flex-start; gap: 0.25rem; }
+}
+
+.history-body,
+.change-request-body { flex: 1; min-width: 0; }
+.history-title-row,
+.change-request-title-row { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem; }
+.history-title,
+.change-request-title { margin: 0; font-size: 1.15rem; }
+.history-meta,
+.change-request-meta { margin: 0.35rem 0 0; color: $vcu-gray; font-size: 0.9rem; }
+.history-note,
+.change-request-note { margin: 0.5rem 0 0; }
+.history-actions,
+.change-request-actions { display: flex; flex-shrink: 0; align-items: center; gap: 0.75rem; }
+.history-more { display: flex; justify-content: center; margin: 1.25rem 0; }
+
+// Add, Update, Delete, Extraction: told apart by their words; the colours only back them up.
+.row-badge {
+  &.is-extraction { background: rgba($vcu-green, 0.15); color: $vcu-green; font-weight: 700; }
+  &.is-add { background: rgba($vcu-green, 0.15); color: $vcu-green; font-weight: 700; }
+  &.is-update { background: rgba($vcu-gold, 0.35); font-weight: 700; }
+  &.is-delete { background: rgba($vcu-red, 0.12); color: $vcu-red; font-weight: 700; }
+}
+
+// ------ Change Requests -------------------------------------------------------------------
+.change-request-people {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.35rem 1.25rem;
+  margin-top: 0.6rem;
+  font-size: 0.9rem;
+}
+.change-request-sent-back {
+  margin-top: 0.6rem;
+  padding: 0.5rem 0.8rem;
+  border-left: 4px solid $vcu-red;
+  border-radius: $border-radius;
+  background: rgba($vcu-red, 0.08);
+  font-size: 0.9rem;
+}
+.change-request-note-you {
+  margin-top: 0.6rem;
+  padding: 0.5rem 0.8rem;
+  border-left: 4px solid $vcu-gold;
+  border-radius: $border-radius;
+  background: rgba($vcu-gold, 0.15);
+  font-size: 0.9rem;
+}
+
+@media (max-width: 767.98px) {
+  .history-entry,
+  .change-request-card { flex-wrap: wrap; }
+  .history-actions,
+  .change-request-actions { width: 100%; justify-content: flex-end; }
+}
+
+// ------ An extraction's questionnaire, laid out for the reviewer ------------------------------
+.change-request-questionnaire-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-top: 1rem;
+  padding-top: 0.75rem;
+  border-top: 1px solid $history-line;
+}
+.change-request-questionnaire-title { margin: 0; font-size: 1.1rem; }
+.change-request-questionnaire {
+  max-height: 55vh;
+  margin-top: 0.5rem;
+  padding: 0.75rem 1rem;
+  border: 1px solid $history-line;
+  border-radius: $border-radius;
+  overflow-y: auto;
+}
+.preview-section { margin: 0.75rem 0; }
+.preview-section-title {
+  margin: 0 0 0.5rem;
+  padding-bottom: 0.25rem;
+  border-bottom: 2px solid $vcu-gold;
+  font-size: 1rem;
+}
+.preview-section-body { margin-left: 0.75rem; }
+.preview-block, .preview-question { margin: 0.5rem 0; }
+.preview-block { display: flex; align-items: baseline; gap: 0.5rem; }
+.preview-question-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 0.5rem; }
+.preview-number { font-weight: 700; }
+.preview-text { white-space: pre-wrap; }
+.preview-note { color: $vcu-gray; font-size: 0.85rem; }
+.preview-variables { margin: 0.25rem 0 0 1.5rem; padding-left: 1rem; font-size: 0.9rem; }
+.preview-variable { display: flex; flex-wrap: wrap; align-items: baseline; gap: 0.35rem 0.6rem; }
+.preview-matr-id { font-family: $font-family-monospace; font-weight: 700; }
+.preview-variable-meta { color: $vcu-gray; }
+.preview-choices { flex-basis: 100%; }
+
+// ------ The changed rows ------------------------------------------------------------------
+.change-list { display: flex; flex-direction: column; gap: 0.5rem; max-height: 55vh; overflow-y: auto; }
+
+.change-row {
+  padding: 0.6rem 0.8rem;
+  border: 1px solid $history-line;
+  border-left-width: 4px;
+  border-radius: $border-radius;
+
+  &.is-insert { border-left-color: $vcu-green; }
+  &.is-update { border-left-color: $vcu-gold; }
+  &.is-delete { border-left-color: $vcu-red; }
+}
+
+// The warning under the list, in the dialog before an edit is applied
+.change-list + .edit-callout { margin-top: 1rem; }
+
+.change-row-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 0.25rem 0.6rem; }
+.change-action { font-size: 0.75rem; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; }
+.change-table { font-weight: 700; }
+.change-key { color: $vcu-gray; font-size: 0.85rem; overflow-wrap: anywhere; }
+
+.change-fields {
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr);
+  gap: 0.15rem 1rem;
+  margin: 0.4rem 0 0;
+  font-size: 0.9rem;
+
+  dt { color: $vcu-gray; font-weight: 400; }
+  dd { margin: 0; overflow-wrap: anywhere; }
+  del { background: rgba($vcu-red, 0.12); color: $vcu-red; text-decoration: line-through; }
+  ins { background: rgba($vcu-gold, 0.4); text-decoration: none; font-weight: 700; }
+}

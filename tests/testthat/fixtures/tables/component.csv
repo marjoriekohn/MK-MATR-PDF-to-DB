@@ -1,0 +1,16 @@
+component_id,component_type_id,text
+1,1,A. About you
+2,4,Please answer every question. Skip any you prefer not to answer.
+3,2,What is your date of birth?
+4,2,Do you now smoke cigarettes?
+5,2,How many cigarettes do you smoke on a typical day?
+6,1,B. Your health
+7,2,How often do you see a doctor?
+8,3,The next questions are about your mood.
+9,2,How often in the past week did you feel sad?
+10,1,Mood
+11,2,Did you smoke during your pregnancy?
+12,1,Pregnancy
+13,5,A twin is one of two children born at the same birth.
+14,2,How many children do you have?
+15,7,Thank you for taking part.

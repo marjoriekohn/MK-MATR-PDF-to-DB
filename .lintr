@@ -1,0 +1,8 @@
+linters: linters_with_defaults(
+    line_length_linter(140),
+    object_length_linter(45),
+    assignment_linter(operator = c("<-", "<<-")),
+    object_usage_linter = NULL
+  )
+exclusions: list("renv", "www", "tests/testthat/fixtures", "ui.R" = 1, "server.R" = 1)
+encoding: "UTF-8"

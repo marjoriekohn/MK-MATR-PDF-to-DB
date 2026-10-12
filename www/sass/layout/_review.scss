@@ -1,0 +1,337 @@
+// Review extraction page (review and outline modules)
+$review-line: rgba($vcu-gray, 0.35);
+$code-width: 5.5rem; // wide enough for the Apply to all button under the codes
+
+// ------ Header ---------------------------------------------------------------
+.review-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.75rem 1.5rem;
+  padding-bottom: 1rem;
+  border-bottom: 1px solid $review-line;
+
+  h1 {
+    margin: 0;
+    padding-left: 0.75rem;
+    border-left: 6px solid $vcu-gold;
+    font-size: 1.75rem;
+  }
+  .subhead { margin: 0.25rem 0 0; color: $vcu-gray; }
+}
+
+.review-progress { display: flex; flex-wrap: wrap; align-items: center; gap: 0.75rem; }
+
+// How far the checking has got: a bar that fills as blocks are marked as checked
+.review-structure { display: flex; align-items: center; gap: 0.5rem; }
+.review-structure-label { font-weight: 500; }
+.review-structure-bar {
+  position: relative;
+  width: 12rem;
+  height: 1.5rem;
+  border: 1px solid $vcu-black;
+  border-radius: $border-radius;
+  background: rgba($vcu-gray, 0.15);
+  .progress-bar { background: $vcu-gold; transition: width 0.3s; }
+}
+.review-structure-text {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: $vcu-black;
+  font-size: 0.8rem;
+  font-weight: 700;
+}
+
+.review-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.375rem 0.75rem;
+  border: 1px solid $vcu-black;
+  border-radius: $border-radius;
+  background: $vcu-white;
+  font-weight: 500;
+}
+button.review-pill:hover { background: rgba($vcu-gold, 0.2); }
+
+.pill-count {
+  padding: 0.1rem 0.5rem;
+  border-radius: $border-radius;
+  background: rgba($vcu-gray, 0.15);
+  font-size: 0.8rem;
+
+  &.is-warning { background: $vcu-gold; font-weight: 700; }
+}
+
+// The header's buttons, all the same size
+.review-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+  margin-left: auto;
+  .btn { white-space: nowrap; }
+}
+
+.save-status {
+  color: $vcu-gray;
+  font-size: 0.9rem;
+
+  &.is-dirty {
+    color: $vcu-black;
+    font-weight: 500;
+    &::before { content: "\25CF"; margin-right: 0.35rem; color: $vcu-gold; }
+  }
+}
+.review-header .subhead .row-badge { margin-left: 0.5rem; }
+
+// ------ The one panel: the outline, edited in place -----------------------------------
+.review-page .structure-card > .structure-body {
+  display: flex;
+  flex-direction: column;
+  padding: 0;
+  overflow: hidden;
+}
+.outline-panel {
+  flex: 1 1 0;
+  min-height: 0;
+  overflow: auto;
+}
+.outline-body { padding: 0.5rem 0.75rem 1rem; }
+
+.outline-toolbar {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.25rem 0.5rem;
+  padding: 0.5rem;
+  border-bottom: 1px solid $review-line;
+  background: $vcu-white;
+  .dropdown { margin-right: auto; }
+}
+.to-fix-note { margin-right: 0.5rem; font-size: 0.9rem; font-weight: 500; &.is-clear { color: $vcu-gray; font-weight: 400; } }
+
+.outline-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+// A section's contents, indented under its row
+.outline-node > .outline-list {
+  margin: 0.35rem 0 0.15rem 1.25rem;
+  padding-left: 0.75rem;
+  border-left: 2px dashed $review-line;
+
+  &:empty {
+    min-height: 2.5rem;
+    border: 2px dashed $review-line;
+    border-radius: $border-radius;
+    &::before { content: "Empty section: drag blocks here"; margin: auto; color: $vcu-gray; font-size: 0.85rem; }
+  }
+}
+.outline-node.is-collapsed > .outline-list { display: none; }
+.outline-node.is-collapsed > .outline-row .btn-toggle > * { transform: rotate(-90deg); }
+.outline-node.is-open > .outline-row .btn-toggle.is-details > * { transform: rotate(90deg); }
+
+.outline-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.35rem 0.6rem;
+  border: 1px solid $review-line;
+  border-radius: $border-radius;
+  background: $vcu-white;
+  cursor: pointer;
+
+  &:hover { background: rgba($vcu-gold, 0.08); }
+  &.is-selected { border-color: $vcu-black; box-shadow: inset 5px 0 0 $vcu-gold, 0 0 0 1px $vcu-black; }
+}
+
+.drag-handle, .box-handle, .choice-handle { color: $vcu-gray; cursor: grab; }
+
+.btn-toggle {
+  width: 1.25rem;
+  flex-shrink: 0;
+  padding: 0;
+  border: 0;
+  background: none;
+  > * { transition: transform 0.15s; }
+}
+
+// Display order, right-aligned so the numbers line up down a list
+.outline-order {
+  width: 1.5rem;
+  flex-shrink: 0;
+  color: $vcu-gray;
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+  text-align: right;
+}
+
+.outline-number { flex-shrink: 0; font-weight: 700; }
+
+// The block's words, typed in its row: drawn as plain words until pointed at or typed in
+.outline-text {
+  flex: 1;
+  min-width: 8rem;
+  min-height: 0;
+  padding: 0.2rem 0.4rem;
+  border-color: transparent;
+  background: transparent;
+  resize: none;
+  overflow: hidden;
+  line-height: 1.4;
+  cursor: text;
+  &:hover { border-color: $review-line; }
+  &:focus { border-color: $vcu-gold; background: $vcu-white; box-shadow: 0 0 0 0.2rem rgba($vcu-gold, 0.35); }
+  &::placeholder { color: rgba($vcu-gray, 0.8); font-style: italic; }
+}
+
+.outline-badges { display: flex; flex-shrink: 0; align-items: center; gap: 0.35rem; }
+.outline-problems.is-hidden { display: none; }
+.outline-actions { display: flex; flex-shrink: 0; align-items: center; gap: 0.1rem; }
+.outline-check {
+  &.is-checked { color: $vcu-black; }
+  &.is-all-checked { background: $vcu-black; color: $vcu-white; border-radius: 50%; }
+  &:not(.is-checked) { color: rgba($vcu-gray, 0.7); }
+}
+
+// The words offered as a block's words are typed (review.js)
+.suggest-box {
+  position: absolute;
+  z-index: 1060;
+  display: none;
+  max-height: 16rem;
+  overflow: auto;
+  border: 1px solid $vcu-black;
+  border-radius: $border-radius;
+  background: $vcu-white;
+  box-shadow: 0 0.5rem 1rem rgba($vcu-black, 0.15);
+}
+.suggest-item {
+  padding: 0.35rem 0.6rem;
+  font-size: 0.9rem;
+  cursor: pointer;
+  &:hover, &.is-active { background: rgba($vcu-gold, 0.25); }
+}
+
+// While a block is dragged, its landing spot is a line saying where that is
+.is-drop-target {
+  border-top: 3px solid $vcu-black;
+  > * { display: none; }
+  &::before { content: attr(data-drop-hint); display: block; padding: 0.15rem 0; font-size: 0.8rem; font-weight: 700; }
+}
+
+// The block under the pointer is solid, not see-through (SortableJS sets its
+// opacity inline, hence !important)
+.is-dragged {
+  border-radius: $border-radius;
+  background: $vcu-white;
+  opacity: 1 !important;
+}
+
+// ------ A question's panel: nested under its row --------------------------------------------
+.question-panel {
+  margin: 0.35rem 0 0.5rem 2.75rem;
+  padding: 0.75rem 0.9rem;
+  border: 1px solid $review-line;
+  border-left: 3px solid $vcu-black;
+  border-radius: $border-radius;
+  background: rgba($vcu-gray, 0.03);
+}
+.details-problems { margin: 0 0 0.75rem; ul { margin: 0; padding-left: 1.1rem; } }
+
+.details-field {
+  display: block;
+  margin-bottom: 0.9rem;
+  .form-label { display: block; margin-bottom: 0.3rem; font-weight: 500; }
+}
+
+.field-hint { margin-left: 0.35rem; color: $vcu-gray; cursor: help; }
+
+// Fields side by side: short ones keep their size, the rest share the width
+.details-row {
+  display: flex;
+  flex-wrap: wrap;
+  column-gap: 0.75rem;
+  > .details-field { flex: 1 1 10rem; min-width: 0; }
+  > .is-short { flex: 0 0 auto; }
+}
+
+// The size of the Code column in the choices table
+.is-short .form-control { width: $code-width; }
+
+// ------ Variables and choices -----------------------------------------------
+.variable-cards {
+  margin: 0.5rem 0 0;
+  padding: 0.75rem;
+  border: 1px solid $review-line;
+  border-radius: $border-radius;
+  background: rgba($vcu-gray, 0.2);
+}
+
+.variable-cards-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  h3 { margin: 0; font-size: 1rem; }
+}
+
+.box-list { display: flex; flex-direction: column; gap: 0.6rem; margin-top: 0.5rem; }
+
+.variable-card {
+  padding: 0.6rem;
+  border: 1px solid $review-line;
+  border-radius: $border-radius;
+  background: $vcu-white;
+  .details-field { margin-bottom: 0; }
+}
+
+// One row per variable: its kind, MATR ID, who it's about, its label (and a write-in's answer type), and delete
+.variable-card-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 0.5rem 0.75rem;
+  > .details-field { flex: 1 1 8rem; min-width: 0; }
+  .toggle-buttons, .box-handle, .variable-card-number { margin-bottom: 0.3rem; }
+  .btn-icon { margin-left: auto; margin-bottom: 0.15rem; }
+}
+.variable-card-number { font-weight: 700; }
+
+.choice-table { margin-top: 0.6rem; }
+.choice-list { display: flex; flex-direction: column; gap: 0.3rem; }
+
+.choice-row {
+  display: grid;
+  grid-template-columns: 1.25rem minmax(0, 2fr) $code-width 3.75rem minmax(0, 1.4fr) minmax(0, 1.4fr) 2rem;
+  align-items: center;
+  gap: 0.35rem;
+  .form-check-input { margin: 0 auto; }
+}
+
+.choice-heading {
+  margin-bottom: 0.2rem;
+  color: $vcu-gray;
+  font-size: 0.7rem;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+// Lined up with the choice rows: + Choice under the choices, Apply to all under the codes
+.choice-actions {
+  margin: 1rem 0 0.4rem;
+  align-items: start;
+  .choice-add { grid-column: 2; justify-self: start; }
+  .choice-apply { grid-column: 3; .btn { width: 100%; padding-inline: 0.25rem; } }
+}
+
+.btn-icon { color: $vcu-gray; &:hover { color: $vcu-black; } }

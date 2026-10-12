@@ -1,0 +1,61 @@
+# ------ R version -------------------------------------------------------------
+# The code uses `%||%`, which base R has had since 4.4.
+if (getRversion() < "4.4.0") {
+  stop("This site needs R 4.4 or newer; this is R ", getRversion(), ".", call. = FALSE)
+}
+
+# ------ Load packages ---------------------------------------------------------
+library(shiny)
+library(bslib)
+library(sass)
+
+# ------ R options -------------------------------------------------------------
+# Questionnaire PDFs are larger than Shiny's 5 MB upload limit. This code
+# increases the maximum allowed file upload size in an R Shiny web application
+# from the default 5 MB to 50 MB.
+options(shiny.maxRequestSize = 50 * 1024^2)
+
+# The Gemini API key (GEMINI_KEY) that reads PDFs, the MATR database's address
+# and keys (SUPABASE_URL, SUPABASE_SECRET_KEY, and SUPABASE_PUBLISHABLE_KEY for
+# signing in) and, while developing, who is using the site (STAFF_EMAIL) live
+# in .env, which git ignores. Reading jobs inherit them.
+if (file.exists(".env")) readRenviron(".env")
+
+# ------ Global variables ------------------------------------------------------
+# VCU brand theme: Bootstrap variables in defaults.scss, styles in rules.scss.
+vcu_theme <- bs_theme(
+  version = 5,
+  base_font = font_google("Roboto"),
+  heading_font = font_google("Roboto")
+) |>
+  bs_bundle(sass_layer(
+    defaults = sass_file("www/sass/defaults.scss"),
+    rules = sass_file("www/sass/rules.scss")
+  ))
+
+# Merriweather (subheads/callouts), loaded in ui.R via head tag
+merriweather_link <- tags$link(
+  rel = "stylesheet",
+  href = "https://fonts.googleapis.com/css2?family=Merriweather:wght@400;700&display=swap"
+)
+
+# ------ The MATR database -----------------------------------------------------
+# Everything the site shows and saves is in the MATR database on Supabase: the
+# live tables (registries, studies, questionnaires, waves...) and the drafts and
+# edit proposals staff are still working on. The server talks to it through
+# Supabase REST API (R/model_database.R). `database` is made once here and
+# passed to the modules as `connection`. If the two variables below are missing
+# the site says so when it starts.
+database <- list(url = Sys.getenv("SUPABASE_URL"),
+                 key = Sys.getenv("SUPABASE_SECRET_KEY"))
+
+# How often (milliseconds) a session asks the database whether any extraction
+# draft changed, so staff see each others work and the reading job's progress,
+# and how often it checks on a reading job in case the job has died.
+drafts_poll_ms <- 2000
+reading_check_ms <- 5000
+
+# How often (milliseconds) the Change Requests page asks whether a request was
+# sent, changed, approved or withdrawn, and Make an edit whether one of the
+# edits saved there was sent back.
+change_requests_poll_ms <- 5000

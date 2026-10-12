@@ -1,0 +1,5 @@
+.form-check-input {
+  border-color: $vcu-gray;
+  &:checked { background-color: $vcu-gold; border-color: $vcu-gold; }
+  &:focus { box-shadow: 0 0 0 0.2rem rgba($vcu-gold, 0.5); }
+}

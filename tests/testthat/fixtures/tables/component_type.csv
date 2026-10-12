@@ -1,0 +1,8 @@
+component_type_id,name,description
+1,Section,"Contains other components; holds the printed heading, including any section number."
+2,Question,Requests one or more answers; has variables recording them.
+3,Introduction,Opening text that introduces the questionnaire or a section.
+4,Instruction,Printed directions telling the respondent how to answer.
+5,Definition,Printed explanation of a term used in the questionnaire.
+6,Interviewer Script,Text an interviewer reads aloud or follows.
+7,Note,Any other printed remark.

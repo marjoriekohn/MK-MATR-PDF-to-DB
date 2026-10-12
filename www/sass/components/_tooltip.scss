@@ -1,0 +1,12 @@
+// Hints are sentences, so they read from the left
+.tooltip-inner { text-align: left; }
+
+// The info mark after a field's label that explains it
+.field-tooltip {
+  display: inline-flex;
+  margin-left: 0.35rem;
+  color: $vcu-gray;
+  cursor: help;
+
+  &:hover, &:focus-visible { color: $vcu-black; }
+}

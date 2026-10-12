@@ -1,0 +1,5 @@
+staff_id,name,email,active
+1,Maggie Kohn,maggie.kohn@example.edu,TRUE
+2,Alex Rivera,alex.rivera@example.edu,TRUE
+3,Casey Former,casey.former@example.edu,FALSE
+4,Jordan Lee,jordan.lee@example.edu,TRUE

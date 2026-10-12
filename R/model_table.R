@@ -12,6 +12,10 @@
 #           hold letters (2a, AH25LF)
 #   date    a day, as YYYY-MM-DD
 #   flag    TRUE or FALSE
+#
+# docs/matr_schema.sql is the design, and the live database differs from it:
+# study has methods and acknowledgements, which that file doesn't, and category
+# has no description column, which it does. These are the live columns.
 
 database_tables <- list(
   registry = list(
@@ -164,10 +168,10 @@ table_model_get <- function(connection, table, filters = list()) {
   rows <- database_model_get(connection, table, names(spec$columns), order_by = spec$order_by, filters = filters)
   for (column in names(spec$columns)) {
     rows[[column]] <- switch(spec$columns[[column]],
-                             id = ,
-                             number = as.numeric(rows[[column]]),
-                             flag = as.logical(rows[[column]]),
-                             as.character(rows[[column]])
+      id = ,
+      number = as.numeric(rows[[column]]),
+      flag = as.logical(rows[[column]]),
+      as.character(rows[[column]])
     )
   }
   rows

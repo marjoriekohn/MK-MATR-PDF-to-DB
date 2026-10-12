@@ -1,0 +1,6 @@
+.table {
+  color: $vcu-black;
+  th { background: $vcu-black; color: $vcu-white; font-weight: 500; }
+  td, th { border-color: $vcu-gray; }
+  tbody tr:hover { background: rgba($vcu-gold, 0.25); }
+}

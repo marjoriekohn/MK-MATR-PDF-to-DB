@@ -1,0 +1,4 @@
+respondent_type_id,name,minimum_age,maximum_age,description
+1,Adult,18,,Twins aged 18 and over
+2,Child,5,17,Twins answering for themselves
+3,Parent,18,,A parent answering about their twins

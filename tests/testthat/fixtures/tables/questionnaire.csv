@@ -1,0 +1,5 @@
+questionnaire_id,study_id,respondent_type_id,name,abbreviation,description
+1,1,1,Adult Health and Personality,AHP,"Health, habits and personality of adult twins"
+2,2,2,Kid Questionnaire,KQ,"Answered by the twins themselves"
+3,2,3,Kid Questionnaire,KQP,"The same questions, answered by a parent about each twin"
+4,2,3,Mother Questionnaire,MQ,"Pregnancy, birth and family history"

@@ -1,0 +1,4 @@
+study_id,registry_id,principal_investigator_id,contact_principal_investigator_id,name,status,description,methods,acknowledgements
+1,1,1,4,Adult Health Study,Ongoing,Health habits and personality of adult twins,Mailed questionnaires sent to registry families,
+2,1,2,2,Child Development Study,Ongoing,Development of school-age twins reported by parents,One parent per household answers about each twin,
+3,2,3,,Example Study,Ended,A study with nothing in it yet,,
