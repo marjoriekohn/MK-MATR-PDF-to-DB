@@ -80,7 +80,7 @@
   }
 
   // The message handler can be added straight away; it only receives messages after connecting.
-  if (window.Shiny) Shiny.addCustomMessageHandler('login-ready', function () { showReady(); });
+  if (window.Shiny) Shiny.addCustomMessageHandler('login-ready', function (_ready) { showReady(); });
   jQuery(document).one('shiny:connected', register);
 
   // Enter in the email box presses the button.
