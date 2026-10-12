@@ -1,0 +1,16 @@
+*, *::before, *::after { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  background: $vcu-white;
+  color: $vcu-black;
+}
+
+a {
+  color: $vcu-black;
+  text-decoration-color: $vcu-gold;
+  text-underline-offset: 0.15em;
+  &:hover { color: $vcu-gray; }
+}
+
+:focus-visible { outline: 3px solid $vcu-gold; outline-offset: 2px; }

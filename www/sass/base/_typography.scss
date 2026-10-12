@@ -1,0 +1,30 @@
+// Clear, consistent headings; legible body copy (leading 125-150%).
+// Larger text sits tighter; smaller text is opened up for legibility.
+body {
+  font-family: $font-family-base;
+  line-height: 1.5;
+  letter-spacing: 0.01em;
+}
+
+h1, h2, h3, h4, h5, h6 {
+  font-family: $headings-font-family;
+  line-height: 1.2;
+  color: $vcu-black;
+}
+h1 { letter-spacing: -0.02em; }
+h2 { letter-spacing: -0.015em; }
+h3 { letter-spacing: -0.01em; }
+
+// Merriweather for subheads and callouts
+.subhead, .callout, blockquote {
+  font-family: $font-family-serif;
+  line-height: 1.5;
+}
+.callout, blockquote {
+  border-left: 4px solid $vcu-gold;
+  padding-left: 1rem;
+  color: $vcu-black;
+}
+
+small, .small, label, .form-text { letter-spacing: 0.03em; line-height: 1.4; }
+label, .control-label { font-weight: 500; color: $vcu-black; }

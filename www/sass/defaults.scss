@@ -1,0 +1,62 @@
+/* override Bootstrap variables before Bootstrap is compiled. */
+
+// ------ VCU brand palette (only these colors are allowed) --------------------
+$vcu-gold:  #FFB300; // RGB 255,179,0
+$vcu-white: #FFFFFF;
+$vcu-black: #000000;
+$vcu-gray:  #63656A; // RGB 99,101,106
+
+// VCU's accent colors. Red for warnings and errors, green for checkmarks and
+// success. Purple, blue and light gray aren't used yet.
+$vcu-red:        #B02E01;
+$vcu-green:      #0B652E;
+$vcu-purple:     #8E6A90;
+$vcu-blue:       #006894;
+$vcu-light-gray: #DEDEDE;
+
+// just in case we need to change the warning color, its named differently
+$field-problem-red: #B02E01;
+
+
+// ------ Typography -----------------------------------------------------------
+// Web pairing recommended by VCU: Roboto (sans) + Merriweather (serif).
+// Univers / Thunderhouse / 59 Ultra Condensed are print faces;
+// Univers Black 75 is logotype-only and is never used here.
+$font-family-sans-serif: "Roboto", "Helvetica Neue", Arial, sans-serif;
+$font-family-serif:      "Merriweather", Georgia, "Times New Roman", serif;
+$font-family-base:       $font-family-sans-serif;
+$headings-font-family:   $font-family-sans-serif;
+
+// Leading: 125-150% of type size for body copy
+$line-height-base: 1.5;
+$headings-line-height: 1.2;
+$headings-font-weight: 700;
+
+// ------ Bootstrap color mapping (the four brand colors) ----------------------
+$primary:   $vcu-gold;
+$secondary: $vcu-gray;
+$success:   $vcu-gray;
+$info:      $vcu-gray;
+$warning:   $vcu-gold;
+$danger:    $vcu-black;
+$light:     $vcu-white;
+$dark:      $vcu-black;
+
+$body-bg:      $vcu-white;
+$body-color:   $vcu-black;
+$link-color:   $vcu-black;
+$link-hover-color: $vcu-gray;
+$border-color: $vcu-gray;
+
+$btn-color: $vcu-black;
+$navbar-light-color: $vcu-black;
+
+// ------ Corners --------------------------------------------------------------
+// One radius for cards, tags, fields, blocks and buttons, whatever their size.
+// bslib's preset sets 3px (8px for cards), so each is set here.
+$border-radius:      0.4rem;
+$border-radius-sm:   $border-radius;
+$border-radius-lg:   $border-radius;
+$border-radius-xl:   $border-radius;
+$border-radius-xxl:  $border-radius;
+$card-border-radius: $border-radius;
