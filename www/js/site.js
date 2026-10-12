@@ -58,20 +58,30 @@
     showBusy('Sending a sign-in link…');
   });
 
-  function register() {
-    Shiny.addCustomMessageHandler('login-ready', function (_ready) {
-      showReady();
-    });
+   // A link that didn't work comes back with #error=...&error_description=... instead of tokens.
+  function problemInAddress() {
+    const hash = window.location.hash;
+    if (!hash || hash.indexOf('error') === -1) return null;
+    const params = new URLSearchParams(hash.replace(/^#/, ''));
+    history.replaceState(null, '', window.location.pathname + window.location.search);
+    return params.get('error_description') || params.get('error') || 'The sign-in link did not work.';
+  }
 
+// Inputs can only be set once Shiny has connected, so the address is read then, not before.
+  function register() {
     const tokens = tokensInAddress();
     if (tokens) {
       showBusy('Signing in…');
       Shiny.setInputValue('auth_tokens', tokens, { priority: 'event' });
+      return;
     }
+    const problem = problemInAddress();
+    if (problem) Shiny.setInputValue('auth_problem', problem, { priority: 'event' });
   }
 
-  if (window.Shiny && Shiny.addCustomMessageHandler) register();
-  else if (window.jQuery) jQuery(document).one('shiny:connected', register);
+  // The message handler can be added straight away; it only receives messages after connecting.
+  if (window.Shiny) Shiny.addCustomMessageHandler('login-ready', function () { showReady(); });
+  jQuery(document).one('shiny:connected', register);
 
   // Enter in the email box presses the button.
   document.addEventListener('keydown', function (event) {

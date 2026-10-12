@@ -56,6 +56,11 @@ function(input, output, session) {
     if (!is.null(result)) start_site(result$me, result$tokens)
   })
 
+  # A link that Supabase turned down (already used, or expired) says why instead of failing silently.
+  observeEvent(input$auth_problem, {
+    say(paste0("That sign-in link didn't work (", input$auth_problem, "). Request a new one."))
+  })
+
   # Logging out ends the sign-in at Auth and starts the session again, at the
   # login screen.
   observeEvent(input$log_out, {
