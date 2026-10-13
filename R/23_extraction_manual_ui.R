@@ -10,12 +10,6 @@ extraction_manual_ui <- function(id) {
   div(
     class = "extraction-mode extraction-manual",
     `data-ns` = ns(""),
-    mode_intro(
-      paste0(
-        "Type the questionnaire in yourself, with no AI. You build its blocks, questions and choices on the review page, ",
-        "which shows the PDF beside them if you add one."
-      )
-    ),
     card(card_body(h2("Questionnaire PDF (optional)"), uiOutput(ns("pdf_card")))),
     card(card_body(
       div(class = "card-intro", h2("About Questionnaire & Wave")),
