@@ -15,7 +15,7 @@ make_edit_ui <- function(id) {
     `data-ns` = ns(""),
     page_header(
       "Make an edit",
-      "Deleting from the database requests review and approval from another staff member. Adding and updating does not.",
+      "Add, update, or delete an item from the database.",
       uiOutput(ns("steps"), inline = TRUE)
     ),
     uiOutput(ns("drafts")),
