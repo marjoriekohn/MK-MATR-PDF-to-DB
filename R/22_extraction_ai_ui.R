@@ -7,10 +7,6 @@ extraction_ai_ui <- function(id) {
   div(
     class = "extraction-mode extraction-ai",
     `data-ns` = ns(""),
-    mode_intro(
-      "Upload a questionnaire PDF. Gemini extracts the metadata for you.",
-      uiOutput(ns("save_status"), inline = TRUE)
-    ),
     card(card_body(h2("Questionnaire PDF"), uiOutput(ns("pdf_card")))),
     uiOutput(ns("reading")),
     card(card_body(

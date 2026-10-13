@@ -189,6 +189,7 @@ $extraction-line: rgba($vcu-gray, 0.35);
   display: flex;
   flex-wrap: wrap;
   align-items: center;
+  justify-content: center;
   gap: 0.4rem 1.25rem;
   margin-bottom: 1.25rem;
   color: $vcu-gray;
@@ -249,8 +250,7 @@ $extraction-line: rgba($vcu-gray, 0.35);
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  justify-content: space-between;
-  gap: 0.75rem 1.5rem;
+  justify-content: center;
   margin-bottom: 1.25rem;
 
   .subhead { margin: 0; }

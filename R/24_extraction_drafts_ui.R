@@ -8,7 +8,7 @@ extraction_drafts_ui <- function(id) {
     class = "extraction-mode extraction-drafts",
     `data-ns` = ns(""),
     mode_intro(
-      "Drafts that haven't been pushed to the database yet, or were sent back to you.",
+      # "Drafts that haven't been pushed to the database yet, or were sent back to you.",
       uiOutput(ns("whose_toggle"))
     ),
     progress_key(),
@@ -20,7 +20,6 @@ progress_key <- function() {
   item <- function(state, label) span(class = "progress-step", progress_dot(state), label)
   div(
     class = "progress-key",
-    span("Key:"),
     item("done", "Done"),
     item("in_progress", "In progress"),
     item("not_started", "Not started"),
