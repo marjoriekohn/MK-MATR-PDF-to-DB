@@ -12,7 +12,7 @@ home_ui <- function(id) {
       class = "home-links",
       home_link(
         ns("extraction"), "file-arrow-up", "Extraction",
-        "Add a questionnaire: type it in, have an AI read its PDF, or pick up a draft."
+        "Extract questionnaire metadata from a PDF."
       ),
       home_link(
         ns("make_edit"), "pencil", "Make an edit",
