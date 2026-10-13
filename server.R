@@ -10,6 +10,7 @@ function(input, output, session) {
   # the sign-in's tokens, kept in this session only, for signing out
 
   start_site <- function(me, signed_in_tokens = NULL, development = FALSE) {
+    if (!is.null(isolate(signed_in()))) return(invisible()) # already signed in this session
     tokens <<- signed_in_tokens
     removeUI(paste0("#", login_screen_id))
     output$navbar_user <- renderUI(user_menu(me, development))
@@ -53,7 +54,23 @@ function(input, output, session) {
         NULL
       }
     )
-    if (!is.null(result)) start_site(result$me, result$tokens)
+    if (!is.null(result)) {
+      session$sendCustomMessage("auth-keep", input$auth_tokens$refresh_token)
+      start_site(result$me, result$tokens)
+    }
+  })
+
+  # A reload: the browser kept the sign-in's refresh token (www/js/site.js). Auth swaps it for new
+  # tokens, the new refresh token goes back to the browser, and they sign the person in as a link's would.
+  observeEvent(input$auth_resume, {
+    result <- tryCatch(staff_service_resume(database, auth, input$auth_resume), error = function(problem) NULL)
+    if (is.null(result)) {
+      session$sendCustomMessage("auth-forget", TRUE)
+      say("Your sign-in has ended. Sign in again.", kind = "note")
+    } else {
+      session$sendCustomMessage("auth-keep", result$tokens$refresh_token)
+      start_site(result$me, result$tokens)
+    }
   })
 
   # A link that Supabase turned down (already used, or expired) says why instead of failing silently.

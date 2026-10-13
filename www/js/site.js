@@ -6,6 +6,8 @@
 //   * while a link is being sent, or the one that brought the person back is signing them in, the
 //     button says so and can't be pressed again
 //   * Enter in the email box presses the button
+//   * the sign-in’s refresh token is kept in this tab (sessionStorage), so a reload signs the person back in; logging out forgets it.
+
 (function () {
   'use strict';
 
@@ -67,7 +69,14 @@
     return params.get('error_description') || params.get('error') || 'The sign-in link did not work.';
   }
 
-// Inputs can only be set once Shiny has connected, so the address is read then, not before.
+  // The sign-in's refresh token, kept so a reload doesn't sign the person out. sessionStorage lasts
+  // while this tab is open; localStorage would also keep it across tabs and after the browser closes.
+  const keptKey = 'matr-refresh-token';
+  function kept() { try { return sessionStorage.getItem(keptKey); } catch (e) { return null; } }
+  function keep(token) { try { if (token) sessionStorage.setItem(keptKey, token); } catch (e) {} }
+  function forget() { try { sessionStorage.removeItem(keptKey); } catch (e) {} }
+
+  // Inputs can only be set once Shiny has connected, so the address is read then, not before.
   function register() {
     const tokens = tokensInAddress();
     if (tokens) {
@@ -76,14 +85,31 @@
       return;
     }
     const problem = problemInAddress();
-    if (problem) Shiny.setInputValue('auth_problem', problem, { priority: 'event' });
+    if (problem) {
+      Shiny.setInputValue('auth_problem', problem, { priority: 'event' });
+      return;
+    }
+    const refresh = kept();
+    if (refresh) {
+      showBusy('Signing in…');
+      Shiny.setInputValue('auth_resume', refresh, { priority: 'event' });
+    }
   }
 
-  // The message handler can be added straight away; it only receives messages after connecting.
-  if (window.Shiny) Shiny.addCustomMessageHandler('login-ready', function (_ready) { showReady(); });
+  // Shiny requires each handler to take exactly one argument, even when it isn't used.
+  if (window.Shiny) {
+    Shiny.addCustomMessageHandler('login-ready', function (_ready) { showReady(); });
+    Shiny.addCustomMessageHandler('auth-keep', function (token) { keep(token); });
+    Shiny.addCustomMessageHandler('auth-forget', function (_forget) { forget(); });
+  }
   jQuery(document).one('shiny:connected', register);
 
-  // Enter in the email box presses the button.
+  // Logging out forgets the kept sign-in, so the reload that follows lands on the login screen.
+  document.addEventListener('click', function (event) {
+    if (event.target.closest && event.target.closest('#log_out')) forget();
+  });
+
+    // Enter in the email box presses the button.
   document.addEventListener('keydown', function (event) {
     if (event.key !== 'Enter' || event.target.id !== 'login_email') return;
     event.preventDefault();

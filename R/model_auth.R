@@ -1,8 +1,7 @@
 # ------ Signing in: Supabase Auth ---------------------------------------------------------
 # Staff sign in with a link emailed to the address of their Supabase Auth account (the project's
 # Authentication section): there are no passwords. The site talks to Auth's REST API
-# (`{SUPABASE_URL}/auth/v1/...`) with the publishable key, which is meant to be public; the
-# tokens the link brings back stay in this R session and are never logged or saved. Who a
+# (`{SUPABASE_URL}/auth/v1/...`) with the publishable key, which is meant to be public. Who a
 # signed-in user is for the site (their staff row and role) is decided in service_staff.R; this
 # only talks to Auth. Errors are sentences staff can act on.
 #
@@ -24,7 +23,7 @@ auth_model_connection <- function(url = Sys.getenv("SUPABASE_URL"), key = Sys.ge
 #' Email a sign-in link.
 #'
 #' Auth sends the email; clicking the link brings the person back to `redirect_to` with their tokens
-#' after `#`, which the page script hands to the server (`staff_service_from_token()`). Only an
+#' after `#`, which the page script hands to the server (`staff_service_from_tokens()`). Only an
 #' existing account gets a link: nobody signs up this way.
 #'
 #' @param auth The Auth connection, `list(url, key)`; see `auth_model_connection()`.
@@ -52,6 +51,20 @@ auth_model_user <- function(auth, access_token) {
     httr2::req_headers(Authorization = paste("Bearer", access_token), .redact = "Authorization") |>
     auth_perform()
   list(id = user$id, email = user$email)
+}
+
+#' Swap a refresh token for new tokens.
+#'
+#' Auth stops accepting the refresh token it was given, so the new one has to be kept instead.
+#'
+#' @param auth The Auth connection, `list(url, key)`; see `auth_model_connection()`.
+#' @param refresh_token The refresh token.
+#' @return A list with `access_token` and `refresh_token`. An error with a sentence if Auth refused.
+auth_model_refresh <- function(auth, refresh_token) {
+  auth_request(auth, "token") |>
+    httr2::req_url_query(grant_type = "refresh_token") |>
+    httr2::req_body_json(list(refresh_token = refresh_token), auto_unbox = TRUE) |>
+    auth_perform()
 }
 
 #' Sign out.

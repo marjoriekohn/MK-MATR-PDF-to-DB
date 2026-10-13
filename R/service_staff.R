@@ -61,7 +61,7 @@ staff_service_current <- function(connection, email = Sys.getenv("STAFF_EMAIL"))
 #'
 #' @param connection The MATR database, `list(url, key)`; see `model_database.R`.
 #' @param auth The Auth connection, `list(url, key)`; see `auth_model_connection()`.
-#' @param tokens A list with `access_token` and, if there is one, `refresh_token`, from the link.
+#' @param tokens A list with `access_token` and, if there is one, `refresh_token`: from a sign-in link, or from swapping a kept refresh token on a reload (`auth_model_refresh()`).
 #' @return A list: `me` (`list(staff_id, name, role, email)`) and `tokens` (`access_token`,
 #'   `refresh_token`), which the session keeps for signing out. An error with a sentence if the token
 #'   isn't good or the person isn't an active staff member.
@@ -74,6 +74,22 @@ staff_service_from_tokens <- function(connection, auth, tokens) {
     stop(problem)
   })
   list(me = me, tokens = list(access_token = access_token, refresh_token = tokens$refresh_token))
+}
+
+#' Sign in again with a refresh token the browser kept, after a reload.
+#'
+#' Auth swaps it for new tokens and stops accepting the old one, so the browser has to keep the
+#' new `refresh_token` this returns.
+#'
+#' @inheritParams staff_service_from_tokens
+#' @param refresh_token The refresh token the browser kept.
+#' @return As `staff_service_from_tokens()`. An error with a sentence if Auth refused or the person
+#'   isn't an active staff member.
+staff_service_resume <- function(connection, auth, refresh_token) {
+  fresh <- auth_model_refresh(auth, refresh_token)
+  staff_service_from_tokens(connection, auth, list(
+    access_token = fresh$access_token, refresh_token = fresh$refresh_token
+  ))
 }
 
 #' Email a sign-in link.
