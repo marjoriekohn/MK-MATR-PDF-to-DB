@@ -16,7 +16,7 @@ home_ui <- function(id) {
       ),
       home_link(
         ns("make_edit"), "pencil", "Make an edit",
-        "Add, update, or remove an item from the database."
+        "Add, update, or delete an item from the database."
       )
     ),
     layout_columns(
@@ -27,7 +27,7 @@ home_ui <- function(id) {
       ),
       home_box(
         ns, "edit_history", "clock-rotate-left", "Edit history",
-        "The newest changes added to the MATR data.", uiOutput(ns("history"))
+        "The newest changes added to the MATR metadata database.", uiOutput(ns("history"))
       )
     )
   )
