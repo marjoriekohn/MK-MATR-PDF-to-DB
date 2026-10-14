@@ -10,7 +10,7 @@ change_requests_ui <- function(id) {
     `data-ns` = ns(""),
     page_header(
       "Change Requests",
-      "Changes waiting for approval before they go into the MATR data.",
+      "Items waiting for approval before they go into the MATR metadata database.",
       uiOutput(ns("whose_toggle"))
     ),
     p(
@@ -116,7 +116,6 @@ change_request_dialog <- function(record, me, ns, detail) {
         if (!is.null(record$requested_reviewer)) paste("asked", record$requested_reviewer$name %||% "someone")
       ), collapse = " · ")
     ),
-    if (nzchar(record$note %||% "")) p(strong("Why: "), record$note),
     if (extraction) {
       tagList(
         if (!is.null(detail$problem)) {
@@ -129,11 +128,10 @@ change_request_dialog <- function(record, me, ns, detail) {
         },
         div(
           class = "change-request-questionnaire-head",
-          h3(class = "change-request-questionnaire-title", "The questionnaire"),
           pdf_open_button(detail$pdf_url)
         ),
         if (is.null(detail$draft)) {
-          p(class = "form-text", "Its questionnaire couldn't be read. Edit opens it on the review page.")
+          p(class = "form-text", "The questionnaire couldn't be read. Edit opens it on the review page.")
         } else {
           div(class = "change-request-questionnaire", questionnaire_preview_ui(detail$draft))
         }
