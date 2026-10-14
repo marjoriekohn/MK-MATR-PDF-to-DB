@@ -58,7 +58,7 @@ home_server <- function(
       if (is.null(recent)) {
         return(p(class = "home-empty", "The Edit history couldn't be read."))
       }
-      home_item_list(lapply(recent$shown, home_history_item), "Nothing has been added to the MATR data through this site yet.")
+      home_item_list(lapply(recent$shown, home_history_item), "Nothing has been added to the MATR metadata database through this site yet.")
     })
 
     output$change_requests_more <- renderUI({
