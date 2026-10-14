@@ -11,11 +11,6 @@ extraction_ai_ui <- function(id) {
     uiOutput(ns("reading")),
     card(card_body(
       div(
-        class = "card-intro",
-        h2("About Questionnaire & Wave"),
-      ),
-      extraction_info_ui(ns("info")),
-      div(
         class = "extraction-footer",
         uiOutput(ns("footer_note"), inline = TRUE),
         actionButton(ns("go_to_review"), "Go to review", class = "btn-primary", disabled = TRUE)

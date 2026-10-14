@@ -10,16 +10,12 @@ extraction_manual_ui <- function(id) {
   div(
     class = "extraction-mode extraction-manual",
     `data-ns` = ns(""),
-    card(card_body(h2("Questionnaire PDF (optional)"), uiOutput(ns("pdf_card")))),
     card(card_body(
-      div(class = "card-intro", h2("About Questionnaire & Wave")),
-      extraction_info_ui(ns("info")),
-      div(
-        class = "extraction-footer",
-        uiOutput(ns("footer_note"), inline = TRUE),
-        actionButton(ns("start"), "Start typing it in", class = "btn-primary", disabled = TRUE)
-      )
-    ))
+      h2("Questionnaire PDF (optional)"),
+      uiOutput(ns("pdf_card"))
+      ),
+      actionButton(ns("start"), "Start Manual Extraction", class = "btn-primary", disabled = TRUE)
+    )
   )
 }
 
