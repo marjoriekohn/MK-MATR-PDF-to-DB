@@ -37,7 +37,7 @@ extraction_detail_columns <- c(
   model = "model", prompt_version = "prompt_version"
 )
 # ... and of draft.
-extraction_parent_columns <- c(status = "status", summary = "summary", note = "note", submitted = "submitted_at")
+extraction_parent_columns <- c(status = "status", summary = "summary", submitted = "submitted_at")
 # The fields of a record the reading job owns: it saves these, and staff never do.
 extraction_reading_fields <- c(
   "extraction_status", "reading_started", "reading_claimed_at", "reading_pid", "error", "model",
@@ -100,7 +100,6 @@ extraction_model_record <- function(parent, detail) {
     kind = extraction_kind,
     status = parent$status,
     summary = parent$summary,
-    note = parent$note,
     prepared_by = parent$preparer$name,
     prepared_by_id = parent$prepared_by,
     started = database_time(parent$created_at),

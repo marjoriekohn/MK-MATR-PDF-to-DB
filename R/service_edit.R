@@ -789,14 +789,13 @@ edit_open_statuses <- c("Draft", "Sent Back", "Awaiting Review")
 #' @param me Who is preparing it: `list(staff_id, name, role)`.
 #' @param form How to open it again on the form: `action`, `entity`, `scope`, `target`, `values`.
 #' @param built The result of `edit_service_build()`, or `edit_service_unfinished()`.
-#' @param note Why the change is made.
 #' @param status `"Draft"`, or `"Awaiting Review"` to send it for approval. A proposal that was
 #'   sent back, or is waiting for review, keeps that status when it is only saved again.
 #' @param previous The record being saved again, if any; it keeps its id, preparer and start time.
 #' @param reviewer The staff id of the person asked to review it, or `NULL` for no one in particular.
 #' @param now The time to record.
 #' @return A record; see `edit_model_get_all()`. `id` is `NULL` until it is first saved.
-edit_service_record <- function(me, form, built, note, status, previous = NULL, reviewer = NULL, now = Sys.time()) {
+edit_service_record <- function(me, form, built, status, previous = NULL, reviewer = NULL, now = Sys.time()) {
   # A saved change keeps the status it has, unless it is being sent for review.
   if (status == "Draft" && !is.null(previous$status) && previous$status %in% c("Sent Back", "Awaiting Review")) {
     status <- previous$status
@@ -813,7 +812,6 @@ edit_service_record <- function(me, form, built, note, status, previous = NULL, 
     submitted = if (status == "Awaiting Review") format_time(now) else previous$submitted,
     expected_revision = previous$revision,
     summary = built$summary,
-    note = trimws(note %||% ""),
     requested_reviewer = if (!is.null(reviewer) && nzchar(as.character(reviewer))) {
       list(id = as.numeric(reviewer))
     } else if (status == "Awaiting Review") {

@@ -21,8 +21,8 @@ history_service_get_all <- function(connection) {
 #'
 #' @param records The edits, from `history_service_get_all()`.
 #' @param kind `"Add"`, `"Update"` or `"Delete"`; anything else keeps every kind.
-#' @param query Words to find, all of which must be in the edit's sentence, its reason or the
-#'   names of the people behind it, ignoring capitals.
+#' @param query Words to find, all of which must be in the edit's sentence or the names of the
+#'   people behind it, ignoring capitals.
 #' @return The matching records, in the same order.
 history_service_filter <- function(records, kind = "all", query = "") {
   words <- strsplit(tolower(trimws(query %||% "")), "[[:space:]]+")[[1]]
@@ -31,7 +31,7 @@ history_service_filter <- function(records, kind = "all", query = "") {
     if (kind %in% history_kinds && !identical(record$kind, kind)) {
       return(FALSE)
     }
-    text <- tolower(paste(record$summary, record$note, record$prepared_by, record$approved_by))
+    text <- tolower(paste(record$summary, record$prepared_by, record$approved_by))
     all(vapply(words, function(word) grepl(word, text, fixed = TRUE), logical(1)))
   }, records)
 }

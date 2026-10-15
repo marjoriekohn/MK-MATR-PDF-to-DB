@@ -84,8 +84,7 @@ edit_model_signature <- function(connection) {
 #' @return The record as saved, with its id. An error with the database's sentence if it refused.
 edit_model_save <- function(connection, record, staff_id = record$prepared_by_id, new_revision = TRUE) {
   parent <- list(
-    status = record$status, summary = record$summary, note = record$note,
-    submitted_at = record$submitted
+    status = record$status, summary = record$summary, submitted_at = record$submitted
   )
   parent["requested_reviewer"] <- list(record$requested_reviewer$id)
   detail <- list(
@@ -136,7 +135,6 @@ edit_model_record <- function(parent, detail) {
     submitted = database_time(parent$submitted_at),
     revision = parent$revision,
     summary = parent$summary,
-    note = parent$note,
     requested_reviewer = draft_row_person(parent$requested_reviewer, parent$reviewer),
     sent_back = draft_row_sent_back(parent),
     form = content$form,

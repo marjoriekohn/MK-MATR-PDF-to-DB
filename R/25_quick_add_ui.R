@@ -22,11 +22,6 @@ quick_add_dialog <- function(entity, ns, back = FALSE) {
     },
     edit_change_ui(ns("change")),
     uiOutput(ns("duplicates")),
-    textAreaInput(
-      ns("note"), "Why are you adding it? (optional)",
-      rows = 2, width = "100%",
-      placeholder = "Reviewers can see this in the Edit history. Say where the information came from."
-    ),
     footer = tagList(
       actionButton(ns("cancel"), if (back) "Back" else "Cancel", class = "btn-outline-dark"),
       uiOutput(ns("blocker"), inline = TRUE, class = "quick-add-blocker"),
