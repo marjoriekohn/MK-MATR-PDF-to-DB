@@ -8,7 +8,7 @@
 #   stats::setNames(lapply(rev(seq_len(n)), function(i) {
 #     list(
 #       id = as.character(i), kind = c("Add", "Update", "Delete")[i %% 3 + 1], source = "Edit", status = "Applied",
-#       summary = paste("Edit number", i), note = "", prepared_by = "Maggie Kohn", approved_by = "Alex Rivera", approval_required = TRUE,
+#       ummary = paste("Edit number", i), prepared_by = "Maggie Kohn", approved_by = "Alex Rivera", approval_required = TRUE,
 #       prepared = "2026-10-01T10:00:00Z", approved = "2026-10-01T11:00:00Z", applied = "2026-10-01T11:01:00Z"
 #     )
 #   }), rev(seq_len(n)))
@@ -18,8 +18,8 @@
 #   admin <- local_staff("ADMIN")
 #   me <- local_staff()
 #   approver <- local_staff()
-#   added <- local_applied_edit(admin, "respondent_type", "add", respondent_type__name = test_name("Listed"), note = "A new kind of respondent")
-#   approved <- local_approved_delete(me, approver, note = "Added by mistake")
+#   added <- local_applied_edit(admin, "respondent_type", "add", respondent_type__name = test_name("Listed"))
+#   approved <- local_approved_delete(me, approver)
 #   shiny::testServer(edit_history_server, args = history_args(), {
 #     errors <- collect_errors(session)
 #     session$setInputs(kind = "all", search = test_marker)
@@ -36,7 +36,7 @@
 #
 # test_that("a kind narrows the list, and so do words typed", {
 #   admin <- local_staff("ADMIN")
-#   added <- local_applied_edit(admin, "respondent_type", "add", respondent_type__name = test_name("Narrowed"), note = "typo somewhere")
+#   added <- local_applied_edit(admin, "respondent_type", "add", respondent_type__name = test_name("Narrowed"))
 #   shiny::testServer(edit_history_server, args = history_args(), {
 #     session$setInputs(kind = "Add", search = test_marker)
 #     expect_true(as.character(added) %in% names(matching()))
@@ -54,7 +54,7 @@
 #   local_stub("history_service_get_all", function(connection) list())
 #   shiny::testServer(edit_history_server, args = history_args(), {
 #     session$setInputs(kind = "all", search = "")
-#     expect_equal(text_of(output$entries), "Nothing has been added to the MATR data through this site yet.")
+#     expect_equal(text_of(output$entries), "Nothing has been added to the MATR metadata database through this site yet.")
 #   })
 # })
 #
@@ -63,7 +63,7 @@
 #   seen <- local_browser()
 #   type <- local_respondent_type(minimum_age = 18, maximum_age = 99)
 #   new_name <- test_name("Renamed")
-#   changed <- local_applied_edit(admin, "respondent_type", "update", type$respondent_type_id, respondent_type__name = new_name, note = "Typo in the name")
+#   changed <- local_applied_edit(admin, "respondent_type", "update", type$respondent_type_id, respondent_type__name = new_name)
 #   shiny::testServer(edit_history_server, args = history_args(), {
 #     session$setInputs(kind = "all", search = "")
 #     session$setInputs(action = list(action = "open", id = as.character(changed)))

@@ -186,12 +186,12 @@ test_that("new choices take the next code in their box, counting from 1", {
 })
 
 # ------ MATR IDs ---------------------------------------------------------------------
-test_that("MATR IDs from the CSV fill the variables in printed order", {
+test_that("Auto Apply gives the variables the CSV's MATR IDs in printed order", {
   draft <- gold_draft()
   ids <- extraction_service_matr_ids(extraction_model_read_csv(fixture_path("gna_matr_ids.csv")))
   expect_length(ids, nrow(draft$variables))
 
-  expect_message(filled <- draft_service_fill_matr_ids(draft, ids), "the MATR IDs of 251 variables")
+  expect_message(filled <- draft_service_auto_apply_matr_ids(draft, ids), "Gave 251 variables a MATR ID")
   boxes <- filled$variables
   id_for <- function(number) boxes$matr_id[boxes$component_id == block_numbered(filled, number)$id]
   expect_equal(id_for("1a"), "q1a")
@@ -201,7 +201,7 @@ test_that("MATR IDs from the CSV fill the variables in printed order", {
   expect_equal(nrow(draft_service_check(filled, test_lookups())), 0)
 })
 
-test_that("a CSV with too few or too many MATR IDs fills what it can and says so", {
+test_that("a CSV with too few or too many MATR IDs fills what it can, loses nothing and says so", {
   draft <- gold_draft()
   n <- nrow(draft$variables)
   ids <- paste0("id", seq_len(n + 2))
@@ -209,14 +209,56 @@ test_that("a CSV with too few or too many MATR IDs fills what it can and says so
     draft$variables$matr_id[match(tail(draft_service_boxes_in_order(draft), 1), draft$variables$id)]
   }
 
-  expect_message(short <- draft_service_fill_matr_ids(draft, ids[1:(n - 1)]), "the last variable gets none")
+  expect_message(short <- draft_service_auto_apply_matr_ids(draft, ids[1:(n - 1)]), "1 variable still has none")
   expect_true(is.na(last_box(short)))
-  expect_message(long <- draft_service_fill_matr_ids(draft, ids), "its last 2 IDs are left over")
+  expect_message(long <- draft_service_auto_apply_matr_ids(draft, ids), "2 uploaded IDs are left over")
   expect_equal(last_box(long), ids[n])
-  expect_error(draft_service_fill_matr_ids(draft, character()), "no MATR IDs")
+  expect_equal(draft_service_available_matr_ids(long, ids), ids[n + 1:2]) # still offered
+  expect_error(draft_service_auto_apply_matr_ids(draft, character()), "no MATR IDs")
 
   typed <- draft_service_update(draft, "variables", draft$variables$id[1], "matr_id", "  AH1  ")
   expect_equal(typed$variables$matr_id[1], "AH1")
+})
+
+test_that("Auto Apply keeps the MATR IDs already given, unless told to replace them", {
+  draft <- gold_draft()
+  in_order <- draft_service_boxes_in_order(draft)
+  ids <- paste0("id", seq_along(in_order))
+  picked <- draft_service_update(draft, "variables", in_order[2], "matr_id", "id5") # picked by hand
+
+  kept <- suppressMessages(draft_service_auto_apply_matr_ids(picked, ids))
+  of <- function(draft, box) draft$variables$matr_id[draft$variables$id == box]
+  expect_equal(of(kept, in_order[2]), "id5")
+  expect_equal(of(kept, in_order[1]), "id1")
+  expect_equal(of(kept, in_order[3]), "id2") # the next ID no variable has
+  expect_false(any(duplicated(stats::na.omit(kept$variables$matr_id))))
+
+  replaced <- suppressMessages(draft_service_auto_apply_matr_ids(picked, ids, replace = TRUE))
+  expect_equal(of(replaced, in_order[2]), "id2")
+})
+
+test_that("a MATR ID goes to one variable only, typed or picked, and the drop-downs offer the rest", {
+  draft <- gold_draft()
+  boxes <- draft_service_boxes_in_order(draft)
+  draft <- draft_service_update(draft, "variables", boxes[1], "matr_id", "AH1")
+  expect_error(draft_service_update(draft, "variables", boxes[2], "matr_id", " AH1 "), "already the MATR ID of variable")
+  expect_equal(draft_service_update(draft, "variables", boxes[1], "matr_id", "AH1")$variables$matr_id[draft$variables$id == boxes[1]], "AH1")
+  expect_equal(draft_service_available_matr_ids(draft, c("AH1", "AH2", "AH2", " ", "AH3")), c("AH2", "AH3"))
+  expect_message(draft_service_auto_apply_matr_ids(gold_draft(), c("A", "B", "A")), "lists A more than once")
+})
+
+test_that("a new variable copying a write-in has no choices to copy", {
+  draft <- gold_draft()
+  q <- block_numbered(draft, "3#3")$id
+  box <- draft_service_children(draft, "variables", q)$id[1]
+  write_in <- draft_service_update(draft, "variables", box, "variable_type", "open_ended")
+  write_in$variables <- write_in$variables[!(write_in$variables$component_id == q & write_in$variables$id != box), ]
+  added <- draft_service_add_box(write_in, q)
+  after <- draft_service_children(added, "variables", q)
+  expect_equal(nrow(after), 2)
+  expect_equal(after$variable_type, c("open_ended", "open_ended"))
+  expect_equal(nrow(draft_service_children(added, "response_options", after$id[2])), 0)
+  expect_length(draft_service_next_id(draft, "response_options", 0), 0)
 })
 
 # ------ The edges of the rules above ----------------------------------------------------------

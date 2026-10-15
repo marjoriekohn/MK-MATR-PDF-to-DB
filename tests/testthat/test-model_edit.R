@@ -11,7 +11,7 @@
 #   form_record <- list(action = "update", entity = "wave", scope = "", target = key, values = list(wave__name = "Round 2", wave__respondent_count = ""))
 #   list(
 #     wave = wave,
-#     record = edit_service_record(staff, form_record, form_items(form), "Typo", status, now = as.POSIXct("2026-10-02 15:30:12", tz = "UTC"))
+#     record = edit_service_record(staff, form_record, form_items(form), status, now = as.POSIXct("2026-10-02 15:30:12", tz = "UTC"))
 #   )
 # }
 #
@@ -33,7 +33,6 @@
 #   back <- edit_model_get(test_connection, saved$id)
 #   expect_equal(back, saved)
 #   expect_equal(back$summary, made$record$summary)
-#   expect_equal(back$note, "Typo")
 #   expect_equal(back$started, "2026-10-02T15:30:12Z") # the time it was started, as given
 #   expect_null(back$submitted)
 #   expect_equal(back$form$values$wave__name, "Round 2")
@@ -72,11 +71,11 @@
 #   me <- local_staff()
 #   colleague <- local_staff()
 #   saved <- local_edit(me)
-#   edited <- edit_model_save(test_connection, utils::modifyList(saved, list(note = "better reason")), colleague$staff_id)
+#   edited <- edit_model_save(test_connection, utils::modifyList(saved, list(summary = "A better summary")), colleague$staff_id)
 #   expect_equal(edited$prepared_by_id, me$staff_id)
 #   expect_equal(edited$saved_by_id, colleague$staff_id)
 #   expect_equal(edited$saved_by, colleague$name)
-#   expect_equal(edited$note, "better reason")
+#   expect_equal(edited$summary, "A better summary")
 # })
 #
 # test_that("a proposal that isn't in the database any more says so", {
@@ -129,7 +128,7 @@ test_that("only open proposals are listed, and only the preparer's if asked", {
 #   snap <- edit_service_load(test_connection, entity)
 #   key <- as.character(tree$questionnaire$questionnaire_id)
 #   built <- edit_service_build(entity, "delete", snap, edit_service_row(entity, snap, key))
-#   record <- edit_service_record(me, list(action = "delete", entity = "questionnaire", scope = "", target = key, values = list()), built, "", "Draft")
+#   record <- edit_service_record(me, list(action = "delete", entity = "questionnaire", scope = "", target = key, values = list()), built, "Draft")
 #   expect_equal(record$reach$rows_removed, built$plan$reach$total)
 #   saved <- edit_model_save(test_connection, record, me$staff_id)
 #   withr::defer(test_delete("draft", list(draft_id = database_eq(saved$id))))
@@ -140,7 +139,7 @@ test_that("only open proposals are listed, and only the preparer's if asked", {
 # test_that("an unfinished form is saved as typed, without items", {
 #   me <- local_staff()
 #   built <- list(summary = "Unfinished: update a wave", items = NULL)
-#   record <- edit_service_record(me, list(action = "update", entity = "wave", values = list(wave__name = "R")), built, "", "Draft")
+#   record <- edit_service_record(me, list(action = "update", entity = "wave", values = list(wave__name = "R")), built, "Draft")
 #   saved <- edit_model_save(test_connection, record, me$staff_id)
 #   withr::defer(test_delete("draft", list(draft_id = database_eq(saved$id))))
 #   back <- edit_model_get(test_connection, saved$id)

@@ -57,12 +57,10 @@ test_that("an add is one Insert per field filled in, on a row with no ID yet", {
   expect_equal(built$summary, "Added the registry “New Registry”")
 })
 
-test_that("a study is added with its first questionnaire and wave, each pointing at the one before", {
+test_that("a study is added by itself, without a questionnaire or a wave", {
   form <- form_for(
     "study", "add",
-    study__registry_id = "1", study__principal_investigator_id = "2", study__name = "New Study", study__status = "Ongoing",
-    questionnaire__respondent_type_id = "1", questionnaire__name = "First", questionnaire__abbreviation = "F",
-    wave__name = "Wave 1", wave__administered_date = "01/02/2027"
+    study__registry_id = "1", study__principal_investigator_id = "2", study__name = "New Study", study__status = "Ongoing"
   )
   built <- form_items(form)
   lines <- item_lines(built$items)
@@ -70,14 +68,7 @@ test_that("a study is added with its first questionnaire and wave, each pointing
     'Insert study {"study_id":"new:study:1"} registry_id: - -> 1',
     'Insert study {"study_id":"new:study:1"} principal_investigator_id: - -> 2',
     'Insert study {"study_id":"new:study:1"} name: - -> New Study',
-    'Insert study {"study_id":"new:study:1"} status: - -> Ongoing',
-    'Insert questionnaire {"questionnaire_id":"new:questionnaire:1"} study_id: - -> new:study:1',
-    'Insert questionnaire {"questionnaire_id":"new:questionnaire:1"} respondent_type_id: - -> 1',
-    'Insert questionnaire {"questionnaire_id":"new:questionnaire:1"} name: - -> First',
-    'Insert questionnaire {"questionnaire_id":"new:questionnaire:1"} abbreviation: - -> F',
-    'Insert wave {"wave_id":"new:wave:1"} questionnaire_id: - -> new:questionnaire:1',
-    'Insert wave {"wave_id":"new:wave:1"} name: - -> Wave 1',
-    'Insert wave {"wave_id":"new:wave:1"} administered_date: - -> 2027-01-02'
+    'Insert study {"study_id":"new:study:1"} status: - -> Ongoing'
   ))
 })
 
@@ -473,13 +464,13 @@ test_that("a proposal records who, what, why and how to open it again", {
   built <- form_items(form_for("registry", "update", "1", registry__name = "MATR"))
   form <- list(action = "update", entity = "registry", scope = "", target = "1", values = list(registry__name = "MATR"))
   now <- as.POSIXct("2026-10-02 15:30:12", tz = "UTC")
-  record <- edit_service_record(fixture_staff, form, built, "  Typo in the name ", "Draft", now = now)
+  record <- edit_service_record(fixture_staff, form, built, "Draft", now = now)
 
   expect_null(record$id) # the database numbers it when it's first saved
   expect_equal(record$status, "Draft")
   expect_equal(record$prepared_by, "Maggie Kohn")
   expect_equal(record$prepared_by_id, 1L)
-  expect_equal(record$note, "Typo in the name")
+  expect_null(record$note) # no reason is asked for or kept
   expect_null(record$expected_revision) # a new proposal has no revision to check against
   expect_null(record$submitted)
   expect_equal(record$summary, "Changed the name of the registry “Mid-Atlantic Twin Registry”")
@@ -487,7 +478,7 @@ test_that("a proposal records who, what, why and how to open it again", {
 
   record$id <- "5" # as saved
   record$revision <- 3L
-  later <- edit_service_record(fixture_other_staff, form, built, "ok", "Awaiting Review", previous = record, now = now + 60)
+  later <- edit_service_record(fixture_other_staff, form, built, "Awaiting Review", previous = record, now = now + 60)
   expect_equal(later$id, record$id)
   expect_equal(later$prepared_by, "Maggie Kohn")
   expect_equal(later$prepared_by_id, 1L)
@@ -501,11 +492,11 @@ test_that("another open proposal that changes the same row is a conflict", {
   saved_as <- function(record, id) utils::modifyList(record, list(id = id))
   mine <- form_items(form_for("registry", "update", "1", registry__name = "A"))$items
   theirs <- saved_as(
-    edit_service_record(sam, list(), form_items(form_for("registry", "update", "1", registry__abbreviation = "X")), "n", "Awaiting Review"),
+    edit_service_record(sam, list(), form_items(form_for("registry", "update", "1", registry__abbreviation = "X")), "Awaiting Review"),
     "10"
   )
   other_row <- saved_as(
-    edit_service_record(sam, list(), form_items(form_for("registry", "update", "2", registry__name = "Z")), "n", "Draft"),
+    edit_service_record(sam, list(), form_items(form_for("registry", "update", "2", registry__name = "Z")), "Draft"),
     "11"
   )
   withdrawn <- utils::modifyList(theirs, list(id = "12", status = "Withdrawn"))

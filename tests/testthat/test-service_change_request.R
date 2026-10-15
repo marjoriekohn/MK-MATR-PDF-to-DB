@@ -82,7 +82,7 @@ test_that("the requests a person sees: those they can approve (the ones asked of
 #   request <- local_edit(me, type, status = "Awaiting Review")
 #
 #   # the request changed after the approver opened it: what they read isn't what would be applied
-#   newer <- edit_model_save(test_connection, utils::modifyList(request, list(note = "new reason", expected_revision = request$revision)), me$staff_id)
+#   newer <- edit_model_save(test_connection, utils::modifyList(request, list(summary = "A newer summary", expected_revision = request$revision)), me$staff_id)
 #   expect_error(change_request_service_approve(test_connection, request, approver), "changed after you opened it")
 #   history_id <- change_request_service_approve(test_connection, newer, approver)
 #   local_applied(history_id)

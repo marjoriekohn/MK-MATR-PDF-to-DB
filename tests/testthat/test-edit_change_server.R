@@ -130,13 +130,13 @@ test_that("something that is not shared has no such box, and its aside says noth
   })
 })
 
-test_that("a kind that comes with more says what else the database needs, and adds it in the same edit", {
+test_that("adding a study asks only for the study", {
   page <- change_page("study", "add")
   shiny::testServer(edit_change_server, args = change_args(page), {
     draw()
     aside <- text_of(output$impact)
     expect_match(aside, "What you're adding")
-    expect_match(aside, "It comes with more The database needs a questionnaire and a wave for it, so you'll add them in the same edit.")
+    expect_false(grepl("It comes with more", aside))
     expect_match(text_of(output$main), "Fill in the details")
   })
 })

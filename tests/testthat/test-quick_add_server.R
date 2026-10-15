@@ -41,7 +41,6 @@
 #     open("respondent_type", then = function(key) got <<- key)
 #     fill(session, output, change, respondent_type__name = name, respondent_type__minimum_age = "5")
 #     expect_true(change$ready())
-#     session$setInputs(note = "From page 2 of the PDF")
 #     session$setInputs(add = 1)
 #
 #     expect_match(got, "^[0-9]+$")
@@ -57,7 +56,6 @@
 #   entry <- Filter(function(record) identical(record$prepared_by, me$name), entry)[[1]]
 #   expect_equal(entry$kind, "Add")
 #   expect_equal(entry$note, "From page 2 of the PDF")
-#   expect_false(entry$approval_required)
 # })
 #
 # test_that("the button waits for a form that is ready, and says 'Add it anyway' when what is typed looks like something there", {
@@ -164,12 +162,12 @@
 #   })
 # })
 
-test_that("the pop-up draws only the form, a note for the history, and its buttons", {
+test_that("the pop-up draws only the form and its buttons", {
   html <- text_of(quick_add_dialog(edit_service_quick_entity("study"), shiny::NS("q"), back = FALSE))
   expect_match(html, "Add a study")
-  expect_match(html, "The questionnaire you are extracting becomes its first questionnaire")
+  expect_match(html, "the questionnaire you are extracting is added to it when its change request is approved")
   expect_match(html, "The lead investigator isn't in the list\\? Add an investigator")
-  expect_match(html, "Why are you adding it\\? \\(optional\\)")
+  expect_no_match(html, "Why are you adding it")
   expect_no_match(text_of(quick_add_dialog(edit_service_quick_entity("respondent_type"), shiny::NS("q"))), "lead investigator")
   expect_match(text_of(quick_add_dialog(edit_service_quick_entity("study"), shiny::NS("q"), back = TRUE)), "Back")
   link <- htmltools::renderTags(quick_add_link("go", "Not in the list? Add a thing"))$html

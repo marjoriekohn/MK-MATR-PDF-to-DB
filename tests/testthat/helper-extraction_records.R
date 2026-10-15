@@ -25,7 +25,7 @@
 #' }
 #'
 #' # A draft that has been read: the hand-checked reading is saved against it, so its questionnaire
-#' # can be opened on the review page.
+#' # can be opened on the Edit Extraction page.
 #' local_read_extraction <- function(staff, ..., env = parent.frame()) {
 #'   record <- local_extraction(staff, extraction_status = "ready", ..., env = env)
 #'   draft_model_save_reading(test_connection, record$id, gold_json(), record$reading_started)

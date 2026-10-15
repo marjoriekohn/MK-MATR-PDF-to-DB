@@ -70,19 +70,17 @@
 #     expect_true(change$ready())
 #     expect_false(needs_approval())
 #     expect_equal(primary_label(), "Add it")
-#     session$setInputs(note = "From the new study's protocol")
 #     session$setInputs(submit = 1)
 #     expect_true(done()$applied)
 #     made$applied <- c(made$applied, done()$history_id)
 #     expect_match(text_of(output$sent), "Done")
-#     expect_match(text_of(output$sent), "in the MATR data now")
+#     expect_match(text_of(output$sent), "in the MATR metadata database now")
 #     expect_length(errors(), 0)
 #   })
 #   rows <- table_model_get(test_connection, "respondent_type", list(name = database_eq(name)))
 #   expect_equal(nrow(rows), 1)
 #   expect_equal(rows$minimum_age, 5)
 #   entry <- history_model_get_all(test_connection)[[made$applied[1]]]
-#   expect_equal(entry$note, "From the new study's protocol")
 #   expect_false(entry$approval_required)
 # })
 #
@@ -97,7 +95,7 @@
 #     draw_form()
 #     session$setInputs(
 #       `change-respondent_type__name` = test_name("Looks the same"),
-#       `change-respondent_type__minimum_age` = "21", `change-respondent_type__maximum_age` = "24", note = "Needed"
+#       `change-respondent_type__minimum_age` = "21", `change-respondent_type__maximum_age` = "24"
 #     )
 #     session$setInputs(submit = 1)
 #     expect_null(done())
@@ -122,7 +120,7 @@
 #     draw_form()
 #     expect_true(needs_approval())
 #     expect_equal(primary_label(), "Send for approval")
-#     session$setInputs(`change-confirm_read` = TRUE, `change-confirm_word` = "DELETE", note = "Not needed")
+#     session$setInputs(`change-confirm_read` = TRUE, `change-confirm_word` = "DELETE")
 #     session$flushReact()
 #     if (!change$ready()) skip(paste("the delete form isn't ready:", change$blockers()[1]))
 #     session$setInputs(submit = 1)
@@ -141,7 +139,7 @@
 #     draw_form()
 #     expect_false(needs_approval())
 #     expect_equal(primary_label(), "Delete it")
-#     session$setInputs(`change-confirm_read` = TRUE, `change-confirm_word` = "DELETE", note = "Not needed")
+#     session$setInputs(`change-confirm_read` = TRUE, `change-confirm_word` = "DELETE")
 #     session$flushReact()
 #     if (!change$ready()) skip(paste("the delete form isn't ready:", change$blockers()[1]))
 #     session$setInputs(submit = 1)

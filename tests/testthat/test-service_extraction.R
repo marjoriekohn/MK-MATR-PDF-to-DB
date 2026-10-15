@@ -201,35 +201,31 @@ test_that("reading steps follow the reading job's status", {
   expect_equal(failed$detail[3], "Stopped on page 6 of 18")
 })
 
-test_that("the progress on each card comes from the record and the questionnaire it read", {
+test_that("the progress on each card is how it was read and how much of it is checked, as the Edit Extraction page counts it", {
   record <- list(status = "Sent Back", extraction_status = "ready", info = new_wave_info(), matr_csv = NULL)
-  draft <- gold_draft()
+  draft <- with_checked(gold_draft(), gold_draft()$components$id[1:10])
   progress <- extraction_service_progress(record, draft)
 
-  expect_equal(progress$state, c("done", "done", "not_started", "not_started", "not_started"))
-  expect_equal(progress$label[3], sprintf("Structure checked · %d of %d", sum(draft$components$checked), nrow(draft$components)))
-  expect_equal(progress$label[5], "Resubmitted")
+  percent <- draft_service_percent_checked(draft_service_counts(draft))
+  expect_equal(percent, as.integer(floor(100 * 10 / nrow(draft$components))))
+  expect_equal(progress$label, c("Read by Gemini", percent, "% reviewed"))
+  expect_equal(progress$state, c("done", "in_progress"))
+  expect_false(any(grepl("MATR IDs|Submitted|Wave details", progress$label)))
 
   unread <- extraction_service_progress(list(status = "Draft", extraction_status = "failed", info = list(), matr_csv = NULL))
-  expect_equal(unread$label, c("Read by Gemini · failed", "Wave details", "Structure", "MATR IDs", "Submitted"))
-  expect_equal(unread$state, c("attention", "not_started", "not_started", "not_started", "not_started"))
-})
-
-test_that("wave details are done once the required fields are filled in", {
-  progress_of <- function(info) extraction_service_progress(list(status = "Draft", extraction_status = "queued", info = info))$state[2]
-  expect_equal(progress_of(new_wave_info()), "done")
-  expect_equal(progress_of(new_wave_info(wave_name = "")), "in_progress")
-  expect_equal(progress_of(list()), "not_started")
-
-  expect_equal(progress_of(new_questionnaire_info()), "done")
-  no_study <- new_questionnaire_info()
-  no_study$study_id <- ""
-  expect_equal(progress_of(no_study), "in_progress")
+  expect_equal(unread$label, c("Read by Gemini · failed", "Structure"))
+  expect_equal(unread$state, c("attention", "not_started"))
+  expect_equal(draft_service_percent_checked(list(blocks = 0, checked = 0)), 0L)
 })
 
 test_that("the required fields left blank are named as the form labels them", {
   expect_equal(extraction_service_missing(extraction_service_info()), c("registry", "study", "questionnaire", "wave name"))
   expect_equal(extraction_service_missing(new_wave_info()), character())
+  recorded_wave <- new_wave_info()
+  recorded_wave$wave_choice <- "existing"
+  expect_equal(extraction_service_missing(recorded_wave), "wave") # a recorded wave is picked, not named
+  recorded_wave$wave_id <- "2"
+  expect_equal(extraction_service_missing(recorded_wave), character())
 
   blank_new <- extraction_service_info()
   blank_new$kind <- "new_questionnaire"
@@ -314,14 +310,46 @@ test_that("a wave name already used by the questionnaire is caught (BR21)", {
   expect_null(extraction_service_wave_name_problem(new_wave_info("1", "Wave 3"), catalog, someone_elses, id = "other"))
 })
 
-test_that("cards are named from what staff typed, else the PDF", {
+test_that("cards are named from where it goes, else what the AI read, else the PDF", {
   catalog <- test_catalog()
   record <- list(pdf = list(name = "scan.pdf"), info = new_wave_info())
   expect_equal(extraction_service_title(record, catalog), "Adult Health and Personality (AHP) · Wave 3")
   expect_equal(extraction_service_title(list(pdf = list(name = "scan.pdf"), info = list()), catalog), "scan.pdf")
+  expect_equal(extraction_service_title(list(pdf = list(name = "scan.pdf"), info = list()), catalog, list(name = "Sleep Diary")), "Sleep Diary")
+  expect_equal(extraction_service_title(list(pdf = list(), info = list()), catalog), "Untitled questionnaire") # typed by hand, no PDF
+  recorded_wave <- utils::modifyList(new_wave_info(), list(wave_choice = "existing", wave_id = "2"))
+  expect_equal(extraction_service_title(list(info = recorded_wave), catalog), "Adult Health and Personality (AHP) · Wave 2")
 })
 
-test_that("the review page is headed by what staff typed, else what Gemini read", {
+test_that("a recorded wave has to be the questionnaire's, ask no questions yet, and not be another draft's", {
+  catalog <- test_catalog()
+  info <- utils::modifyList(new_wave_info(), list(wave_choice = "existing", wave_id = "2"))
+  expect_null(extraction_service_recorded_wave_problem(info, catalog))
+
+expect_equal(extraction_service_recorded_wave_problem(utils::modifyList(info, list(wave_id = "3")), catalog), "Pick one of this questionnaire's waves.")
+  expect_equal(
+    extraction_service_recorded_wave_problem(info, catalog, question_counts = c("2" = 12L)),
+    "Wave 2 already asks 12 questions. Pick a wave without questions, or add a new wave."
+  )
+  other <- list(other = list(id = "other", status = "Awaiting Review", prepared_by = "D. Chen", prepared_by_id = 9L, info = info))
+  expect_match(extraction_service_recorded_wave_problem(info, catalog, records = other, id = "mine"), "D. Chen already has a draft going into Wave 2")
+  expect_null(extraction_service_recorded_wave_problem(info, catalog, records = other, id = "other"))
+  # a new wave isn't checked this way, and a recorded wave has no name to check
+  expect_null(extraction_service_recorded_wave_problem(new_wave_info(), catalog))
+
+expect_null(extraction_service_wave_name_problem(utils::modifyList(info, list(wave_name = "Wave 1")), catalog, list()))
+  expect_equal(questionnaire_service_empty_wave_choices(catalog, "1", c("1" = 3L)), c("Wave 2 · given 04/15/2022 · no questions yet" = "2"))
+})
+
+test_that("a new questionnaire another draft is adding to the same study is a clash", {
+  catalog <- test_catalog()
+  other <- list(other = list(id = "other", status = "Awaiting Review", prepared_by = "D. Chen", prepared_by_id = 9L, info = new_questionnaire_info()))
+
+  expect_match(extraction_service_name_problem(new_questionnaire_info(), catalog, other, id = "mine"), "D. Chen already has a draft adding Twin Diet Survey")
+  expect_null(extraction_service_name_problem(new_questionnaire_info(), catalog, other, id = "other"))
+})
+
+test_that("the Edit Extraction page is headed by what staff typed, else what Gemini read", {
   catalog <- test_catalog()
   read <- list(name = "Printed Title", abbreviation = "PT")
   expect_equal(

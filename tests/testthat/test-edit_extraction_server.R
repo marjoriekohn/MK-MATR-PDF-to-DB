@@ -1,10 +1,10 @@
-# # The review page: one draft's questionnaire, changed in this session until Save writes it to the draft's
+# # The Edit Extraction page: one draft's questionnaire, changed in this session until Save writes it to the draft's
 # # reviewed copy in the database. Inside the page's server, `open()` is how the other pages hand it a draft.
 # # Names like `draft`, `record` and `selected` are the page's own, so the drafts these tests make are called
 # # `first`, `second` and so on. The database is the real one: each test makes the registry, study and
 # # questionnaire its draft is about.
 #
-# review_page <- function(me, extractions = test_extractions()) {
+# edit_page <- function(me, extractions = test_extractions()) {
 #   list(extractions = extractions, catalog = test_live_catalog(), connection = test_connection, me = me)
 # }
 #
@@ -24,7 +24,7 @@
 # # Fills in the MATR IDs of the draft on the page, as a CSV would, so nothing is left to fix. Called
 # # inside testServer(), where `draft` and `change_draft` are the page's.
 # fill_all_matr_ids <- function(draft, change_draft) {
-#   change_draft(draft_service_fill_matr_ids(draft(), sprintf("m%03d", seq_len(nrow(draft()$variables)))), keep_checked = TRUE)
+#   change_draft(suppressMessages(draft_service_auto_apply_matr_ids(draft(), sprintf("m%03d", seq_len(nrow(draft()$variables))))), keep_checked = TRUE)
 # }
 #
 # test_that("opening a draft loads its questionnaire, numbers its questions by their place, and heads the page", {
@@ -32,7 +32,7 @@
 #   tree <- local_tree()
 #   seen <- local_browser()
 #   first <- read_draft(me, tree)
-#   shiny::testServer(review_server, args = review_page(me), {
+#   shiny::testServer(edit_extraction_server, args = edit_page(me), {
 #     errors <- collect_errors(session)
 #     expect_true(open(first))
 #     expect_equal(record_id(), first$id)
@@ -40,7 +40,7 @@
 #     expect_false(has_unsaved_changes()) # the numbering isn't a change of the person's
 #     questions <- draft()$components[draft()$components$component_type == "Question", ]
 #     expect_equal(sort(as.integer(questions$question_number)), seq_len(nrow(questions)))
-#     expect_equal(output$title, "Review ZZQ · Wave 3")
+#     expect_equal(output$title, "Edit Extraction: ZZQ · Wave 3")
 #     expect_equal(output$subtitle, tree$questionnaire$name)
 #     expect_length(undo_stack(), 0)
 #     expect_null(selected())
@@ -53,7 +53,7 @@
 #   tree <- local_tree()
 #   seen <- local_browser()
 #   first <- read_draft(me, tree)
-#   shiny::testServer(review_server, args = review_page(me), {
+#   shiny::testServer(edit_extraction_server, args = edit_page(me), {
 #     open(first)
 #     session$flushReact()
 #     expect_true(last_update(seen, "save")$disabled)
@@ -80,7 +80,7 @@
 #   tree <- local_tree()
 #   seen <- local_browser()
 #   first <- read_draft(me, tree)
-#   shiny::testServer(review_server, args = review_page(me), {
+#   shiny::testServer(edit_extraction_server, args = edit_page(me), {
 #     open(first)
 #     for (i in seq_len(undo_depth + 5)) change_draft(reworded(draft(), paste("Words", i)))
 #     expect_length(undo_stack(), undo_depth)
@@ -102,7 +102,7 @@
 #   tree <- local_tree()
 #   seen <- local_browser()
 #   first <- read_draft(me, tree)
-#   shiny::testServer(review_server, args = review_page(me), {
+#   shiny::testServer(edit_extraction_server, args = edit_page(me), {
 #     open(first)
 #     before <- layout_version()
 #     change_draft(reworded(draft(), "Typed words"), typed = TRUE)
@@ -128,7 +128,7 @@
 #   tree <- local_tree()
 #   seen <- local_browser()
 #   first <- read_draft(me, tree)
-#   shiny::testServer(review_server, args = review_page(me), {
+#   shiny::testServer(edit_extraction_server, args = edit_page(me), {
 #     open(first)
 #     before <- layout_version()
 #     expect_false(change_draft(draft_service_update(draft(), "components", "gone", "text", "x")))
@@ -152,7 +152,7 @@
 #   tree <- local_tree()
 #   seen <- local_browser()
 #   first <- read_draft(me, tree)
-#   shiny::testServer(review_server, args = review_page(me), {
+#   shiny::testServer(edit_extraction_server, args = edit_page(me), {
 #     open(first)
 #     change_draft(reworded(draft()))
 #     session$setInputs(save = 1)
@@ -161,7 +161,7 @@
 #     expect_identical(stored, draft())
 #     expect_equal(component(stored, "c3")$text, "Do you worry a lot?")
 #     expect_equal(component(stored, "c3")$question_number, component(numbered_gold(), "c3")$question_number)
-#     expect_equal(notice_texts(seen), "Saved. Nothing is added to the MATR data until the draft is pushed.")
+#     expect_equal(notice_texts(seen), "Saved. Nothing is added to the MATR metadata database until its change request is approved.")
 #     session$flushReact()
 #     expect_true(last_update(seen, "save")$disabled)
 #
@@ -178,7 +178,7 @@
 #   tree <- local_tree()
 #   seen <- local_browser()
 #   first <- read_draft(me, tree)
-#   shiny::testServer(review_server, args = review_page(me), {
+#   shiny::testServer(edit_extraction_server, args = edit_page(me), {
 #     open(first)
 #     fill_all_matr_ids(draft, change_draft)
 #     change_draft(draft_service_update(draft(), "components", "c4", "text", ""))
@@ -200,7 +200,7 @@
 #   seen <- local_browser()
 #   first <- read_draft(me, tree)
 #   second <- read_draft(me, tree, wave_name = "Wave 4")
-#   shiny::testServer(review_server, args = review_page(me), {
+#   shiny::testServer(edit_extraction_server, args = edit_page(me), {
 #     open(first)
 #     change_draft(reworded(draft()))
 #     expect_true(open(second)) # asking is not failing
@@ -235,7 +235,7 @@
 #   seen <- local_browser()
 #   first <- read_draft(me, tree)
 #   second <- read_draft(me, tree, wave_name = "Wave 4")
-#   shiny::testServer(review_server, args = review_page(me), {
+#   shiny::testServer(edit_extraction_server, args = edit_page(me), {
 #     open(first)
 #     change_draft(reworded(draft()))
 #     open(second)
@@ -252,7 +252,7 @@
 #   seen <- local_browser()
 #   first <- read_draft(me, tree)
 #   unread <- local_extraction(me, info = typed_new_wave(tree, wave_name = "Wave 5"))
-#   shiny::testServer(review_server, args = review_page(me), {
+#   shiny::testServer(edit_extraction_server, args = edit_page(me), {
 #     open(first)
 #     expect_false(open(unread))
 #     expect_equal(record_id(), first$id)
@@ -260,18 +260,18 @@
 #   })
 # })
 #
-# test_that("the MATR IDs dialog explains itself, Fill is off until there is a CSV, and a CSV fills from the top", {
+# test_that("the MATR IDs dialog explains itself, Auto Apply is off until there is a CSV, and it fills from the top", {
 #   me <- local_staff()
 #   tree <- local_tree()
 #   seen <- local_browser()
 #   first <- read_draft(me, tree)
 #   n_boxes <- nrow(gold_draft()$variables)
 #   ids <- sprintf("m%03d", seq_len(n_boxes))
-#   shiny::testServer(review_server, args = review_page(me), {
+#   shiny::testServer(edit_extraction_server, args = edit_page(me), {
 #     errors <- collect_errors(session)
 #     open(first)
 #     session$setInputs(action = list(action = "matr_ids"))
-#     expect_match(seen$modals[[1]], "MATR IDs A CSV lists MATR IDs in the order they appear on the questionnaire")
+#     expect_match(seen$modals[[1]], "MATR IDs Upload a CSV that lists the MATR IDs in the order the variables appear")
 #     expect_false(grepl("earlier waves", seen$modals[[1]])) # the questionnaire prints nothing yet
 #     expect_match(text_of(output$matr_csv_status), "Drop the CSV of MATR IDs here")
 #     expect_equal(text_of(output$matr_fill_note), "")
@@ -281,9 +281,9 @@
 #     expect_equal(extraction_model_get(test_connection, first$id)$matr_csv$name, "ahp_ids.csv")
 #     expect_match(text_of(output$matr_csv_status), sprintf("ahp_ids.csv %d MATR IDs · m001 to m%03d", n_boxes, n_boxes))
 #     expect_match(text_of(output$matr_fill_note), sprintf("One MATR ID for each of the %d variables.", n_boxes))
-#     expect_false(last_update(seen, "fill_matr_ids")$disabled)
+#     expect_false(last_update(seen, "auto_apply")$disabled)
 #
-#     session$setInputs(fill_matr_ids = 1)
+#     session$setInputs(auto_apply = 1)
 #     expect_equal(draft()$variables$matr_id[1:2], c("m001", "m002"))
 #     expect_true(has_unsaved_changes())
 #     expect_equal(seen$closed, 1)
@@ -298,15 +298,15 @@
 #   tree <- local_tree()
 #   seen <- local_browser()
 #   first <- read_draft(me, tree)
-#   shiny::testServer(review_server, args = review_page(me), {
+#   shiny::testServer(edit_extraction_server, args = edit_page(me), {
 #     errors <- collect_errors(session)
 #     open(first)
 #     session$setInputs(matr_csv = fake_csv_upload(c("matr_id", "m001", "m002", "m003")))
 #     expect_length(matr_ids(), 3)
-#     expect_match(text_of(output$matr_fill_note), "Check the outline against the CSV before filling")
+#     expect_match(text_of(output$matr_fill_note), "Nothing is lost")
 #     change_draft(draft_service_update(draft(), "variables", "v1", "matr_id", "typed1"))
 #     session$flushReact()
-#     expect_match(text_of(output$matr_fill_note), "This replaces the 1 MATR ID already filled in. Undo brings them back.")
+#     expect_match(text_of(output$matr_fill_note), "1 of the variables have a MATR ID")
 #
 #     test_delete_draft(first$id)
 #     session$setInputs(matr_csv = fake_csv_upload(c("matr_id", "m001")))
@@ -325,7 +325,7 @@
 #   second_wave <- do.call(local_manual_extraction, c(list(me), typed_new_wave(tree, pushed$questionnaire_id), list(env = environment())))
 #   draft_service_save(test_connection, second_wave$id, test_questionnaire_draft(matr = c(NA, NA)), me$staff_id)
 #   second_wave <- extraction_model_get(test_connection, second_wave$id)
-#   shiny::testServer(review_server, args = review_page(me), {
+#   shiny::testServer(edit_extraction_server, args = edit_page(me), {
 #     errors <- collect_errors(session)
 #     expect_true(open(second_wave))
 #     expect_setequal(draft()$variables$matr_id, pushed$draft$variables$matr_id)
@@ -349,36 +349,11 @@
 #   })
 # })
 #
-# test_that("the About dialog opens on the draft's details, and Save writes them to the draft", {
-#   me <- local_staff()
-#   tree <- local_tree()
-#   seen <- local_browser()
-#   first <- read_draft(me, tree)
-#   shiny::testServer(review_server, args = review_page(me), {
-#     open(first)
-#     session$setInputs(edit_info = 1)
-#     expect_match(seen$modals[[1]], "About the questionnaire & wave")
-#     expect_equal(last_update(seen, "wave_name")$value, "Wave 3") # (the form is a module, so the id is its own)
-#
-#     session$setInputs(
-#       `info-kind` = "new_wave", `info-registry_id` = as.character(tree$registry$registry_id),
-#       `info-study_id` = as.character(tree$study$study_id),
-#       `info-questionnaire_id` = as.character(tree$questionnaire$questionnaire_id), `info-wave_name` = "Wave 5"
-#     )
-#     session$setInputs(save_info = 1)
-#     expect_equal(extraction_model_get(test_connection, first$id)$info$wave_name, "Wave 5")
-#     expect_equal(seen$closed, 1)
-#     expect_equal(notice_texts(seen), "Questionnaire and wave details saved.")
-#     expect_equal(output$title, "Review ZZQ · Wave 5")
-#     expect_false(has_unsaved_changes()) # the details aren't part of the questionnaire
-#   })
-# })
-#
 # test_that("a pick list the database couldn't give is a warning when the page starts, not a blank list", {
 #   me <- local_staff()
 #   seen <- local_browser()
 #   local_stub("lookup_model_get_subjects", function(connection) stop("The subject table is missing.", call. = FALSE))
-#   shiny::testServer(review_server, args = review_page(me), {
+#   shiny::testServer(edit_extraction_server, args = edit_page(me), {
 #     expect_match(notice_texts(seen), "The list of subjects couldn't be read")
 #     expect_equal(seen$notifications[[1]]$type, "warning")
 #   })
@@ -389,7 +364,7 @@
 #   tree <- local_tree()
 #   seen <- local_browser()
 #   first <- read_draft(me, tree)
-#   shiny::testServer(review_server, args = review_page(me), {
+#   shiny::testServer(edit_extraction_server, args = edit_page(me), {
 #     errors <- collect_errors(session)
 #     open(first)
 #     session$setInputs(`outline-action` = list(action = "check", id = "c3"))
@@ -417,7 +392,7 @@
 #   seen <- local_browser()
 #   first <- read_draft(me, tree)
 #   ids <- sprintf("m%03d", seq_len(nrow(gold_draft()$variables)))
-#   shiny::testServer(review_server, args = review_page(me), {
+#   shiny::testServer(edit_extraction_server, args = edit_page(me), {
 #     open(first)
 #     change_draft(with_checked(draft(), c("c3", "c4", "c5")), keep_checked = TRUE)
 #     session$setInputs(`outline-edit` = list(table = "variables", id = "v1", field = "label", value = "Nervous"))
@@ -433,7 +408,7 @@
 #
 #     change_draft(with_checked(draft(), c("c3", "c4")), keep_checked = TRUE)
 #     session$setInputs(matr_csv = fake_csv_upload(c("matr_id", ids)))
-#     session$setInputs(fill_matr_ids = 1)
+#     session$setInputs(auto_apply = 1)
 #     expect_equal(draft()$variables$matr_id[1], "m001")
 #     expect_equal(checked_blocks(draft()), c("c3", "c4"))
 #     session$setInputs(`outline-edit` = list(table = "variables", id = "v1", field = "matr_id", value = "typed"))
@@ -449,7 +424,7 @@
 #   printed <- draft_service_printed_order(gold_draft())
 #   sent <- function(ids, parents) list(ids = as.list(ids), parents = as.list(ifelse(is.na(parents), "", parents)))
 #   parents <- gold_draft()$components$parent_id[match(printed, gold_draft()$components$id)]
-#   shiny::testServer(review_server, args = review_page(me), {
+#   shiny::testServer(edit_extraction_server, args = edit_page(me), {
 #     open(first)
 #     change_draft(with_checked(draft(), c("c3", "c4")), keep_checked = TRUE)
 #     swapped <- printed
@@ -470,12 +445,12 @@
 #   seen <- local_browser()
 #   local_pdf_cache()
 #   first <- read_draft(me, tree)
-#   shiny::testServer(review_server, args = review_page(me), {
+#   shiny::testServer(edit_extraction_server, args = edit_page(me), {
 #     open(first)
 #     expect_equal(text_of(output$pdf_link), "") # the test draft's PDF was never stored here
 #   })
-#   html <- htmltools::renderTags(review_ui("review"))$html
-#   expect_match(html, 'id="review-pdf_link"')
+#   html <- htmltools::renderTags(edit_extraction_ui("edit_extraction"))$html
+#   expect_match(html, 'id="edit_extraction-pdf_link"')
 #   expect_match(html, "structure-card")
 #   expect_false(grepl("pdf-card|review-details", html))
 #   expect_equal(lengths(regmatches(html, gregexpr('class="card ', html))), 1)
