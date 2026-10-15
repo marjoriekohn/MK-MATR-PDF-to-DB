@@ -1,5 +1,5 @@
 // The Extraction page: its three modes (Manual, AI-Powered, Existing Draft)
-$extraction-line: rgba($vcu-gray);
+$extraction-line: $vcu-gray;
 
 .extraction-page {
   h2 { margin: 0; font-size: 1.15rem; }
