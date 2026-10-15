@@ -1,7 +1,8 @@
-// ------ Review page events ------------------------------------------------------
-// Loaded on every page: the Extraction, Change Requests, Make an edit and Home pages use data-action buttons too.
+// ------ Page events ------------------------------------------------------------
+// The Edit Extraction page's outline, and the data-action buttons every page uses: loaded on every page
+// (the Extraction, Change Requests, Make an edit and Home pages use data-action buttons too).
 // The HTML that R renders says what to send back, so no R code builds JavaScript:
-//   data-ns       a module's outer element: its Shiny namespace, e.g. "review-outline-"
+//   data-ns       a module's outer element: its Shiny namespace, e.g. "edit_extraction-outline-"
 //   data-action   a click sends the element's data-* values to that module's `action`
 //   data-field    a change sends {table, id, field, value} to that module's `edit`
 //   data-suggest  a text field that offers the words in the <datalist> this names, as they are typed

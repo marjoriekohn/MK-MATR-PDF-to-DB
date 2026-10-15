@@ -1,7 +1,7 @@
 # ------ Drafts: the shared rows and their details --------------------------------------
 # What staff are still working on before it reaches the live tables is a DRAFT: one row
 # of the columns both kinds share,
-#   status, prepared_by, saved_by, requested_reviewer (STAFF rows), revision, summary, note,
+#   status, prepared_by, saved_by, requested_reviewer (STAFF rows), revision, summary,
 #   sent_back_by / _at / _note, created_at, saved_at, submitted_at
 # and one row of a table for its kind:
 #   EXTRACTED_DRAFT  an extraction of a questionnaire (kind "Extraction")
@@ -18,7 +18,7 @@ edit_draft_table <- "edit_draft"
 
 # The shared columns, and the names of the people they point at.
 draft_columns <- c(
-  "draft_id", "kind", "status", "prepared_by", "saved_by", "requested_reviewer", "revision", "summary", "note",
+  "draft_id", "kind", "status", "prepared_by", "saved_by", "requested_reviewer", "revision", "summary",
   "sent_back_by", "sent_back_at", "sent_back_note", "created_at", "saved_at", "submitted_at",
   "preparer:staff!prepared_by(name)", "saver:staff!saved_by(name)",
   "reviewer:staff!requested_reviewer(name)", "sender:staff!sent_back_by(name)"
@@ -68,7 +68,7 @@ draft_row_model_details <- function(connection, table, ids, columns) {
 #' @param connection The MATR database, `list(url, key)`; see `model_database.R`.
 #' @param kind `"Extraction"` or `"Edit"`.
 #' @param prepared_by The staff id of the person starting it.
-#' @param parent The shared columns to set, as a named list (`status`, `summary`, `note`,
+#' @param parent The shared columns to set, as a named list (`status`, `summary`,
 #'   `requested_reviewer`, `created_at`).
 #' @param detail The kind's own columns to set, as a named list.
 #' @return The new draft's id, as text.

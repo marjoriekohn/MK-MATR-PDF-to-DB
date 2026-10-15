@@ -1,4 +1,4 @@
-#' The Change Requests page: changes waiting for one other staff member to approve them.
+#' The Change Requests page: items waiting for one other staff member to approve them.
 #'
 #' @param id The module's id.
 #' @return The page's UI.
@@ -90,16 +90,17 @@ change_request_card_ui <- function(record, me) {
 
 #' What a person reads before approving, sending back or withdrawing a request.
 #'
-#' For an extraction, the whole questionnaire is laid out to read (`questionnaire_preview_ui()`),
-#' with a button to its PDF when the file is here, so a reviewer needn't open it on the review page.
+#' For an extraction, the same presentation its preparer saw before submitting it
+#' (`extraction_request_ui()`): where it goes and what it adds, each as cards of the rows that are there
+#' and the NEW ones, and the whole questionnaire laid out to read, with a button to its PDF when the
+#' file is here, so a reviewer needn't open it on the Edit Extraction page.
 #'
 #' @param record A request.
 #' @param me Who is using the site: `list(staff_id, name, role)`.
 #' @param ns The module's namespace function.
 #' @param detail What the request comes to: for an edit `change_request_service_changes()`; for an
-#'   extraction `list(summary = <sentence>, unchecked = <how many blocks>, problem = <why it can't be
-#'   added, or NULL>, draft = <its questionnaire, or NULL if it couldn't be read>, pdf_url = <the PDF's
-#'   address, or NULL>)`.
+#'   extraction `list(preview = <from extraction_service_request_preview()>, draft = <its questionnaire,
+#'   or NULL if it couldn't be read>, pdf_url = <the PDF's address, or NULL>)`.
 #' @return A `modalDialog()`, for `showModal()`.
 change_request_dialog <- function(record, me, ns, detail) {
   state <- change_request_service_state(record, me)

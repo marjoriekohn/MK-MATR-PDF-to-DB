@@ -1,8 +1,8 @@
 # ------ A questionnaire, laid out to read -----------------------------------------------------
 # A draft's questionnaire drawn as it would be read, with nothing to edit: its sections with what
-# they hold, each question numbered with its words, and under a question its variables (MATR ID,
-# label, who it's about) with their choices. The Change Requests page shows a reviewer this before
-# they approve an extraction.
+# they hold, each question numbered with its words, and under a question its variables (MATR ID and
+# label, and a write-in's kind of answer), each with its choices and their codes beside it. A change
+# request shows this before it is submitted and while it waits for a reviewer to approve it.
 
 #' A draft's questionnaire, laid out to read.
 #'

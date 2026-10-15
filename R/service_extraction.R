@@ -107,7 +107,7 @@ extraction_service_is_read <- function(record) {
 #' @param connection The MATR database, `list(url, key)`; see `model_database.R`.
 #' @param upload One row of a `fileInput`'s value: `name`, `size`, `datapath`.
 #' @param staff Who is preparing it: `list(staff_id, name, role)`.
-#' @param info What staff typed about the questionnaire and wave, as `extraction_service_info()` returns it.
+#' @param info Where it goes in the database, as `extraction_service_info()` returns it.
 #' @param now The time to record.
 #' @return The record as saved, with its id.
 extraction_service_create <- function(connection, upload, staff,
@@ -134,11 +134,11 @@ extraction_service_create <- function(connection, upload, staff,
 #' Start a Manual draft: the questionnaire is typed by hand.
 #'
 #' There is no reading. The PDF is optional: if staff give one, it is kept with the draft so the
-#' review page can show it beside what they type. The questionnaire starts empty.
+#' Edit Extraction page can show it beside what they type. The questionnaire starts empty.
 #'
 #' @param connection The MATR database, `list(url, key)`; see `model_database.R`.
 #' @param staff Who is preparing it: `list(staff_id, name, role)`.
-#' @param info What staff typed about the questionnaire and wave, as `extraction_service_info()` returns it.
+#' @param info Where it goes in the database, as `extraction_service_info()` returns it.
 #' @param upload One row of a `fileInput`'s value: `name`, `size`, `datapath`; or `NULL` for none.
 #' @param now The time to record.
 #' @return The record as saved, with its id.
@@ -159,11 +159,14 @@ extraction_service_create_manual <- function(connection, staff, info = extractio
   extraction_model_create(connection, record)
 }
 
-#' Save what staff typed about the questionnaire and wave.
+#' Save where an extraction goes, by itself.
+#'
+#' The site saves it with the change request instead (`extraction_service_push()`); the database tests
+#' use this to check that saving one field never undoes another.
 #'
 #' @param connection The MATR database, `list(url, key)`; see `model_database.R`.
 #' @param id The draft's id.
-#' @param info What staff typed about the questionnaire and wave, as `extraction_service_info()` returns it.
+#' @param info Where it goes in the database, as `extraction_service_info()` returns it.
 #' @param me Who is saving: `list(staff_id, name, role)`.
 #' @return The record as saved.
 extraction_service_save_info <- function(connection, id, info, me) {
@@ -267,7 +270,7 @@ extraction_service_load_draft <- function(connection, record) {
 #'
 #' @param connection The MATR database, `list(url, key)`; see `model_database.R`.
 #' @param record The extraction draft's record.
-#' @param draft A draft, as the review page edits it.
+#' @param draft A draft, as the Edit Extraction page edits it.
 #' @param base The draft as it was when the page opened it or last saved it; what the
 #'   changes are measured against.
 #' @param me Who is saving: `list(staff_id, name, role)`.
@@ -612,7 +615,7 @@ matr_id_headings <- "^((matr|variable)[ _.]?(ids?|names?)?|ids?)$"
 # ------ What a recorded questionnaire prints already ----------------------------------------
 #' The blocks a recorded questionnaire prints, and its questions' MATR IDs.
 #'
-#' For a new wave of a recorded questionnaire, the review page offers the blocks the questionnaire already
+#' For a new wave of a recorded questionnaire, the Edit Extraction page offers the blocks the questionnaire already
 #' prints as suggestions while a block's words are typed, and a question with the same words as one the
 #' questionnaire already asks keeps its variables' MATR IDs (BR93: a MATR ID names the variable within its
 #' questionnaire), so they are filled in instead of asked for. For a new questionnaire there is nothing yet.

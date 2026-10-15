@@ -9,7 +9,7 @@
 #                                         just one must be asked about first
 #   cards(snap, scope)                    one card per row, with counts
 #   fields(snap, mode, row, scope)        the form, for "add" and "update"
-#   parts                                 an add that needs more rows: see below
+#   parts                                 an add that needs more rows: see below (none does today)
 #   delete_start(snap, row)               what a delete starts from, if not the row
 #   delete_about, update_about            what staff should know before they do it
 #   build(mode, ...)                      writes a change as items, if it's not
@@ -21,9 +21,10 @@
 # `snap` is a list of whole tables (edit_service_load()). Anything an entry
 # doesn't say, edit_service_*() does the plain way.
 #
-# `parts`: the schema says a study needs a questionnaire and a questionnaire a
-# wave, so adding the first means adding the rest with it, in one edit. Each
-# part is a kind, and `link` the column that holds the part before it.
+# `parts`: an add that has to add other rows with it, in one edit. Each part is a kind,
+# and `link` the column that holds the part before it. Adding a study or a
+# questionnaire adds only that row: its questionnaires and waves are added
+# afterwards, by themselves or with an extraction.
 
 # ------ Building blocks ---------------------------------------------------------------------
 #' A count of rows with its noun, thousands separated.

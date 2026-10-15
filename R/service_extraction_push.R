@@ -99,7 +99,7 @@ extraction_service_push_items <- function(connection, record) {
 #' @param draft The questionnaire as saved; see `draft_service_from_json()`.
 #' @param info What staff typed about the questionnaire and wave, from `extraction_service_info()`.
 #' @param ids `component_types` and `subjects` as data frames with their ids.
-#' @param existing For a new wave, what the questionnaire has printed already, from
+#' @param existing For a recorded questionnaire, what it has printed already, from
 #'   `push_model_existing()`; `NULL` for a new questionnaire.
 #' @param options The answer choices and option sets there are, from `push_model_options()`.
 #' @return A list: `items` and `summary`; see `extraction_service_push_build()`.

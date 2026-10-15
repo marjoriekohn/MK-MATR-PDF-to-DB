@@ -1,6 +1,6 @@
 #' The Edit history page's server.
 #'
-#' The edits applied to the MATR data, newest first, filtered by kind and by words typed.
+#' The edits applied to the MATR metadata database, newest first, filtered by kind and by words typed.
 #' "See what changed" opens the fields an edit changed, old and new.
 #'
 #' @param id The module's id.

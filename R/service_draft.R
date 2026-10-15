@@ -1,7 +1,7 @@
 # ------ Extraction drafts ------------------------------------------------------
 # The extraction pipeline returns a questionnaire as nested JSON: sections hold
 # blocks, questions hold variables, and variables hold choices
-# (response options). The review page edits three flat tables instead, so
+# (response options). The Edit Extraction page edits three flat tables instead, so
 # moving a block only changes its parent_id and display_order, the same way
 # QUESTIONNAIRE_COMPONENT stores it:
 #

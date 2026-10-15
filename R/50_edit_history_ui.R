@@ -1,4 +1,4 @@
-#' The Edit history page: every edit that has been applied to the MATR data.
+#' The Edit history page: every edit that has been applied to the MATR metadata database.
 #'
 #' @param id The module's id.
 #' @return The page's UI.

@@ -1,7 +1,7 @@
 # ------ Editing a draft --------------------------------------------------------
 # Each function takes a draft and returns the changed copy. When a change isn't
 # allowed, stop() says what to do instead; message() notes what else changed.
-# The review page shows both to staff.
+# The Edit Extraction page shows both to staff.
 
 # The fields staff can change by typing or picking. A value keeps its column's type.
 editable_fields <- list(
@@ -219,7 +219,8 @@ draft_service_add_block <- function(draft, component_type, id, near_id = NULL) {
 #' Add a variable to a question.
 #'
 #' It copies the question's last variable (its kind, who it is about and its choices), since
-#' one question's variables are usually alike. A question's first variable starts with two blank choices.
+#' one question's variables are usually alike; a write-in has no choices to copy. A question's first
+#' variable starts with two blank choices.
 #'
 #' @param draft A draft: `list(questionnaire, components, variables, response_options)`; see the top of `service_draft.R`.
 #' @param component_id The question's id.

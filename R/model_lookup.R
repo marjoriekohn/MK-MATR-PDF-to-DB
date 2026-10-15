@@ -1,7 +1,7 @@
 # ------ Lookup tables ---------------------------------------------------------------
 # Short lists staff can add rows to without a schema change, so spelling stays
 # consistent. Each is a table in the MATR database (`connection`, as in
-# model_database.R), read for the review page's pick lists and the reading
+# model_database.R), read for the Edit Extraction page's pick lists and the reading
 # instructions.
 
 #' The kinds of block a questionnaire holds.

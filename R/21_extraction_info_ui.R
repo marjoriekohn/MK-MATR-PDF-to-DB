@@ -1,8 +1,9 @@
-#' What staff know about a questionnaire and its wave.
+#' Where an extraction goes in the MATR metadata database: its registry, study, questionnaire and wave.
 #'
-#' Typed on the Extraction page (by hand, or while the PDF is read), and changed later from the review
-#' page. The drop-downs' choices and the notes under the fields come from the server.
-#' Required fields have a * after their label.
+#' Picked when its change request is previewed and submitted from the Edit Extraction page.
+#' The questionnaire and the wave can each be one that is recorded or a new one;
+#' a recorded wave has to have no questions yet. The drop-downs' choices and the notes under the fields
+#' come from the server. Required fields have a * after their label.
 #'
 #' @param id The module's id.
 #' @return The page's UI.

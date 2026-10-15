@@ -1,6 +1,7 @@
-# ------ Review page building blocks --------------------------------------------
-# Pieces shared by the outline and the details panel. What the page script
-# (www/js/review.js) sends back to Shiny is written into the HTML:
+# ------ Page building blocks ------------------------------------------------------
+# Pieces the Edit Extraction page's outline is made of, and the buttons every page
+# uses. What the page script (www/js/review.js) sends back to Shiny is written into
+# the HTML:
 #   data-ns      a module's outer element: its namespace, so events reach its inputs
 #   data-action  a click sends the element's data-* values to the module's `action`
 #   data-field   a change sends {table, id, field, value} to the module's `edit`

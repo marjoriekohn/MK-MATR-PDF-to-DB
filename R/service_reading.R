@@ -3,7 +3,7 @@
 # answering with JSON in the shape the prompt describes: the questionnaire's
 # blocks, nested as printed. Gemini can only write so much in one answer, so it
 # reads two pages per request, the requests sent at once, and their answers are
-# joined. reading_service_tidy() turns the whole into the JSON the review page
+# joined. reading_service_tidy() turns the whole into the JSON the Edit Extraction page
 # loads (tests/testthat/fixtures/gna_gold.json is a hand-checked example), and the draft checks
 # look it over. If they find problems, Gemini reads it once more, told what
 # they were, and the reading with fewer problems is kept.
@@ -12,7 +12,7 @@ reading_gemini_model <- "gemini-3.8-flash"
 reading_prompt_path <- "prompts/extraction.md"
 reading_pages_at_once <- 2
 
-#' Read a questionnaire PDF into the JSON the review page loads.
+#' Read a questionnaire PDF into the JSON the Edit Extraction page loads.
 #'
 #' Gemini reads a few pages at a time, the requests sent at once, and the answers are
 #' joined and tidied. The draft checks look the result over; if they find problems, Gemini
@@ -164,7 +164,7 @@ reading_service_prompt_version <- function(instructions) {
   substr(digest::digest(instructions, algo = "sha256", serialize = FALSE), 1, 12)
 }
 
-# ------ Into the review page's shape ----------------------------------------------------
+# ------ Into the Edit Extraction page's shape ----------------------------------------------------
 # Counts display_order 1, 2, 3... down each list, keeps only the fields each kind
 # of block has (in tests/testthat/fixtures/gna_gold.json's order, leaving out empty ones), and
 # tidies the text: one space between words, straight quotes. A block put inside
@@ -269,7 +269,7 @@ clean_number <- function(number) {
 }
 
 # ------ Checking a reading ------------------------------------------------------------
-# What the review page's checks would flag, worded for Gemini: each names its
+# What the Edit Extraction page's checks would flag, worded for Gemini: each names its
 # block ("Question 4: Add at least one variable.").
 reading_service_problems <- function(json, lookups) {
   draft <- draft_service_from_json(json)

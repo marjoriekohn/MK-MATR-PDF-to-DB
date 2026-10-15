@@ -1,7 +1,8 @@
 # ------ Checking a draft -------------------------------------------------------
 # Business rules the database will enforce once the draft is loaded, checked
-# now so staff can fix problems while reviewing. Each problem names the block
-# to fix (id) and says what to do next (message), in printed order.
+# now so staff can fix problems while editing. Each problem names the block
+# to fix (id) and says what to do next (message), in printed order, and, where
+# one field is at fault, which (table, row, field), so the page can outline it.
 
 #' Check a draft against the rules a questionnaire has to meet.
 #'
@@ -9,8 +10,9 @@
 #' @param lookups The pick lists, from `lookup_service_get_all()`.
 #' @param matr_ids Whether a variable without a MATR ID is a problem. It is for staff reviewing a
 #'   draft; not for the reading job, since Gemini never reads MATR IDs.
-#' @return A data frame of `id` (the block to fix) and `message` (what to do), in
-#'   printed order; no rows if all is well.
+#' @return A data frame of `id` (the block to fix), `message` (what to do), and `table`, `row` and
+#'   `field` (the field at fault: `NA` for a problem with the block as a whole, and `field` `NA` for
+#'   one with a whole variable), in printed order; no rows if all is well.
 draft_service_check <- function(draft, lookups, matr_ids = TRUE) {
   problems <- rbind(
     block_problems(draft, lookups),
