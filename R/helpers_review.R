@@ -1,6 +1,7 @@
-# ------ Review page building blocks --------------------------------------------
-# Pieces shared by the outline and the details panel. What the page script
-# (www/js/review.js) sends back to Shiny is written into the HTML:
+# ------ Page building blocks ------------------------------------------------------
+# Pieces the Edit Extraction page's outline is made of, and the buttons every page
+# uses. What the page script (www/js/review.js) sends back to Shiny is written into
+# the HTML:
 #   data-ns      a module's outer element: its namespace, so events reach its inputs
 #   data-action  a click sends the element's data-* values to the module's `action`
 #   data-field   a change sends {table, id, field, value} to the module's `edit`
@@ -85,12 +86,39 @@ shorten <- function(text, max_characters) {
 
 # ------ Fields bound to the draft ----------------------------------------------
 # Each input edits one field of one row: `table` and `row` say which, `field`
-# names the column.
+# names the column. What a field holds is said in it while it is empty
+# (`placeholder`, or a drop-down's empty choice); `label` names it for screen readers.
 field_attributes <- function(table, row, field) {
   list(`data-table` = table, `data-id` = row$id, `data-field` = field)
 }
 
-#' A one-line text field of the review page.
+# ------ Fields at fault -------------------------------------------------------------
+# A field the checks found at fault (`draft_service_check()`'s table, row and field) is outlined in red,
+# and says why to screen readers and when pointed at. The page script puts the same marks on as the
+# checks run again, since the outline isn't redrawn as words are typed (review.js). A `field` of NA
+# means the whole row, e.g. a variable with too few choices.
+field_problems <- function(problems, table, id, field) {
+  if (is.null(problems) || nrow(problems) == 0 || is.null(problems$table)) {
+    return(character())
+  }
+  at <- problems$table %in% table & problems$row %in% id &
+    (if (is.na(field)) is.na(problems$field) else problems$field %in% field)
+  problems$message[at]
+}
+
+field_problem_class <- function(problems, table, id, field) {
+  if (length(field_problems(problems, table, id, field)) > 0) "has-problem"
+}
+
+field_problem_attributes <- function(problems, table, id, field) {
+  messages <- field_problems(problems, table, id, field)
+  if (length(messages) == 0) {
+    return(list())
+  }
+  list(`aria-invalid` = "true", title = paste(messages, collapse = "\n"))
+}
+
+#' A one-line text field of the Edit Extraction page.
 #'
 #' @param table The draft table the row is in.
 #' @param row One row of it, as a one-row data frame.
@@ -98,40 +126,31 @@ field_attributes <- function(table, row, field) {
 #' @param placeholder Text shown while it is empty.
 #' @param list The id of a `suggestions()` list.
 #' @param type The input type.
+#' @param label Its name for screen readers, or `NULL`.
+#' @param problems The checks' problems, from `draft_service_check()`, to outline it if it is at fault.
 #' @return A UI element; its changes are reported through `data-field`.
 field_text <- function(table, row, field, placeholder = NULL, list = NULL,
-                       type = "text") {
+                       type = "text", label = NULL, problems = NULL) {
   tags$input(
-    type = type, class = "form-control form-control-sm",
-    value = blank_if_na(row[[field]]), placeholder = placeholder, list = list,
+    type = type, class = c("form-control form-control-sm", field_problem_class(problems, table, row$id, field)),
+    value = blank_if_na(row[[field]]), placeholder = placeholder, list = list, `aria-label` = label,
+    !!!field_problem_attributes(problems, table, row$id, field),
     !!!field_attributes(table, row, field)
   )
 }
 
-#' A multi-line text field of the review page.
-#'
-#' @param autofocus Whether it takes the cursor when drawn.
-#' @inheritParams field_text
-#' @return A UI element.
-field_textarea <- function(table, row, field, autofocus = FALSE) {
-  tags$textarea(
-    class = "form-control", rows = 3, `data-autofocus` = if (autofocus) NA,
-    !!!field_attributes(table, row, field),
-    blank_if_na(row[[field]])
-  )
-}
-
-#' A drop-down of the review page.
+#' A drop-down of the Edit Extraction page.
 #'
 #' A value that isn't one of the choices still shows, marked, so nothing changes silently.
 #'
 #' @param choices The choices; a named vector shows the names.
-#' @param blank The empty choice's text, offered when the field is optional or has no value yet.
+#' @param blank The empty choice's text, offered when the field is optional or has no value yet: it says
+#'   what the field holds.
 #' @param optional Whether the field may be left empty.
 #' @inheritParams field_text
 #' @return A UI element.
 field_select <- function(table, row, field, choices, blank = "Pick one…",
-                         optional = FALSE) {
+                         optional = FALSE, label = NULL, problems = NULL) {
   value <- row[[field]]
   if (is.null(names(choices))) names(choices) <- choices
   if (!is.na(value) && !value %in% choices) {
@@ -141,7 +160,10 @@ field_select <- function(table, row, field, choices, blank = "Pick one…",
     tags$option(value = choice, selected = if (identical(choice, value)) NA, label)
   }, names(choices), unname(choices))
   tags$select(
-    class = "form-select form-select-sm", !!!field_attributes(table, row, field),
+    class = c("form-select form-select-sm", field_problem_class(problems, table, row$id, field)),
+    `aria-label` = label,
+    !!!field_problem_attributes(problems, table, row$id, field),
+    !!!field_attributes(table, row, field),
     if (optional || is.na(value)) tags$option(value = "", blank),
     unname(options)
   )
@@ -162,7 +184,7 @@ field_toggle <- function(table, row, field, choices, label) {
   )
 }
 
-#' A check box of the review page.
+#' A check box of the Edit Extraction page.
 #'
 #' @param label Names it for screen readers.
 #' @inheritParams field_text
@@ -173,37 +195,6 @@ field_checkbox <- function(table, row, field, label) {
     checked = if (isTRUE(row[[field]])) NA,
     !!!field_attributes(table, row, field)
   )
-}
-
-#' A label above a field.
-#'
-#' Clicking the label goes to the field, except for a row of buttons (`group = TRUE`),
-#' where it would press the first one.
-#'
-#' @param label The label.
-#' @param field The field's UI.
-#' @param hint Text for an "i" beside the label, or `NULL`.
-#' @param group Whether `field` is a row of buttons.
-#' @param class Extra classes.
-#' @return A UI element.
-labelled <- function(label, field, hint = NULL, group = FALSE, class = NULL) {
-  wrapper <- if (group) div else tags$label
-  wrapper(
-    class = c("details-field", class),
-    role = if (group) "group", `aria-label` = if (group) label,
-    span(class = "form-label", label, if (!is.null(hint)) hint_icon(hint)),
-    field
-  )
-}
-
-#' An "i" beside a label.
-#'
-#' Its hint shows when pointing at or tabbing to it.
-#'
-#' @param hint The hint.
-#' @return A UI element.
-hint_icon <- function(hint) {
-  bslib::tooltip(span(class = "field-hint", `aria-label` = hint, icon("circle-info")), hint)
 }
 
 #' Suggestions a text field offers as you type.

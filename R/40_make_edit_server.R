@@ -160,7 +160,7 @@ make_edit_server <- function(
           )
         } else {
           switch(verb(),
-            add = if (!is.null(entity()$parts)) NULL,
+            add = NULL,
             update = edit_callout(
               "info",
               "Pick the one to change, then change it. Before you send anything you'll see everywhere it's used."
@@ -311,7 +311,7 @@ make_edit_server <- function(
       showModal(confirm_dialog(
         "Discard this saved edit?",
         p(strong(record$summary)),
-        p("It's set aside and won't be listed here again. Nothing has been added to the MATR data."),
+        p("It's set aside and won't be listed here again. Nothing has been added to the MATR metadata database."),
         confirm_id = ns("confirm_discard"), confirm_label = "Discard", easy_close = TRUE
       ))
       discarding(record$id)
@@ -351,7 +351,7 @@ make_edit_server <- function(
       tagList(
         if (!stuck) {
           div(
-            class = "edit-why",
+            class = "edit-send",
             uiOutput(ns("conflicts")),
             if (identical(draft()$status, "Sent Back") && !is.null(sent_back)) {
               edit_callout(
@@ -360,23 +360,16 @@ make_edit_server <- function(
                 p(sent_back$note), p("Change what they ask, then send it again.")
               )
             },
-            card(card_body(
-              textAreaInput(
-                ns("note"), "Why are you making this change?",
-                value = isolate(draft()$note) %||% "", rows = 2, width = "100%",
-                placeholder = "Reviewers read this. Say where the correct information came from."
-              ),
-              if (needs_approval() && !editing_request() && length(reviewers()) > 0) {
+            if (needs_approval() && !editing_request() && length(reviewers()) > 0) {
+              card(card_body(
                 selectInput(
                   ns("reviewer"), "Ask someone to review it (optional)",
                   c("Anyone" = "", reviewers()), selected = isolate(draft()$requested_reviewer$id) %||% "",
                   width = "100%", selectize = FALSE
-                )
-              },
-              if (needs_approval() && !editing_request() && length(reviewers()) > 0) {
+                ),
                 p(class = "form-text", "They are emailed a link once sign-in is set up. Until then, any staff member can approve it.")
-              }
-            ))
+              ))
+            }
           )
         },
         div(
@@ -396,26 +389,24 @@ make_edit_server <- function(
       )
     })
 
-    has_note <- reactive(has_text(input$note))
-
     observe({
-      updateActionButton(session, "submit", disabled = !(change$ready() && has_note()))
+      updateActionButton(session, "submit", disabled = !change$ready())
     })
 
     output$footer_note <- renderUI({
       if (!change$ready()) {
         return(change$blockers()[1])
       }
-      if (!has_note()) {
-        return("Say why you're making this change, so reviewers know.")
-      }
       if (editing_request()) {
         return("Saving makes a new version of this request. Nobody has approved it yet.")
       }
       if (needs_approval()) {
-        return("Sending puts this on Change Requests. Nothing changes in the MATR data until another staff member approves it.")
+        return(paste(
+          "Sending puts this on Change Requests.",
+          "Nothing changes in the MATR metadata database until another staff member approves it."
+        ))
       }
-      "This changes the MATR data right away. It is recorded in the Edit history."
+      "This changes the MATR metadata database right away. It is recorded in the Edit history."
     })
 
     # Other open edits that change the same record: staff should talk first.
@@ -429,7 +420,7 @@ make_edit_server <- function(
         "warning",
         title = "Another open edit already changes this",
         lapply(clashes, function(record) {
-          who <- if (identical(record$prepared_by_id, me$staff_id)) "You have" else paste(record$prepared_by, "has")
+          who <- if (draft_row_service_is_mine(record, me)) "You have" else paste(record$prepared_by, "has")
           p(strong(who), paste0(" an open edit that changes the same thing: “", record$summary, "”."))
         }),
         p("Check it first, and talk to whoever made it, so the two don't undo each other.")
@@ -441,7 +432,7 @@ make_edit_server <- function(
     build_record <- function(status) {
       built <- tryCatch(change$built(), shiny.silent.error = function(problem) NULL) %||%
         edit_service_unfinished(verb(), entity())
-      edit_service_record(me, change$form(), built, input$note, status, previous = draft(), reviewer = input$reviewer)
+      edit_service_record(me, change$form(), built, status, previous = draft(), reviewer = input$reviewer)
     }
 
     observeEvent(input$save_draft, {
@@ -465,7 +456,7 @@ make_edit_server <- function(
 
     # The main button. An add is checked for something like it first.
     observeEvent(input$submit, {
-      req(change$ready(), has_note())
+      req(change$ready())
       if (identical(verb(), "add") && !editing_request()) {
         found <- tryCatch(
           edit_service_duplicates(entity(), snapshot(), change$fields(), change$values()),
@@ -556,7 +547,10 @@ make_edit_server <- function(
           } else if (isTRUE(outcome$resaved)) {
             "This is a new version of the request. It is waiting on Change Requests, where one other staff member has to approve it."
           } else {
-            "It is waiting on Change Requests, where one other staff member has to approve it. Nothing has changed in the MATR data yet."
+            paste(
+              "It is waiting on Change Requests, where one other staff member has to approve it.",
+              "Nothing has changed in the MATR metadata database yet."
+            )
           }
         ),
         div(

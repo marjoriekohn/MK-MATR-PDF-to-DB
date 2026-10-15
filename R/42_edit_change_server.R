@@ -228,16 +228,7 @@ edit_change_server <- function(
     add_aside <- function(ctx) {
       tagList(
         h2("What you're adding"),
-        edit_callout("info", ctx$entity$about),
-        if (!is.null(ctx$entity$parts)) {
-          edit_callout(
-            "info",
-            title = "It comes with more",
-            paste0("The database needs ", word_list(vapply(ctx$entity$parts[-1], function(part) {
-              paste("a", edit_entities[[part$entity]]$noun)
-            }, character(1))), " for it, so you'll add them in the same edit.")
-          )
-        }
+        edit_callout("info", ctx$entity$about)
       )
     }
 

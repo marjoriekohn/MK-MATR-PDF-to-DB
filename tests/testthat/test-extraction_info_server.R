@@ -1,5 +1,5 @@
-# The questionnaire-and-wave form, shared by the Extraction page's modes and the review page's
-# "About" dialog. Its inputs are named after the fields (`wave_name`, `study_id`...). It works on the live
+# The form that says where an extraction goes (registry, study, questionnaire, wave), in the Edit
+# Extraction page's Preview Change Request dialog. Its inputs are named after the fields (`wave_name`, `study_id`...). It works on the live
 # tables as the page read them, so these tests give it the sample tables and drafts; what it does with
 # the database (adding a study from a drop-down) is in test-quick_add_server.R.
 
@@ -88,7 +88,7 @@ test_that("each problem is written under its own field", {
 
 test_that("showing a draft fills the form from it, with the study and registry of its questionnaire", {
   seen <- local_browser()
-  record <- list(info = list(kind = "new_wave", questionnaire_id = "1", wave_name = "Wave 3", notes = "From the box in the hall"))
+  record <- list(info = list(kind = "new_wave", questionnaire_id = "1", wave_name = "Wave 3"))
   shiny::testServer(extraction_info_server, args = info_args(), {
     show(record)
     expect_equal(last_update(seen, "registry_id")$selected, "1")
@@ -100,8 +100,32 @@ test_that("showing a draft fills the form from it, with the study and registry o
     expect_equal(questionnaire$selected, "1")
     expect_match(names(questionnaire$choices)[2], "Adult Health and Personality")
     expect_equal(last_update(seen, "wave_name")$value, "Wave 3")
-    expect_equal(last_update(seen, "notes")$value, "From the box in the hall")
+    expect_equal(last_update(seen, "wave_choice")$selected, "new")
+    expect_equal(last_update(seen, "wave_id")$choices[1], c("Select wave" = ""))
   })
+})
+
+test_that("a recorded questionnaire's wave can be a recorded one: it is then required, checked and offered by name", {
+  shiny::testServer(extraction_info_server, args = info_args(), {
+    session$setInputs(registry_id = "1", study_id = "1", kind = "new_wave", questionnaire_id = "1", wave_choice = "existing")
+    expect_equal(missing(), "wave")
+    session$setInputs(wave_id = "3") # another questionnaire's wave
+    expect_equal(problems()$wave_id, "Pick one of this questionnaire's waves.")
+    session$setInputs(wave_id = "2")
+    expect_length(missing(), 0)
+    expect_null(problems()$wave_id)
+    expect_null(problems()$wave_name) # a recorded wave's name isn't typed
+  })
+})
+
+test_that("the form says new or existing for the questionnaire and for its wave, and has no notes", {
+  html <- htmltools::renderTags(extraction_info_ui("info"))$html
+  expect_match(html, "Existing questionnaire")
+  expect_match(html, "New questionnaire")
+  expect_match(html, 'id="info-wave_choice"')
+  expect_match(html, "Existing wave")
+  expect_match(html, 'id="info-wave_id"')
+  expect_false(grepl("Notes for reviewers|info-notes", html))
 })
 
 test_that("showing no draft empties the form, and the drop-downs offer what the database has", {

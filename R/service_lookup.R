@@ -1,4 +1,4 @@
-#' The lists staff pick from on the review page, and the reading job tells Gemini to use.
+#' The lists staff pick from on the Edit Extraction page, and the reading job tells Gemini to use.
 #'
 #' A list that can't be read comes back empty, and `problems` says why (e.g. a lookup
 #' table the database doesn't have yet), so the page can say so instead of failing.

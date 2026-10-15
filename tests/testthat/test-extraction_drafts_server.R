@@ -10,7 +10,7 @@
 #     did = did,
 #     args = list(
 #       extractions = extractions, catalog = test_live_catalog(), connection = test_connection, me = me,
-#       open_review = function(record) did$reviews[[length(did$reviews) + 1]] <- record,
+#       open_edit_extraction = function(record) did$reviews[[length(did$reviews) + 1]] <- record,
 #       open_details = function(record) did$details[[length(did$details) + 1]] <- record,
 #       switch_mode = function(mode) did$modes <- c(did$modes, mode)
 #     )
@@ -74,7 +74,7 @@
 #   })
 # })
 #
-# test_that("Continue opens a draft that has been read on the review page, and one still being read in AI-Powered mode", {
+# test_that("Continue opens a draft that has been read on the Edit Extraction page, and one still being read in AI-Powered mode", {
 #   me <- local_staff()
 #   colleague <- local_staff()
 #   tree <- local_tree()

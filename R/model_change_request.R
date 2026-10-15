@@ -1,8 +1,8 @@
 # ------ Change Requests ------------------------------------------------------------
 # A change request is a draft (model_draft_row.R) that has been sent for review: an edit that
-# needs approval (a STAFF member's delete) or an extraction pushed by a STAFF member. It waits
+# needs approval (a STAFF member's delete) or an extraction a STAFF member submitted. It waits
 # with the status "Awaiting Review" until one staff member other than the person who prepared
-# or last changed it approves it, which applies it to the MATR data, or sends it back to the
+# or last changed it approves it, which applies it to the MATR metadata database, or sends it back to the
 # preparer, or until the preparer withdraws it.
 #
 # Approving and applying are functions of the database, called through /rpc/, because applying

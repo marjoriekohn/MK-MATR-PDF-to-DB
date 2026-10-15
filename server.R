@@ -176,10 +176,10 @@ function(input, output, session) {
     on_page <- function(page) reactive(identical(input$nav, page))
 
     # What the other pages add to the database (an add on Make an edit, an
-    # approved request, a pushed extraction) has to be in the drop-downs the next
+    # approved request, an extraction an ADMIN added) has to be in the drop-downs the next
     # time they are used, so the catalog is read again whenever a page that picks
     # from it is opened.
-    observeEvent(input$nav, if (input$nav %in% c("extraction", "review")) catalog$refresh())
+    observeEvent(input$nav, if (input$nav %in% c("extraction", "edit_extraction")) catalog$refresh())
 
     # ------ MODULES -----------------------------------------------------------
 
@@ -188,15 +188,15 @@ function(input, output, session) {
     observeEvent(input$to_home, show_page("home"))
 
     # ------ * Extraction ------------------------------------------------------
-    # Every way of starting an extraction opens its draft on the review page (set
-    # up below).
-    open_review <- function(record) {
-      if (review$open(record)) show_page("review")
+    # Every way of starting an extraction opens its draft on the Edit Extraction
+    # page (set up below).
+    open_edit_extraction <- function(record) {
+      if (edit_extraction$open(record)) show_page("edit_extraction")
     }
-    extraction_server("extraction", extractions, catalog, database, me, open_review)
+    extraction_server("extraction", extractions, catalog, database, me, open_edit_extraction)
 
-    # ------ * Review extraction -----------------------------------------------
-    review <- review_server("review", extractions, catalog, database, me, show_page)
+    # ------ * Edit Extraction -------------------------------------------------
+    edit_extraction <- edit_extraction_server("edit_extraction", extractions, catalog, database, me, show_page)
 
     # ------ * Make an edit ----------------------------------------------------
     make_edit <- make_edit_server("make_edit", database, me, show_page)
@@ -206,14 +206,14 @@ function(input, output, session) {
 
     # ------ * Change Requests -------------------------------------------------
     # Editing a request opens it where it was made: an edit on Make an edit, an
-    # extraction on the review page.
+    # extraction on the Edit Extraction page.
     change_requests_server(
       "change_requests", database, me,
       open_edit = function(record) {
         make_edit$open(record)
         show_page("make_edit")
       },
-      open_review = open_review
+      open_edit_extraction = open_edit_extraction
     )
     site <<- list(catalog = catalog, extractions = extractions)
     invisible()

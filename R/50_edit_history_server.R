@@ -1,6 +1,6 @@
 #' The Edit history page's server.
 #'
-#' The edits applied to the MATR data, newest first, filtered by kind and by words typed.
+#' The edits applied to the MATR metadata database, newest first, filtered by kind and by words typed.
 #' "See what changed" opens the fields an edit changed, old and new.
 #'
 #' @param id The module's id.
@@ -71,7 +71,6 @@ edit_history_server <- function(
         size = "l",
         easyClose = TRUE,
         p(class = "history-meta", paste(c(history_service_when(record), history_service_people(record)), collapse = " · ")),
-        if (nzchar(record$note)) p(strong("Why: "), record$note),
         p(class = "form-text", change_service_counts_text(changes$counts)),
         change_items_ui(changes$groups),
         footer = modalButton("Close")

@@ -1,6 +1,6 @@
 # ------ Edit history ---------------------------------------------------------------
 # An applied change is a DRAFT row with the status Applied (model_draft_row.R): what it was in a
-# sentence, why, who prepared it, the one person who approved it (or nobody: an add or an
+# sentence, who prepared it, the one person who approved it (or nobody: an add or an
 # update, or anything an ADMIN did, needs no approval), and when it was applied. APPLIED_ITEM has
 # one row for each field it changed, with the old and new value (the same items the draft held,
 # with the numbers the database gave new rows). Only apply_draft() and approve_draft() in the
@@ -11,7 +11,7 @@
 #   id                 the draft's id, as text
 #   kind               Add, Update or Delete (an extraction is an Add)
 #   source             "Edit" or "Extraction"
-#   status, summary, note
+#   status, summary
 #   prepared_by        the preparer's name (NA if they are no longer listed)
 #   approved_by        the approver's name; NA if it needed no approval
 #   approval_required  whether someone had to approve it
@@ -22,7 +22,7 @@ history_item_table <- "applied_item"
 history_applied_status <- "Applied"
 
 history_columns <- c(
-  "draft_id", "kind", "status", "summary", "note",
+  "draft_id", "kind", "status", "summary",
   "created_at", "approved_at", "applied_at",
   "preparer:staff!prepared_by(name)",
   "approver:staff!approved_by(name)",
@@ -76,7 +76,6 @@ history_model_record <- function(row) {
     source = row$kind %||% edit_draft_kind,
     status = row$status,
     summary = row$summary %||% "",
-    note = row$note %||% "",
     prepared_by = as.character(row$preparer$name %||% NA),
     approved_by = as.character(approver %||% NA),
     approval_required = !is.null(approver),

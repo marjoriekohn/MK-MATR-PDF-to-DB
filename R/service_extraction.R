@@ -3,25 +3,31 @@
 # reading job (Gemini; service_reading.R) moves `extraction_status` along
 #   queued -> sent -> received -> ready      or stops at failed
 # and saves the questionnaire it read. Manual: staff type the questionnaire themselves, with or
-# without a PDF to look at, and there is no reading. Either way staff review a copy (see
-# draft_service_load()). `status` belongs to the draft: Draft until it's pushed, Awaiting
-# Review while it waits for approval, Sent Back when a reviewer returns it, Withdrawn if
-# discarded, Applied once it is in the MATR data.
-# `info` is what staff typed about the questionnaire and wave (all text; rows
-# picked from the live tables are saved as their IDs). Records are kept in the
-# database (model_extraction.R); `connection` is the one made in global.R.
+# without a PDF to look at, and there is no reading. Either way staff edit a copy on the Edit
+# Extraction page (see draft_service_load()). `status` belongs to the draft: Draft until its
+# change request is submitted, Awaiting Review while it waits for approval, Sent Back when a
+# reviewer returns it, Withdrawn if discarded, Applied once it is in the MATR metadata database.
+# `info` is where it goes in the database: its registry, study, questionnaire and wave (all
+# text; rows picked from the live tables are saved as their IDs). It is picked when the change
+# request is submitted, so a draft can have none. Records are kept in the database
+# (model_extraction.R); `connection` is the one made in global.R.
 
 extraction_open_statuses <- c("Draft", "Sent Back")
 
+# The drafts whose questionnaire and wave another draft mustn't take as well: those still being
+# prepared, and those waiting for approval.
+extraction_pending_statuses <- c(extraction_open_statuses, "Awaiting Review")
+
 extraction_info_fields <- c(
   "registry_id", "study_id", # the registry and study it belongs to
-  "kind", # "new_wave" of a recorded questionnaire, or "new_questionnaire"
+  "kind", # "new_wave": a recorded questionnaire, or "new_questionnaire"
   "questionnaire_id", # new_wave: which questionnaire
   "name", "abbreviation", # new_questionnaire: about it, and its respondent type
   "respondent_type_id",
   "description",
-  "wave_name", "administered_date", "respondent_count",
-  "notes"
+  "wave_choice", # a recorded questionnaire's wave: "new", or "existing" (a recorded wave with no questions)
+  "wave_id", # wave_choice "existing": which wave
+  "wave_name", "administered_date", "respondent_count" # a new wave: about it
 )
 
 #' Every extraction draft, newest saved first.
@@ -59,7 +65,7 @@ extraction_service_open_drafts <- function(records, prepared_by_id = NULL) {
 #'
 #' @param record An extraction record, as `extraction_model_get_all()` returns it. `NULL` for an empty form.
 #' @return A named list of strings, one per field in `extraction_info_fields`, blanks as
-#'   `""`; `kind` is `"new_wave"` unless the record says otherwise.
+#'   `""`; `kind` is `"new_wave"` and `wave_choice` `"new"` unless the record says otherwise.
 extraction_service_info <- function(record = NULL) {
   info <- lapply(extraction_info_fields, function(field) {
     value <- record$info[[field]]
@@ -67,16 +73,27 @@ extraction_service_info <- function(record = NULL) {
   })
   info <- stats::setNames(info, extraction_info_fields)
   if (!nzchar(info$kind)) info$kind <- "new_wave"
+  if (!nzchar(info$wave_choice)) info$wave_choice <- "new"
   info
 }
 
-#' Fill in the study and registry a new wave's questionnaire belongs to.
+#' Whether an extraction goes into a wave that is recorded already.
 #'
-#' A new wave's questionnaire says which study and registry it belongs to, so they are
+#' Only a recorded questionnaire's wave can be: a new questionnaire's wave is new too.
+#'
+#' @param info Where it goes, as `extraction_service_info()` returns it.
+#' @return `TRUE` or `FALSE`.
+extraction_service_uses_recorded_wave <- function(info) {
+  identical(info$kind, "new_wave") && identical(info$wave_choice, "existing")
+}
+
+#' Fill in the study and registry a recorded questionnaire belongs to.
+#'
+#' A recorded questionnaire says which study and registry it belongs to, so they are
 #' filled in from it when blank (as in drafts saved before the form asked for them), and
 #' the questionnaire stays among the drop-down's choices.
 #'
-#' @param info What staff typed about the questionnaire and wave, as `extraction_service_info()` returns it.
+#' @param info Where it goes in the database, as `extraction_service_info()` returns it.
 #' @param catalog The live tables the pages pick from, from `questionnaire_service_get_catalog()`.
 #' @return `info`, with `study_id` and `registry_id` filled in where they were blank.
 extraction_service_place <- function(info, catalog) {
@@ -107,7 +124,7 @@ extraction_service_is_read <- function(record) {
 #' @param connection The MATR database, `list(url, key)`; see `model_database.R`.
 #' @param upload One row of a `fileInput`'s value: `name`, `size`, `datapath`.
 #' @param staff Who is preparing it: `list(staff_id, name, role)`.
-#' @param info What staff typed about the questionnaire and wave, as `extraction_service_info()` returns it.
+#' @param info Where it goes in the database, as `extraction_service_info()` returns it.
 #' @param now The time to record.
 #' @return The record as saved, with its id.
 extraction_service_create <- function(connection, upload, staff,
@@ -134,11 +151,11 @@ extraction_service_create <- function(connection, upload, staff,
 #' Start a Manual draft: the questionnaire is typed by hand.
 #'
 #' There is no reading. The PDF is optional: if staff give one, it is kept with the draft so the
-#' review page can show it beside what they type. The questionnaire starts empty.
+#' Edit Extraction page can show it beside what they type. The questionnaire starts empty.
 #'
 #' @param connection The MATR database, `list(url, key)`; see `model_database.R`.
 #' @param staff Who is preparing it: `list(staff_id, name, role)`.
-#' @param info What staff typed about the questionnaire and wave, as `extraction_service_info()` returns it.
+#' @param info Where it goes in the database, as `extraction_service_info()` returns it.
 #' @param upload One row of a `fileInput`'s value: `name`, `size`, `datapath`; or `NULL` for none.
 #' @param now The time to record.
 #' @return The record as saved, with its id.
@@ -159,11 +176,14 @@ extraction_service_create_manual <- function(connection, staff, info = extractio
   extraction_model_create(connection, record)
 }
 
-#' Save what staff typed about the questionnaire and wave.
+#' Save where an extraction goes, by itself.
+#'
+#' The site saves it with the change request instead (`extraction_service_push()`); the database tests
+#' use this to check that saving one field never undoes another.
 #'
 #' @param connection The MATR database, `list(url, key)`; see `model_database.R`.
 #' @param id The draft's id.
-#' @param info What staff typed about the questionnaire and wave, as `extraction_service_info()` returns it.
+#' @param info Where it goes in the database, as `extraction_service_info()` returns it.
 #' @param me Who is saving: `list(staff_id, name, role)`.
 #' @return The record as saved.
 extraction_service_save_info <- function(connection, id, info, me) {
@@ -267,7 +287,7 @@ extraction_service_load_draft <- function(connection, record) {
 #'
 #' @param connection The MATR database, `list(url, key)`; see `model_database.R`.
 #' @param record The extraction draft's record.
-#' @param draft A draft, as the review page edits it.
+#' @param draft A draft, as the Edit Extraction page edits it.
 #' @param base The draft as it was when the page opened it or last saved it; what the
 #'   changes are measured against.
 #' @param me Who is saving: `list(staff_id, name, role)`.
@@ -322,18 +342,16 @@ extraction_service_reading_steps <- function(record) {
 
 #' The steps on each Existing Draft card.
 #'
+#' How it was read (or that it was typed by hand), and how much of it has been checked on the Edit
+#' Extraction page, as the page's own "N% complete" counts it.
+#'
 #' @param record An extraction record, as `extraction_model_get_all()` returns it.
 #' @param draft The questionnaire it read, or `NULL` until reading has finished.
 #' @return A data frame with `label` and `state`, one row per step.
 extraction_service_progress <- function(record, draft = NULL) {
-  info <- extraction_service_info(record)
-  sent_back <- identical(record$status, "Sent Back")
   rbind(
     reading_progress(record),
-    progress_step("Wave details", info_state(info)),
-    structure_progress(draft),
-    matr_id_progress(draft, record$matr_csv),
-    progress_step(if (sent_back) "Resubmitted" else "Submitted", "not_started")
+    structure_progress(draft)
   )
 }
 
@@ -352,38 +370,15 @@ reading_progress <- function(record) {
   )
 }
 
-# Done once every required field is filled in; started once anything is.
-info_state <- function(info) {
-  if (length(extraction_service_missing(info)) == 0) {
-    return("done")
-  }
-  typed <- setdiff(extraction_info_fields, "kind")
-  if (any(vapply(typed, function(field) has_text(info[[field]]), logical(1)))) "in_progress" else "not_started"
-}
-
 structure_progress <- function(draft) {
   if (is.null(draft)) {
     return(progress_step("Structure", "not_started"))
   }
   counts <- draft_service_counts(draft)
   progress_step(
-    sprintf("Structure checked · %d of %d", counts$checked, counts$blocks),
+    paste0("Structure · ", draft_service_percent_checked(counts), "% complete"),
     count_state(counts$checked, counts$blocks)
   )
-}
-
-# Staff fill each variable's matr_id on the review page, from the CSV or by hand.
-matr_id_progress <- function(draft, matr_csv) {
-  if (is.null(draft)) {
-    if (is.null(matr_csv)) {
-      return(progress_step("MATR IDs", "not_started"))
-    }
-    return(progress_step("MATR IDs · CSV added", "in_progress"))
-  }
-  counts <- draft_service_counts(draft)
-  state <- count_state(counts$matr_ids, counts$boxes)
-  if (state == "not_started" && !is.null(matr_csv)) state <- "in_progress"
-  progress_step(sprintf("MATR IDs · %d of %d", counts$matr_ids, counts$boxes), state)
 }
 
 count_state <- function(n_done, n_total) {
@@ -391,17 +386,23 @@ count_state <- function(n_done, n_total) {
 }
 
 # ------ Naming ---------------------------------------------------------------------
-#' A card's title, from what staff typed, or the PDF's file name until they have.
+#' A card's title: where it goes, once that is picked; until then the name the AI read off the
+#' PDF, or the PDF's file name.
 #'
 #' @param record An extraction record, as `extraction_model_get_all()` returns it.
 #' @param catalog The live tables the pages pick from, from `questionnaire_service_get_catalog()`.
+#' @param read The draft's questionnaire, with whichever of `name` and `abbreviation` were printed, or `NULL`.
 #' @return A string such as `"Adult Health and Personality (AHP) · Wave 3"`.
-extraction_service_title <- function(record, catalog) {
+extraction_service_title <- function(record, catalog, read = NULL) {
   info <- extraction_service_info(record)
   questionnaire <- extraction_service_questionnaire(info, catalog)
-  wave <- trimws(info$wave_name)
+  wave <- extraction_service_wave_name(info, catalog)
   if (is.null(questionnaire) && !nzchar(wave)) {
-    return(record$pdf$name)
+    read_name <- questionnaire_name(trimws(read$name %||% ""), trimws(read$abbreviation %||% ""))
+    if (nzchar(read_name)) {
+      return(read_name)
+    }
+    return(record$pdf$name %||% "Untitled questionnaire")
   }
   paste(c(
     if (!is.null(questionnaire)) questionnaire_name(questionnaire$name, questionnaire$abbreviation) else "Unnamed questionnaire",
@@ -409,9 +410,18 @@ extraction_service_title <- function(record, catalog) {
   ), collapse = " · ")
 }
 
-#' The review page's heading.
+# The wave's name: the recorded one's, or as typed for a new one; "" if neither is known yet.
+extraction_service_wave_name <- function(info, catalog) {
+  if (extraction_service_uses_recorded_wave(info)) {
+    wave <- catalog$waves[as.character(catalog$waves$wave_id) %in% info$wave_id, , drop = FALSE]
+    return(if (nrow(wave) == 1) trimws(wave$name) else "")
+  }
+  trimws(info$wave_name)
+}
+
+#' The Edit Extraction page's heading.
 #'
-#' Until staff name the questionnaire, it goes by what Gemini read off the PDF.
+#' Until staff say where it goes, it goes by what Gemini read off the PDF.
 #'
 #' @param record An extraction record, as `extraction_model_get_all()` returns it.
 #' @param catalog The live tables the pages pick from, from `questionnaire_service_get_catalog()`.
@@ -423,7 +433,7 @@ extraction_service_heading <- function(record, catalog, read = NULL) {
   name <- trimws(questionnaire$name %||% "")
   abbreviation <- trimws(questionnaire$abbreviation %||% "")
   short_name <- if (nzchar(abbreviation)) abbreviation else if (nzchar(name)) name else "Unnamed questionnaire"
-  wave <- trimws(info$wave_name)
+  wave <- extraction_service_wave_name(info, catalog)
   list(
     title = paste(c(short_name, if (nzchar(wave)) wave), collapse = " · "),
     subtitle = if (nzchar(abbreviation)) name else ""
@@ -454,10 +464,11 @@ questionnaire_name <- function(name, abbreviation) {
 # ------ Checks on what staff typed ---------------------------------------------------
 #' The required fields left blank.
 #'
-#' The form goes registry, study, then the questionnaire: a new wave needs the recorded questionnaire,
-#' and a new questionnaire everything the QUESTIONNAIRE row will hold. Both need a wave name.
+#' The form goes registry, study, then the questionnaire: a recorded questionnaire needs picking, and a
+#' new questionnaire everything the QUESTIONNAIRE row will hold. Then the wave: a recorded one needs
+#' picking, and a new one a name.
 #'
-#' @param info What staff typed about the questionnaire and wave, as `extraction_service_info()` returns it.
+#' @param info Where it goes, as `extraction_service_info()` returns it.
 #' @return The names of the fields, as the form labels them; empty if none.
 extraction_service_missing <- function(info) {
   required <- c(registry_id = "registry", study_id = "study")
@@ -466,7 +477,7 @@ extraction_service_missing <- function(info) {
   } else {
     c(questionnaire_id = "questionnaire")
   })
-  required <- c(required, wave_name = "wave name")
+  required <- c(required, if (extraction_service_uses_recorded_wave(info)) c(wave_id = "wave") else c(wave_name = "wave name"))
   blank <- !vapply(names(required), function(field) has_text(info[[field]]), logical(1))
   unname(required[blank])
 }
@@ -478,19 +489,39 @@ extraction_service_missing <- function(info) {
 #' The name must be new for its study. The database allows repeats (BR14), but two
 #' questionnaires named alike would be hard to tell apart.
 #'
-#' @param info What staff typed about the questionnaire and wave, as `extraction_service_info()` returns it.
+#' The same goes for another draft that is being prepared, or waiting for approval, as a new
+#' questionnaire of the same study, so the two don't add it twice.
+#'
+#' @param info Where it goes, as `extraction_service_info()` returns it.
 #' @param catalog The live tables the pages pick from, from `questionnaire_service_get_catalog()`.
+#' @param records All the extraction records, to find other drafts of a new questionnaire.
+#' @param id This draft's id, so it doesn't clash with itself.
 #' @return A sentence saying what to do, or `NULL`.
-extraction_service_name_problem <- function(info, catalog) {
+extraction_service_name_problem <- function(info, catalog, records = list(), id = NULL) {
   same <- same_in_study(info, catalog, "name")
   if (nrow(same) > 0) {
-    sprintf("This study already has a questionnaire called %s. Pick another name, or choose Existing questionnaire.", same$name[1])
+    return(sprintf("This study already has a questionnaire called %s. Pick another name, or choose Existing questionnaire.", same$name[1]))
+  }
+  typed <- tolower(trimws(info$name))
+  if (info$kind != "new_questionnaire" || !nzchar(typed)) {
+    return(NULL)
+  }
+  others <- Filter(function(record) {
+    other <- extraction_service_info(record)
+    !identical(record$id, id) && other$kind == "new_questionnaire" && identical(other$study_id, info$study_id) &&
+      tolower(trimws(other$name)) == typed
+  }, draft_row_service_open(records, extraction_pending_statuses))
+  if (length(others) > 0) {
+    sprintf(
+      "%s already has a draft adding %s to this study. Pick another name, or continue that draft.",
+      others[[1]]$prepared_by %||% "Someone", trimws(info$name)
+    )
   }
 }
 
 #' A problem with a new questionnaire's abbreviation, or `NULL`.
 #'
-#' @param info What staff typed about the questionnaire and wave, as `extraction_service_info()` returns it.
+#' @param info Where it goes in the database, as `extraction_service_info()` returns it.
 #' @param catalog The live tables the pages pick from, from `questionnaire_service_get_catalog()`.
 #' @return A sentence saying what to do, or `NULL`.
 extraction_service_abbreviation_problem <- function(info, catalog) {
@@ -514,9 +545,9 @@ same_in_study <- function(info, catalog, field) {
 #' A problem with a new wave's name, or `NULL` (BR21).
 #'
 #' A questionnaire's wave names are unique, among its recorded waves and the drafts
-#' being prepared for it.
+#' being prepared for it or waiting for approval.
 #'
-#' @param info What staff typed about the questionnaire and wave, as `extraction_service_info()` returns it.
+#' @param info Where it goes, as `extraction_service_info()` returns it.
 #' @param catalog The live tables the pages pick from, from `questionnaire_service_get_catalog()`.
 #' @param records All the extraction records, to find other drafts of the same wave.
 #' @param id This draft's id, so it doesn't clash with itself.
@@ -525,7 +556,7 @@ same_in_study <- function(info, catalog, field) {
 #' @return A sentence saying what to do, or `NULL`.
 extraction_service_wave_name_problem <- function(info, catalog, records, id = NULL, me = NULL) {
   wave_name <- trimws(info$wave_name)
-  if (info$kind != "new_wave" || !nzchar(wave_name)) {
+  if (info$kind != "new_wave" || extraction_service_uses_recorded_wave(info) || !nzchar(wave_name)) {
     return(NULL)
   }
   questionnaire <- questionnaire_service_get(catalog, info$questionnaire_id)
@@ -541,15 +572,55 @@ extraction_service_wave_name_problem <- function(info, catalog, records, id = NU
   }
   others <- Filter(function(record) {
     other <- extraction_service_info(record)
-    !identical(record$id, id) && other$kind == "new_wave" &&
+    !identical(record$id, id) && other$kind == "new_wave" && !extraction_service_uses_recorded_wave(other) &&
       identical(other$questionnaire_id, info$questionnaire_id) && same_name(other$wave_name)
-  }, extraction_service_open_drafts(records))
+  }, draft_row_service_open(records, extraction_pending_statuses))
   if (length(others) > 0) {
-    who <- if (identical(others[[1]]$prepared_by_id, me$staff_id)) "You" else others[[1]]$prepared_by
+    who <- if (draft_row_service_is_mine(others[[1]], me)) "You" else others[[1]]$prepared_by
     return(sprintf(
       "%s already started a draft of %s %s. Pick another name, or continue that draft.",
       who, questionnaire$abbreviation, wave_name
     ))
+  }
+  NULL
+}
+
+#' A problem with the recorded wave an extraction goes into, or `NULL`.
+#'
+#' It has to be one of the questionnaire's waves, with no questions yet (an extraction adds every
+#' question the wave asks), and no other draft being prepared or waiting for approval may be going into
+#' it too.
+#'
+#' @param info Where it goes, as `extraction_service_info()` returns it.
+#' @param catalog The live tables the pages pick from, from `questionnaire_service_get_catalog()`.
+#' @param question_counts How many questions each of the questionnaire's waves asks: a named integer
+#'   vector by wave id (`questionnaire_service_wave_question_counts()`).
+#' @param records All the extraction records, to find other drafts going into the same wave.
+#' @param id This draft's id, so it doesn't clash with itself.
+#' @param me Who is using the site, `list(staff_id, name)`, so a clash with their own draft says "You".
+#' @return A sentence saying what to do, or `NULL`.
+extraction_service_recorded_wave_problem <- function(info, catalog, question_counts = integer(), records = list(),
+                                                     id = NULL, me = NULL) {
+  if (!extraction_service_uses_recorded_wave(info) || !has_text(info$wave_id)) {
+    return(NULL)
+  }
+  wave <- catalog$waves[as.character(catalog$waves$wave_id) %in% info$wave_id, , drop = FALSE]
+  if (nrow(wave) != 1 || !as.character(wave$questionnaire_id) %in% info$questionnaire_id) {
+    return("Pick one of this questionnaire's waves.")
+  }
+  n_questions <- question_counts[info$wave_id]
+  if (isTRUE(n_questions > 0)) {
+    return(sprintf(
+      "%s already asks %s. Pick a wave without questions, or add a new wave.", wave$name, plural(n_questions, "question")
+    ))
+  }
+  others <- Filter(function(record) {
+    other <- extraction_service_info(record)
+    !identical(record$id, id) && extraction_service_uses_recorded_wave(other) && identical(other$wave_id, info$wave_id)
+  }, draft_row_service_open(records, extraction_pending_statuses))
+  if (length(others) > 0) {
+    who <- if (draft_row_service_is_mine(others[[1]], me)) "You" else others[[1]]$prepared_by %||% "Someone"
+    return(sprintf("%s already has a draft going into %s. Pick another wave, or continue that draft.", who, wave$name))
   }
   NULL
 }
@@ -612,7 +683,7 @@ matr_id_headings <- "^((matr|variable)[ _.]?(ids?|names?)?|ids?)$"
 # ------ What a recorded questionnaire prints already ----------------------------------------
 #' The blocks a recorded questionnaire prints, and its questions' MATR IDs.
 #'
-#' For a new wave of a recorded questionnaire, the review page offers the blocks the questionnaire already
+#' For a new wave of a recorded questionnaire, the Edit Extraction page offers the blocks the questionnaire already
 #' prints as suggestions while a block's words are typed, and a question with the same words as one the
 #' questionnaire already asks keeps its variables' MATR IDs (BR93: a MATR ID names the variable within its
 #' questionnaire), so they are filled in instead of asked for. For a new questionnaire there is nothing yet.

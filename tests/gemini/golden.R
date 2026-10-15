@@ -147,7 +147,7 @@ if (sys.nframe() == 0) {
         reading$tokens$most_in_one_answer
       ))
       if (length(reading$problems)) cat(paste("  problem:", reading$problems), sep = "\n")
-      json <- jsonlite::read_json(out_path, simplifyVector = FALSE) # as the review page would load it
+      json <- jsonlite::read_json(out_path, simplifyVector = FALSE) # as the Edit Extraction page would load it
     }
     result <- golden_compare(json, jsonlite::read_json(case$answer, simplifyVector = FALSE))
     cat(sprintf("%s: %.1f%% of %d fields match. Reading saved to %s\n", name, 100 * result$score, result$n_fields, out_path))

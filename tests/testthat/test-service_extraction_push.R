@@ -1,5 +1,5 @@
 # Pushing an extraction to the database: what stops it, the rows it adds (worked out from the questionnaire as
-# saved and the MATR data as it is), and what happens when a STAFF member or an ADMIN pushes it. The rows are
+# saved and the MATR metadata database as it is), and what happens when a STAFF member or an ADMIN pushes it. The rows are
 # worked out by pure functions, tested here with data given to them, and added by the database, tested with a
 # real push that is removed again.
 
@@ -74,10 +74,10 @@ test_that("what stops a push is said in the order to do it", {
   }
   expect_equal(blockers(draft = draft), character())
 
-  expect_equal(blockers(list(info = list()), draft = draft)[1], "Fill in the registry, study, questionnaire and wave name under Edit Details.")
+  expect_equal(blockers(list(info = list()), draft = draft)[1], "Fill in the registry, study, questionnaire and wave name under Where it goes.")
   taken <- complete_info()
   taken$info$wave_name <- "Wave 1" # the questionnaire has a Wave 1 already
-  expect_equal(blockers(taken, draft)[1], "Fix the fields outlined in red under Edit Details.")
+  expect_equal(blockers(taken, draft)[1], "Fix the fields outlined in red under Where it goes.")
   expect_equal(blockers(draft = draft_service_empty()), "Add the questionnaire's blocks and questions first.")
 
   no_question <- draft
@@ -215,7 +215,7 @@ test_that("a push is described in words", {
   built <- build_for(small_draft(), list(kind = "new_questionnaire", study_id = "3", respondent_type_id = "2", name = "Small One", abbreviation = "SO", wave_name = "Wave 1"))
   expect_equal(
     extraction_service_push_summary(built$summary),
-    "Adds the questionnaire, the wave, 4 new blocks, 2 questions asked in the wave, 2 new variables, 2 choices, 2 new answer choices and 1 new set of choices."
+    "Adds the questionnaire, the wave, 4 new blocks, 2 questions asked in the wave, 2 new variables, 2 response options, 2 new answer choices and 1 new set of choices."
   )
   summary <- built$summary
   summary$questionnaire <- FALSE
@@ -224,6 +224,90 @@ test_that("a push is described in words", {
   summary$variables_found <- 2L
   summary$variables <- 0L
   expect_match(extraction_service_push_summary(summary), "^Adds the wave, 4 blocks already there, 2 questions asked in the wave, 2 variables already there")
+})
+
+test_that("an extraction can go into a recorded wave that asks no questions yet, and not one that does", {
+  existing <- list(
+    placements = no_rows(c("component_id", "parent_component_id", "display_order")),
+    components = no_rows(c("component_id", "component_type_id", "text")),
+    questions = no_rows("component_id"),
+    variables = no_rows(c("variable_key", "component_id", "matr_id", "display_order")),
+    waves = data.frame(wave_id = c(40, 41), name = c("Wave 1", "Wave 2")),
+    wave_questions = data.frame(wave_id = 40, component_id = 5)
+  )
+  info <- list(kind = "new_wave", questionnaire_id = "7", wave_choice = "existing", wave_id = "41")
+  built <- build_for(small_draft(), info, existing = existing)
+  expect_false(built$summary$wave)
+  expect_false("wave" %in% built$items$entity_name) # the wave is there already
+  wave_questions <- built$items[built$items$entity_name == "wave_question", ]
+  expect_true(all(grepl('"wave_id":41', wave_questions$record_identifier)))
+  expect_match(extraction_service_push_summary(built$summary), "^Adds 4 new blocks, 2 questions asked in the wave")
+
+  expect_error(build_for(small_draft(), utils::modifyList(info, list(wave_id = "40")), existing = existing), "already asks 1 question")
+  expect_error(build_for(small_draft(), utils::modifyList(info, list(wave_id = "99")), existing = existing), "isn't one of this questionnaire's waves")
+  # a new questionnaire's wave is always new
+  new_one <- build_for(small_draft(), list(kind = "new_questionnaire", study_id = "3", respondent_type_id = "2", name = "N", abbreviation = "N", wave_choice = "existing", wave_id = "41", wave_name = "Wave 1"))
+  expect_true(new_one$summary$wave)
+})
+
+test_that("repeated choices are new response options, but each answer choice and set of choices is added or reused once", {
+  # three variables offering Yes / No: three times two response options, one per variable and choice
+  draft <- small_draft()
+  question <- draft$components$id[draft$components$component_type == "Question"][1]
+  draft <- draft_service_add_box(draft, question)
+  draft <- draft_service_add_box(draft, question)
+  draft$variables$matr_id <- paste0("zz", seq_len(nrow(draft$variables)))
+  info <- list(kind = "new_questionnaire", study_id = "3", respondent_type_id = "2", name = "Small One", abbreviation = "SO", wave_name = "Wave 1")
+
+  added <- build_for(draft, info)
+  expect_equal(added$summary$choices, 6L)
+  expect_equal(added$summary[c("answer_options", "option_sets")], list(answer_options = 2L, option_sets = 1L))
+  expect_equal(sum(added$items$entity_name == "answer_option"), 2) # Yes and No once each
+  expect_equal(length(unique(added$items$record_identifier[added$items$entity_name == "response_option"])), 6)
+
+  options <- list(
+    answer_options = data.frame(answer_option_id = c(10, 11), standardized_label = c("Yes", "No")),
+    option_sets = data.frame(option_set_id = 5, name = "Yes / No"),
+    members = data.frame(option_set_id = c(5, 5), answer_option_id = c(10, 11))
+  )
+  reused <- build_for(draft, info, options = options)
+  expect_equal(reused$summary[c("answer_options", "answer_options_found", "option_sets", "option_sets_found")],
+    list(answer_options = 0L, answer_options_found = 2L, option_sets = 0L, option_sets_found = 1L))
+  expect_equal(reused$summary$choices, 6L) # still one per variable and choice: the links are new
+
+  cards <- extraction_service_what_cards(reused$summary)
+  kinds <- vapply(cards, function(card) card$kind, character(1))
+  answer_card <- cards[[which(kinds == "Answer choices")]]
+  expect_false(answer_card$is_new)
+  expect_equal(answer_card$facts, "2 already in the database, used again")
+  links <- cards[[which(kinds == "Response options")]]
+  expect_true(links$is_new)
+  expect_equal(links$title, "6 response options")
+})
+
+test_that("the preview says where it goes, recorded or NEW, and what it adds, without writing anything", {
+  catalog <- test_catalog()
+  context <- list(ids = no_ids, options = no_options)
+  info <- extraction_service_info(list(info = list(
+    kind = "new_questionnaire", registry_id = "1", study_id = "1", respondent_type_id = as.character(catalog$respondent_types$respondent_type_id[1]),
+    name = "Small One", abbreviation = "SO", wave_name = "Wave 1"
+  )))
+  preview <- extraction_service_request_preview(small_draft(), info, catalog, context)
+  where <- vapply(preview$where, function(card) card$kind, character(1))
+  expect_equal(where, c("Registry", "Study", "Questionnaire", "Wave"))
+  expect_equal(vapply(preview$where, function(card) isTRUE(card$is_new), logical(1)), c(FALSE, FALSE, TRUE, TRUE))
+  expect_null(preview$problem)
+  expect_match(preview$summary, "^Adds the questionnaire, the wave")
+  html <- htmltools::renderTags(extraction_request_ui(preview, small_draft()))$html
+  expect_match(html, "Where it goes")
+  expect_match(html, "fa-certificate")
+  expect_match(html, "NEW")
+  expect_false(grepl("Why", html))
+
+  # until it is placed, the cards say what is still to pick, and nothing is worked out
+  unplaced <- extraction_service_request_preview(small_draft(), extraction_service_info(), catalog, context)
+  expect_true(all(vapply(unplaced$where[1:2], function(card) isTRUE(card$is_missing), logical(1))))
+  expect_length(unplaced$what, 0)
 })
 
 test_that("a push is titled for the request that carries it", {

@@ -1,8 +1,8 @@
 #' The Change Requests page's server.
 #'
-#' The requests waiting for approval (a STAFF member's delete, or an extraction they pushed),
+#' The requests waiting for approval (a STAFF member's delete, or an extraction they submitted),
 #' longest waiting first. "Review" shows what a request changes; from there a person other than
-#' who prepared or last changed it approves it, which adds it to the MATR data at once, or sends
+#' who prepared or last changed it approves it, which adds it to the MATR metadata database at once, or sends
 #' it back with a note; whoever prepared it can withdraw it; anyone can open it to edit it, which
 #' makes a new revision. The database does the approving and the applying and checks the rules
 #' again (`model_change_request.R`); this page offers the buttons that make sense.
@@ -11,14 +11,14 @@
 #' @param connection The MATR database, `list(url, key)`; see `model_database.R`.
 #' @param me Who is using the site: `list(staff_id, name, role)`.
 #' @param open_edit A function taking an edit request's record and opening it on Make an edit.
-#' @param open_review A function taking an extraction request's record and opening it on the review page.
+#' @param open_edit_extraction A function taking an extraction request's record and opening it on the Edit Extraction page.
 #' @return Called for its effect.
 change_requests_server <- function(
   id,
   connection,
   me,
   open_edit,
-  open_review
+  open_edit_extraction
 ) {
   moduleServer(id, function(input, output, session) {
     ns <- session$ns
@@ -64,26 +64,32 @@ change_requests_server <- function(
       }
     })
 
-    # What a request comes to. An extraction's rows are worked out from the MATR data as it is now, so
-    # the reviewer is told at once if it can't be added as it stands; its questionnaire is read so the
-    # dialog can lay it out, and its PDF is served to this session if the file is here.
+    # What a request comes to, laid out as its preparer saw it before submitting it. An extraction's
+    # rows are worked out from the database as it is now, so the reviewer is told at once if it can't be
+    # added as it stands; its questionnaire is read so the dialog can lay it out, and its PDF is served
+    # to this session if the file is here.
     request_detail <- function(record) {
       if (!identical(record$kind, extraction_kind)) {
         return(change_request_service_changes(record))
       }
       draft <- tryCatch(draft_service_load(connection, record$id), error = function(problem) NULL)
-      detail <- tryCatch(
-        {
-          built <- extraction_service_push_build(connection, record)
-          list(
-            summary = extraction_service_push_summary(built$summary),
-            unchecked = if (is.null(draft)) 0 else extraction_service_unchecked(draft)
+      info <- extraction_service_info(record)
+      preview <- tryCatch(
+        if (is.null(draft)) {
+          list(where = extraction_service_where_cards(info, catalog_now()), what = list(), problem = "The questionnaire couldn't be read.")
+        } else {
+          extraction_service_request_preview(
+            draft, info, catalog_now(), extraction_service_push_context(connection),
+            extraction_service_push_existing(connection, info)
           )
         },
-        error = function(problem) list(problem = conditionMessage(problem), unchecked = 0)
+        error = function(problem) list(problem = conditionMessage(problem))
       )
-      c(detail, list(draft = draft, pdf_url = request_pdf_url(record)))
+      list(preview = preview, draft = draft, pdf_url = request_pdf_url(record))
     }
+
+    # The live tables, read now, so a request names what it goes into as the database has it.
+    catalog_now <- function() questionnaire_service_get_catalog(connection)
 
     # The address the browser gets the request's PDF from, for this session only; NULL if the file
     # isn't on this server (see `pdf_address()`).
@@ -103,7 +109,7 @@ change_requests_server <- function(
       tryCatch(
         {
           change_request_service_approve(connection, opened, me)
-          showNotification("Approved. It is in the MATR data now, and in the Edit history.", type = "message")
+          showNotification("Approved. It is in the MATR metadata database now, and in the Edit history.", type = "message")
         },
         error = function(problem) show_problem(problem, "Couldn't approve it")
       )
@@ -145,7 +151,7 @@ change_requests_server <- function(
       showModal(confirm_dialog(
         "Withdraw this request?",
         p(strong(opened$summary)),
-        p("It is set aside and won't be asked of anyone. Nothing has been added to the MATR data."),
+        p("It is set aside and won't be asked of anyone. Nothing has been added to the MATR metadata database."),
         confirm_id = ns("confirm_withdraw"), confirm_label = "Withdraw it", easy_close = TRUE
       ))
     })
@@ -171,7 +177,7 @@ change_requests_server <- function(
       opened <- reviewing()
       req(opened)
       removeModal()
-      if (identical(opened$kind, extraction_kind)) open_review(opened) else open_edit(opened)
+      if (identical(opened$kind, extraction_kind)) open_edit_extraction(opened) else open_edit(opened)
       reviewing(NULL)
     })
 

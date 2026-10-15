@@ -16,7 +16,7 @@ home_service_recent_requests <- function(connection, n = home_recent_n) {
   list(shown = utils::head(rev(unname(waiting)), n), total = length(waiting))
 }
 
-#' The newest changes applied to the MATR data.
+#' The newest changes applied to the MATR metadata database.
 #'
 #' @param connection The MATR database, `list(url, key)`; see `model_database.R`.
 #' @param n How many at most.

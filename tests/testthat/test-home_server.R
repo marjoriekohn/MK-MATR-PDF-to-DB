@@ -22,8 +22,8 @@
 #   me <- local_staff()
 #   colleague <- local_staff()
 #   admin <- local_staff("ADMIN")
-#   request <- local_edit(colleague, status = "Awaiting Review", note = "Not needed any more")
-#   applied <- local_applied_edit(admin, "respondent_type", "add", respondent_type__name = test_name("Listed"), note = "A new kind")
+#   request <- local_edit(colleague, status = "Awaiting Review")
+#   applied <- local_applied_edit(admin, "respondent_type", "add", respondent_type__name = test_name("Listed"))
 #   shiny::testServer(home_server, args = home_args(me)$args, {
 #     errors <- collect_errors(session)
 #     requests_text <- text_of(output$requests)

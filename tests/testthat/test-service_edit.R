@@ -105,16 +105,13 @@ test_that("a questionnaire's questions say what numbers they had and what they f
 })
 
 # ------ The form -----------------------------------------------------------------------------------
-test_that("a study's add form includes its first questionnaire and wave, linked", {
-  form <- form_for("study", "add")
-  ids <- vapply(form$fields, function(field) field$id, character(1))
-  expect_true(all(c("study__name", "questionnaire__name", "wave__name") %in% ids))
-  expect_false("questionnaire__study_id" %in% ids)
-  expect_false("wave__questionnaire_id" %in% ids)
-  expect_equal(
-    unique(vapply(form$fields, function(field) field$part_title %||% NA_character_, character(1)))[1:3],
-    c("The study", "Its first questionnaire", "That questionnaire's first wave")
-  )
+test_that("a study's and a questionnaire's add forms have only their own fields", {
+  study <- vapply(form_for("study", "add")$fields, function(field) field$id, character(1))
+  expect_true(all(grepl("^study__", study)))
+  expect_true(all(c("study__name", "study__registry_id", "study__status") %in% study))
+  questionnaire <- vapply(form_for("questionnaire", "add")$fields, function(field) field$id, character(1))
+  expect_true(all(grepl("^questionnaire__", questionnaire)))
+  expect_false("wave__name" %in% questionnaire)
 })
 
 test_that("an update form shows the row as it is, with locked fields marked", {
@@ -138,7 +135,7 @@ test_that("drop-downs hold the rows they point at, by name, saved as IDs", {
   form <- form_for("study", "add")
   registry <- Filter(function(field) field$name == "registry_id", form$fields)[[1]]
   expect_equal(registry$choices, c("Choose a registry" = "", "Example Registry (EXR)" = "2", "Mid-Atlantic Twin Registry (MATR)" = "1"))
-  respondent <- Filter(function(field) field$id == "questionnaire__respondent_type_id", form$fields)[[1]]
+  respondent <- Filter(function(field) field$id == "questionnaire__respondent_type_id", form_for("questionnaire", "add")$fields)[[1]]
   expect_equal(unname(respondent$choices), c("", "2", "1", "3"))
   expect_equal(names(respondent$choices)[2], "Child (5-17)")
 })
@@ -303,13 +300,10 @@ test_that("values are saved tidied", {
   expect_equal(edit_service_normalize(edit_field("c", "C", "choice"), "FALSE"), "false")
 })
 
-test_that("a form that's several rows says which one a repeated label belongs to", {
+test_that("a study's add form names only the study's own fields left blank", {
   form <- form_for("study", "add")
   missing <- edit_service_check(form$fields, form$values)$missing
-  expect_equal(
-    missing,
-    c("registry", "lead investigator", "contact investigator", "study name", "status", "respondent type", "questionnaire name", "abbreviation", "wave name")
-  )
+  expect_equal(missing, c("registry", "lead investigator", "contact investigator", "name", "status"))
 })
 
 test_that("every kind builds its forms from the tables it reads, whatever it's asked to do", {
@@ -351,18 +345,16 @@ test_that("every kind builds its forms from the tables it reads, whatever it's a
   expect_equal(planned, length(edit_entities))
 })
 
-test_that("a draft's note and values come back as they were saved", {
+test_that("a draft's values come back as they were saved", {
   form <- form_for("registry", "add", registry__name = "R", registry__abbreviation = "R", registry__participant_count = "5")
   built <- form_items(form)
   record <- edit_service_record(
     fixture_staff,
     list(action = "add", entity = "registry", scope = "", target = "", values = form$values),
     built,
-    "because",
     "Draft"
   )
   expect_equal(record$form$values$registry__name, "R")
-  expect_equal(record$note, "because")
 })
 
 # ------ Empty databases ----------------------------------------------------------------------------
@@ -424,7 +416,12 @@ test_that("a form with nothing to pick from says to add it first", {
   notes <- htmltools::renderTags(htmltools::tagList(edit_empty_choices_ui(fields)))$html
   expect_match(notes, "Nothing to pick for “Registry” yet")
   expect_match(notes, "Add registry first")
-  expect_match(notes, "Nothing to pick for “Respondent Type” yet")
+  expect_no_match(notes, "Respondent Type") # a study's form doesn't ask for its questionnaire's any more
+
+  questionnaire_snap <- empty_tables(test_snapshot(edit_service_tables(edit_entities$questionnaire)))
+  questionnaire_fields <- edit_service_fields(edit_entities$questionnaire, questionnaire_snap, "add")
+  questionnaire_notes <- htmltools::renderTags(htmltools::tagList(edit_empty_choices_ui(questionnaire_fields)))$html
+  expect_match(questionnaire_notes, "Nothing to pick for “Respondent Type” yet")
 })
 
 # ------ What's left to do ----------------------------------------------------------------------

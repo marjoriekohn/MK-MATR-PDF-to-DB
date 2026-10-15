@@ -70,7 +70,7 @@
 #   expect_error(change_request_model_approve(test_connection, request$id, request$revision, me$staff_id), "You prepared this, so someone else has to approve it")
 #
 #   # a colleague changes it: the latest changes are theirs now, so they can't approve it either
-#   changed <- edit_model_save(test_connection, utils::modifyList(request, list(note = "a better reason", expected_revision = request$revision)), colleague$staff_id)
+#   changed <- edit_model_save(test_connection, utils::modifyList(request, list(summary = "A better summary", expected_revision = request$revision)), colleague$staff_id)
 #   expect_error(
 #     change_request_model_approve(test_connection, changed$id, changed$revision, colleague$staff_id),
 #     "You made the latest changes to this, so someone else has to approve it"

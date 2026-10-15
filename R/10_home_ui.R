@@ -16,7 +16,7 @@ home_ui <- function(id) {
       ),
       home_link(
         ns("make_edit"), "pencil", "Make an edit",
-        "Add, update, or remove an item from the database."
+        "Add, update, or delete an item from the database."
       )
     ),
     layout_columns(
@@ -27,7 +27,7 @@ home_ui <- function(id) {
       ),
       home_box(
         ns, "edit_history", "clock-rotate-left", "Edit history",
-        "The newest changes added to the MATR data.", uiOutput(ns("history"))
+        "The newest changes added to the MATR metadata database.", uiOutput(ns("history"))
       )
     )
   )
@@ -68,7 +68,7 @@ home_box <- function(ns, page, icon_name, title, text, list_output) {
 #' @return A UI element.
 home_request_item <- function(record, me) {
   kind <- change_request_service_kind(record)
-  who <- if (identical(record$prepared_by_id, me$staff_id)) "you" else record$prepared_by
+  who <- if (draft_row_service_is_mine(record, me)) "you" else record$prepared_by
   div(
     class = "home-item",
     row_badge(kind, class = paste0("is-", tolower(kind))),

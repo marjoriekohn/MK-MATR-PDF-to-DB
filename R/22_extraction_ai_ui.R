@@ -1,4 +1,8 @@
-#' The AI-Powered mode of the Extraction page: the PDF and how reading it is going, then what staff know about it.
+#' The AI-Powered mode of the Extraction page: the PDF and how reading it is going.
+#'
+#' Reading happens in the background, so staff can leave and find the draft under Existing Draft; once it
+#' has finished, the whole extraction opens on the Edit Extraction page to review and edit before its
+#' change request is submitted.
 #'
 #' @param id The module's id.
 #' @return The mode's UI.
@@ -8,12 +12,18 @@ extraction_ai_ui <- function(id) {
     class = "extraction-mode extraction-ai",
     `data-ns` = ns(""),
     card(card_body(h2("Questionnaire PDF"), uiOutput(ns("pdf_card")))),
+    edit_callout(
+      "info",
+      title = "Reading happens in the background",
+      "It takes a few minutes. You can leave this page: the draft waits under Existing Draft, where you can open ",
+      "it once reading has finished, review and edit what was extracted, and then submit it as a change request."
+    ),
     uiOutput(ns("reading")),
     card(card_body(
       div(
         class = "extraction-footer",
         uiOutput(ns("footer_note"), inline = TRUE),
-        actionButton(ns("go_to_review"), "Go to review", class = "btn-primary", disabled = TRUE)
+        actionButton(ns("open_extraction"), "Open in Edit Extraction", class = "btn-primary", disabled = TRUE)
       )
     ))
   )
@@ -90,7 +100,7 @@ reading_card <- function(record, ns) {
       p(
         class = "reading-note",
         "You can leave this page. The draft will be waiting under ",
-        actionLink(ns("to_continue"), "Existing Draft"), " until it's pushed."
+        actionLink(ns("to_continue"), "Existing Draft"), " until its change request is submitted."
       )
     },
     div(actionButton(ns("cancel"), "Cancel extraction", class = "btn-outline-dark"))

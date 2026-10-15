@@ -1,4 +1,4 @@
-// Review extraction page (review and outline modules)
+// Edit Extraction page (edit_extraction and outline modules)
 $review-line: rgba($vcu-gray, 0.35);
 $code-width: 5.5rem; // wide enough for the Apply to all button under the codes
 
@@ -89,7 +89,7 @@ button.review-pill:hover { background: rgba($vcu-gold, 0.2); }
 .review-header .subhead .row-badge { margin-left: 0.5rem; }
 
 // ------ The one panel: the outline, edited in place -----------------------------------
-.review-page .structure-card > .structure-body {
+.edit-extraction-page .structure-card > .structure-body {
   display: flex;
   flex-direction: column;
   padding: 0;
@@ -195,6 +195,13 @@ button.review-pill:hover { background: rgba($vcu-gold, 0.2); }
   &::placeholder { color: rgba($vcu-gray, 0.8); font-style: italic; }
 }
 
+// The question it follows, beside its words
+.outline-parent {
+  flex: 0 1 14rem;
+  min-width: 9rem;
+  .form-select { width: 100%; }
+}
+
 .outline-badges { display: flex; flex-shrink: 0; align-items: center; gap: 0.35rem; }
 .outline-problems.is-hidden { display: none; }
 .outline-actions { display: flex; flex-shrink: 0; align-items: center; gap: 0.1rem; }
@@ -252,10 +259,15 @@ button.review-pill:hover { background: rgba($vcu-gold, 0.2); }
 .details-field {
   display: block;
   margin-bottom: 0.9rem;
-  .form-label { display: block; margin-bottom: 0.3rem; font-weight: 500; }
 }
 
-.field-hint { margin-left: 0.35rem; color: $vcu-gray; cursor: help; }
+// A field the checks found at fault (review.js keeps the marks up to date as they run)
+.form-control.has-problem, .form-select.has-problem {
+  border-color: $field-problem-red;
+  box-shadow: 0 0 0 1px $field-problem-red;
+  &:focus { box-shadow: 0 0 0 0.2rem rgba($field-problem-red, 0.35); }
+}
+.variable-card.has-problem { border-color: $field-problem-red; box-shadow: 0 0 0 1px $field-problem-red; }
 
 // Fields side by side: short ones keep their size, the rest share the width
 .details-row {
@@ -299,39 +311,52 @@ button.review-pill:hover { background: rgba($vcu-gold, 0.2); }
 .variable-card-row {
   display: flex;
   flex-wrap: wrap;
-  align-items: flex-end;
+  align-items: center;
   gap: 0.5rem 0.75rem;
   > .details-field { flex: 1 1 8rem; min-width: 0; }
-  .toggle-buttons, .box-handle, .variable-card-number { margin-bottom: 0.3rem; }
-  .btn-icon { margin-left: auto; margin-bottom: 0.15rem; }
+  .btn-icon { margin-left: auto; }
 }
 .variable-card-number { font-weight: 700; }
 
 .choice-table { margin-top: 0.6rem; }
 .choice-list { display: flex; flex-direction: column; gap: 0.3rem; }
 
+// Code, then the response option it codes, whether it is printed, how, and where it skips to
 .choice-row {
   display: grid;
-  grid-template-columns: 1.25rem minmax(0, 2fr) $code-width 3.75rem minmax(0, 1.4fr) minmax(0, 1.4fr) 2rem;
+  grid-template-columns: 1.25rem $code-width minmax(0, 2fr) 5rem minmax(0, 1.4fr) minmax(0, 1.4fr) 2rem;
   align-items: center;
   gap: 0.35rem;
-  .form-check-input { margin: 0 auto; }
+}
+.choice-printed {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  margin: 0;
+  font-size: 0.85rem;
+  .form-check-input { margin: 0; }
 }
 
-.choice-heading {
-  margin-bottom: 0.2rem;
-  color: $vcu-gray;
-  font-size: 0.7rem;
-  letter-spacing: 0.05em;
-  text-transform: uppercase;
-}
-
-// Lined up with the choice rows: + Choice under the choices, Apply to all under the codes
+// Lined up with the choice rows: Apply to all under the codes, + Choice under the choices
 .choice-actions {
   margin: 1rem 0 0.4rem;
   align-items: start;
-  .choice-add { grid-column: 2; justify-self: start; }
-  .choice-apply { grid-column: 3; .btn { width: 100%; padding-inline: 0.25rem; } }
+  .choice-apply { grid-column: 2; .btn { width: 100%; padding-inline: 0.25rem; } }
+  .choice-add { grid-column: 3; justify-self: start; }
 }
 
 .btn-icon { color: $vcu-gray; &:hover { color: $vcu-black; } }
+
+// ------ The MATR IDs dialog: two ways to give the uploaded IDs out --------------------------
+.matr-modes {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(16rem, 1fr));
+  gap: 1rem;
+  margin-top: 1rem;
+}
+.matr-mode {
+  padding: 0.9rem 1rem;
+  border: 1px solid $review-line;
+  border-radius: $border-radius;
+  h3 { margin: 0 0 0.35rem; font-size: 1rem; }
+}

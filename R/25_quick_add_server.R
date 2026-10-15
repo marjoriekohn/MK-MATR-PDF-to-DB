@@ -128,7 +128,7 @@ quick_add_server <- function(
       req(change$ready(), !adding())
       adding(TRUE)
       result <- tryCatch(
-        edit_service_quick_add(connection, entity(), snapshot(), change$fields(), change$values(), me, input$note),
+        edit_service_quick_add(connection, entity(), snapshot(), change$fields(), change$values(), me),
         error = function(problem) {
           show_problem(problem, "Couldn't add it")
           NULL

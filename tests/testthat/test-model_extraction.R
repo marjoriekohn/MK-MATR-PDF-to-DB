@@ -76,12 +76,10 @@
 #   colleague <- local_staff()
 #   record <- local_extraction(me)
 #   record$summary <- "Add the wave"
-#   record$note <- "Why"
 #   record$requested_reviewer <- list(id = colleague$staff_id)
 #   record$info$notes <- "page 6 is scanned"
-#   saved <- extraction_model_save(test_connection, record, c("summary", "note", "requested_reviewer", "info"), me$staff_id)
+#   saved <- extraction_model_save(test_connection, record, c("summary", "requested_reviewer", "info"), me$staff_id)
 #   expect_equal(saved$summary, "Add the wave")
-#   expect_equal(saved$note, "Why")
 #   expect_equal(saved$requested_reviewer, list(id = colleague$staff_id, name = colleague$name))
 #   expect_equal(saved$info$notes, "page 6 is scanned")
 #

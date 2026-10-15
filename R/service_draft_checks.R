@@ -1,7 +1,8 @@
 # ------ Checking a draft -------------------------------------------------------
 # Business rules the database will enforce once the draft is loaded, checked
-# now so staff can fix problems while reviewing. Each problem names the block
-# to fix (id) and says what to do next (message), in printed order.
+# now so staff can fix problems while editing. Each problem names the block
+# to fix (id) and says what to do next (message), in printed order, and, where
+# one field is at fault, which (table, row, field), so the page can outline it.
 
 #' Check a draft against the rules a questionnaire has to meet.
 #'
@@ -9,8 +10,9 @@
 #' @param lookups The pick lists, from `lookup_service_get_all()`.
 #' @param matr_ids Whether a variable without a MATR ID is a problem. It is for staff reviewing a
 #'   draft; not for the reading job, since Gemini never reads MATR IDs.
-#' @return A data frame of `id` (the block to fix) and `message` (what to do), in
-#'   printed order; no rows if all is well.
+#' @return A data frame of `id` (the block to fix), `message` (what to do), and `table`, `row` and
+#'   `field` (the field at fault: `NA` for a problem with the block as a whole, and `field` `NA` for
+#'   one with a whole variable), in printed order; no rows if all is well.
 draft_service_check <- function(draft, lookups, matr_ids = TRUE) {
   problems <- rbind(
     block_problems(draft, lookups),
@@ -50,7 +52,8 @@ block_problems <- function(draft, lookups) {
     ),
     problems_where(
       blocks$id, is.na(blocks$text) & blocks$component_type != "Section",
-      "Add the printed words. Only a section can be blank." # BR42
+      "Add the printed words. Only a section can be blank.", # BR42
+      table = "components", rows = blocks$id, field = "text"
     )
   )
 }
@@ -63,6 +66,9 @@ question_problems <- function(draft) {
   parent_type <- blocks$component_type[match(questions$parent_question_id, blocks$id)]
   parent_is_earlier_question <- parent_type %in% "Question" &
     match(questions$parent_question_id, printed) < match(questions$id, printed)
+  parent_field <- function(condition, message) {
+    problems_where(questions$id, condition, message, table = "components", rows = questions$id, field = "parent_question_id")
+  }
   rbind(
     problems_where(questions$id, is.na(questions$question_number), "Add the question number."),
     problems_where(
@@ -73,12 +79,12 @@ question_problems <- function(draft) {
       questions$id, !questions$id %in% draft$variables$component_id,
       "Add at least one variable." # BR87
     ),
-    problems_where(
-      questions$id, questions$self_contained %in% FALSE & !has_parent,
+    parent_field(
+      questions$self_contained %in% FALSE & !has_parent,
       "Pick the question it follows, since it can't be understood on its own." # BR64
     ),
-    problems_where(
-      questions$id, has_parent & !parent_is_earlier_question,
+    parent_field(
+      has_parent & !parent_is_earlier_question,
       "Pick the question it follows again. It has to be a question printed before it." # BR62, BR63
     )
   )
@@ -89,40 +95,53 @@ variable_problems <- function(draft, lookups, matr_ids = TRUE) {
   choices <- draft$response_options
   n_choices <- tabulate(match(choices$variable_id, boxes$id), nbins = nrow(boxes))
   is_choice_box <- boxes$variable_type == "closed_ended"
-  box_problem <- function(condition, message) {
+  # A problem with a variable's own field (or, with no field, the whole variable)...
+  box_problem <- function(condition, message, field = NA_character_) {
     problems_where(
       boxes$component_id, condition,
-      sprintf("Variable %d: %s", as.integer(boxes$display_order), message)
+      sprintf("Variable %d: %s", as.integer(boxes$display_order), message),
+      table = "variables", rows = boxes$id, field = field
     )
   }
-  boxes_where <- function(choice_condition) {
-    boxes$id %in% choices$variable_id[choice_condition]
+  # ...and with one field of each choice where `choice_condition` holds.
+  choice_problem <- function(choice_condition, message, field) {
+    box_row <- match(choices$variable_id, boxes$id)
+    problems_where(
+      boxes$component_id[box_row], choice_condition,
+      sprintf("Variable %d: %s", as.integer(boxes$display_order[box_row]), message),
+      table = "response_options", rows = choices$id, field = field
+    )
   }
   rbind(
     box_problem(is_choice_box & n_choices < 2, "add at least two choices."), # BR99
-    box_problem(boxes_where(is.na(choices$answer_option)), "fill in the blank choice."),
-    box_problem(
-      boxes_where(duplicated_within(choices$answer_option, choices$variable_id)),
-      "list each choice once."
+    choice_problem(is.na(choices$answer_option), "fill in the blank choice.", "answer_option"),
+    choice_problem(duplicated_within(choices$answer_option, choices$variable_id), "list each choice once.", "answer_option"),
+    choice_problem(
+      duplicated_within(choices$code_value, choices$variable_id),
+      "give each choice its own code.", "code_value" # BR103
     ),
-    box_problem(
-      boxes_where(duplicated_within(choices$code_value, choices$variable_id)),
-      "give each choice its own code." # BR103
-    ),
-    box_problem(!is_choice_box & is.na(boxes$answer_data_type), "pick the kind of answer it takes."), # BR95
-    box_problem(!boxes$subject %in% lookups$subjects, "pick who it's about from the list."),
-    if (matr_ids) box_problem(is.na(boxes$matr_id), "fill in its MATR ID."), # every variable needs one before it can be pushed
+    box_problem(!is_choice_box & is.na(boxes$answer_data_type), "pick the kind of answer it takes.", "answer_data_type"), # BR95
+    box_problem(!boxes$subject %in% lookups$subjects, "pick who it's about from the list.", "subject"),
+    if (matr_ids) box_problem(is.na(boxes$matr_id), "fill in its MATR ID.", "matr_id"), # every variable needs one before it is sent
     box_problem(
       duplicated_within(boxes$matr_id, "questionnaire"),
-      "give it a MATR ID no other variable has." # BR93
+      "give it a MATR ID no other variable has.", "matr_id" # BR93
     )
   )
 }
 
-# One problem for each id where `condition` holds.
-problems_where <- function(ids, condition, message) {
+# One problem for each id where `condition` holds. `table`, `rows` and `field` say which field is at
+# fault, if one is: `rows` holds each id's row in `table`.
+problems_where <- function(ids, condition, message, table = NA_character_, rows = NA_character_, field = NA_character_) {
   keep <- condition %in% TRUE
-  data.frame(id = ids[keep], message = rep_len(message, length(ids))[keep])
+  n <- length(ids)
+  data.frame(
+    id = ids[keep],
+    message = rep_len(message, n)[keep],
+    table = rep_len(table, n)[keep],
+    row = rep_len(as.character(rows), n)[keep],
+    field = rep_len(field, n)[keep]
+  )
 }
 
 # TRUE for each value that appears more than once in its group. NA never does.

@@ -6,7 +6,7 @@
 # changed record back into the columns to save.
 #
 # A record's fields and where they are kept (draft / extracted_draft):
-#   id, status, summary, note                      draft
+#   id, status, summary                            draft
 #   kind (always "Extraction")                     draft, so a list of requests can tell it from an edit
 #   prepared_by (name), prepared_by_id, started    draft (created_at)
 #   saved, saved_by (name), saved_by_id, revision  draft
@@ -22,7 +22,7 @@
 #
 # The PDFs aren't in the database. Each upload is kept in `uploads/pdfs/` (the
 # option matr.pdf_dir changes it) under its SHA-256, only so the reading job can
-# open it and the review page can show it; the record keeps its name, size and hash.
+# open it and the Edit Extraction page can show it; the record keeps its name, size and hash.
 # (Supabase Storage is on the to-do list.)
 
 extraction_kind <- "Extraction"
@@ -37,7 +37,7 @@ extraction_detail_columns <- c(
   model = "model", prompt_version = "prompt_version"
 )
 # ... and of draft.
-extraction_parent_columns <- c(status = "status", summary = "summary", note = "note", submitted = "submitted_at")
+extraction_parent_columns <- c(status = "status", summary = "summary", submitted = "submitted_at")
 # The fields of a record the reading job owns: it saves these, and staff never do.
 extraction_reading_fields <- c(
   "extraction_status", "reading_started", "reading_claimed_at", "reading_pid", "error", "model",
@@ -100,7 +100,6 @@ extraction_model_record <- function(parent, detail) {
     kind = extraction_kind,
     status = parent$status,
     summary = parent$summary,
-    note = parent$note,
     prepared_by = parent$preparer$name,
     prepared_by_id = parent$prepared_by,
     started = database_time(parent$created_at),

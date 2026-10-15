@@ -30,7 +30,7 @@ test_that("an empty set of columns is sent as an empty object, not an empty list
 
 # test_that("a draft and its details are added together, and read back with who prepared it", {
 #   me <- local_staff()
-#   id <- new_edit(me, list(summary = "Rename a wave", note = "typo", created_at = "2026-10-02T15:30:12Z"))
+#   id <- new_edit(me, list(summary = "Rename a wave", created_at = "2026-10-02T15:30:12Z"))
 #   expect_match(id, "^[0-9]+$")
 #
 #   row <- draft_row_model_get(test_connection, id)
@@ -90,13 +90,13 @@ test_that("an empty set of columns is sent as an empty object, not an empty list
 # test_that("saving raises the revision, says who saved, and writes only the columns named", {
 #   me <- local_staff()
 #   colleague <- local_staff()
-#   id <- new_edit(me, list(summary = "one", note = "keep this"))
+#   id <- new_edit(me, list(summary = "one", requested_reviewer = colleague$staff_id))
 #
 #   revision <- draft_row_model_save(test_connection, id, colleague$staff_id, list(summary = "two"), list(form = list(a = "b")))
 #   expect_equal(revision, 2)
 #   row <- draft_row_model_get(test_connection, id)
 #   expect_equal(row$summary, "two")
-#   expect_equal(row$note, "keep this")
+#   expect_equal(row$requested_reviewer, colleague$staff_id) # a column not named keeps its value
 #   expect_equal(row$revision, 2)
 #   expect_equal(row$saved_by, colleague$staff_id)
 #   expect_equal(row$saver$name, colleague$name)
@@ -106,8 +106,8 @@ test_that("an empty set of columns is sent as an empty object, not an empty list
 #   expect_equal(details$edit_kind, "Update")
 #
 #   # a NULL empties a column
-#   draft_row_model_save(test_connection, id, me$staff_id, list(note = NULL))
-#   expect_null(draft_row_model_get(test_connection, id)$note)
+#   draft_row_model_save(test_connection, id, me$staff_id, list(requested_reviewer = NULL))
+#   expect_null(draft_row_model_get(test_connection, id)$requested_reviewer)
 #   # a change that isn't to the content keeps the revision
 #   expect_equal(draft_row_model_save(test_connection, id, me$staff_id, list(summary = "three"), new_revision = FALSE), 3)
 #   expect_equal(draft_row_model_get(test_connection, id)$revision, 3)

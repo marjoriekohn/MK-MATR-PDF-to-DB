@@ -1,7 +1,7 @@
 # ------ Extraction drafts ------------------------------------------------------
 # The extraction pipeline returns a questionnaire as nested JSON: sections hold
 # blocks, questions hold variables, and variables hold choices
-# (response options). The review page edits three flat tables instead, so
+# (response options). The Edit Extraction page edits three flat tables instead, so
 # moving a block only changes its parent_id and display_order, the same way
 # QUESTIONNAIRE_COMPONENT stores it:
 #
@@ -89,8 +89,18 @@ draft_service_counts <- function(draft) {
   )
 }
 
+#' How much of a draft has been checked, as a whole percentage.
+#'
+#' The Edit Extraction page's "N% complete" and the Existing Draft cards both show it.
+#'
+#' @param counts From `draft_service_counts()`.
+#' @return A whole number from 0 to 100, rounded down; 0 for a draft with no blocks.
+draft_service_percent_checked <- function(counts) {
+  if (counts$blocks > 0) as.integer(floor(100 * counts$checked / counts$blocks)) else 0L
+}
+
 # ------ JSON to tables ---------------------------------------------------------
-#' Turn the questionnaire JSON into the three tables the review page edits.
+#' Turn the questionnaire JSON into the three tables the Edit Extraction page edits.
 #'
 #' Rows get ids when a draft is loaded (c1, v1, o1...); ids aren't saved. Positions are
 #' numbered 1, 2, 3... within each parent, and choices without a code are coded.
@@ -338,11 +348,12 @@ draft_service_ancestors <- function(draft, id) {
 #'
 #' @param draft A draft: `list(questionnaire, components, variables, response_options)`; see the top of `service_draft.R`.
 #' @param table `"components"`, `"variables"` or `"response_options"`.
-#' @param n How many ids.
+#' @param n How many ids; none gives none.
 #' @return A character vector, e.g. `"c132"` after `"c131"`.
 draft_service_next_id <- function(draft, table, n = 1) {
   used <- as.integer(substring(draft[[table]]$id, 2))
-  paste0(id_prefixes[[table]], max(c(0L, used)) + seq_len(n))
+  # recycle0: without it, no numbers would still paste one id (the prefix alone)
+  paste0(id_prefixes[[table]], max(c(0L, used)) + seq_len(n), recycle0 = TRUE)
 }
 
 #' The printed number of a question.

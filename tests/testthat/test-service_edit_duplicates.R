@@ -70,10 +70,9 @@ test_that("a block or a question with exactly these words is flagged", {
   expect_length(found_for("question", question__text = "Words nobody uses"), 0)
 })
 
-test_that("a kind with no rule, or an add that is several rows, has nothing to say or says it for each row", {
+test_that("a kind with no rule has nothing to say, and a study is checked by its own fields", {
   expect_length(found_for("wave", wave__name = "Wave 1"), 0) # a wave's name is checked by its own field
-  # a study added with its questionnaire is checked for both
-  form <- form_for("study", "add", study__name = "Adult Health Study", study__registry_id = "1", questionnaire__name = "Adult Health and Personality", questionnaire__abbreviation = "AHP")
+  form <- form_for("study", "add", study__name = "Adult Health Study", study__registry_id = "1")
   found <- edit_service_duplicates(form$entity, form$snap, form$fields, form$values)
   expect_true("A study with this name" %in% vapply(found, function(match) match$why, character(1)))
 })

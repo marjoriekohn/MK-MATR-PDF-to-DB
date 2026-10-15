@@ -6,14 +6,13 @@
 #   admin <- local_staff("ADMIN")
 #   type <- local_respondent_type()
 #   new_name <- test_name("Renamed")
-#   id <- local_applied_edit(admin, "respondent_type", "update", type$respondent_type_id, respondent_type__name = new_name, note = "Typo in the name")
+#   id <- local_applied_edit(admin, "respondent_type", "update", type$respondent_type_id, respondent_type__name = new_name)
 #
 #   record <- history_model_get_all(test_connection)[[as.character(id)]]
 #   expect_equal(record$id, as.character(id))
 #   expect_equal(record$kind, "Update")
 #   expect_equal(record$status, "Applied")
 #   expect_equal(record$summary, paste0("Changed the name of the respondent type “", type$name, "”"))
-#   expect_equal(record$note, "Typo in the name")
 #   expect_equal(record$prepared_by, admin$name)
 #   expect_true(is.na(record$approved_by)) # it needed no approval
 #   expect_false(record$approval_required)
@@ -27,13 +26,12 @@
 # test_that("an edit someone approved says who, and that it needed approval", {
 #   me <- local_staff()
 #   approver <- local_staff()
-#   id <- local_approved_delete(me, approver, note = "Not used by anything")
+#   id <- local_approved_delete(me, approver)
 #   record <- history_model_get_all(test_connection)[[as.character(id)]]
 #   expect_equal(record$kind, "Delete")
 #   expect_equal(record$prepared_by, me$name)
 #   expect_equal(record$approved_by, approver$name)
 #   expect_true(record$approval_required)
-#   expect_equal(record$note, "Not used by anything")
 #   expect_match(record$approved, "^[0-9]{4}-")
 # })
 #
@@ -58,10 +56,10 @@
 # })
 
 test_that("an edit from before it had a sentence has empty words where it has none", {
-  # the history keeps old edits as they were; a row with no summary or note reads as empty text
+  # the history keeps old edits as they were; a row with no summary reads as empty text
   record <- history_model_record(list(draft_id = 1, kind = "Edit", status = "Applied", edit = list(edit_kind = "Update")))
   expect_equal(record$summary, "")
-  expect_equal(record$note, "")
+  expect_null(record$note) # no reason is kept
   expect_equal(record$kind, "Update")
   expect_false(record$approval_required) # nobody approved it, so none was needed
   expect_true(is.na(record$approved_by))

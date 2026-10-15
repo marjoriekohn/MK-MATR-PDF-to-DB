@@ -110,11 +110,11 @@ collect_errors <- function(session) {
   function() errors
 }
 
-# What the review page shares with its outline and details modules, kept simple: the
+# What the Edit Extraction page shares with its outline and details modules, kept simple: the
 # draft and the selected block are reactive values, and every change goes through
 # `change`, which like the page's own keeps the sentences a failed change would show staff
 # (in `log$errors`) and says whether the text was typed (`log$typed`).
-review_state <- function(draft = gold_draft(), lookups = test_lookups()) {
+edit_extraction_state <- function(draft = gold_draft(), lookups = test_lookups()) {
   current <- shiny::reactiveVal(draft)
   selected <- shiny::reactiveVal(NULL)
   log <- new.env()

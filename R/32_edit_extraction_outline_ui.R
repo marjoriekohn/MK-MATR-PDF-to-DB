@@ -1,14 +1,14 @@
-#' The outline: the questionnaire's blocks as a tree, each edited where it is.
+#' The outline of the Edit Extraction page: the questionnaire's blocks as a tree, each edited where it is.
 #'
 #' A block's words are typed straight into its row (with the words of other blocks of the same kind
 #' offered as it is typed), and its row holds the buttons to mark it as checked and to delete it. A
-#' question's row also opens a nested panel for what else a question has: the question it follows, its
-#' skip condition, and its variables with their choices. Question numbers follow the questions' places in
-#' the outline.
+#' question's row also has the question it follows, and opens a nested panel for what else a question
+#' has: its skip condition, and its variables with their choices. Question numbers follow the questions'
+#' places in the outline.
 #'
 #' @param id The module's id.
 #' @return The page's UI.
-review_outline_ui <- function(id) {
+extraction_outline_ui <- function(id) {
   ns <- NS(id)
   div(
     class = "outline-panel",
@@ -50,7 +50,8 @@ add_block_menu <- function(component_types) {
 # block into that list puts the block inside the section. Only sections have a
 # list, so only sections can hold blocks (BR53). `view` holds what's selected,
 # which sections are collapsed, which questions have their panel open, the
-# problems the checks found, and the words to suggest.
+# problems the checks found, the words to suggest and the uploaded MATR IDs no
+# variable has yet.
 
 # SortableJS settings for every list in the outline: one shared group, so blocks
 # move between sections, dragged by their dots. SortableJS draws the dragged
@@ -65,19 +66,24 @@ outline_sortable_options <- sortable::sortable_options(
   fallbackOnBody = TRUE,
   swapThreshold = 0.65,
   ghostClass = "is-drop-target",
-  onMove = htmlwidgets::JS("reviewPage.showDropHint"),
-  onEnd = htmlwidgets::JS("reviewPage.sendOutline")
+  onMove = htmlwidgets::JS("editExtractionPage.showDropHint"),
+  onEnd = htmlwidgets::JS("editExtractionPage.sendOutline")
 )
 
-# The id of the list of words offered for a kind of block, e.g. "review-outline-suggest-Section".
+# The id of the list of words offered for a kind of block, e.g. "edit_extraction-outline-suggest-Section".
 suggest_list_id <- function(ns, component_type) ns(paste0("suggest-", gsub("[^A-Za-z0-9]", "_", component_type)))
+
+# The id of the list of uploaded MATR IDs no variable has yet, which every MATR ID field offers. The page
+# script keeps it up to date as IDs are given (review.js).
+matr_id_list_id <- function(ns) ns("matr-ids")
 
 #' The outline as a tree.
 #'
 #' @param draft A draft.
-#' @param view `list(selected, collapsed, opened, problems, suggestions)`: what is selected, which
-#'   sections are closed, which questions have their panel open, the problems to mark, and the words to
-#'   offer for each kind of block (`draft_service_text_suggestions()`).
+#' @param view `list(selected, collapsed, opened, problems, suggestions, matr_ids)`: what is selected,
+#'   which sections are closed, which questions have their panel open, the problems to mark, the words to
+#'   offer for each kind of block (`draft_service_text_suggestions()`) and the uploaded MATR IDs to offer
+#'   (`draft_service_available_matr_ids()`).
 #' @param lookups The pick lists, from `lookup_service_get_all()`.
 #' @param ns The module's namespace function.
 #' @return A UI element.
@@ -85,12 +91,13 @@ outline_tree <- function(draft, view, lookups, ns) {
   div(
     class = "outline-tree",
     outline_list(draft, section = NULL, view, lookups, ns),
-    # The words offered as staff type, one list per kind of block, plus the answer choices and conditions
+    # The words offered as staff type, one list per kind of block, plus the answer choices, conditions and MATR IDs
     lapply(names(view$suggestions %||% list()), function(component_type) {
       suggestions(suggest_list_id(ns, component_type), view$suggestions[[component_type]])
     }),
     suggestions(ns("answer-options"), lookups$answer_options),
-    suggestions(ns("conditions"), unique(c("If yes", "If no", stats::na.omit(draft$components$condition))))
+    suggestions(ns("conditions"), unique(c("If yes", "If no", stats::na.omit(draft$components$condition)))),
+    suggestions(matr_id_list_id(ns), view$matr_ids %||% character())
   )
 }
 
@@ -137,13 +144,14 @@ outline_row <- function(block, draft, view, ns) {
       Question = review_button(
         icon("caret-right"), "details",
         `data-id` = block$id, class = "btn-toggle is-details",
-        title = "Show or hide the question's variables, the question it follows and its skip condition"
+        title = "Show or hide the question's skip condition and variables"
       ),
       span(class = "btn-toggle")
     ),
     type_chip(block$component_type),
     if (!is.na(block$question_number)) span(class = "outline-number", paste0("Q", block$question_number)),
-    outline_text_field(block, ns),
+    outline_text_field(block, view$problems, ns),
+    if (block$component_type == "Question") parent_question_field(block, draft, view$problems),
     outline_badges(block, draft, view$problems),
     outline_actions(block, draft)
   )
@@ -161,19 +169,32 @@ outline_order <- function(block) {
 
 # The block's words, typed where they are. The words of the other blocks of the same kind, and of the
 # recorded questionnaire's, are offered as they are typed (review.js reads the list `data-suggest` names).
-outline_text_field <- function(block, ns) {
+outline_text_field <- function(block, problems, ns) {
   placeholder <- switch(block$component_type,
     Section = "Section heading, as printed (e.g. ‘Section 1: About You’). A section can be left blank.",
     Question = "The question's words only. Introductions, instructions and definitions go in their own block.",
     paste("The", tolower(block$component_type), "as printed")
   )
   tags$textarea(
-    class = "form-control form-control-sm outline-text",
+    class = c("form-control form-control-sm outline-text", field_problem_class(problems, "components", block$id, "text")),
     rows = 1, placeholder = placeholder, `aria-label` = paste(block$component_type, "text"),
     `data-autofocus` = if (is.na(block$text)) NA,
     `data-suggest` = suggest_list_id(ns, block$component_type),
+    !!!field_problem_attributes(problems, "components", block$id, "text"),
     !!!field_attributes("components", block, "text"),
     blank_if_na(block$text)
+  )
+}
+
+# The question it follows, beside its words: when it's asked in the context of another question, or is
+# only shown when a skip condition is met.
+parent_question_field <- function(block, draft, problems) {
+  span(
+    class = "outline-parent",
+    field_select(
+      "components", block, "parent_question_id", parent_question_choices(block, draft),
+      blank = "No Parent Question", optional = TRUE, label = "Parent question", problems = problems
+    )
   )
 }
 
@@ -182,12 +203,10 @@ outline_text_field <- function(block, ns) {
 outline_badges <- function(block, draft, problems) {
   n_inside <- sum(draft$components$parent_id %in% block$id)
   n_boxes <- sum(draft$variables$component_id == block$id)
-  follows <- question_number_of(draft, block$parent_question_id)
   block_problems <- problems$message[problems$id == block$id]
   span(
     class = "outline-badges",
     if (block$component_type == "Section") row_badge(paste(n_inside, if (n_inside == 1) "item" else "items")),
-    if (!is.na(follows)) row_badge(paste0("Follows Q", follows)),
     if (block$component_type == "Question") row_badge(paste(n_boxes, if (n_boxes == 1) "variable" else "variables")),
     problem_badge(block_problems)
   )
@@ -232,42 +251,31 @@ outline_actions <- function(block, draft) {
 }
 
 # ------ A question's panel ---------------------------------------------------------------
-# Under a question's row, when its arrow is open: the question it follows and its skip condition, its
-# variables and their choices, and what the checks found.
+# Under a question's row, when its arrow is open: its skip condition, its variables and their choices,
+# and what the checks found that isn't one field's (a field at fault is outlined in red instead).
 question_panel <- function(block, draft, view, lookups, ns) {
-  messages <- view$problems$message[view$problems$id == block$id]
+  of_block <- view$problems[view$problems$id == block$id, , drop = FALSE]
+  messages <- of_block$message[is.na(of_block$table)]
   div(
     class = "question-panel",
     if (length(messages) > 0) div(class = "callout details-problems", tags$ul(lapply(messages, tags$li))),
-    question_fields(block, draft, ns),
-    variable_cards(block, draft, lookups, ns)
+    question_fields(block, ns),
+    variable_cards(block, draft, view, lookups, ns)
   )
 }
 
-# The question it follows and the printed condition, in one row. The condition shows once there's a parent
-# question, or if it already has words (e.g. its parent was deleted), so they're never hidden.
-question_fields <- function(block, draft, ns) {
-  has_condition <- !is.na(block$parent_question_id) || !is.na(block$condition)
+# The printed condition. It shows once there's a parent question, or if it already has words (e.g. its
+# parent was deleted), so it's never hidden.
+question_fields <- function(block, ns) {
+  if (is.na(block$parent_question_id) && is.na(block$condition)) {
+    return(NULL)
+  }
   div(
     class = "details-row",
-    labelled(
-      "Parent Question",
-      hint = paste(
-        "When it's asked in the context of another question, or is only shown",
-        "when a skip condition is met."
-      ),
-      field_select(
-        "components", block, "parent_question_id", parent_question_choices(block, draft),
-        blank = "None", optional = TRUE
-      )
-    ),
-    if (has_condition) {
-      labelled(
-        "Skip Condition",
-        hint = "Optional, e.g. “If yes”",
-        field_text("components", block, "condition", list = ns("conditions"))
-      )
-    }
+    span(
+      class = "details-field",
+      field_text("components", block, "condition", placeholder = "Skip condition", list = ns("conditions"), label = "Skip condition")
+    )
   )
 }
 
@@ -290,20 +298,22 @@ parent_question_choices <- function(block, draft) {
 # ------ Variables and choices -----------------------------------------------
 # Variables reorder within their question, choices within their variable.
 list_sortable_options <- function(handle) {
-  sortable::sortable_options(handle = handle, onEnd = htmlwidgets::JS("reviewPage.sendList"))
+  sortable::sortable_options(handle = handle, onEnd = htmlwidgets::JS("editExtractionPage.sendList"))
 }
 
 #' A question's variables and their choices.
 #'
 #' Each variable is one row: its kind (choices or write-in), its MATR ID, who it's about, its label,
-#' and, for a write-in, the kind of answer; its choices are listed under the row.
+#' and, for a write-in, the kind of answer; its choices are listed under the row. What each field holds
+#' is said in it while it is empty, and its label is kept for screen readers.
 #'
 #' @param block One row of a draft's `components`: a question.
 #' @param draft A draft.
+#' @param view What the outline shows; see `outline_tree()`. `problems` outlines the fields at fault.
 #' @param lookups The pick lists, from `lookup_service_get_all()`.
 #' @param ns The module's namespace function.
 #' @return A UI element.
-variable_cards <- function(block, draft, lookups, ns) {
+variable_cards <- function(block, draft, view, lookups, ns) {
   boxes <- draft_service_children(draft, "variables", block$id)
   list_id <- ns(paste0("boxes-", block$id))
   div(
@@ -315,16 +325,17 @@ variable_cards <- function(block, draft, lookups, ns) {
     ),
     div(
       id = list_id, class = "box-list", `data-table` = "variables",
-      map_rows(boxes, variable_card, draft, lookups, ns)
+      map_rows(boxes, variable_card, draft, view$problems, lookups, ns)
     ),
     sortable::sortable_js(list_id, list_sortable_options(".box-handle"))
   )
 }
 
-variable_card <- function(box, draft, lookups, ns) {
+variable_card <- function(box, draft, problems, lookups, ns) {
   is_choice_box <- box$variable_type == "closed_ended"
   div(
-    class = "variable-card", `data-id` = box$id,
+    class = c("variable-card", field_problem_class(problems, "variables", box$id, NA)),
+    `data-id` = box$id,
     div(
       class = "variable-card-row",
       span(class = "box-handle", title = "Drag to reorder", icon("grip-vertical")),
@@ -333,18 +344,29 @@ variable_card <- function(box, draft, lookups, ns) {
         "variables", box, "variable_type", c("Choices" = "closed_ended", "Write-in" = "open_ended"),
         label = "Kind"
       ),
-      labelled(
-        "MATR ID",
-        hint = paste(
-          "A new wave of a recorded questionnaire gets the MATR IDs its questions already have.",
-          "Upload MATR IDs, at the top of the page, fills the rest from a CSV."
-        ),
-        field_text("variables", box, "matr_id")
+      span(
+        class = "details-field",
+        field_text(
+          "variables", box, "matr_id",
+          placeholder = "MATR ID", list = matr_id_list_id(ns), label = "MATR ID", problems = problems
+        )
       ),
-      labelled("About", field_select("variables", box, "subject", lookups$subjects)),
-      labelled("Label", field_text("variables", box, "label", placeholder = "Optional, e.g. weeks")),
+      span(
+        class = "details-field",
+        field_select(
+          "variables", box, "subject", lookups$subjects,
+          blank = "Select who this question is about", label = "Question subject", problems = problems
+        )
+      ),
+      span(class = "details-field", field_text("variables", box, "label", placeholder = "Optional Label", label = "Optional label")),
       if (!is_choice_box) {
-        labelled("Answer type", field_select("variables", box, "answer_data_type", lookups$answer_data_types))
+        span(
+          class = "details-field",
+          field_select(
+            "variables", box, "answer_data_type", lookups$answer_data_types,
+            blank = "Select an answer type", label = "Answer type", problems = problems
+          )
+        )
       },
       review_button(
         icon("trash-can"), "delete",
@@ -352,39 +374,31 @@ variable_card <- function(box, draft, lookups, ns) {
         class = "btn btn-sm btn-icon", title = "Delete this variable"
       )
     ),
-    if (is_choice_box) choice_table(box, draft, ns)
+    if (is_choice_box) choice_table(box, draft, problems, ns)
   )
 }
 
 # "Apply to all" sits under the Code column, since it copies the codes.
-choice_table <- function(box, draft, ns) {
+choice_table <- function(box, draft, problems, ns) {
   choices <- draft_service_children(draft, "response_options", box$id)
   list_id <- ns(paste0("choices-", box$id))
-  any_printed_fields <- any(shows_printed_fields(choices))
   div(
     class = "choice-table",
     div(
-      class = "choice-row choice-heading",
-      span(), span("Choice"), span("Code"), span("Printed?"),
-      if (any_printed_fields) span("Printed as", hint_icon("Leave blank if no difference")) else span(),
-      if (any_printed_fields) span("Skip to") else span(),
-      span()
-    ),
-    div(
       id = list_id, class = "choice-list", `data-table` = "response_options",
-      map_rows(choices, choice_row, ns)
+      map_rows(choices, choice_row, problems, ns)
     ),
     sortable::sortable_js(list_id, list_sortable_options(".choice-handle")),
     div(
       class = "choice-row choice-actions",
-      review_button(tagList(icon("plus"), " Choice"), "add_choice", `data-id` = box$id, class = "btn btn-sm btn-outline-dark choice-add"),
       div(
         class = "choice-apply",
         bslib::tooltip(
           review_button("Apply to all", "copy_codes", `data-id` = box$id),
           "Use these codes wherever these same choices appear in the questionnaire."
         )
-      )
+      ),
+      review_button(tagList(icon("plus"), " Choice"), "add_choice", `data-id` = box$id, class = "btn btn-sm btn-outline-dark choice-add")
     )
   )
 }
@@ -395,19 +409,32 @@ shows_printed_fields <- function(choices) {
   choices$printed %in% TRUE | !is.na(choices$printed_label) | !is.na(choices$skip_instruction)
 }
 
-choice_row <- function(choice, ns) {
+# Code first, then the response option it codes.
+choice_row <- function(choice, problems, ns) {
   printed_fields <- shows_printed_fields(choice)
   div(
     class = "choice-row", `data-id` = choice$id,
     span(class = "choice-handle", title = "Drag to reorder", icon("grip-vertical")),
+    field_text("response_options", choice, "code_value", placeholder = "Code", type = "number", label = "Code", problems = problems),
     field_text(
       "response_options", choice, "answer_option",
-      placeholder = "Pick or type", list = ns("answer-options")
+      placeholder = "Response Option", list = ns("answer-options"), label = "Response option", problems = problems
     ),
-    field_text("response_options", choice, "code_value", type = "number"),
-    field_checkbox("response_options", choice, "printed", "Printed on the form"),
-    if (printed_fields) field_text("response_options", choice, "printed_label", placeholder = "—") else span(),
-    if (printed_fields) field_text("response_options", choice, "skip_instruction", placeholder = "—") else span(),
+    tags$label(
+      class = "choice-printed",
+      field_checkbox("response_options", choice, "printed", "Printed on the form"),
+      span("Printed")
+    ),
+    if (printed_fields) {
+      field_text("response_options", choice, "printed_label", placeholder = "Printed as", label = "Printed as")
+    } else {
+      span()
+    },
+    if (printed_fields) {
+      field_text("response_options", choice, "skip_instruction", placeholder = "Skip to", label = "Skip to")
+    } else {
+      span()
+    },
     review_button(
       icon("trash-can"), "delete",
       `data-table` = "response_options", `data-id` = choice$id,

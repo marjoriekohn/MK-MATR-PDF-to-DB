@@ -1,8 +1,9 @@
-#' What staff know about a questionnaire and its wave.
+#' Where an extraction goes in the MATR metadata database: its registry, study, questionnaire and wave.
 #'
-#' Typed on the Extraction page (by hand, or while the PDF is read), and changed later from the review
-#' page. The drop-downs' choices and the notes under the fields come from the server.
-#' Required fields have a * after their label.
+#' Picked when its change request is previewed and submitted from the Edit Extraction page, not when the
+#' extraction is started. The questionnaire and the wave can each be one that is recorded or a new one;
+#' a recorded wave has to have no questions yet. The drop-downs' choices and the notes under the fields
+#' come from the server. Required fields have a * after their label.
 #'
 #' @param id The module's id.
 #' @return The page's UI.
@@ -28,24 +29,19 @@ extraction_info_ui <- function(id) {
       "input.registry_id != '' && input.study_id != ''",
       ns = ns,
       questionnaire_fields(ns),
-      wave_fields(ns)
-    ),
-    textAreaInput(
-      ns("notes"), "Notes for reviewers",
-      rows = 3, width = "100%",
-      placeholder = "Anything unusual about this PDF, e.g. page 6 is a scanned insert"
+      wave_choice_fields(ns)
     )
   )
 }
 
-# A questionnaire never recorded, or a new wave of a recorded one.
+# A questionnaire never recorded, or one that is.
 questionnaire_fields <- function(ns) {
   tagList(
     div(
       class = "kind-toggle",
       toggle_input(
         ns("kind"),
-        c("New questionnaire" = "new_questionnaire", "New wave" = "new_wave"),
+        c("Existing questionnaire" = "new_wave", "New questionnaire" = "new_questionnaire"),
         selected = "new_wave", label = "New or existing questionnaire"
       )
     ),
@@ -67,6 +63,38 @@ questionnaire_fields <- function(ns) {
       "input.kind == 'new_wave'",
       ns = ns,
       select_field(ns("questionnaire_id"), "Questionnaire", required = TRUE)
+    )
+  )
+}
+
+# A recorded questionnaire's wave can be a new one or one recorded without questions yet; a new
+# questionnaire's wave is new.
+wave_choice_fields <- function(ns) {
+  tagList(
+    conditionalPanel(
+      "input.kind == 'new_wave'",
+      ns = ns,
+      div(
+        class = "kind-toggle",
+        toggle_input(
+          ns("wave_choice"), c("New wave" = "new", "Existing wave" = "existing"),
+          selected = "new", label = "New or existing wave"
+        )
+      ),
+      conditionalPanel(
+        "input.wave_choice == 'existing'",
+        ns = ns,
+        div(
+          class = "form-field",
+          select_field(ns("wave_id"), "Wave", required = TRUE),
+          uiOutput(ns("wave_id_note"), class = "form-text field-note")
+        )
+      )
+    ),
+    conditionalPanel(
+      "input.kind == 'new_questionnaire' || input.wave_choice != 'existing'",
+      ns = ns,
+      wave_fields(ns)
     )
   )
 }

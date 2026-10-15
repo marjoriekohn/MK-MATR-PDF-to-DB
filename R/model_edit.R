@@ -1,14 +1,14 @@
 # ------ Edit proposals -------------------------------------------------------------
-# One record per change staff make on the Make an edit page, saying who, why, what it comes
+# One record per change staff make on the Make an edit page, saying who, what it comes
 # to in a sentence, how to open it again on the form, and the items to apply. Each is a
 # DRAFT row of kind "Edit" with an EDIT_DRAFT row (model_draft_row.R). Applying it (at once for
 # an add or an update, after one approval for a STAFF member's delete) makes it a
 # WRITE_HISTORY row with its WRITE_HISTORY_ITEM rows. `status` is Draft until it's sent for
 # review, then Awaiting Review; Sent Back if a reviewer returned it; Withdrawn if the
-# preparer discards it; Applied once it is in the MATR data.
+# preparer discards it; Applied once it is in the MATR metadata database.
 #
 # A record's fields and where they are kept (draft / edit_draft):
-#   id, status, summary, note                      draft
+#   id, status, summary                            draft
 #   prepared_by (name), prepared_by_id, started    draft (created_at)
 #   saved, saved_by (name), saved_by_id, revision  draft
 #   submitted                                      draft (submitted_at)
@@ -84,8 +84,7 @@ edit_model_signature <- function(connection) {
 #' @return The record as saved, with its id. An error with the database's sentence if it refused.
 edit_model_save <- function(connection, record, staff_id = record$prepared_by_id, new_revision = TRUE) {
   parent <- list(
-    status = record$status, summary = record$summary, note = record$note,
-    submitted_at = record$submitted
+    status = record$status, summary = record$summary, submitted_at = record$submitted
   )
   parent["requested_reviewer"] <- list(record$requested_reviewer$id)
   detail <- list(
@@ -136,7 +135,6 @@ edit_model_record <- function(parent, detail) {
     submitted = database_time(parent$submitted_at),
     revision = parent$revision,
     summary = parent$summary,
-    note = parent$note,
     requested_reviewer = draft_row_person(parent$requested_reviewer, parent$reviewer),
     sent_back = draft_row_sent_back(parent),
     form = content$form,

@@ -85,7 +85,7 @@ read_with <- function(gemini, pages = 1, pdf_path = "unused.pdf") {
   c(reading, list(statuses = statuses))
 }
 
-test_that("what Gemini writes is tidied into exactly the review page's JSON", {
+test_that("what Gemini writes is tidied into exactly the Edit Extraction page's JSON", {
   gold <- gold_json()
   tidied <- reading_service_tidy(jsonlite::fromJSON(as_gemini_wrote_it(gold), simplifyVector = FALSE))
   expect_identical(tidied, gold)

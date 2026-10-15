@@ -38,7 +38,7 @@ probe_columns <- lapply(database_tables, function(spec) {
 other_tables <- list(
   option_set = list(read = "option_set_id", change = "name"),
   staff = list(read = "staff_id", change = "name"),
-  draft = list(read = "draft_id", change = "note"),
+  draft = list(read = "draft_id", change = "summary"),
   extracted_draft = list(read = "draft_id", change = "pdf_name"),
   edit_draft = list(read = "draft_id", change = "form"),
   applied_item = list(read = "draft_id", change = "entity_name")

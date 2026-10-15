@@ -36,6 +36,18 @@ wave_model_get_all <- function(connection) {
   )
 }
 
+#' The questions one questionnaire's waves ask.
+#'
+#' @param connection The MATR database, `list(url, key)`; see `model_database.R`.
+#' @param questionnaire_id The questionnaire's id.
+#' @return A data frame with `wave_id` and `component_id`, one row per question a wave asks.
+wave_question_model_get <- function(connection, questionnaire_id) {
+  database_model_get(
+    connection, "wave_question", c("wave_id", "component_id"),
+    order_by = c("wave_id", "component_id"), filters = list(questionnaire_id = database_eq(questionnaire_id))
+  )
+}
+
 #' Every study.
 #'
 #' @param connection The MATR database, `list(url, key)`; see `model_database.R`.

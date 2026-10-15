@@ -1,4 +1,4 @@
-#' The Change Requests page: changes waiting for one other staff member to approve them.
+#' The Change Requests page: items waiting for one other staff member to approve them.
 #'
 #' @param id The module's id.
 #' @return The page's UI.
@@ -12,12 +12,6 @@ change_requests_ui <- function(id) {
       "Change Requests",
       "Items waiting for approval before they go into the MATR metadata database.",
       uiOutput(ns("whose_toggle"))
-    ),
-    p(
-      class = "form-text change-request-rule",
-      "A delete, or an extraction pushed to the database, made by a STAFF member waits here until one other staff member ",
-      "approves it, which adds it to the MATR data at once. You can't approve what you prepared or last changed. ",
-      "Adds and updates, and anything an ADMIN does, are applied straight away and never wait here."
     ),
     uiOutput(ns("cases"))
   )
@@ -69,7 +63,6 @@ change_request_card_ui <- function(record, me) {
           }
         ), collapse = " · ")
       ),
-      if (nzchar(record$note %||% "")) p(class = "change-request-note", strong("Why: "), record$note),
       if (state$mine) {
         p(class = "change-request-note-you", "You prepared this. One other staff member has to approve it.")
       } else if (state$changed_by_me) {
@@ -90,16 +83,17 @@ change_request_card_ui <- function(record, me) {
 
 #' What a person reads before approving, sending back or withdrawing a request.
 #'
-#' For an extraction, the whole questionnaire is laid out to read (`questionnaire_preview_ui()`),
-#' with a button to its PDF when the file is here, so a reviewer needn't open it on the review page.
+#' For an extraction, the same presentation its preparer saw before submitting it
+#' (`extraction_request_ui()`): where it goes and what it adds, each as cards of the rows that are there
+#' and the NEW ones, and the whole questionnaire laid out to read, with a button to its PDF when the
+#' file is here, so a reviewer needn't open it on the Edit Extraction page.
 #'
 #' @param record A request.
 #' @param me Who is using the site: `list(staff_id, name, role)`.
 #' @param ns The module's namespace function.
 #' @param detail What the request comes to: for an edit `change_request_service_changes()`; for an
-#'   extraction `list(summary = <sentence>, unchecked = <how many blocks>, problem = <why it can't be
-#'   added, or NULL>, draft = <its questionnaire, or NULL if it couldn't be read>, pdf_url = <the PDF's
-#'   address, or NULL>)`.
+#'   extraction `list(preview = <from extraction_service_request_preview()>, draft = <its questionnaire,
+#'   or NULL if it couldn't be read>, pdf_url = <the PDF's address, or NULL>)`.
 #' @return A `modalDialog()`, for `showModal()`.
 change_request_dialog <- function(record, me, ns, detail) {
   state <- change_request_service_state(record, me)
@@ -117,25 +111,7 @@ change_request_dialog <- function(record, me, ns, detail) {
       ), collapse = " · ")
     ),
     if (extraction) {
-      tagList(
-        if (!is.null(detail$problem)) {
-          edit_callout("danger", title = "This can't be added as it is", detail$problem)
-        } else {
-          p(class = "form-text", detail$summary)
-        },
-        if (isTRUE(detail$unchecked > 0)) {
-          p(class = "form-text", sprintf("%s haven't been marked as checked yet.", plural(detail$unchecked, "block")))
-        },
-        div(
-          class = "change-request-questionnaire-head",
-          pdf_open_button(detail$pdf_url)
-        ),
-        if (is.null(detail$draft)) {
-          p(class = "form-text", "The questionnaire couldn't be read. Edit opens it on the review page.")
-        } else {
-          div(class = "change-request-questionnaire", questionnaire_preview_ui(detail$draft))
-        }
-      )
+      extraction_request_ui(detail$preview, detail$draft, detail$pdf_url)
     } else {
       tagList(
         p(class = "form-text", change_service_counts_text(detail$counts)),
@@ -145,7 +121,7 @@ change_request_dialog <- function(record, me, ns, detail) {
     if (state$can_approve) {
       edit_callout(
         "warning",
-        title = "Approving adds this to the database now.",
+        title = "Approving adds this to the MATR metadata database now.",
         "All of it is done at once. If a row has changed since this was prepared, nothing is added and you are told which."
       )
     },

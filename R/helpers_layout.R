@@ -33,7 +33,7 @@ progress_dot <- function(state) {
 #' @param choices Maps each label to the value it stands for.
 #' @param selected The value picked now.
 #' @param label Names the group for screen readers.
-#' @param attributes Put on every button, e.g. the review page's `data-field`.
+#' @param attributes Put on every button, e.g. the Edit Extraction page's `data-field`.
 #' @param small Whether to draw small buttons.
 #' @return A UI element.
 toggle_buttons <- function(name, choices, selected, label, attributes = list(),

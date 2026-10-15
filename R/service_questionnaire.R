@@ -74,6 +74,20 @@ questionnaire_service_get_study <- function(catalog, study_id) {
   if (nrow(study) == 1) study
 }
 
+#' How many questions each of a questionnaire's waves asks.
+#'
+#' @param connection The MATR database, `list(url, key)`; see `model_database.R`.
+#' @param questionnaire_id The questionnaire's id; blank gives none.
+#' @return A named integer vector: the count by wave id. A wave that asks nothing isn't in it.
+questionnaire_service_wave_question_counts <- function(connection, questionnaire_id) {
+  if (!grepl("^[0-9]+$", questionnaire_id %||% "")) {
+    return(integer())
+  }
+  asked <- wave_question_model_get(connection, questionnaire_id)
+  counts <- table(as.character(asked$wave_id))
+  stats::setNames(as.integer(counts), names(counts))
+}
+
 # ------ Drop-down choices -------------------------------------------------------------
 # Named vectors: the names are shown, and the values, the rows' IDs, are saved.
 # With no rows there are no labels (recycle0), rather than one made of the
@@ -117,6 +131,22 @@ questionnaire_service_respondent_type_choices <- function(catalog) {
   types <- catalog$respondent_types
   ages <- age_range_text(types$minimum_age, types$maximum_age)
   stats::setNames(as.character(types$respondent_type_id), paste0(types$name, " (", ages, ")", recycle0 = TRUE))
+}
+
+#' A questionnaire's waves that ask no questions yet, for a drop-down.
+#'
+#' An extraction can go into one of them (a wave added on Make an edit before its questionnaire was
+#' extracted); a wave that asks questions already can't take another extraction's.
+#'
+#' @param catalog The live tables the pages pick from, from `questionnaire_service_get_catalog()`.
+#' @param questionnaire_id The questionnaire's id.
+#' @param question_counts From `questionnaire_service_wave_question_counts()`.
+#' @return A named character vector, as `questionnaire_service_registry_choices()`.
+questionnaire_service_empty_wave_choices <- function(catalog, questionnaire_id, question_counts = integer()) {
+  waves <- catalog$waves[catalog$waves$questionnaire_id %in% questionnaire_id, , drop = FALSE]
+  waves <- waves[!as.character(waves$wave_id) %in% names(question_counts)[question_counts > 0], , drop = FALSE]
+  dates <- ifelse(is.na(waves$administered_date), "", paste0(" · given ", format(as.Date(waves$administered_date), "%m/%d/%Y")))
+  stats::setNames(as.character(waves$wave_id), paste0(waves$name, dates, " · no questions yet", recycle0 = TRUE))
 }
 
 #' A study's questionnaires for a drop-down.

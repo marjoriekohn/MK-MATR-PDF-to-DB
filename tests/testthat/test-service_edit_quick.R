@@ -10,10 +10,10 @@ test_that("only a respondent type, an investigator and a study can be added this
   expect_error(edit_service_quick_entity("registry"), "can't be added from here")
   expect_equal(edit_service_quick_entity("respondent_type")$table, "respondent_type")
   study <- edit_service_quick_entity("study")
-  expect_null(study$parts) # on Make an edit a study comes with its first questionnaire and wave
+  expect_null(study$parts)
   expect_length(edit_service_fields(study, test_snapshot(edit_service_tables(study)), "add"), 8)
   expect_false("questionnaire__name" %in% vapply(edit_service_fields(study, test_snapshot(edit_service_tables(study)), "add"), function(field) field$id, character(1)))
-  expect_false(is.null(edit_entities$study$parts)) # Make an edit is unchanged
+  expect_null(edit_entities$study$parts) # nor on Make an edit
 })
 
 test_that("the key of the row an add made is read from the history's items", {
@@ -56,19 +56,8 @@ test_that("a row in the catalog is found by its key", {
 #     expect_false(entry$approval_required)
 #     expect_true(is.na(entry$approved_by))
 #     expect_equal(entry$prepared_by, me$name)
-#     expect_equal(entry$note, edit_quick_note) # the reason is filled in when none is given
 #     expect_equal(entry$summary, paste0("Added the respondent type “", name, "”"))
 #   }
-# })
-#
-# test_that("a reason that was given is what the history says", {
-#   me <- local_staff()
-#   entity <- edit_service_quick_entity("respondent_type")
-#   snap <- edit_service_load(test_connection, entity)
-#   typed <- form_values(entity, snap, respondent_type__name = test_name("Quick type"))
-#   added <- edit_service_quick_add(test_connection, entity, snap, typed$fields, typed$values, me, note = "  Printed on page 1 of the PDF ")
-#   local_applied(added$history_id)
-#   expect_equal(history_model_get_all(test_connection)[[as.character(added$history_id)]]$note, "Printed on page 1 of the PDF")
 # })
 #
 # test_that("an investigator and then a study led by them are added, and the study has no questionnaire yet", {

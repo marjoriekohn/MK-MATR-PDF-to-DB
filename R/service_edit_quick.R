@@ -7,14 +7,7 @@
 # The kinds that can be added this way.
 edit_quick_kinds <- c("respondent_type", "investigator", "study")
 
-# What the History shows as the reason, unless the person gives one.
-edit_quick_note <- "Added from the Extraction page, while preparing a questionnaire."
-
 #' The kind of thing a drop-down can add, as one row.
-#'
-#' A study added on Make an edit comes with its first questionnaire and wave, because the schema says
-#' a study needs them. From a drop-down the questionnaire being extracted is that questionnaire, and it
-#' is added when the extraction is pushed, so only the study is added here.
 #'
 #' @param key One of `edit_quick_kinds`.
 #' @return A kind of thing staff can edit: one entry of `edit_entities` (see `service_edit_entities.R`).
@@ -22,10 +15,9 @@ edit_service_quick_entity <- function(key) {
   if (!key %in% edit_quick_kinds) stop("That can't be added from here.", call. = FALSE)
   entity <- edit_entities[[key]]
   if (key == "study") {
-    entity$parts <- NULL
     entity$about <- paste0(
-      "One research project run under a registry. The questionnaire you are extracting becomes its first ",
-      "questionnaire when the extraction is pushed."
+      "One research project run under a registry. It is added to the database now; the questionnaire you are ",
+      "extracting is added to it when its change request is approved."
     )
   }
   entity
@@ -42,15 +34,13 @@ edit_service_quick_entity <- function(key) {
 #' @param fields The form's fields, from `edit_service_fields()`.
 #' @param values What is in the form: a named list of strings by field id.
 #' @param me Who is adding it: `list(staff_id, name, role)`.
-#' @param note Why, if the person said; otherwise `edit_quick_note`.
 #' @param now The time to record.
 #' @return A list: `record` (the saved edit), `history_id` and `key` (the new row's key, as text, for
 #'   the drop-down to pick). An error with the database's own sentence if it refused.
-edit_service_quick_add <- function(connection, entity, snap, fields, values, me, note = "", now = Sys.time()) {
+edit_service_quick_add <- function(connection, entity, snap, fields, values, me, now = Sys.time()) {
   built <- edit_service_build(entity, "add", snap, fields = fields, values = values)
   form <- list(action = "add", entity = entity$key, scope = "", target = "", values = values)
-  note <- if (has_text(note)) note else edit_quick_note
-  saved <- edit_service_save(connection, edit_service_record(me, form, built, note, "Draft", now = now), me)
+  saved <- edit_service_save(connection, edit_service_record(me, form, built, "Draft", now = now), me)
   history_id <- edit_service_apply(connection, saved, me)
   list(
     record = saved,
