@@ -14,12 +14,7 @@
 #' @param me Who is using the site: `list(staff_id, name, role)`.
 #' @param show_page A function taking a page's name and showing it.
 #' @return A list with `open`, a function taking a saved edit's record that opens it on the form.
-make_edit_server <- function(
-  id,
-  connection,
-  me,
-  show_page
-) {
+make_edit_server <- function(id, connection, me, show_page) {
   moduleServer(id, function(input, output, session) {
     ns <- session$ns
 
@@ -383,9 +378,9 @@ make_edit_server <- function(
                 if (!editing_request()) actionButton(ns("save_draft"), "Save as draft", class = "btn-outline-dark"),
                 actionButton(ns("submit"), primary_label(), class = "btn-primary", disabled = TRUE)
               )
-            )
+            }
           )
-        }
+        )
       )
     })
 
