@@ -1,5 +1,7 @@
 # Pushing an extraction to the database: what stops it, the rows it adds (worked out from the questionnaire as
-# saved and the MATR metadata database as it is), and what happens when a STAFF member or an ADMIN pushes it. The rows are worked out by pure functions, tested here with data given to them, and added by the database, tested with a real push that is removed again.
+# saved and the MATR metadata database as it is), and what happens when a STAFF member or an ADMIN pushes it. The rows are
+# worked out by pure functions, tested here with data given to them, and added by the database, tested with a
+# real push that is removed again.
 
 test_marker <- "ZZTEST"
 
@@ -270,7 +272,7 @@ test_that("repeated choices are new response options, but each answer choice and
   )
   reused <- build_for(draft, info, options = options)
   expect_equal(reused$summary[c("answer_options", "answer_options_found", "option_sets", "option_sets_found")],
-               list(answer_options = 0L, answer_options_found = 2L, option_sets = 0L, option_sets_found = 1L))
+    list(answer_options = 0L, answer_options_found = 2L, option_sets = 0L, option_sets_found = 1L))
   expect_equal(reused$summary$choices, 6L) # still one per variable and choice: the links are new
 
   cards <- extraction_service_what_cards(reused$summary)

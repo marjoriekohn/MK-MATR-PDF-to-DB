@@ -1,4 +1,4 @@
-# How often the reading time is brought up to date.
+# How often the reading timer is brought up to date.
 reading_timer_refresh_ms <- 1000
 
 #' The AI-Powered mode of the Extraction page: the server.

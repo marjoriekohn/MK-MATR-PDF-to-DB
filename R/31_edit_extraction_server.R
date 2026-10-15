@@ -124,7 +124,7 @@ edit_extraction_server <- function(
           extraction_service_save_draft(connection, record(), draft(), saved(), me)
           saved(draft())
           extractions$changed()
-          showNotification("Saved. Nothing is added to the MATR data until the draft is pushed.", type = "message")
+          showNotification("Saved. Nothing is added to the MATR metadata database until its change request is approved.", type = "message")
           TRUE
         },
         error = function(problem) {
@@ -466,14 +466,6 @@ edit_extraction_server <- function(
       current <- req(record())
       tagList(
         if (identical(current$method, extraction_manual)) row_badge("Typed by hand"),
-        if (!identical(current$status, "Draft")) row_badge(current$status, class = "is-warning")
-      )
-    })
-
-    output$badges <- renderUI({
-      current <- req(record())
-      tagList(
-        row_badge(if (identical(current$method, extraction_manual)) "Typed by hand" else "AI-Powered"),
         if (!identical(current$status, "Draft")) row_badge(current$status, class = "is-warning")
       )
     })

@@ -45,6 +45,5 @@ extraction_manual_server <- function(
 
     # ------ OUTPUT ------------------------------------------------------------
     output$pdf_card <- renderUI(manual_pdf_card(upload(), ns))
-
   })
 }

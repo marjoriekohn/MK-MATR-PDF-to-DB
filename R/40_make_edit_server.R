@@ -366,21 +366,22 @@ make_edit_server <- function(
                   ns("reviewer"), "Ask someone to review it (optional)",
                   c("Anyone" = "", reviewers()), selected = isolate(draft()$requested_reviewer$id) %||% "",
                   width = "100%", selectize = FALSE
-                )
+                ),
+                p(class = "form-text", "They are emailed a link once sign-in is set up. Until then, any staff member can approve it.")
               ))
-            },
-            div(
-              class = "edit-footer",
-              div(
-                class = "edit-footer-bar",
-                actionLink(ns("cancel"), if (stuck) "Start over" else "Cancel"),
-                uiOutput(ns("footer_note"), class = "edit-footer-note"),
-                if (!stuck) {
-                  tagList(
-                    if (!editing_request()) actionButton(ns("save_draft"), "Save as draft", class = "btn-outline-dark"),
-                    actionButton(ns("submit"), primary_label(), class = "btn-primary", disabled = TRUE)
-                  )
-                }
+            }
+          )
+        },
+        div(
+          class = "edit-footer",
+          div(
+            class = "edit-footer-bar",
+            actionLink(ns("cancel"), if (stuck) "Start over" else "Cancel"),
+            uiOutput(ns("footer_note"), class = "edit-footer-note"),
+            if (!stuck) {
+              tagList(
+                if (!editing_request()) actionButton(ns("save_draft"), "Save as draft", class = "btn-outline-dark"),
+                actionButton(ns("submit"), primary_label(), class = "btn-primary", disabled = TRUE)
               )
             )
           )
@@ -546,7 +547,10 @@ make_edit_server <- function(
           } else if (isTRUE(outcome$resaved)) {
             "This is a new version of the request. It is waiting on Change Requests, where one other staff member has to approve it."
           } else {
-            paste("It is waiting on Change Requests, where one other staff member has to approve it. Nothing has changed in the MATR data yet.")
+            paste(
+              "It is waiting on Change Requests, where one other staff member has to approve it.",
+              "Nothing has changed in the MATR metadata database yet."
+            )
           }
         ),
         div(

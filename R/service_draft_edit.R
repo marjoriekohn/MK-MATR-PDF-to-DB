@@ -361,6 +361,8 @@ draft_service_copy_codes <- function(draft, variable_id) {
 # ID picked from the uploaded IDs no other variable has yet, or typed (Manual Assignment). Either way an
 # ID goes to one variable only (set_matr_id()), and an ID the variables don't use is still offered.
 
+#' The uploaded MATR IDs as they can be given: each once, blanks left out.
+#'
 #' @param matr_ids The IDs, in order (`extraction_service_matr_ids()`).
 #' @return A character vector, in the CSV's order.
 draft_service_uploaded_matr_ids <- function(matr_ids) {

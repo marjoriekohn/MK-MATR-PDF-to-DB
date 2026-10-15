@@ -8,7 +8,7 @@
 #   stats::setNames(lapply(rev(seq_len(n)), function(i) {
 #     list(
 #       id = as.character(i), kind = c("Add", "Update", "Delete")[i %% 3 + 1], source = "Edit", status = "Applied",
-#       ummary = paste("Edit number", i), prepared_by = "Maggie Kohn", approved_by = "Alex Rivera", approval_required = TRUE,
+#       summary = paste("Edit number", i), prepared_by = "Maggie Kohn", approved_by = "Alex Rivera", approval_required = TRUE,
 #       prepared = "2026-10-01T10:00:00Z", approved = "2026-10-01T11:00:00Z", applied = "2026-10-01T11:01:00Z"
 #     )
 #   }), rev(seq_len(n)))

@@ -19,9 +19,9 @@
 #' @param lookups The pick lists, from `lookup_service_get_all()`.
 #' @return Called for its effect.
 extraction_outline_server <- function(
-    id,
-    state,
-    lookups
+  id,
+  state,
+  lookups
 ) {
   moduleServer(id, function(input, output, session) {
     ns <- session$ns

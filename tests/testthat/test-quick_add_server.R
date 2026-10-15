@@ -55,7 +55,7 @@
 #   entry <- history_model_get_all(test_connection)
 #   entry <- Filter(function(record) identical(record$prepared_by, me$name), entry)[[1]]
 #   expect_equal(entry$kind, "Add")
-#   expect_equal(entry$note, "From page 2 of the PDF")
+#   expect_false(entry$approval_required)
 # })
 #
 # test_that("the button waits for a form that is ready, and says 'Add it anyway' when what is typed looks like something there", {

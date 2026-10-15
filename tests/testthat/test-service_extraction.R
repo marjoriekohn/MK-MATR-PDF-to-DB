@@ -208,7 +208,7 @@ test_that("the progress on each card is how it was read and how much of it is ch
 
   percent <- draft_service_percent_checked(draft_service_counts(draft))
   expect_equal(percent, as.integer(floor(100 * 10 / nrow(draft$components))))
-  expect_equal(progress$label, c("Read by Gemini", percent, "% reviewed"))
+  expect_equal(progress$label, c("Read by Gemini", paste0("Structure · ", percent, "% complete")))
   expect_equal(progress$state, c("done", "in_progress"))
   expect_false(any(grepl("MATR IDs|Submitted|Wave details", progress$label)))
 
@@ -325,8 +325,7 @@ test_that("a recorded wave has to be the questionnaire's, ask no questions yet, 
   catalog <- test_catalog()
   info <- utils::modifyList(new_wave_info(), list(wave_choice = "existing", wave_id = "2"))
   expect_null(extraction_service_recorded_wave_problem(info, catalog))
-
-expect_equal(extraction_service_recorded_wave_problem(utils::modifyList(info, list(wave_id = "3")), catalog), "Pick one of this questionnaire's waves.")
+  expect_equal(extraction_service_recorded_wave_problem(utils::modifyList(info, list(wave_id = "3")), catalog), "Pick one of this questionnaire's waves.")
   expect_equal(
     extraction_service_recorded_wave_problem(info, catalog, question_counts = c("2" = 12L)),
     "Wave 2 already asks 12 questions. Pick a wave without questions, or add a new wave."
@@ -336,15 +335,13 @@ expect_equal(extraction_service_recorded_wave_problem(utils::modifyList(info, li
   expect_null(extraction_service_recorded_wave_problem(info, catalog, records = other, id = "other"))
   # a new wave isn't checked this way, and a recorded wave has no name to check
   expect_null(extraction_service_recorded_wave_problem(new_wave_info(), catalog))
-
-expect_null(extraction_service_wave_name_problem(utils::modifyList(info, list(wave_name = "Wave 1")), catalog, list()))
+  expect_null(extraction_service_wave_name_problem(utils::modifyList(info, list(wave_name = "Wave 1")), catalog, list()))
   expect_equal(questionnaire_service_empty_wave_choices(catalog, "1", c("1" = 3L)), c("Wave 2 · given 04/15/2022 · no questions yet" = "2"))
 })
 
 test_that("a new questionnaire another draft is adding to the same study is a clash", {
   catalog <- test_catalog()
   other <- list(other = list(id = "other", status = "Awaiting Review", prepared_by = "D. Chen", prepared_by_id = 9L, info = new_questionnaire_info()))
-
   expect_match(extraction_service_name_problem(new_questionnaire_info(), catalog, other, id = "mine"), "D. Chen already has a draft adding Twin Diet Survey")
   expect_null(extraction_service_name_problem(new_questionnaire_info(), catalog, other, id = "other"))
 })

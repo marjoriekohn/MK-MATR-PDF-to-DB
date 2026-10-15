@@ -35,8 +35,6 @@
 #     expect_equal(record()$pdf$name, "AHP_wave3.pdf")
 #     expect_equal(record()$extraction_status, "queued")
 #     expect_equal(record()$prepared_by_id, me$staff_id)
-#     expect_equal(record()$info$wave_name, "Wave 3")
-#     expect_equal(record()$info$questionnaire_id, as.character(tree$questionnaire$questionnaire_id))
 #     expect_equal(reading()$pdf$name, "AHP_wave3.pdf")
 #     expect_match(text_of(output$pdf_card), "AHP_wave3.pdf 2 pages")
 #     expect_match(text_of(output$reading), "Reading your questionnaire")

@@ -13,7 +13,7 @@ extraction_drafts_ui <- function(id) {
   )
 }
 
-# What the dots on the cards mean, in the theme's colors: green Done, gold In progress, red Needs attention.
+# What the dots on the cards mean, in the theme's colours: green Done, gold In progress, red Needs attention.
 progress_key <- function() {
   item <- function(state, label) span(class = "progress-step", progress_dot(state), label)
   div(
@@ -39,6 +39,8 @@ whose_buttons <- function(input_id, whose, n_mine, n_everyone) {
 
 # ------ One card per draft ---------------------------------------------------------
 #' One card for a draft.
+#' Whose it is is said the same way on every card, from who started it: "Yours", or their name.
+#'
 #' Whose it is is said the same way on every card, from who started it: "Yours", or their name.
 #'
 #' @param record An extraction record.
@@ -88,8 +90,8 @@ draft_card <- function(record, draft, catalog, me) {
   )
 }
 
-# "Started by you on Sep 29 · last saved 2 hours ago · AHP_wave3.pdf, 14 pages".
-# What there is nothing to say about is left out, so no piece is empty.
+# "Started by you on Sep 29 · last saved 2 hours ago · AHP_wave3.pdf, 14 pages". What there is nothing to
+# say about (no PDF, no reading error) is left out, so no piece is empty.
 draft_meta <- function(record, me) {
   who <- if (draft_row_service_is_mine(record, me)) "you" else draft_row_service_preparer(record)
   pdf <- record$pdf

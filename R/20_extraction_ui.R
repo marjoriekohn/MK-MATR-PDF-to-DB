@@ -1,7 +1,7 @@
 #' The Extraction page: three ways to start an extraction of a questionnaire.
 #'
-#'   Manual          type the questionnaire on a blank Edit Extraction page
-#'   AI-Powered      upload a PDF and an AI reads it in the background
+#'   Manual          type the questionnaire in yourself, on a blank Edit Extraction page
+#'   AI-Powered      upload a PDF and an AI reads it, in the background
 #'   Existing Draft  pick up a draft whose change request isn't submitted yet
 #'
 #' All three end on the same Edit Extraction page, with the same kind of draft.

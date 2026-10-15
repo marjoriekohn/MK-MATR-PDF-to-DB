@@ -376,11 +376,10 @@ structure_progress <- function(draft) {
   }
   counts <- draft_service_counts(draft)
   progress_step(
-    paste0(draft_service_percent_checked(counts), "% reviewed"),
+    paste0("Structure · ", draft_service_percent_checked(counts), "% complete"),
     count_state(counts$checked, counts$blocks)
   )
 }
-
 
 count_state <- function(n_done, n_total) {
   if (n_total > 0 && n_done == n_total) "done" else if (n_done > 0) "in_progress" else "not_started"
@@ -492,7 +491,10 @@ extraction_service_missing <- function(info) {
 #' #' The same goes for another draft that is being prepared, or waiting for approval, as a new
 #' questionnaire of the same study, so the two don't add it twice.
 #'
-#' @param info Where it goes, as `extraction_service_info()` returns it.#' @param catalog The live tables the pages pick from, from `questionnaire_service_get_catalog()`.
+#' The same goes for another draft that is being prepared, or waiting for approval, as a new
+#' questionnaire of the same study, so the two don't add it twice.
+#'
+#' @param info Where it goes, as `extraction_service_info()` returns it.
 #' @param catalog The live tables the pages pick from, from `questionnaire_service_get_catalog()`.
 #' @param records All the extraction records, to find other drafts of a new questionnaire.
 #' @param id This draft's id, so it doesn't clash with itself.
@@ -521,7 +523,8 @@ extraction_service_name_problem <- function(info, catalog, records = list(), id 
 
 #' A problem with a new questionnaire's abbreviation, or `NULL`.
 #'
-#' @param info Where it goes in the database, as `extraction_service_info()` returns it.#' @param catalog The live tables the pages pick from, from `questionnaire_service_get_catalog()`.
+#' @param info Where it goes in the database, as `extraction_service_info()` returns it.
+#' @param catalog The live tables the pages pick from, from `questionnaire_service_get_catalog()`.
 #' @return A sentence saying what to do, or `NULL`.
 extraction_service_abbreviation_problem <- function(info, catalog) {
   same <- same_in_study(info, catalog, "abbreviation")
@@ -583,7 +586,6 @@ extraction_service_wave_name_problem <- function(info, catalog, records, id = NU
   }
   NULL
 }
-
 
 #' A problem with the recorded wave an extraction goes into, or `NULL`.
 #'

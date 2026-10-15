@@ -98,6 +98,14 @@ edit_extraction_banner <- function(record) {
   }
 }
 
+#' The MATR IDs dialog: upload a CSV of them, then give them to the variables.
+#'
+#' Two ways: Auto Apply gives them out in the order the variables appear; Manual Assignment leaves each
+#' variable's MATR ID to be picked, from the uploaded IDs no other variable has, or typed.
+#'
+#' @param ns The module's namespace function.
+#' @param can_apply Whether there are uploaded IDs to give out.
+#' @param recorded Whether the questionnaire's earlier waves have MATR IDs to fill in from.
 #' @return A `modalDialog()`, for `showModal()`.
 matr_ids_dialog <- function(ns, can_apply, recorded = FALSE) {
   modalDialog(
@@ -138,9 +146,10 @@ matr_ids_dialog <- function(ns, can_apply, recorded = FALSE) {
       div(
         class = "matr-mode",
         h3("Manual Assignment"),
-        p(          class = "form-text",
-                    "Pick each variable's MATR ID from the uploaded IDs no other variable has, or type one. ",
-                    "Open a question's variables in the outline to do it."
+        p(
+          class = "form-text",
+          "Pick each variable's MATR ID from the uploaded IDs no other variable has, or type one. ",
+          "Open a question's variables in the outline to do it."
         ),
         actionButton(ns("manual_assign"), "Assign by hand", class = "btn-outline-dark", disabled = !can_apply)
       )

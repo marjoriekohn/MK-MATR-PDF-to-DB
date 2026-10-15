@@ -417,6 +417,7 @@ test_that("a form with nothing to pick from says to add it first", {
   expect_match(notes, "Nothing to pick for “Registry” yet")
   expect_match(notes, "Add registry first")
   expect_no_match(notes, "Respondent Type") # a study's form doesn't ask for its questionnaire's any more
+
   questionnaire_snap <- empty_tables(test_snapshot(edit_service_tables(edit_entities$questionnaire)))
   questionnaire_fields <- edit_service_fields(edit_entities$questionnaire, questionnaire_snap, "add")
   questionnaire_notes <- htmltools::renderTags(htmltools::tagList(edit_empty_choices_ui(questionnaire_fields)))$html

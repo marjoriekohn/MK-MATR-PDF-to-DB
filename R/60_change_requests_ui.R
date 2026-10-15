@@ -63,7 +63,6 @@ change_request_card_ui <- function(record, me) {
           }
         ), collapse = " · ")
       ),
-      if (nzchar(record$note %||% "")) p(class = "change-request-note", strong("Why: "), record$note),
       if (state$mine) {
         p(class = "change-request-note-you", "You prepared this. One other staff member has to approve it.")
       } else if (state$changed_by_me) {
@@ -122,7 +121,7 @@ change_request_dialog <- function(record, me, ns, detail) {
     if (state$can_approve) {
       edit_callout(
         "warning",
-        title = "Approving adds this to the database now.",
+        title = "Approving adds this to the MATR metadata database now.",
         "All of it is done at once. If a row has changed since this was prepared, nothing is added and you are told which."
       )
     },

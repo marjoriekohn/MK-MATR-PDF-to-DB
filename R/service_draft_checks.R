@@ -105,7 +105,6 @@ variable_problems <- function(draft, lookups, matr_ids = TRUE) {
   }
   # ...and with one field of each choice where `choice_condition` holds.
   choice_problem <- function(choice_condition, message, field) {
-
     box_row <- match(choices$variable_id, boxes$id)
     problems_where(
       boxes$component_id[box_row], choice_condition,
@@ -131,7 +130,6 @@ variable_problems <- function(draft, lookups, matr_ids = TRUE) {
   )
 }
 
-# One problem for each id where `condition` holds.
 # One problem for each id where `condition` holds. `table`, `rows` and `field` say which field is at
 # fault, if one is: `rows` holds each id's row in `table`.
 problems_where <- function(ids, condition, message, table = NA_character_, rows = NA_character_, field = NA_character_) {

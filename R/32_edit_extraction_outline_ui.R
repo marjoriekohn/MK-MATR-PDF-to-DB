@@ -137,16 +137,16 @@ outline_row <- function(block, draft, view, ns) {
     span(class = "drag-handle", title = "Drag to move", icon("grip-vertical")),
     outline_order(block),
     switch(block$component_type,
-           Section = review_button(
-             icon("caret-down"), "toggle",
-             `data-id` = block$id, class = "btn-toggle", title = "Show or hide what's inside"
-           ),
-           Question = review_button(
-             icon("caret-right"), "details",
-             `data-id` = block$id, class = "btn-toggle is-details",
-             title = "Show or hide the question's skip condition and variables"
-           ),
-           span(class = "btn-toggle")
+      Section = review_button(
+        icon("caret-down"), "toggle",
+        `data-id` = block$id, class = "btn-toggle", title = "Show or hide what's inside"
+      ),
+      Question = review_button(
+        icon("caret-right"), "details",
+        `data-id` = block$id, class = "btn-toggle is-details",
+        title = "Show or hide the question's skip condition and variables"
+      ),
+      span(class = "btn-toggle")
     ),
     type_chip(block$component_type),
     if (!is.na(block$question_number)) span(class = "outline-number", paste0("Q", block$question_number)),

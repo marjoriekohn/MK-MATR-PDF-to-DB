@@ -144,7 +144,8 @@ field_text <- function(table, row, field, placeholder = NULL, list = NULL,
 #' A value that isn't one of the choices still shows, marked, so nothing changes silently.
 #'
 #' @param choices The choices; a named vector shows the names.
-#' @param blank The empty choice's text, offered when the field is optional or has no value yet: it says what the field value holds.
+#' @param blank The empty choice's text, offered when the field is optional or has no value yet: it says
+#'   what the field holds.
 #' @param optional Whether the field may be left empty.
 #' @inheritParams field_text
 #' @return A UI element.

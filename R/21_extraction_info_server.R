@@ -21,13 +21,13 @@
 #'   `problems` (what to fix in the others, by field) and `show`, a function that fills the
 #'   form from a draft's record (or anything with an `info`), or empties it for `NULL`.
 extraction_info_server <- function(
-    id,
-    catalog,
-    extractions,
-    record_id,
-    me,
-    connection,
-    reopen = NULL
+  id,
+  catalog,
+  extractions,
+  record_id,
+  me,
+  connection,
+  reopen = NULL
 ) {
   moduleServer(id, function(input, output, session) {
     ns <- session$ns
@@ -173,6 +173,14 @@ extraction_info_server <- function(
                  ignoreInit = TRUE
     )
 
+    observeEvent(wave_question_counts(),
+      {
+        choices <- wave_choices(input$questionnaire_id, wave_question_counts())
+        updateSelectInput(session, "wave_id", choices = choices, selected = still_offered(input$wave_id, choices))
+      },
+      ignoreInit = TRUE
+    )
+
     # ------ Adding what a drop-down lacks ---------------------------------------
     # The pop-up refreshes the catalog before it calls back, so the new row is in the choices. The
     # pop-up takes the place of the dialog the form is in, so the dialog is put back, with what was in
@@ -185,8 +193,8 @@ extraction_info_server <- function(
     observeEvent(input$add_respondent_type, {
       before <- isolate(info())
       quick$open("respondent_type",
-                 then = function(key) come_back(utils::modifyList(before, list(respondent_type_id = key))),
-                 back = function() come_back(before)
+        then = function(key) come_back(utils::modifyList(before, list(respondent_type_id = key))),
+        back = function() come_back(before)
       )
     })
 
@@ -194,16 +202,16 @@ extraction_info_server <- function(
       before <- isolate(info())
       start <- list(study__registry_id = before$registry_id)
       quick$open("study",
-                 values = start,
-                 then = function(key) {
-                   added <- edit_service_quick_row(now(), "study", key)
-                   # A study just added has no questionnaires, so this one is its first, and so is its wave.
-                   come_back(utils::modifyList(before, list(
-                     registry_id = as.character(added$registry_id %||% before$registry_id), study_id = key,
-                     kind = "new_questionnaire", questionnaire_id = "", wave_choice = "new", wave_id = ""
-                   )))
-                 },
-                 back = function() come_back(before)
+        values = start,
+        then = function(key) {
+          added <- edit_service_quick_row(now(), "study", key)
+          # A study just added has no questionnaires, so this one is its first, and so is its wave.
+          come_back(utils::modifyList(before, list(
+            registry_id = as.character(added$registry_id %||% before$registry_id), study_id = key,
+            kind = "new_questionnaire", questionnaire_id = "", wave_choice = "new", wave_id = ""
+          )))
+        },
+        back = function() come_back(before)
       )
     })
 

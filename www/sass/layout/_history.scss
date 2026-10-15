@@ -71,7 +71,7 @@ $history-line: rgba($vcu-gray, 0.35);
   .change-request-actions { width: 100%; justify-content: flex-end; }
 }
 
-// ------ An extraction's change request, laid out to read ---------------------
+// ------ An extraction's change request, laid out to read -----------------------------------------
 // Before it is submitted (the Edit Extraction page's preview) and while it waits (Change Requests).
 .request-section {
   margin-top: 1.25rem;
@@ -110,7 +110,7 @@ $history-line: rgba($vcu-gray, 0.35);
   .new-badge-text { position: relative; color: $vcu-gold; font-size: 0.7rem; font-weight: 900; letter-spacing: 0.04em; }
 }
 
-// ------ An extraction's questionnaire, laid out to read -------------
+// ------ An extraction's questionnaire, laid out to read ---------------------------------------
 .change-request-questionnaire-head {
   display: flex;
   align-items: center;
