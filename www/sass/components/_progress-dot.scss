@@ -1,5 +1,6 @@
-// How far something has got: Done, In progress, Not started, Needs attention.
-// Each is a different shape as well as a different colour.
+// How far something has got, in the theme's colors:
+// Done (green), In progress (gold), Not started (an empty ring), Needs attention (red).
+// Each is a different shape as well as a different color.
 .progress-dot {
   display: inline-block;
   flex-shrink: 0;
@@ -9,10 +10,10 @@
   border-radius: 50%;
   background: $vcu-white;
 
-  &.is-done        { background: $vcu-black; }
-  &.is-in_progress { background: linear-gradient(90deg, $vcu-black 50%, $vcu-white 50%); }
-  &.is-not_started { border-color: rgba($vcu-gray, 0.6); }
-  &.is-attention   { background: $vcu-gold; }
+  &.is-done        { border-color: $vcu-black; background: $vcu-green; }
+  &.is-in_progress { border-color: $vcu-black; background: linear-gradient(90deg, $vcu-gold 50%, $vcu-white 50%); }
+  &.is-not_started { border-color: $vcu-black; }
+  &.is-attention   { border-color: $vcu-black; background: $vcu-red; border-radius: 0.15rem; }
 }
 
 .progress-step {
