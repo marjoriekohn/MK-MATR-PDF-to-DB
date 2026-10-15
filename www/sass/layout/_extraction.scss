@@ -1,5 +1,5 @@
 // The Extraction page: its three modes (Manual, AI-Powered, Existing Draft)
-$extraction-line: rgba($vcu-gray, 0.35);
+$extraction-line: rgba($vcu-gray);
 
 .extraction-page {
   h2 { margin: 0; font-size: 1.15rem; }
@@ -37,7 +37,8 @@ $extraction-line: rgba($vcu-gray, 0.35);
   &::before { content: "\25CF"; margin-right: 0.35rem; color: $field-problem-red; }
 }
 // ...and then its box is outlined in red
-.form-field:has(.field-problem) .form-control {
+.form-field:has(.field-problem) .form-control,
+.form-field:has(.field-problem) .form-select {
   border-color: $field-problem-red;
   box-shadow: 0 0 0 1px $field-problem-red;
   &:focus { box-shadow: 0 0 0 0.2rem rgba($field-problem-red, 0.35); }

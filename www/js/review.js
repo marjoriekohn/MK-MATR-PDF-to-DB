@@ -42,7 +42,7 @@
   }
 
   function sendField(field) {
-    clearTimeout(field.reviewTimer);
+    clearTimeout(field.sendTimer);
     send(field, 'edit', {
       table: field.dataset.table,
       id: field.dataset.id,
@@ -55,8 +55,8 @@
   document.addEventListener('input', function (event) {
     const field = event.target.closest('[data-field]');
     if (field && isTyped(field)) {
-      clearTimeout(field.reviewTimer);
-      field.reviewTimer = setTimeout(function () { sendField(field); }, 400);
+      clearTimeout(field.sendTimer);
+      field.sendTimer = setTimeout(function () { sendField(field); }, 400);
     }
     if (field && field.matches('textarea.outline-text')) autogrow(field);
   });
@@ -180,9 +180,50 @@
   });
 
   // ------ Marks the server sends as words are typed ---------------------------------------
-  // The outline is only redrawn when its layout changes, so the selected row and each block's problems
-  // come separately, and are put on again whenever Shiny redraws something.
-  let marks = { selected: null, problems: [] };
+  // The outline is only redrawn when its layout changes, so the selected row, each block's problems, the
+  // fields at fault (outlined in red) and the uploaded MATR IDs still free come separately, and are put on
+  // again whenever Shiny redraws something.
+  let marks = { selected: null, problems: [], fields: [], matr_ids: null, matr_list: null };
+
+  // A field at fault: {table, id, field, title}; an empty field means its whole row (a variable card).
+  function fieldSelector(mark) {
+    if (!mark.field) return '.variable-card[data-id="' + CSS.escape(mark.id) + '"]';
+    return '[data-table="' + CSS.escape(mark.table) + '"][data-id="' + CSS.escape(mark.id) + '"][data-field="' + CSS.escape(mark.field) + '"]';
+  }
+
+  function applyFieldMarks(tree) {
+    const titles = new Map();
+    marks.fields.forEach(function (mark) {
+      tree.querySelectorAll(fieldSelector(mark)).forEach(function (el) {
+        titles.set(el, (titles.has(el) ? titles.get(el) + '\n' : '') + mark.title);
+      });
+    });
+    tree.querySelectorAll('.has-problem').forEach(function (el) {
+      if (!titles.has(el)) {
+        el.classList.remove('has-problem');
+        el.removeAttribute('aria-invalid');
+        el.removeAttribute('title');
+      }
+    });
+    titles.forEach(function (title, el) {
+      el.classList.add('has-problem');
+      el.title = title;
+      if (el.matches('[data-field]')) el.setAttribute('aria-invalid', 'true');
+    });
+  }
+
+  // Every MATR ID field offers the uploaded IDs no variable has yet.
+  function applyMatrIds() {
+    if (!marks.matr_list || !marks.matr_ids) return;
+    const list = document.getElementById(marks.matr_list);
+    if (!list) return;
+    list.innerHTML = '';
+    marks.matr_ids.forEach(function (id) {
+      const option = document.createElement('option');
+      option.value = id;
+      list.appendChild(option);
+    });
+  }
 
   function applyMarks() {
     const tree = document.querySelector('.outline-tree');
@@ -207,11 +248,16 @@
       const count = badge.querySelector('.problem-count');
       if (count) count.textContent = problem ? problem.n + ' to fix' : '0 to fix';
     });
+    applyFieldMarks(tree);
+    applyMatrIds();
   }
 
   function register() {
-    Shiny.addCustomMessageHandler('review-marks', function (sent) {
-      marks = { selected: sent.selected || null, problems: sent.problems || [] };
+    Shiny.addCustomMessageHandler('edit-extraction-marks', function (sent) {
+      marks = {
+        selected: sent.selected || null, problems: sent.problems || [], fields: sent.fields || [],
+        matr_ids: sent.matr_ids || [], matr_list: sent.matr_list || null
+      };
       applyMarks();
     });
   }
@@ -238,7 +284,7 @@
   });
 
   // ------ Drag and drop ---------------------------------------------------------------
-  window.reviewPage = {
+  window.editExtractionPage = {
     // While a block is dragged, say in words where it will land.
     showDropHint: function (evt) {
       const where = evt.to.dataset.label ? 'inside ' + evt.to.dataset.label : 'at the top level';

@@ -26,8 +26,6 @@ $history-line: rgba($vcu-gray, 0.35);
 .change-request-title { margin: 0; font-size: 1.15rem; }
 .history-meta,
 .change-request-meta { margin: 0.35rem 0 0; color: $vcu-gray; font-size: 0.9rem; }
-.history-note,
-.change-request-note { margin: 0.5rem 0 0; }
 .history-actions,
 .change-request-actions { display: flex; flex-shrink: 0; align-items: center; gap: 0.75rem; }
 .history-more { display: flex; justify-content: center; margin: 1.25rem 0; }
@@ -73,7 +71,46 @@ $history-line: rgba($vcu-gray, 0.35);
   .change-request-actions { width: 100%; justify-content: flex-end; }
 }
 
-// ------ An extraction's questionnaire, laid out for the reviewer ------------------------------
+// ------ An extraction's change request, laid out to read ---------------------
+// Before it is submitted (the Edit Extraction page's preview) and while it waits (Change Requests).
+.request-section {
+  margin-top: 1.25rem;
+  h3 { margin: 0 0 0.5rem; font-size: 1.05rem; }
+}
+.request-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(14rem, 1fr));
+  gap: 0.75rem;
+}
+// A card for a row, as Make an edit draws one; a NEW row has the certificate in its corner
+.request-card {
+  position: relative;
+  margin: 0;
+  padding-right: 3rem;
+  &.is-new { border-color: $vcu-black; }
+  &.is-missing { border-style: dashed; color: $vcu-gray; }
+}
+.request-card-kind {
+  color: $vcu-gray;
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+.new-badge {
+  position: absolute;
+  top: -0.6rem;
+  right: -0.6rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 3rem;
+  height: 3rem;
+  .fa-certificate { position: absolute; color: $vcu-black; font-size: 3rem; }
+  .new-badge-text { position: relative; color: $vcu-gold; font-size: 0.7rem; font-weight: 900; letter-spacing: 0.04em; }
+}
+
+// ------ An extraction's questionnaire, laid out to read -------------
 .change-request-questionnaire-head {
   display: flex;
   align-items: center;
@@ -107,10 +144,20 @@ $history-line: rgba($vcu-gray, 0.35);
 .preview-text { white-space: pre-wrap; }
 .preview-note { color: $vcu-gray; font-size: 0.85rem; }
 .preview-variables { margin: 0.25rem 0 0 1.5rem; padding-left: 1rem; font-size: 0.9rem; }
-.preview-variable { display: flex; flex-wrap: wrap; align-items: baseline; gap: 0.35rem 0.6rem; }
+// One line per variable: MATR ID and label, then its choices and their codes beside them
+.preview-variable {
+  display: grid;
+  grid-template-columns: minmax(6rem, max-content) minmax(0, 12rem) minmax(0, 1fr);
+  align-items: baseline;
+  gap: 0.35rem 0.75rem;
+}
 .preview-matr-id { font-family: $font-family-monospace; font-weight: 700; }
 .preview-variable-meta { color: $vcu-gray; }
-.preview-choices { flex-basis: 100%; }
+.preview-choices { min-width: 0; }
+
+@media (max-width: 767.98px) {
+  .preview-variable { grid-template-columns: minmax(0, 1fr); }
+}
 
 // ------ The changed rows ------------------------------------------------------------------
 .change-list { display: flex; flex-direction: column; gap: 0.5rem; max-height: 55vh; overflow-y: auto; }
