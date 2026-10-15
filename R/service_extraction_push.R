@@ -1,13 +1,16 @@
-# ------ Pushing an extraction to the database --------------------------------------------
-# A reviewed extraction becomes MATR data: a questionnaire (or just a wave of one that is
-# recorded), its blocks as components placed in the questionnaire, its questions and their
-# numbers in the wave, and each question's variables with their choices. It is written the way
-# an edit is, as a list of items that only add rows (service_edit.R), so the same database
-# function applies it, in one transaction, and the Edit history lists every row it added.
+# ------ Sending an extraction to the database --------------------------------------------
+# An extraction becomes rows of the MATR metadata database: a questionnaire (or a wave of one that
+# is recorded, new or recorded without questions yet), its blocks as components placed in the
+# questionnaire, its questions and their numbers in the wave, and each question's variables with
+# their choices. It is written the way an edit is, as a list of items that only add rows
+# (service_edit.R), so the same database function applies it, in one transaction, and the Edit
+# history lists every row it added.
 #
-# A STAFF member's push is a change request that one other staff member approves; an ADMIN's is
-# applied at once (service_change_request.R). The rows are worked out when it is applied, from
-# the questionnaire as saved and the MATR data as it is then, not when it was sent.
+# Where it goes (registry, study, questionnaire, wave: the draft's `info`) is picked when its change
+# request is previewed and submitted on the Edit Extraction page. Previewing writes nothing. A STAFF
+# member's request is one other staff member approves; an ADMIN's is applied at once
+# (service_change_request.R). The rows are worked out when it is applied, from the questionnaire as
+# saved and the database as it is then, not when it was sent.
 #
 # What is reused, and what is new:
 #   * An answer choice is kept once for the whole registry, so a choice whose words are already
@@ -16,35 +19,43 @@
 #     set (in any order) uses it; otherwise a set is added, named after its choices.
 #   * A new questionnaire adds every block as a new component. Nothing is shared with another
 #     questionnaire; that can be done afterwards on Make an edit.
-#   * A new wave of a questionnaire that is recorded finds its blocks where it prints them: a
+#   * A wave of a questionnaire that is recorded finds its blocks where it prints them: a
 #     block with the same kind and words, in the same place, is that block (so the wave asks the
 #     same question, and finds its variables by MATR ID). The blocks that aren't there are
 #     added, after the ones that are in the same section.
+#   * A recorded wave is used as it is; it has to ask no questions yet.
 #   * Nothing already recorded is changed or deleted.
+#   * Each variable's choices are its RESPONSE_OPTION rows: one per variable and answer choice, with
+#     its code. They are always new, since the variable is, even where the words repeat; the answer
+#     choices and the sets of choices they point at are the ones reused.
 
 # ------ Before pushing -----------------------------------------------------------------
-#' What stops an extraction being pushed.
+#' What stops an extraction's change request being submitted.
 #'
 #' @param record The extraction's record.
-#' @param draft The questionnaire as saved; see `draft_service_load()`.
+#' @param draft The questionnaire, as on the Edit Extraction page.
 #' @param lookups The pick lists, from `lookup_service_get_all()`.
 #' @param catalog The live tables the pages pick from, from `questionnaire_service_get_catalog()`.
-#' @param records All the extraction records, to find other drafts of the same wave.
+#' @param records All the extraction records, to find other drafts of the same questionnaire and wave.
+#' @param info Where it goes, as `extraction_service_info()` returns it; the record's by default.
+#' @param question_counts How many questions each of the questionnaire's waves asks, for a recorded
+#'   wave (`questionnaire_service_wave_question_counts()`).
 #' @return A character vector of sentences, in the order to do them; empty when it can go.
-extraction_service_push_blockers <- function(record, draft, lookups, catalog, records = list()) {
-  info <- extraction_service_info(record)
+extraction_service_push_blockers <- function(record, draft, lookups, catalog, records = list(),
+                                             info = extraction_service_info(record), question_counts = integer()) {
   missing <- extraction_service_missing(info)
   problems <- c(
-    extraction_service_name_problem(info, catalog),
+    extraction_service_name_problem(info, catalog, records, record$id),
     extraction_service_abbreviation_problem(info, catalog),
+    extraction_service_recorded_wave_problem(info, catalog, question_counts, records, record$id),
     extraction_service_wave_name_problem(info, catalog, records, record$id),
     extraction_service_date_problem(info$administered_date),
     extraction_service_count_problem(info$respondent_count)
   )
   n_blocks_to_fix <- length(unique(draft_service_check(draft, lookups)$id)) # a blank MATR ID is among them
   as.character(c(
-    if (length(missing) > 0) paste0("Fill in the ", word_list(missing), " under Edit Details."),
-    if (length(problems) > 0) "Fix the fields outlined in red under Edit Details.",
+    if (length(missing) > 0) paste0("Fill in the ", word_list(missing), " under Where it goes."),
+    if (length(problems) > 0) "Fix the fields outlined in red under Where it goes.",
     if (nrow(draft$components) == 0) "Add the questionnaire's blocks and questions first.",
     if (nrow(draft$components) > 0 && !"Question" %in% draft$components$component_type) "Add at least one question.",
     if (n_blocks_to_fix > 0) paste0("Fix the ", plural(n_blocks_to_fix, "block"), " marked to fix.")
@@ -53,7 +64,7 @@ extraction_service_push_blockers <- function(record, draft, lookups, catalog, re
 
 #' How many blocks still haven't been marked as checked.
 #'
-#' Not a reason to stop: it is said before pushing.
+#' Not a reason to stop: it is said before the request is submitted.
 #'
 #' @param draft The questionnaire as saved.
 #' @return A whole number.
@@ -62,26 +73,53 @@ extraction_service_unchecked <- function(draft) {
 }
 
 # ------ The rows ----------------------------------------------------------------------------
-#' The rows pushing an extraction adds.
+#' The rows an extraction adds.
 #'
-#' Reads the questionnaire as it is saved and the MATR data it has to fit, and works out the
-#' items (see the top of this file). Nothing is written.
+#' Reads the questionnaire as it is saved (or takes the one given) and the database it has to fit,
+#' and works out the items (see the top of this file). Nothing is written.
 #'
 #' @param connection The MATR database, `list(url, key)`; see `model_database.R`.
 #' @param record The extraction's record.
+#' @param draft The questionnaire, if not the saved one (the Edit Extraction page's, before it is saved).
+#' @param info Where it goes, as `extraction_service_info()` returns it; the record's by default.
 #' @return A list: `items` (a data frame in the shape of `edit_item()`, numbered, in the order to
 #'   add them) and `summary` (what they come to; see `extraction_service_push_summary()`). An
-#'   error with a sentence if it can't be pushed as it is.
-extraction_service_push_build <- function(connection, record) {
-  # the questions are numbered by their place in the questionnaire, as the review page shows them
-  draft <- draft_service_renumber_questions(draft_service_load(connection, record$id))
-  info <- extraction_service_info(record)
-  ids <- list(
-    component_types = lookup_model_get_component_types(connection),
-    subjects = lookup_model_get_subjects(connection)
+#'   error with a sentence if it can't be added as it is.
+extraction_service_push_build <- function(connection, record, draft = NULL, info = extraction_service_info(record)) {
+  # the questions are numbered by their place in the questionnaire, as the Edit Extraction page shows them
+  draft <- draft_service_renumber_questions(draft %||% draft_service_load(connection, record$id))
+  context <- extraction_service_push_context(connection)
+  existing <- extraction_service_push_existing(connection, info)
+  extraction_service_build_items(draft, info, context$ids, existing, context$options)
+}
+
+#' What any extraction's rows are worked out against: the kinds of block, the subjects, and the
+#' answer choices and option sets there are.
+#'
+#' Read once for a preview, which is worked out again as its fields change.
+#'
+#' @param connection The MATR database, `list(url, key)`; see `model_database.R`.
+#' @return A list: `ids` (`component_types` and `subjects`, as data frames with their ids) and
+#'   `options` (from `push_model_options()`).
+extraction_service_push_context <- function(connection) {
+  list(
+    ids = list(
+      component_types = lookup_model_get_component_types(connection),
+      subjects = lookup_model_get_subjects(connection)
+    ),
+    options = push_model_options(connection)
   )
-  existing <- if (identical(info$kind, "new_wave")) push_model_existing(connection, info$questionnaire_id)
-  extraction_service_build_items(draft, info, ids, existing, push_model_options(connection))
+}
+
+#' What a recorded questionnaire has printed already, for an extraction that goes into it.
+#'
+#' @param connection The MATR database, `list(url, key)`; see `model_database.R`.
+#' @param info Where it goes, as `extraction_service_info()` returns it.
+#' @return From `push_model_existing()`, or `NULL` for a new questionnaire (or none picked yet).
+extraction_service_push_existing <- function(connection, info) {
+  if (identical(info$kind, "new_wave") && grepl("^[0-9]+$", info$questionnaire_id)) {
+    push_model_existing(connection, info$questionnaire_id)
+  }
 }
 
 #' The items of pushing an extraction.
@@ -115,11 +153,15 @@ extraction_service_build_items <- function(draft, info, ids, existing, options) 
       name = trimws(info$name), abbreviation = trimws(info$abbreviation), description = blank_to_na(info$description)
     ))
   }
-  wave <- push$token("wave")
-  push$insert("wave", list(wave_id = wave), list(
-    questionnaire_id = questionnaire, name = trimws(info$wave_name),
-    respondent_count = push_count(info$respondent_count), administered_date = push_date(info$administered_date)
-  ))
+  if (push$summary$wave) {
+    wave <- push$token("wave")
+    push$insert("wave", list(wave_id = wave), list(
+      questionnaire_id = questionnaire, name = trimws(info$wave_name),
+      respondent_count = push_count(info$respondent_count), administered_date = push_date(info$administered_date)
+    ))
+  } else {
+    wave <- push_recorded_wave(info, existing)
+  }
 
   # ---- the blocks, parents before what is inside them
   blocks <- draft$components
@@ -173,8 +215,9 @@ push_start <- function(info, ids, existing, options) {
   made <- new.env() # answer choices and option sets this push has already added
   push <- new.env()
   push$summary <- list(
-    questionnaire = identical(info$kind, "new_questionnaire"), blocks = 0L, blocks_found = 0L, questions = 0L,
-    variables = 0L, variables_found = 0L, choices = 0L, answer_options = 0L, option_sets = 0L, option_sets_found = 0L
+    questionnaire = identical(info$kind, "new_questionnaire"), wave = !extraction_service_uses_recorded_wave(info),
+    blocks = 0L, blocks_found = 0L, questions = 0L, variables = 0L, variables_found = 0L, choices = 0L,
+    answer_options = 0L, answer_options_found = 0L, option_sets = 0L, option_sets_found = 0L
   )
   push$existing <- existing
   push$options <- options
@@ -255,6 +298,11 @@ push_answer_option <- function(push, label) {
   answer_options <- push$options$answer_options
   there <- answer_options$answer_option_id[answer_options$standardized_label == label]
   if (length(there) == 1) {
+    found_key <- paste0("found choice:", label) # counted once, however many variables use it
+    if (is.null(push$made[[found_key]])) {
+      push$made[[found_key]] <- TRUE
+      push$summary$answer_options_found <- push$summary$answer_options_found + 1L
+    }
     return(there)
   }
   key <- paste0("choice:", label)
@@ -281,7 +329,11 @@ push_option_set <- function(push, labels) {
   keys <- vapply(split(member_labels, options$members$option_set_id), function(m) paste(sort(m), collapse = "\r"), character(1))
   there <- names(keys)[keys == key]
   if (length(there) > 0) {
-    push$summary$option_sets_found <- push$summary$option_sets_found + 1L
+    found_key <- paste0("found set:", there[1]) # counted once, however many variables use it
+    if (is.null(push$made[[found_key]])) {
+      push$made[[found_key]] <- TRUE
+      push$summary$option_sets_found <- push$summary$option_sets_found + 1L
+    }
     return(as.numeric(there[1]))
   }
   made_key <- paste0("set:", key)
@@ -353,6 +405,21 @@ push_match_blocks <- function(draft, existing, ids) {
   found
 }
 
+# The recorded wave an extraction goes into: one of the questionnaire's waves, asking no questions yet.
+push_recorded_wave <- function(info, existing) {
+  wave <- suppressWarnings(as.numeric(info$wave_id))
+  if (is.null(existing) || is.na(wave) || !wave %in% existing$waves$wave_id) {
+    stop("The wave picked isn't one of this questionnaire's waves. Pick it again.", call. = FALSE)
+  }
+  asked <- sum(existing$wave_questions$wave_id %in% wave)
+  if (asked > 0) {
+    stop(sprintf(
+      "The wave picked already asks %s. Pick a wave without questions, or add a new wave.", plural(asked, "question")
+    ), call. = FALSE)
+  }
+  wave
+}
+
 # How many places in a section (or at the top) are taken already, so a new block goes after them.
 # A section that is new has nothing in it.
 push_taken <- function(existing, parent) {
@@ -365,30 +432,182 @@ push_taken <- function(existing, parent) {
 }
 
 # ------ Said in words ---------------------------------------------------------------------------
-#' What a push comes to, in words.
+#' What an extraction's rows come to, in words.
 #'
-#' For example "Adds the questionnaire, the wave, 14 new blocks, 9 questions asked in the wave and 11 new variables."
+#' For example "Adds the questionnaire, the wave, 14 new blocks, 9 questions asked in the wave, 11 new
+#' variables and 20 response options."
 #'
 #' @param summary From `extraction_service_push_build()`.
 #' @return A string.
 extraction_service_push_summary <- function(summary) {
   parts <- c(
     if (summary$questionnaire) "the questionnaire",
-    "the wave",
+    if (!isFALSE(summary$wave)) "the wave",
     if (summary$blocks > 0) plural(summary$blocks, "new block"),
     if (summary$blocks_found > 0) paste0(plural(summary$blocks_found, "block"), " already there"),
     if (summary$questions > 0) paste(plural(summary$questions, "question"), "asked in the wave"),
     if (summary$variables > 0) plural(summary$variables, "new variable"),
     if (summary$variables_found > 0) paste0(plural(summary$variables_found, "variable"), " already there"),
-    if (summary$choices > 0) plural(summary$choices, "choice"),
+    if (summary$choices > 0) plural(summary$choices, "response option"),
     if (summary$answer_options > 0) plural(summary$answer_options, "new answer choice"),
     if (summary$option_sets > 0) plural(summary$option_sets, "new set of choices", plural_form = "new sets of choices")
   )
   paste0("Adds ", word_list(parts), ".")
 }
 
+# ------ The preview -------------------------------------------------------------------------------
+#' What an extraction's change request comes to, to show before it is submitted and while it waits.
+#'
+#' Pure: the rows are worked out from what is given (`context` and `existing` are read by the caller),
+#' and nothing is written.
+#'
+#' @param draft The questionnaire.
+#' @param info Where it goes, as `extraction_service_info()` returns it.
+#' @param catalog The live tables the pages pick from, from `questionnaire_service_get_catalog()`.
+#' @param context From `extraction_service_push_context()`.
+#' @param existing From `extraction_service_push_existing()`.
+#' @return A list for `extraction_request_ui()`: `where` and `what` (lists of cards), `summary` (a
+#'   sentence), `problem` (why the rows can't be worked out, or `NULL`) and `unchecked`.
+extraction_service_request_preview <- function(draft, info, catalog, context, existing = NULL) {
+  preview <- list(
+    where = extraction_service_where_cards(info, catalog),
+    what = list(), summary = "", problem = NULL,
+    unchecked = extraction_service_unchecked(draft)
+  )
+  if (length(extraction_service_missing(info)) > 0) {
+    return(preview)
+  }
+  built <- tryCatch(
+    extraction_service_build_items(draft_service_renumber_questions(draft), info, context$ids, existing, context$options),
+    error = function(problem) problem
+  )
+  if (inherits(built, "error")) {
+    preview$problem <- conditionMessage(built)
+    return(preview)
+  }
+  preview$summary <- extraction_service_push_summary(built$summary)
+  preview$what <- extraction_service_what_cards(built$summary)
+  preview
+}
+
+#' The cards for where an extraction goes: its registry, study, questionnaire and wave, each recorded or NEW.
+#'
+#' @param info Where it goes, as `extraction_service_info()` returns it.
+#' @param catalog The live tables the pages pick from, from `questionnaire_service_get_catalog()`.
+#' @return A list of four cards (see `request_card_ui()`); one not picked yet says so.
+extraction_service_where_cards <- function(info, catalog) {
+  not_picked <- function(kind) list(kind = kind, title = "Not picked yet", subtitle = "", facts = character(), is_missing = TRUE)
+  registry <- catalog$registries[as.character(catalog$registries$registry_id) %in% info$registry_id, , drop = FALSE]
+  study <- questionnaire_service_get_study(catalog, info$study_id)
+  questionnaire <- if (info$kind == "new_wave") questionnaire_service_get(catalog, info$questionnaire_id)
+  wave <- catalog$waves[as.character(catalog$waves$wave_id) %in% info$wave_id, , drop = FALSE]
+  respondent_type <- catalog$respondent_types$name[as.character(catalog$respondent_types$respondent_type_id) %in% info$respondent_type_id]
+  wave_facts <- function(date, count) {
+    c(
+      if (has_text(date)) paste("Given", date),
+      if (has_text(count)) paste(count, "respondents")
+    )
+  }
+  list(
+    if (nrow(registry) == 1) {
+      list(
+        kind = "Registry", title = questionnaire_name(registry$name, registry$abbreviation %||% ""),
+        subtitle = "Already in the database", facts = character(), is_new = FALSE
+      )
+    } else {
+      not_picked("Registry")
+    },
+    if (!is.null(study)) {
+      list(
+        kind = "Study", title = study$name,
+        subtitle = if (!is.na(study$principal_investigator)) paste("Led by", study$principal_investigator) else "Already in the database",
+        facts = character(), is_new = FALSE
+      )
+    } else {
+      not_picked("Study")
+    },
+    if (info$kind == "new_questionnaire" && has_text(info$name)) {
+      list(
+        kind = "Questionnaire", title = questionnaire_name(trimws(info$name), trimws(info$abbreviation)),
+        subtitle = if (length(respondent_type) == 1) paste("For", respondent_type) else "",
+        facts = character(), is_new = TRUE
+      )
+    } else if (!is.null(questionnaire)) {
+      list(
+        kind = "Questionnaire", title = questionnaire_name(questionnaire$name, questionnaire$abbreviation),
+        subtitle = paste0("For ", questionnaire$respondent_type, " · already in the database"),
+        facts = plural(questionnaire$n_waves, "wave"), is_new = FALSE
+      )
+    } else {
+      not_picked("Questionnaire")
+    },
+    if (extraction_service_uses_recorded_wave(info) && nrow(wave) == 1) {
+      list(
+        kind = "Wave", title = wave$name, subtitle = "Already in the database, with no questions yet",
+        facts = wave_facts(
+          if (!is.na(wave$administered_date)) format(as.Date(wave$administered_date), "%m/%d/%Y") else "",
+          if (!is.na(wave$respondent_count)) format(wave$respondent_count, big.mark = ",") else ""
+        ),
+        is_new = FALSE
+      )
+    } else if (!extraction_service_uses_recorded_wave(info) && has_text(info$wave_name)) {
+      list(
+        kind = "Wave", title = trimws(info$wave_name), subtitle = "",
+        facts = wave_facts(info$administered_date, info$respondent_count), is_new = TRUE
+      )
+    } else {
+      not_picked("Wave")
+    }
+  )
+}
+
+#' The cards for what an extraction adds: for each kind of row, how many are new, how many are already
+#' in the database and are used again, and which rows only link the two.
+#'
+#' @param summary From `extraction_service_push_build()`.
+#' @return A list of cards (see `request_card_ui()`); a card is NEW when its rows are added.
+extraction_service_what_cards <- function(summary) {
+  count <- function(n) format(n, big.mark = ",")
+  card <- function(kind, n_new, n_found, title, found_note, subtitle = "") {
+    list(
+      kind = kind, title = title, subtitle = subtitle,
+      facts = c(if (n_new > 0) paste(count(n_new), "new"), if (n_found > 0) paste(count(n_found), found_note)),
+      is_new = n_new > 0
+    )
+  }
+  list(
+    card(
+      "Blocks", summary$blocks, summary$blocks_found,
+      plural(summary$blocks + summary$blocks_found, "block", big_mark = ","), "already in the questionnaire"
+    ),
+    card(
+      "Questions in the wave", summary$questions, 0L, plural(summary$questions, "question", big_mark = ","), "",
+      subtitle = "Each question the wave asks, with its number"
+    ),
+    card(
+      "Variables", summary$variables, summary$variables_found,
+      plural(summary$variables + summary$variables_found, "variable", big_mark = ","), "already recorded"
+    ),
+    card(
+      "Answer choices", summary$answer_options, summary$answer_options_found,
+      plural(summary$answer_options + summary$answer_options_found, "different answer choice", big_mark = ","),
+      "already in the database, used again",
+      subtitle = "Each worded choice is kept once for the whole registry"
+    ),
+    card(
+      "Sets of choices", summary$option_sets, summary$option_sets_found,
+      plural(summary$option_sets + summary$option_sets_found, "set of choices", plural_form = "sets of choices", big_mark = ","),
+      "already in the database, used again"
+    ),
+    card(
+      "Response options", summary$choices, 0L, plural(summary$choices, "response option", big_mark = ","), "",
+      subtitle = "Links between a variable and an answer choice, with its code: one per variable for each of its choices"
+    )
+  )
+}
+
 # ------ Sending it ----------------------------------------------------------------------------------
-#' The one-line description of a push, for the request's title.
+#' The one-line description of an extraction's change request, for its title.
 #'
 #' @param record The extraction's record.
 #' @param catalog The live tables the pages pick from.
@@ -397,27 +616,25 @@ extraction_service_push_title <- function(record, catalog) {
   paste("Add", extraction_service_title(record, catalog))
 }
 
-#' Push an extraction to the database.
+#' Submit an extraction's change request.
 #'
-#' A STAFF member's push is sent to Change Requests, where one other staff member approves it, which
-#' applies it. An ADMIN's is applied at once. The questionnaire has to be saved first (the page saves
-#' it); what is pushed is the saved copy.
+#' Where it goes (`info`) is saved with it. A STAFF member's request is sent to Change Requests, where
+#' one other staff member approves it, which applies it. An ADMIN's is applied at once. The
+#' questionnaire has to be saved first (the page saves it); what is sent is the saved copy.
 #'
 #' @param connection The MATR database, `list(url, key)`; see `model_database.R`.
 #' @param record The extraction's record.
-#' @param me Who is pushing it: `list(staff_id, name, role)`.
+#' @param me Who is submitting it: `list(staff_id, name, role)`.
 #' @param catalog The live tables the pages pick from, from `questionnaire_service_get_catalog()`.
-#' @param note Why, for the reviewer.
+#' @param info Where it goes, as `extraction_service_info()` returns it; the record's by default.
 #' @param reviewer The staff id of the person asked to review it, or `NULL`.
 #' @param now The time to record.
-#' @return A list: `applied` (whether it is in the MATR data now), `history_id` (if so) and `record`
-#'   (as saved). An error with a sentence if the database refused.
-extraction_service_push <- function(connection, record, me, catalog, note = "", reviewer = NULL, now = Sys.time()) {
-  described <- utils::modifyList(
-    record,
-    list(summary = extraction_service_push_title(record, catalog), note = trimws(note %||% "")),
-    keep.null = TRUE
-  )
+#' @return A list: `applied` (whether it is in the MATR metadata database now), `history_id` (if so)
+#'   and `record` (as saved). An error with a sentence if the database refused.
+extraction_service_push <- function(connection, record, me, catalog, info = extraction_service_info(record),
+                                    reviewer = NULL, now = Sys.time()) {
+  placed <- utils::modifyList(record, list(info = info), keep.null = TRUE)
+  described <- utils::modifyList(placed, list(summary = extraction_service_push_title(placed, catalog)), keep.null = TRUE)
   if (change_request_service_needs_approval(me, extraction_kind)) {
     asked <- if (!is.null(reviewer) && nzchar(as.character(reviewer))) list(id = as.numeric(reviewer))
     sent <- utils::modifyList(
@@ -426,33 +643,14 @@ extraction_service_push <- function(connection, record, me, catalog, note = "", 
       keep.null = TRUE
     )
     saved <- extraction_model_save(
-      connection, sent, c("status", "summary", "note", "submitted", "requested_reviewer"), me$staff_id,
+      connection, sent, c("status", "summary", "info", "submitted", "requested_reviewer"), me$staff_id,
       expected_revision = record$revision, new_revision = FALSE
     )
     return(list(applied = FALSE, history_id = NULL, record = saved))
   }
-  extraction_model_save(connection, described, c("summary", "note"), me$staff_id, new_revision = FALSE)
+  extraction_model_save(connection, described, c("summary", "info"), me$staff_id, new_revision = FALSE)
   history_id <- change_request_model_apply(
-    connection, record$id, me$staff_id, extraction_service_push_build(connection, record)$items
+    connection, record$id, me$staff_id, extraction_service_push_build(connection, record, info = info)$items
   )
   list(applied = TRUE, history_id = history_id, record = extraction_model_get(connection, record$id))
-}
-
-# ------ Small things ------------------------------------------------------------------------------------
-blank_to_na <- function(text) if (has_text(text)) trimws(text) else NA_character_
-
-# "1,200" as 1200; NA for nothing.
-push_count <- function(text) {
-  if (!has_text(text)) {
-    return(NA)
-  }
-  as.numeric(gsub(",", "", trimws(text), fixed = TRUE))
-}
-
-# "04/15/2022" as "2022-04-15"; NA for nothing.
-push_date <- function(text) {
-  if (!has_text(text)) {
-    return(NA_character_)
-  }
-  format(as.Date(trimws(text), "%m/%d/%Y"))
 }

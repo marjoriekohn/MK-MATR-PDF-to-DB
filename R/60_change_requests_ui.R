@@ -13,12 +13,6 @@ change_requests_ui <- function(id) {
       "Items waiting for approval before they go into the MATR metadata database.",
       uiOutput(ns("whose_toggle"))
     ),
-    p(
-      class = "form-text change-request-rule",
-      "A delete, or an extraction pushed to the database, made by a STAFF member waits here until one other staff member ",
-      "approves it, which adds it to the MATR data at once. You can't approve what you prepared or last changed. ",
-      "Adds and updates, and anything an ADMIN does, are applied straight away and never wait here."
-    ),
     uiOutput(ns("cases"))
   )
 }
@@ -118,25 +112,7 @@ change_request_dialog <- function(record, me, ns, detail) {
       ), collapse = " · ")
     ),
     if (extraction) {
-      tagList(
-        if (!is.null(detail$problem)) {
-          edit_callout("danger", title = "This can't be added as it is", detail$problem)
-        } else {
-          p(class = "form-text", detail$summary)
-        },
-        if (isTRUE(detail$unchecked > 0)) {
-          p(class = "form-text", sprintf("%s haven't been marked as checked yet.", plural(detail$unchecked, "block")))
-        },
-        div(
-          class = "change-request-questionnaire-head",
-          pdf_open_button(detail$pdf_url)
-        ),
-        if (is.null(detail$draft)) {
-          p(class = "form-text", "The questionnaire couldn't be read. Edit opens it on the review page.")
-        } else {
-          div(class = "change-request-questionnaire", questionnaire_preview_ui(detail$draft))
-        }
-      )
+      extraction_request_ui(detail$preview, detail$draft, detail$pdf_url)
     } else {
       tagList(
         p(class = "form-text", change_service_counts_text(detail$counts)),

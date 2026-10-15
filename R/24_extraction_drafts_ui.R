@@ -7,19 +7,17 @@ extraction_drafts_ui <- function(id) {
   div(
     class = "extraction-mode extraction-drafts",
     `data-ns` = ns(""),
-    mode_intro(
-      # "Drafts that haven't been pushed to the database yet, or were sent back to you.",
-      uiOutput(ns("whose_toggle"))
-    ),
+    mode_intro(uiOutput(ns("whose_toggle"))),
     progress_key(),
     uiOutput(ns("drafts"))
   )
 }
 
+# What the dots on the cards mean, in the theme's colors: green Done, gold In progress, red Needs attention.
 progress_key <- function() {
   item <- function(state, label) span(class = "progress-step", progress_dot(state), label)
   div(
-    class = "progress-key",
+    class = "progress-key", role = "group", `aria-label` = "What the dots mean",
     item("done", "Done"),
     item("in_progress", "In progress"),
     item("not_started", "Not started"),
@@ -41,6 +39,7 @@ whose_buttons <- function(input_id, whose, n_mine, n_everyone) {
 
 # ------ One card per draft ---------------------------------------------------------
 #' One card for a draft.
+#' Whose it is is said the same way on every card, from who started it: "Yours", or their name.
 #'
 #' @param record An extraction record.
 #' @param draft The questionnaire it read, or `NULL` until reading has finished.
@@ -48,7 +47,7 @@ whose_buttons <- function(input_id, whose, n_mine, n_everyone) {
 #' @param me Who is using the site: `list(staff_id, name)`.
 #' @return A UI element.
 draft_card <- function(record, draft, catalog, me) {
-  mine <- identical(record$prepared_by_id, me$staff_id)
+  mine <- draft_row_service_is_mine(record, me)
   failed <- identical(record$extraction_status, "failed")
   sent_back <- record$sent_back
   steps <- extraction_service_progress(record, draft)
@@ -59,8 +58,8 @@ draft_card <- function(record, draft, catalog, me) {
       class = "draft-body",
       div(
         class = "draft-title-row",
-        h2(class = "draft-title", extraction_service_title(record, catalog)),
-        if (mine) row_badge("Yours"),
+        h2(class = "draft-title", extraction_service_title(record, catalog, draft$questionnaire)),
+        row_badge(if (mine) "Yours" else draft_row_service_preparer(record), class = if (mine) "is-mine"),
         if (!is.null(sent_back)) row_badge("Sent back", class = "is-warning"),
         if (identical(record$method, extraction_manual)) row_badge("Typed by hand"),
         if (failed) row_badge("Reading stopped", class = "is-warning")
@@ -82,27 +81,29 @@ draft_card <- function(record, draft, catalog, me) {
         review_button(
           "Continue", "continue",
           `data-id` = record$id, class = "btn btn-primary",
-          title = if (!extraction_service_is_read(record)) "Still being read: see its progress and wave details"
+          title = if (!extraction_service_is_read(record)) "Still being read: see its progress"
         )
       }
     )
   )
 }
 
-# "Started by you on Sep 29 · last saved 2 hours ago · AHP_wave3.pdf, 14 pages"
+# "Started by you on Sep 29 · last saved 2 hours ago · AHP_wave3.pdf, 14 pages".
+# What there is nothing to say about is left out, so no piece is empty.
 draft_meta <- function(record, me) {
-  who <- if (identical(record$prepared_by_id, me$staff_id)) "you" else record$prepared_by
+  who <- if (draft_row_service_is_mine(record, me)) "you" else draft_row_service_preparer(record)
   pdf <- record$pdf
-  paste(c(
+  pieces <- c(
     paste("Started by", who, day_phrase(parse_time(record$started))),
     if (!is.null(record$sent_back)) {
-      paste("sent back by", record$sent_back$by, day_phrase(parse_time(record$sent_back$date)))
+      paste("sent back by", record$sent_back$by %||% "a reviewer", day_phrase(parse_time(record$sent_back$date)))
     } else {
       paste("last saved", time_ago(parse_time(record$saved)))
     },
     if (identical(record$extraction_status, "failed")) record$error,
     paste(c(pdf$name, if (!is.null(pdf$pages)) plural(pdf$pages, "page")), collapse = ", ")
-  ), collapse = " · ")
+  )
+  paste(pieces[has_text(pieces)], collapse = " · ")
 }
 
 #' What is shown when there are no drafts.

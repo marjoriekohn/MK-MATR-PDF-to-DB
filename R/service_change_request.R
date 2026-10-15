@@ -57,12 +57,12 @@ change_request_service_signature <- function(connection) {
 #'   revision, though someone else prepared it), `asked_of_me` (the preparer asked them to
 #'   review it), `can_approve`, `can_send_back` and `can_withdraw`.
 change_request_service_state <- function(record, me) {
-  mine <- identical(record$prepared_by_id, me$staff_id)
-  changed_by_me <- !mine && identical(record$saved_by_id, me$staff_id)
+  mine <- draft_row_service_is_mine(record, me)
+  changed_by_me <- !mine && same_staff(record$saved_by_id, me$staff_id)
   list(
     mine = mine,
     changed_by_me = changed_by_me,
-    asked_of_me = identical(record$requested_reviewer$id, me$staff_id),
+    asked_of_me = same_staff(record$requested_reviewer$id, me$staff_id),
     can_approve = !mine && !changed_by_me,
     can_send_back = !mine,
     can_withdraw = mine
@@ -144,7 +144,7 @@ change_request_service_send_back <- function(connection, record, me, note) {
 #' @param me Who withdraws it: `list(staff_id, name, role)`; it has to be the person who prepared it.
 #' @return Called for its effect.
 change_request_service_withdraw <- function(connection, record, me) {
-  if (!identical(record$prepared_by_id, me$staff_id)) {
+  if (!draft_row_service_is_mine(record, me)) {
     stop("Only the person who prepared this can withdraw it.", call. = FALSE)
   }
   change_request_model_withdraw(connection, record$id, me$staff_id)

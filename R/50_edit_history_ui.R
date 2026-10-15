@@ -10,7 +10,7 @@ edit_history_ui <- function(id) {
     `data-ns` = ns(""),
     page_header(
       "Edit history",
-      "Every change that has been added to the MATR data, newest first.",
+      "Every change that has been added to the MATR metadata database, newest first.",
       toggle_input(
         ns("kind"), c("All" = "all", "Added" = "Add", "Updated" = "Update", "Deleted" = "Delete"),
         selected = "all", label = "Kind of edit"
@@ -19,7 +19,7 @@ edit_history_ui <- function(id) {
     ),
     textInput(
       ns("search"), NULL,
-      placeholder = "Search by what changed, why, or who was behind it", width = "100%"
+      placeholder = "Search by what changed or who was behind it", width = "100%"
     ) |> tagAppendAttributes(class = "history-search"),
     uiOutput(ns("entries"))
   )
@@ -40,8 +40,7 @@ history_entry_ui <- function(record) {
         row_badge(record$kind %||% "Edit", class = paste0("is-", tolower(record$kind %||% "edit"))),
         h2(class = "history-title", if (nzchar(record$summary)) record$summary else "(no description)")
       ),
-      p(class = "history-meta", paste(c(history_service_when(record), history_service_people(record)), collapse = " · ")),
-      if (nzchar(record$note)) p(class = "history-note", strong("Why: "), record$note)
+      p(class = "history-meta", paste(c(history_service_when(record), history_service_people(record)), collapse = " · "))
     ),
     div(
       class = "history-actions",
@@ -57,6 +56,6 @@ history_entry_ui <- function(record) {
 no_history <- function(filtered) {
   div(
     class = "history-entry is-empty",
-    p(if (filtered) "No edit matches that." else "Nothing has been added to the MATR data through this site yet.")
+    p(if (filtered) "No edit matches that." else "Nothing has been added to the MATR metadata database through this site yet.")
   )
 }

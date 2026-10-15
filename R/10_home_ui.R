@@ -68,7 +68,7 @@ home_box <- function(ns, page, icon_name, title, text, list_output) {
 #' @return A UI element.
 home_request_item <- function(record, me) {
   kind <- change_request_service_kind(record)
-  who <- if (identical(record$prepared_by_id, me$staff_id)) "you" else record$prepared_by
+  who <- if (draft_row_service_is_mine(record, me)) "you" else record$prepared_by
   div(
     class = "home-item",
     row_badge(kind, class = paste0("is-", tolower(kind))),

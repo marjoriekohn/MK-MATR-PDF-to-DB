@@ -1,7 +1,8 @@
-#' The Manual mode of the Extraction page: what staff know about the questionnaire, and a PDF if they have one.
+#' The Manual mode of the Extraction page: a PDF if staff have one, and a button that starts.
 #'
-#' No AI reads anything. Staff type the questionnaire's blocks, questions and choices on the review
-#' page, which is the same page an AI-Powered extraction is reviewed on.
+#' No AI reads anything. Starting opens a blank Edit Extraction page, the same page an AI-Powered
+#' extraction is edited on, where every block, question and choice is typed in, with the PDF beside it
+#' if one was added.
 #'
 #' @param id The module's id.
 #' @return The mode's UI.
@@ -12,10 +13,13 @@ extraction_manual_ui <- function(id) {
     `data-ns` = ns(""),
     card(card_body(
       h2("Questionnaire PDF (optional)"),
-      uiOutput(ns("pdf_card"))
-      ),
-      actionButton(ns("start"), "Start Manual Extraction", class = "btn-primary", disabled = TRUE)
-    )
+      uiOutput(ns("pdf_card")),
+      div(
+        class = "extraction-footer",
+        span("You'll type the questionnaire in on the Edit Extraction page."),
+        actionButton(ns("start"), "Start Manual Extraction", class = "btn-primary")
+      )
+    ))
   )
 }
 

@@ -52,7 +52,8 @@ push_model_existing <- function(connection, questionnaire_id) {
       connection, "variable", c("variable_key", "component_id", "matr_id", "display_order"),
       order_by = "variable_key", filters = here
     ),
-    waves = database_model_get(connection, "wave", "name", order_by = "wave_id", filters = here)
+    waves = database_model_get(connection, "wave", c("wave_id", "name"), order_by = "wave_id", filters = here),
+    wave_questions = wave_question_model_get(connection, questionnaire_id)
   )
 }
 

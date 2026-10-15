@@ -35,6 +35,7 @@ draft_service_update <- function(draft, table, id, field, value) {
     component_type = set_component_type(draft, row, value),
     variable_type = set_variable_type(draft, row, value),
     printed = set_printed(draft, row, value),
+    matr_id = set_matr_id(draft, row, value),
     {
       draft[[table]][row, field] <- value
       draft
@@ -89,6 +90,23 @@ set_variable_type <- function(draft, row, type) {
   }
   draft$variables$answer_data_type[row] <- NA
   add_blank_choices(draft, box$id, 2)
+}
+
+# A MATR ID names one variable of the questionnaire (BR93), so one another variable has is refused,
+# whether it was typed or picked from the uploaded IDs.
+set_matr_id <- function(draft, row, matr_id) {
+  boxes <- draft$variables
+  taken_by <- which(boxes$matr_id %in% matr_id & seq_len(nrow(boxes)) != row)
+  if (!is.na(matr_id) && length(taken_by) > 0) {
+    other <- boxes[taken_by[1], ]
+    question <- question_number_of(draft, other$component_id)
+    stop(sprintf(
+      "%s is already the MATR ID of variable %d of Q%s. Give each variable its own.",
+      matr_id, as.integer(other$display_order), if (is.na(question)) "?" else question
+    ))
+  }
+  draft$variables$matr_id[row] <- matr_id
+  draft
 }
 
 # Printed as and Skip to only mean something for a choice printed on the form,
@@ -241,6 +259,9 @@ draft_service_add_box <- function(draft, component_id) {
     answer_data_type = template$answer_data_type
   ))
   choices <- draft_service_children(draft, "response_options", template$id)
+  if (nrow(choices) == 0) {
+    return(draft)
+  }
   choices$id <- draft_service_next_id(draft, "response_options", nrow(choices))
   choices$variable_id <- rep(id, nrow(choices))
   add_rows(draft, "response_options", choices)
@@ -335,21 +356,64 @@ draft_service_copy_codes <- function(draft, variable_id) {
 }
 
 # ------ MATR IDs ---------------------------------------------------------------
-#' Fill the variables' MATR IDs from a CSV's list.
+# The uploaded CSV lists one MATR ID per variable, in the order the variables appear. They are given
+# to the variables either all at once, in that order (Auto Apply), or one by one, each variable's MATR
+# ID picked from the uploaded IDs no other variable has yet, or typed (Manual Assignment). Either way an
+# ID goes to one variable only (set_matr_id()), and an ID the variables don't use is still offered.
+
+#' @param matr_ids The IDs, in order (`extraction_service_matr_ids()`).
+#' @return A character vector, in the CSV's order.
+draft_service_uploaded_matr_ids <- function(matr_ids) {
+  matr_ids <- trimws(as.character(matr_ids))
+  unique(matr_ids[!is.na(matr_ids) & nzchar(matr_ids)])
+}
+
+#' The uploaded MATR IDs no variable has yet.
 #'
-#' The CSV lists one ID per variable in printed order. If the counts differ, variables past the end
-#' of the list get none, and staff are told with `message()`.
+#' What each variable's MATR ID drop-down offers.
 #'
 #' @param draft A draft: `list(questionnaire, components, variables, response_options)`; see the top of `service_draft.R`.
 #' @param matr_ids The IDs, in order (`extraction_service_matr_ids()`).
+#' @return A character vector, in the CSV's order.
+draft_service_available_matr_ids <- function(draft, matr_ids) {
+  setdiff(draft_service_uploaded_matr_ids(matr_ids), draft$variables$matr_id)
+}
+
+#' Give the variables the uploaded MATR IDs in the order they appear (Auto Apply).
+#'
+#' The first variable without a MATR ID gets the first uploaded ID no variable has, and so on, so what
+#' was typed or picked already is kept. With `replace`, every variable is given the ID in its place in
+#' the list instead. If the counts differ, nothing is lost: the variables left over keep no MATR ID and
+#' the IDs left over are still offered in the drop-downs, and staff are told with `message()`.
+#'
+#' @param draft A draft: `list(questionnaire, components, variables, response_options)`; see the top of `service_draft.R`.
+#' @param matr_ids The IDs, in order (`extraction_service_matr_ids()`).
+#' @param replace Whether to replace the MATR IDs the variables have.
 #' @return The changed draft. An error if the list is empty.
-draft_service_fill_matr_ids <- function(draft, matr_ids) {
-  if (length(matr_ids) == 0) stop("The CSV has no MATR IDs in it. Check the file and add it again.")
-  rows <- match(draft_service_boxes_in_order(draft), draft$variables$id)
-  draft$variables$matr_id[rows] <- matr_ids[seq_along(rows)]
+draft_service_auto_apply_matr_ids <- function(draft, matr_ids, replace = FALSE) {
+  ids <- draft_service_uploaded_matr_ids(matr_ids)
+  if (length(ids) == 0) stop("The CSV has no MATR IDs in it. Check the file and add it again.")
+  in_order <- match(draft_service_boxes_in_order(draft), draft$variables$id)
+  if (replace) {
+    draft$variables$matr_id <- NA_character_
+  }
+  targets <- in_order[is.na(draft$variables$matr_id[in_order])]
+  pool <- setdiff(ids, draft$variables$matr_id)
+  n <- min(length(targets), length(pool))
+  draft$variables$matr_id[targets[seq_len(n)]] <- pool[seq_len(n)]
+  repeated <- unique(matr_ids[duplicated(trimws(matr_ids)) & nzchar(trimws(matr_ids))])
+  n_unfilled <- length(targets) - n
+  n_left <- length(pool) - n
   message(paste(c(
-    sprintf("Filled in the MATR IDs of %s.", plural(min(length(rows), length(matr_ids)), "variable")),
-    draft_service_matr_id_mismatch(length(matr_ids), length(rows))
+    sprintf("Gave %s a MATR ID, in the order they appear.", plural(n, "variable")),
+    if (n_unfilled > 0) sprintf("%s still %s none.", plural(n_unfilled, "variable"), if (n_unfilled == 1) "has" else "have"),
+    if (n_left > 0) {
+      sprintf(
+        "%s left over, still offered in each MATR ID drop-down.",
+        plural(n_left, "uploaded ID is", plural_form = "uploaded IDs are")
+      )
+    },
+    if (length(repeated) > 0) sprintf("The CSV lists %s more than once; each is given once.", word_list(repeated))
   ), collapse = " "))
   draft
 }

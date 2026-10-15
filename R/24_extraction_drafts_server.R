@@ -1,7 +1,7 @@
 #' The Existing Draft mode of the Extraction page: the server.
 #'
 #' Every extraction draft still being prepared, newest first. Continue opens a draft that
-#' has been read (or typed by hand) on the review page, and one still being read in AI-Powered mode.
+#' has been read (or typed by hand) on the Edit Extraction page, and one still being read in AI-Powered mode.
 #'
 #' @param id The module's id.
 #' @param extractions The extraction drafts as `server.R` shares them: `all()` is a reactive list
@@ -10,7 +10,7 @@
 #'   (`questionnaire_service_get_catalog()`) and `refresh()` reads them again.
 #' @param connection The MATR database, `list(url, key)`; see `model_database.R`.
 #' @param me Who is using the site: `list(staff_id, name, role)`.
-#' @param open_review A function taking a record and opening it on the review page.
+#' @param open_edit_extraction A function taking a record and opening it on the Edit Extraction page.
 #' @param open_details A function taking a record and opening it in AI-Powered mode.
 #' @param switch_mode A function taking a mode of the Extraction page and showing it.
 #' @return Called for its effect.
@@ -20,7 +20,7 @@ extraction_drafts_server <- function(
   catalog,
   connection,
   me,
-  open_review,
+  open_edit_extraction,
   open_details,
   switch_mode
 ) {
@@ -43,7 +43,7 @@ extraction_drafts_server <- function(
       record <- extractions$all()[[event$id %||% ""]]
       switch(event$action,
         new = switch_mode("ai"),
-        continue = if (extraction_service_is_read(record)) open_review(record) else open_details(record),
+        continue = if (extraction_service_is_read(record)) open_edit_extraction(record) else open_details(record),
         retry = {
           extraction_service_retry(connection, record$id, me)
           extractions$changed()
@@ -57,7 +57,7 @@ extraction_drafts_server <- function(
       showModal(confirm_dialog(
         "Discard this draft?",
         p(strong(extraction_service_title(record, catalog$get()))),
-        p("It's set aside and won't appear here again. Nothing has been added to the MATR data."),
+        p("It's set aside and won't appear here again. Nothing has been added to the MATR metadata database."),
         confirm_id = ns("confirm_discard"), confirm_label = "Discard"
       ))
     }

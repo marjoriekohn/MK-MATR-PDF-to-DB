@@ -71,7 +71,6 @@ edit_history_server <- function(
         size = "l",
         easyClose = TRUE,
         p(class = "history-meta", paste(c(history_service_when(record), history_service_people(record)), collapse = " · ")),
-        if (nzchar(record$note)) p(strong("Why: "), record$note),
         p(class = "form-text", change_service_counts_text(changes$counts)),
         change_items_ui(changes$groups),
         footer = modalButton("Close")

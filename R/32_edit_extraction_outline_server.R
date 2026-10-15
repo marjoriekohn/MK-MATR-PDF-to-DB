@@ -1,24 +1,27 @@
-#' The questionnaire outline of the review page.
+#' The questionnaire outline of the Edit Extraction page.
 #'
-#' Blocks as a tree, each edited where it is: type a block's words into its row, open and close
-#' sections, open a question's panel for its variables and the question it follows, mark a block as
-#' checked, add and delete blocks, variables and choices, and drag any of them into a new order. Every
-#' change goes through `state$change()`.
+#' Blocks as a tree, each edited where it is: type a block's words into its row, pick the question it
+#' follows, open and close sections, open a question's panel for its skip condition and variables, mark
+#' a block as checked, add and delete blocks, variables and choices, and drag any of them into a new
+#' order. Every change goes through `state$change()`.
 #'
 #' The tree is drawn again only when the layout changes (a block or variable added, deleted, moved or
 #' picked from a list), never as words are typed, so the field being typed in is left alone. What changes
-#' as words are typed (which block is selected, and which have problems) is sent to the page script,
-#' which marks the rows.
+#' as words are typed (which block is selected, which blocks and fields have problems, and which uploaded
+#' MATR IDs are still free) is sent to the page script, which marks the rows and fields.
 #'
 #' @param id The module's id.
-#' @param state What the review page shares: `list(draft, change, selected, problems, layout_version,
-#'   suggestions)`; `suggestions` (a reactive of `draft_service_text_suggestions()`) may be left out.
+#' @param state What the Edit Extraction page shares: `list(draft, change, selected, problems,
+#'   layout_version, suggestions, matr_ids)`; `suggestions` (a reactive of
+#'   `draft_service_text_suggestions()`), `matr_ids` (a reactive of the uploaded MATR IDs no variable
+#'   has, `draft_service_available_matr_ids()`) and `show_variables` (a reactive that ticks when every
+#'   question's variables should be shown, to give out MATR IDs by hand) may be left out.
 #' @param lookups The pick lists, from `lookup_service_get_all()`.
 #' @return Called for its effect.
-review_outline_server <- function(
-  id,
-  state,
-  lookups
+extraction_outline_server <- function(
+    id,
+    state,
+    lookups
 ) {
   moduleServer(id, function(input, output, session) {
     ns <- session$ns
@@ -27,29 +30,30 @@ review_outline_server <- function(
     collapsed <- reactiveVal(character()) # sections whose contents are hidden
     opened <- reactiveVal(character()) # questions whose panel is open
     suggestions <- state$suggestions %||% function() list()
+    matr_ids <- state$matr_ids %||% function() character()
 
     observeEvent(input$action, {
       event <- input$action
       draft <- state$draft()
       blocks <- draft$components
       switch(event$action,
-        select = state$selected(event$id),
-        toggle = collapsed(flip(collapsed(), event$id)),
-        details = opened(flip(opened(), event$id)),
-        collapse_all = collapsed(blocks$id[blocks$component_type == "Section"]),
-        expand_all = collapsed(character()),
-        add_block = add_block(event$type),
-        check = toggle_checked(draft, event$id),
-        add_box = {
-          opened(union(opened(), event$id))
-          state$change(draft_service_add_box(draft, event$id))
-        },
-        add_choice = state$change(draft_service_add_choice(draft, event$id)),
-        copy_codes = state$change(draft_service_copy_codes(draft, event$id)),
-        delete = {
-          deleted <- state$change(draft_service_delete(draft, event$table, event$id))
-          if (deleted && event$table == "components" && identical(state$selected(), event$id)) state$selected(NULL)
-        }
+             select = state$selected(event$id),
+             toggle = collapsed(flip(collapsed(), event$id)),
+             details = opened(flip(opened(), event$id)),
+             collapse_all = collapsed(blocks$id[blocks$component_type == "Section"]),
+             expand_all = collapsed(character()),
+             add_block = add_block(event$type),
+             check = toggle_checked(draft, event$id),
+             add_box = {
+               opened(union(opened(), event$id))
+               state$change(draft_service_add_box(draft, event$id))
+             },
+             add_choice = state$change(draft_service_add_choice(draft, event$id)),
+             copy_codes = state$change(draft_service_copy_codes(draft, event$id)),
+             delete = {
+               deleted <- state$change(draft_service_delete(draft, event$table, event$id))
+               if (deleted && event$table == "components" && identical(state$selected(), event$id)) state$selected(NULL)
+             }
       )
     })
 
@@ -97,19 +101,35 @@ review_outline_server <- function(
       state$change(draft_service_reorder(state$draft(), input$reorder$table, unlist(input$reorder$ids)))
     })
 
+    # Giving out MATR IDs by hand: every question's panel opens, so each variable's MATR ID can be picked.
+    if (!is.null(state$show_variables)) {
+      observeEvent(state$show_variables(), {
+        blocks <- state$draft()$components
+        opened(blocks$id[blocks$component_type == "Question"])
+        collapsed(character())
+      }, ignoreInit = TRUE)
+    }
+
     # Open the sections around the selected block, so it can be seen.
     observeEvent(state$selected(), {
       collapsed(setdiff(collapsed(), draft_service_ancestors(state$draft(), state$selected())))
     })
 
-    # What changes as words are typed: the selected row, and each block's count of problems.
+    # What changes as words are typed: the selected row, each block's count of problems, the fields at
+    # fault, and the uploaded MATR IDs no variable has yet.
     observe({
       problems <- state$problems()
       counts <- as.list(table(problems$id))
       messages <- lapply(split(problems$message, problems$id), paste, collapse = "\n")
-      session$sendCustomMessage("review-marks", list(
+      at_fault <- problems[!is.na(problems$table), , drop = FALSE]
+      session$sendCustomMessage("edit-extraction-marks", list(
         selected = state$selected(),
-        problems = lapply(names(counts), function(id) list(id = id, n = counts[[id]], title = messages[[id]]))
+        problems = lapply(names(counts), function(id) list(id = id, n = counts[[id]], title = messages[[id]])),
+        fields = map_rows(at_fault, function(problem) {
+          list(table = problem$table, id = problem$row, field = if (is.na(problem$field)) "" else problem$field, title = problem$message)
+        }),
+        matr_ids = as.list(matr_ids()),
+        matr_list = matr_id_list_id(ns)
       ))
     })
 
@@ -125,7 +145,7 @@ review_outline_server <- function(
       isolate({
         view <- list(
           selected = state$selected(), collapsed = collapsed(), opened = opened(),
-          problems = state$problems(), suggestions = suggestions()
+          problems = state$problems(), suggestions = suggestions(), matr_ids = matr_ids()
         )
         outline_tree(state$draft(), view, lookups, ns)
       })

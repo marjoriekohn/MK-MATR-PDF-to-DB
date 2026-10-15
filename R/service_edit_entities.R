@@ -240,18 +240,7 @@ study_status_tooltip <- "Active: the study is ongoing. Ended: all data collectio
 study_entity <- list(
   label = "Study", noun = "study", plural = "studies", article = "a",
   group = "Registries and studies", table = "study",
-  about = "One research project run under a registry. It needs at least one questionnaire, and each questionnaire at least one wave.",
-  parts = list(
-    list(entity = "study", title = "The study"),
-    list(
-      entity = "questionnaire", link = "study_id", title = "Its first questionnaire",
-      why = "Every study needs at least one questionnaire."
-    ),
-    list(
-      entity = "wave", link = "questionnaire_id", title = "That questionnaire's first wave",
-      why = "Every questionnaire needs at least one wave."
-    )
-  ),
+  about = "One research project run under a registry.",
   delete_about = paste0(
     "Deleting a study deletes all its questionnaires, with their waves and variables. Registries ",
     "and investigators are not affected."
@@ -356,14 +345,7 @@ questionnaire_entity <- list(
   group = "Questionnaires", table = "questionnaire",
   about = paste0(
     "What stays true across every time a survey is given: its name, its respondent type and the study it ",
-    "belongs to. Each time it's given is a wave. It needs at least one wave."
-  ),
-  parts = list(
-    list(entity = "questionnaire", title = "The questionnaire"),
-    list(
-      entity = "wave", link = "questionnaire_id", title = "Its first wave",
-      why = "Every questionnaire needs at least one wave."
-    )
+    "belongs to. Each time it's given is a wave."
   ),
   delete_about = paste0(
     "Deleting a questionnaire deletes its waves and everything printed in it: every placement of a ",
@@ -618,7 +600,7 @@ subject_entity <- list(
   label = "Subject", noun = "subject", plural = "subjects", article = "a",
   group = "Shared lists", table = "subject",
   about = paste0(
-    "Who a variable can be about, like “Self” or “Respondent's Family”. The review page offers these, and the ",
+    "Who a variable can be about, like “Self” or “Respondent's Family”. The Edit Extraction page offers these, and the ",
     "reading instructions list them for Gemini."
   ),
   delete_about = paste0(
