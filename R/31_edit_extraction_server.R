@@ -1,9 +1,6 @@
 # How many changes Undo can take back.
 undo_depth <- 50
 
-# The Preview Change Request dialog works its rows out again once typing in it pauses for this long.
-preview_delay_ms <- 600
-
 #' The Edit Extraction page's server, for one extraction draft.
 #'
 #' The whole questionnaire as it was extracted, every block edited where it is
@@ -11,12 +8,12 @@ preview_delay_ms <- 600
 #' returns. Changes stay in this session until Save writes them to the draft's reviewed copy in the
 #' database.
 #'
-#' Preview Change Request asks where the extraction goes (registry, study, questionnaire, wave) and
-#' shows what its change request comes to, the way Change Requests shows it to a reviewer; previewing
-#' writes nothing. Submit Change Request saves anything unsaved and sends it: a STAFF member's request
-#' goes to Change Requests for one other staff member to approve, an ADMIN's is added at once
-#' (`service_extraction_push.R`). Questions are numbered by their place in the outline, and a wave of a
-#' recorded questionnaire gets the MATR IDs its questions already have.
+#' Preview Change Request shows the questionnaire the way Change Requests shows it to a reviewer;
+#' previewing writes nothing. Submit Change Request saves anything unsaved and sends it to Change
+#' Requests, where its Basic Info (registry, study, questionnaire, wave) is filled in; then one other
+#' staff member approves it, or an ADMIN adds their own (`service_extraction_push.R`). Questions are
+#' numbered by their place in the outline, and a wave of a recorded questionnaire gets the MATR IDs its
+#' questions already have.
 #'
 #' @param id The module's id.
 #' @param extractions The extraction drafts as `server.R` shares them: `all()` is a reactive list
@@ -181,8 +178,8 @@ edit_extraction_server <- function(
 
     # ------ What the recorded questionnaire has already -----------------------------
     # For a wave of a recorded questionnaire: the words its blocks have (offered while typing) and its
-    # questions' MATR IDs (filled in where the question is worded the same). Read when a draft opens and
-    # when where it goes is picked; a read that fails leaves nothing to offer, with a warning.
+    # questions' MATR IDs (filled in where the question is worded the same). Read when a draft opens,
+    # from the Basic Info saved with it; a read that fails leaves nothing to offer, with a warning.
     read_recorded <- function(opened, info = extraction_service_info(opened)) {
       recorded(tryCatch(
         extraction_service_recorded(connection, list(info = info)),
@@ -281,69 +278,36 @@ edit_extraction_server <- function(
     })
 
     # ------ Previewing and submitting the change request ---------------------------------------
-    # The preview asks where the extraction goes and works out what its change request comes to, from
-    # the questionnaire as it is on screen: nothing is saved or added while it is open. What the rows
-    # are worked out against is read once when it opens (`preview_context`), and what a recorded
-    # questionnaire prints is read once for each questionnaire picked.
+    # The preview shows the questionnaire as it is on screen, the way its change request shows it:
+    # nothing is saved or sent while it is open. Where it goes (its Basic Info) is filled in on
+    # Change Requests, after it is submitted.
     needs_approval <- change_request_service_needs_approval(me, extraction_kind)
     reviewers <- reactive(tryCatch(staff_service_reviewers(connection, me), error = function(problem) character()))
-    preview_context <- reactiveVal(NULL)
     preview_open <- reactiveVal(FALSE)
-    pending_info <- reactiveVal(NULL) # where it goes, as picked in the preview, until it is submitted
-    existing_read <- new.env() # questionnaire id -> what it prints already
 
-    existing_for <- function(info) {
-      if (!identical(info$kind, "new_wave") || !grepl("^[0-9]+$", info$questionnaire_id)) {
-        return(NULL)
-      }
-      key <- info$questionnaire_id
-      if (is.null(existing_read[[key]])) existing_read[[key]] <- extraction_service_push_existing(connection, info)
-      existing_read[[key]]
-    }
-
-    show_preview <- function(info) {
+    show_preview <- function() {
       preview_open(TRUE)
       showModal(preview_request_dialog(ns))
-      info_form$show(list(info = info))
     }
 
     observeEvent(input$request, {
       req(record_id(), draft())
-      context <- tryCatch(extraction_service_push_context(connection), error = function(problem) {
-        show_problem(problem, "Couldn't read the database")
-        NULL
-      })
-      if (is.null(context)) {
-        return()
-      }
-      preview_context(context)
-      rm(list = ls(existing_read), envir = existing_read)
-      show_preview(extraction_service_info(record()))
+      show_preview()
     })
-
-    placed <- debounce(reactive(info_form$info()), preview_delay_ms)
 
     preview_blockers <- reactive({
       req(preview_open(), draft())
-      info <- extraction_service_info(list(info = placed()))
-      counts <- tryCatch(questionnaire_service_wave_question_counts(connection, info$questionnaire_id), error = function(problem) integer())
-      extraction_service_push_blockers(record(), draft(), lookups, catalog$get(), extractions$all(), info = info, question_counts = counts)
+      extraction_service_draft_blockers(draft(), lookups)
     })
 
     output$preview <- renderUI({
-      req(preview_open(), draft(), preview_context())
-      info <- extraction_service_info(list(info = placed()))
-      existing <- tryCatch(existing_for(info), error = function(problem) problem)
-      if (inherits(existing, "error")) {
-        return(edit_callout("danger", title = "Couldn't read what this questionnaire has already", conditionMessage(existing)))
-      }
-      preview <- extraction_service_request_preview(draft(), info, catalog$get(), preview_context(), existing)
+      req(preview_open(), draft())
       blockers <- preview_blockers()
       tagList(
         if (length(blockers) > 0) {
           edit_callout("warning", title = "Before it can be submitted", tags$ul(lapply(blockers, tags$li)))
         },
-        extraction_request_ui(preview, draft(), pdf_url = record_pdf_url())
+        extraction_request_ui(list(unchecked = extraction_service_unchecked(draft())), draft())
       )
     })
 
@@ -357,44 +321,26 @@ edit_extraction_server <- function(
       updateActionButton(session, "submit_request", disabled = length(preview_blockers()) > 0)
     })
 
-    # Submitting: where it goes is kept, and the submission dialog takes the preview's place. Back
-    # puts the preview back as it was.
+    # Submitting: the submission dialog takes the preview's place. Back puts the preview back.
     observeEvent(input$submit_request, {
       req(length(preview_blockers()) == 0)
-      info <- extraction_service_info(list(info = info_form$info()))
-      pending_info(info)
-      summary <- tryCatch(
-        extraction_service_push_summary(
-          extraction_service_build_items(
-            draft_service_renumber_questions(draft()), info, preview_context()$ids, existing_for(info), preview_context()$options
-          )$summary
-        ),
-        error = function(problem) {
-          show_problem(problem, "This can't be submitted as it is")
-          NULL
-        }
-      )
-      if (is.null(summary)) {
-        return()
-      }
       preview_open(FALSE)
-      showModal(submit_request_dialog(ns, summary, extraction_service_unchecked(draft()), needs_approval, reviewers()))
+      showModal(submit_request_dialog(
+        ns, extraction_service_draft_summary(draft()), extraction_service_unchecked(draft()), needs_approval, reviewers()
+      ))
     })
 
-    observeEvent(input$back_to_preview, show_preview(pending_info()))
+    observeEvent(input$back_to_preview, show_preview())
 
     observeEvent(input$confirm_request, {
-      req(record_id(), draft(), pending_info())
+      req(record_id(), draft())
       if (has_unsaved_changes() && !save_draft()) {
         return()
       }
       outcome <- tryCatch(
-        extraction_service_push(
-          connection, record(), me, catalog$get(),
-          info = pending_info(), reviewer = input$request_reviewer
-        ),
+        extraction_service_push(connection, record(), me, catalog$get(), reviewer = input$request_reviewer),
         error = function(problem) {
-          show_problem(problem, if (needs_approval) "Couldn't send it" else "Couldn't add it")
+          show_problem(problem, "Couldn't send it")
           NULL
         }
       )
@@ -402,50 +348,19 @@ edit_extraction_server <- function(
         return()
       }
       removeModal()
-      pending_info(NULL)
       extractions$changed()
-      if (outcome$applied) {
-        showNotification("Added to the MATR metadata database. It is in the Edit history.", type = "message")
-        close_draft()
-        show_page("edit_history")
-      } else {
-        showNotification("Sent for approval. It is waiting on Change Requests.", type = "message")
-        show_page("change_requests")
-      }
+      showNotification("Sent to Change Requests. Fill in its Basic Info there.", type = "message")
+      show_page("change_requests")
     })
 
-    # Closing the preview stops it working its rows out. Nothing picked in it is kept.
+    # Closing the preview stops it laying the questionnaire out.
     observeEvent(input$preview_cancel, {
       preview_open(FALSE)
       removeModal()
     })
 
-    # Picking a recorded questionnaire in the preview reads what it prints already, so its words are
-    # offered while typing and its MATR IDs can be filled in from the MATR IDs dialog. The draft itself
-    # isn't changed by it.
-    observeEvent(list(placed()$kind, placed()$questionnaire_id), {
-      req(preview_open())
-      read_recorded(NULL, info = extraction_service_info(list(info = placed())))
-    }, ignoreInit = TRUE)
-
-    # A draft whose request was added is done with: the page goes back to showing nothing.
-    close_draft <- function() {
-      record_id(NULL)
-      draft(NULL)
-      saved(NULL)
-      undo_stack(list())
-      selected(NULL)
-    }
-
     # ------ MODULES -----------------------------------------------------------
     extraction_outline_server("outline", state, lookups)
-    info_form <- extraction_info_server(
-      "info", catalog, extractions, record_id, me, connection,
-      reopen = function() {
-        preview_open(TRUE)
-        showModal(preview_request_dialog(ns))
-      }
-    )
 
     # ------ OUTPUT ------------------------------------------------------------
     output$title <- renderText(paste("Edit Extraction:", heading()$title))

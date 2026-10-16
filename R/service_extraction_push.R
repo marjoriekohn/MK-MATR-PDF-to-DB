@@ -6,11 +6,11 @@
 # (service_edit.R), so the same database function applies it, in one transaction, and the Edit
 # history lists every row it added.
 #
-# Where it goes (registry, study, questionnaire, wave: the draft's `info`) is picked when its change
-# request is previewed and submitted on the Edit Extraction page. Previewing writes nothing. A STAFF
-# member's request is one other staff member approves; an ADMIN's is applied at once
-# (service_change_request.R). The rows are worked out when it is applied, from the questionnaire as
-# saved and the database as it is then, not when it was sent.
+# The questionnaire is previewed and submitted on the Edit Extraction page; previewing writes nothing.
+# Submitting sends it to Change Requests, where its Basic Info (registry, study, questionnaire, wave:
+# the draft's `info`) is filled in and saved. Then one other staff member approves it, or, for an
+# ADMIN's own request, the ADMIN adds it (service_change_request.R). The rows are worked out when it
+# is applied, from the questionnaire as saved and the database as it is then, not when it was sent.
 #
 # What is reused, and what is new:
 #   * An answer choice is kept once for the whole registry, so a choice whose words are already
@@ -30,7 +30,7 @@
 #     choices and the sets of choices they point at are the ones reused.
 
 # ------ Before pushing -----------------------------------------------------------------
-#' What stops an extraction's change request being submitted.
+#' What stops an extraction being added: its Basic Info, then its questionnaire.
 #'
 #' @param record The extraction's record.
 #' @param draft The questionnaire, as on the Edit Extraction page.
@@ -43,6 +43,33 @@
 #' @return A character vector of sentences, in the order to do them; empty when it can go.
 extraction_service_push_blockers <- function(record, draft, lookups, catalog, records = list(),
                                              info = extraction_service_info(record), question_counts = integer()) {
+  c(
+    extraction_service_info_blockers(record, info, catalog, records, question_counts),
+    extraction_service_draft_blockers(draft, lookups)
+  )
+}
+
+#' What stops an extraction's change request being submitted from the Edit Extraction page: only its
+#' questionnaire. The Basic Info is filled in afterwards, on Change Requests.
+#'
+#' @param draft The questionnaire, as on the Edit Extraction page.
+#' @param lookups The pick lists, from `lookup_service_get_all()`.
+#' @return A character vector of sentences, in the order to do them; empty when it can be submitted.
+extraction_service_draft_blockers <- function(draft, lookups) {
+  n_blocks_to_fix <- length(unique(draft_service_check(draft, lookups)$id)) # a blank MATR ID is among them
+  as.character(c(
+    if (nrow(draft$components) == 0) "Add the questionnaire's blocks and questions first.",
+    if (nrow(draft$components) > 0 && !"Question" %in% draft$components$component_type) "Add at least one question.",
+    if (n_blocks_to_fix > 0) paste0("Fix the ", plural(n_blocks_to_fix, "block"), " marked to fix.")
+  ))
+}
+
+#' What stops an extraction's change request being approved because of its Basic Info.
+#'
+#' @inheritParams extraction_service_push_blockers
+#' @return A character vector of sentences; empty when the Basic Info is complete and fits.
+extraction_service_info_blockers <- function(record, info = extraction_service_info(record), catalog,
+                                             records = list(), question_counts = integer()) {
   missing <- extraction_service_missing(info)
   problems <- c(
     extraction_service_name_problem(info, catalog, records, record$id),
@@ -52,14 +79,24 @@ extraction_service_push_blockers <- function(record, draft, lookups, catalog, re
     extraction_service_date_problem(info$administered_date),
     extraction_service_count_problem(info$respondent_count)
   )
-  n_blocks_to_fix <- length(unique(draft_service_check(draft, lookups)$id)) # a blank MATR ID is among them
   as.character(c(
-    if (length(missing) > 0) paste0("Fill in the ", word_list(missing), " under Where it goes."),
-    if (length(problems) > 0) "Fix the fields outlined in red under Where it goes.",
-    if (nrow(draft$components) == 0) "Add the questionnaire's blocks and questions first.",
-    if (nrow(draft$components) > 0 && !"Question" %in% draft$components$component_type) "Add at least one question.",
-    if (n_blocks_to_fix > 0) paste0("Fix the ", plural(n_blocks_to_fix, "block"), " marked to fix.")
+    if (length(missing) > 0) paste0("Fill in the ", word_list(missing), " under Basic Info."),
+    if (length(problems) > 0) "Fix the fields outlined in red under Basic Info."
   ))
+}
+
+#' What an extraction's questionnaire holds, in a sentence, for submitting it before its Basic Info is
+#' known.
+#'
+#' @param draft The questionnaire.
+#' @return A string, e.g. `"12 blocks, with 30 questions and 45 variables."`.
+extraction_service_draft_summary <- function(draft) {
+  questions <- sum(draft$components$component_type %in% "Question")
+  paste0(
+    plural(nrow(draft$components), "block", big_mark = ","), ", with ",
+    plural(questions, "question", big_mark = ","), " and ",
+    plural(nrow(draft$variables), "variable", big_mark = ","), "."
+  )
 }
 
 #' How many blocks still haven't been marked as checked.
@@ -618,39 +655,68 @@ extraction_service_push_title <- function(record, catalog) {
 
 #' Submit an extraction's change request.
 #'
-#' Where it goes (`info`) is saved with it. A STAFF member's request is sent to Change Requests, where
-#' one other staff member approves it, which applies it. An ADMIN's is applied at once. The
-#' questionnaire has to be saved first (the page saves it); what is sent is the saved copy.
+#' It is sent to Change Requests, whoever submits it: its Basic Info (`info`) is filled in there. Then
+#' one other staff member approves it, which applies it; an ADMIN can add their own without approval.
+#' The questionnaire has to be saved first (the page saves it); what is sent is the saved copy.
 #'
 #' @param connection The MATR database, `list(url, key)`; see `model_database.R`.
 #' @param record The extraction's record.
 #' @param me Who is submitting it: `list(staff_id, name, role)`.
 #' @param catalog The live tables the pages pick from, from `questionnaire_service_get_catalog()`.
-#' @param info Where it goes, as `extraction_service_info()` returns it; the record's by default.
 #' @param reviewer The staff id of the person asked to review it, or `NULL`.
 #' @param now The time to record.
-#' @return A list: `applied` (whether it is in the MATR metadata database now), `history_id` (if so)
-#'   and `record` (as saved). An error with a sentence if the database refused.
-extraction_service_push <- function(connection, record, me, catalog, info = extraction_service_info(record),
-                                    reviewer = NULL, now = Sys.time()) {
+#' @return A list: `applied` (always `FALSE`: it waits on Change Requests), `history_id` (`NULL`) and
+#'   `record` (as saved). An error with a sentence if the database refused.
+extraction_service_push <- function(connection, record, me, catalog, reviewer = NULL, now = Sys.time()) {
+  asked <- if (!is.null(reviewer) && nzchar(as.character(reviewer))) list(id = as.numeric(reviewer))
+  sent <- utils::modifyList(
+    record,
+    list(
+      summary = extraction_service_push_title(record, catalog), status = "Awaiting Review",
+      submitted = format_time(now), requested_reviewer = asked
+    ),
+    keep.null = TRUE
+  )
+  saved <- extraction_model_save(
+    connection, sent, c("status", "summary", "submitted", "requested_reviewer"), me$staff_id,
+    expected_revision = record$revision, new_revision = FALSE
+  )
+  list(applied = FALSE, history_id = NULL, record = saved)
+}
+
+#' Save an extraction's Basic Info: where it goes in the database.
+#'
+#' Filled in on Change Requests. It is a change to the request like any other: it makes a new
+#' revision, and whoever saves it can't be the one who approves it.
+#'
+#' @param connection The MATR database, `list(url, key)`; see `model_database.R`.
+#' @param record The request as the person read it.
+#' @param info Where it goes, as `extraction_service_info()` returns it.
+#' @param me Who is saving it: `list(staff_id, name, role)`.
+#' @param catalog The live tables the pages pick from, from `questionnaire_service_get_catalog()`.
+#' @return The record as saved. An error with a sentence if the database refused, e.g. because the
+#'   request was changed after the person opened it.
+extraction_service_save_info <- function(connection, record, info, me, catalog) {
   placed <- utils::modifyList(record, list(info = info), keep.null = TRUE)
   described <- utils::modifyList(placed, list(summary = extraction_service_push_title(placed, catalog)), keep.null = TRUE)
-  if (change_request_service_needs_approval(me, extraction_kind)) {
-    asked <- if (!is.null(reviewer) && nzchar(as.character(reviewer))) list(id = as.numeric(reviewer))
-    sent <- utils::modifyList(
-      described,
-      list(status = "Awaiting Review", submitted = format_time(now), requested_reviewer = asked),
-      keep.null = TRUE
-    )
-    saved <- extraction_model_save(
-      connection, sent, c("status", "summary", "info", "submitted", "requested_reviewer"), me$staff_id,
-      expected_revision = record$revision, new_revision = FALSE
-    )
-    return(list(applied = FALSE, history_id = NULL, record = saved))
+  extraction_model_save(connection, described, c("summary", "info"), me$staff_id, expected_revision = record$revision)
+}
+
+# ------ Small things ------------------------------------------------------------------------------------
+blank_to_na <- function(text) if (has_text(text)) trimws(text) else NA_character_
+
+# "1,200" as 1200; NA for nothing.
+push_count <- function(text) {
+  if (!has_text(text)) {
+    return(NA)
   }
-  extraction_model_save(connection, described, c("summary", "info"), me$staff_id, new_revision = FALSE)
-  history_id <- change_request_model_apply(
-    connection, record$id, me$staff_id, extraction_service_push_build(connection, record, info = info)$items
-  )
-  list(applied = TRUE, history_id = history_id, record = extraction_model_get(connection, record$id))
+  as.numeric(gsub(",", "", trimws(text), fixed = TRUE))
+}
+
+# "04/15/2022" as "2022-04-15"; NA for nothing.
+push_date <- function(text) {
+  if (!has_text(text)) {
+    return(NA_character_)
+  }
+  format(as.Date(trimws(text), "%m/%d/%Y"))
 }

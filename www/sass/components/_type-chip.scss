@@ -29,5 +29,5 @@
   font-size: 0.75rem;
   white-space: nowrap;
 
-  &.is-warning { background: $vcu-gold; font-weight: 700; }
+  &.is-warning { background: $vcu-red; font-weight: 700; color: $vcu-white; }
 }

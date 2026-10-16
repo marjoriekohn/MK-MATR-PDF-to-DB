@@ -65,7 +65,6 @@ $edit-line: rgba($vcu-gray, 0.35);
   background-color: rgba($vcu-red, 0.1);
 }
 
-.edit-hint { margin: 0.75rem 0 0; color: $vcu-gray; }
 
 // ------ Notes ------------------------------------------------------------------------------
 .edit-callout {
@@ -155,18 +154,27 @@ $edit-line: rgba($vcu-gray, 0.35);
   align-items: start;
   margin: 1rem 0;
 }
+.edit-columns.is-single { grid-template-columns: minmax(0, 1fr); }
 @media (max-width: 991.98px) { .edit-columns { grid-template-columns: minmax(0, 1fr); } }
 
+// A drop-down that searches as it is typed in, left blank when it is required
+.form-field:has(.field-missing) .selectize-input { border-color: $field-problem-red; box-shadow: 0 0 0 1px $field-problem-red; }
+
 // A field's help under it, and what's wrong or worth knowing
-.field-help { margin: -0.5rem 0 0.75rem; font-size: 0.8rem; }
-.edit-field .field-note:not(:empty) { margin-top: -0.5rem; }
+.field-help { margin: 0.25rem 0 0; font-size: 0.8rem; }
 .field-warning {
   color: $vcu-black;
   font-weight: 500;
   &::before { content: "\25B2"; margin-right: 0.35rem; color: $vcu-gold; }
 }
 
-.edit-field { margin-bottom: 0.25rem; .form-label { font-weight: 500; } }
+// What a field holds is said inside it, not in a label above, so the fields sit close together
+.edit-field {
+  margin-bottom: 0.75rem;
+  .shiny-input-container { margin-bottom: 0; }
+  .field-note:not(:empty) { margin: 0.25rem 0 0; }
+  .field-note:has(> .field-missing:only-child) { margin: 0; }
+}
 
 .edit-part-heading {
   margin: 1.5rem 0 0.75rem;

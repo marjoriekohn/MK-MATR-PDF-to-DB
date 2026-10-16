@@ -213,7 +213,9 @@ function(input, output, session) {
         make_edit$open(record)
         show_page("make_edit")
       },
-      open_edit_extraction = open_edit_extraction
+      open_edit_extraction = open_edit_extraction,
+      catalog = catalog,
+      extractions = extractions
     )
     site <<- list(catalog = catalog, extractions = extractions)
     invisible()

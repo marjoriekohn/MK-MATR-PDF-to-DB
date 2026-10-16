@@ -74,10 +74,10 @@ test_that("what stops a push is said in the order to do it", {
   }
   expect_equal(blockers(draft = draft), character())
 
-  expect_equal(blockers(list(info = list()), draft = draft)[1], "Fill in the registry, study, questionnaire and wave name under Where it goes.")
+  expect_equal(blockers(list(info = list()), draft = draft)[1], "Fill in the registry, study, questionnaire and wave name under Basic Info.")
   taken <- complete_info()
   taken$info$wave_name <- "Wave 1" # the questionnaire has a Wave 1 already
-  expect_equal(blockers(taken, draft)[1], "Fix the fields outlined in red under Where it goes.")
+  expect_equal(blockers(taken, draft)[1], "Fix the fields outlined in red under Basic Info.")
   expect_equal(blockers(draft = draft_service_empty()), "Add the questionnaire's blocks and questions first.")
 
   no_question <- draft
@@ -299,7 +299,8 @@ test_that("the preview says where it goes, recorded or NEW, and what it adds, wi
   expect_null(preview$problem)
   expect_match(preview$summary, "^Adds the questionnaire, the wave")
   html <- htmltools::renderTags(extraction_request_ui(preview, small_draft()))$html
-  expect_match(html, "Where it goes")
+  expect_false(grepl("Where it goes", html)) # Basic Info is the form on Change Requests now
+  expect_match(html, "What it adds")
   expect_match(html, "fa-certificate")
   expect_match(html, "NEW")
   expect_false(grepl("Why", html))
@@ -308,6 +309,16 @@ test_that("the preview says where it goes, recorded or NEW, and what it adds, wi
   unplaced <- extraction_service_request_preview(small_draft(), extraction_service_info(), catalog, context)
   expect_true(all(vapply(unplaced$where[1:2], function(card) isTRUE(card$is_missing), logical(1))))
   expect_length(unplaced$what, 0)
+})
+
+test_that("submitting needs only the questionnaire; its Basic Info is filled in afterwards", {
+  lookups <- test_lookups()
+  draft <- gold_draft()
+  draft$variables$matr_id <- paste0("q", seq_len(nrow(draft$variables)))
+  expect_equal(extraction_service_draft_blockers(draft, lookups), character())
+  expect_equal(extraction_service_draft_blockers(draft_service_empty(), lookups), "Add the questionnaire's blocks and questions first.")
+  expect_match(extraction_service_info_blockers(list(id = "1", info = list()), catalog = test_catalog())[1], "under Basic Info")
+  expect_match(extraction_service_draft_summary(draft), "^[0-9,]+ blocks, with [0-9,]+ questions and [0-9,]+ variables\\.$")
 })
 
 test_that("a push is titled for the request that carries it", {

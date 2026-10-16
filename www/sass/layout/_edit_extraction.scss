@@ -4,12 +4,13 @@ $code-width: 5.5rem; // wide enough for the Apply to all button under the codes
 
 // ------ Header ---------------------------------------------------------------
 .review-header {
-  // display: flex;
-  // flex-wrap: wrap;
-  align-items: center;
-  // gap: 0.75rem 1.5rem;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 0.75rem 1.5rem;
   padding-bottom: 1rem;
   border-bottom: 1px solid $review-line;
+  justify-content: space-between;
 
   h1 {
     margin: 0;
@@ -41,8 +42,6 @@ $code-width: 5.5rem; // wide enough for the Apply to all button under the codes
   align-items: center;
   justify-content: center;
   color: $vcu-black;
-  font-size: 0.8rem;
-  font-weight: 700;
 }
 
 .review-pill {
@@ -72,7 +71,6 @@ button.review-pill:hover { background: rgba($vcu-gold, 0.2); }
   flex-wrap: wrap;
   align-items: center;
   gap: 0.5rem;
-  margin-left: auto;
   .btn { white-space: nowrap; }
 }
 
@@ -170,7 +168,7 @@ button.review-pill:hover { background: rgba($vcu-gold, 0.2); }
 .outline-order {
   width: 1.5rem;
   flex-shrink: 0;
-  color: $vcu-gray;
+  color: rgba($vcu-gray, 0.2);
   font-variant-numeric: tabular-nums;
   font-weight: 700;
   text-align: right;
@@ -206,9 +204,9 @@ button.review-pill:hover { background: rgba($vcu-gold, 0.2); }
 .outline-problems.is-hidden { display: none; }
 .outline-actions { display: flex; flex-shrink: 0; align-items: center; gap: 0.1rem; }
 .outline-check {
-  &.is-checked { color: $vcu-black; }
-  &.is-all-checked { background: $vcu-black; color: $vcu-white; border-radius: 50%; }
-  &:not(.is-checked) { color: rgba($vcu-gray, 0.7); }
+  &.is-checked { color: $vcu-green; }
+  &.is-all-checked { background: $vcu-green; color: $vcu-white; border-radius: 50%; }
+  &:not(.is-checked) { color: rgba($vcu-red, 0.7); }
 }
 
 // The words offered as a block's words are typed (review.js)

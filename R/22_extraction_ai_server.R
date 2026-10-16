@@ -4,8 +4,8 @@ reading_timer_refresh_ms <- 1000
 #' The AI-Powered mode of the Extraction page: the server.
 #'
 #' Upload a questionnaire PDF and watch it being read, in the background. Once reading has finished
-#' the draft opens on the Edit Extraction page. Where it goes in the database is picked later, when its
-#' change request is submitted. Drafts are kept in the database but nothing here adds to the MATR
+#' the draft opens on the Edit Extraction page. Where it goes in the database (its Basic Info) is filled in
+#' later, on Change Requests, once its change request is submitted. Drafts are kept in the database but nothing here adds to the MATR
 #' metadata database itself.
 #'
 #' @param id The module's id.

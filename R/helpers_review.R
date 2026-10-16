@@ -6,7 +6,7 @@
 #   data-action  a click sends the element's data-* values to the module's `action`
 #   data-field   a change sends {table, id, field, value} to the module's `edit`
 
-#' The coloured label for a kind of block.
+#' The colored label for a kind of block.
 #'
 #' Used in outline rows and the details. Blocks that aren't sections or questions all
 #' look like Instruction, at its width, so the longer names are shortened.

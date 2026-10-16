@@ -2,7 +2,7 @@
 # delete reaches. The page tests go through most of it; these look at the pieces on
 # their own, as words on a screen.
 
-test_that("every field of every kind can be drawn, with its label and its value", {
+test_that("every field of every kind can be drawn, named for screen readers but with no label above it", {
   drawn <- 0L
   for (entity in edit_entities) {
     snap <- test_snapshot(edit_service_tables(entity))
@@ -14,8 +14,10 @@ test_that("every field of every kind can be drawn, with its label and its value"
       initial <- edit_service_initial(entity, fields, snap, mode, row, scope)
       for (i in seq_along(fields)) {
         field <- fields[[i]]
-        html <- text_of(edit_field_ui(shiny::NS("page"), field, initial[[field$id]], paste0("note_", i)))
-        expect_match(html, field$label, fixed = TRUE, info = paste(entity$key, mode, field$id))
+        html <- paste(as.character(edit_field_ui(shiny::NS("page"), field, initial[[field$id]], paste0("note_", i))), collapse = "")
+        info <- paste(entity$key, mode, field$id)
+        expect_match(html, paste0('aria-label="', htmltools::htmlEscape(field$label, attribute = TRUE), '"'), fixed = TRUE, info = info)
+        expect_false(grepl('class="control-label"|form-label|required-mark', html), info = info)
         drawn <- drawn + 1L
       }
     }
@@ -31,6 +33,29 @@ test_that("a locked field shows its value and why it can't be changed, and is no
   expect_match(text_of(html), locked[[1]]$locked, fixed = TRUE)
   expect_match(html, "locked-value", fixed = TRUE)
   expect_false(grepl("<input|<select", html))
+})
+
+test_that("a text box says what it holds inside it, and whether it can be left empty", {
+  name <- edit_field("name", "Name", required = TRUE, placeholder = "e.g. Adult Health Study")
+  expect_equal(edit_field_placeholder(name), "Name (e.g. Adult Health Study)")
+  expect_equal(edit_field_placeholder(edit_field("description", "Description", "textarea")), "Description (optional)")
+  expect_equal(edit_field_placeholder(edit_field("count", "Respondents", "number", placeholder = "e.g. 1,200")), "Respondents (optional, e.g. 1,200)")
+  html <- paste(as.character(edit_field_ui(shiny::NS("page"), name, "", "note_1")), collapse = "")
+  expect_match(html, 'placeholder="Name (e.g. Adult Health Study)"', fixed = TRUE)
+})
+
+test_that("the info block says what the kind is, what the verb involves and what sending does, once", {
+  study <- edit_entities$study
+  added <- text_of(edit_info_block(study, "add", approval = FALSE))
+  expect_match(added, "Adding a study")
+  expect_match(added, study$about, fixed = TRUE)
+  expect_match(added, "as soon as you send it")
+  deleted <- edit_info_block(study, "delete", approval = TRUE)
+  expect_match(text_of(deleted), study$delete_about, fixed = TRUE)
+  expect_match(text_of(deleted), "approves it on Change Requests")
+  expect_match(paste(as.character(deleted), collapse = ""), "is-danger")
+  expect_match(text_of(edit_info_block(study, "update", editing_request = TRUE)), "new version of this request")
+  expect_false(grepl("Adding|Changing|Deleting", text_of(edit_info_block(study, ""))))
 })
 
 test_that("a drop-down offers its choices by name, with the one that is chosen selected", {

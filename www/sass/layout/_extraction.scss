@@ -7,11 +7,22 @@ $extraction-line: $vcu-gray;
 }
 
 // ------ Fields ---------------------------------------------------------------------
-// New or existing questionnaire
-.kind-toggle { margin-bottom: 1rem; }
 
-// * after a required field's label
-.required-mark { margin-left: 0.1rem; }
+// The Basic Info form: what a field holds is said inside it, so the fields sit close, as the variables do
+.extraction-info {
+  .form-field { margin-bottom: 0.75rem; }
+  .form-field .shiny-input-container { margin-bottom: 0; }
+  .field-note:not(:empty) { margin: 0.25rem 0 0; }
+  .field-note:has(> .field-missing:only-child) { margin: 0; }
+}
+
+// No form has labels: Shiny still writes an empty one for an input given none, which takes no room
+.shiny-label-null { display: none; }
+
+// A drop-down still on its empty choice reads like a placeholder, as every form's fields say what they
+// hold inside them rather than in a label
+.form-select:has(option[value=""]:checked) { color: $vcu-gray; }
+.form-select option { color: $vcu-black; }
 
 // Fields side by side, wrapping on narrow screens
 .field-row {
@@ -36,9 +47,13 @@ $extraction-line: $vcu-gray;
   font-weight: 500;
   &::before { content: "\25CF"; margin-right: 0.35rem; color: $field-problem-red; }
 }
-// ...and then its box is outlined in red
+// A required field still blank says so only to screen readers, so its note takes no room
+.field-note:has(> .field-missing:only-child) { margin: 0; }
+// ...and either way its box is outlined in red
 .form-field:has(.field-problem) .form-control,
-.form-field:has(.field-problem) .form-select {
+.form-field:has(.field-problem) .form-select,
+.form-field:has(.field-missing) .form-control,
+.form-field:has(.field-missing) .form-select {
   border-color: $field-problem-red;
   box-shadow: 0 0 0 1px $field-problem-red;
   &:focus { box-shadow: 0 0 0 0.2rem rgba($field-problem-red, 0.35); }
@@ -269,7 +284,6 @@ $extraction-line: $vcu-gray;
   .edit-columns {
     display: block;
     margin: 0 0 1rem;
-    > .card:last-child { display: none; }
     > .card:first-child {
       border: 0;
       box-shadow: none;

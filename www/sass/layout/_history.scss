@@ -124,40 +124,46 @@ $history-line: rgba($vcu-gray, 0.35);
 .change-request-questionnaire {
   max-height: 55vh;
   margin-top: 0.5rem;
-  padding: 0.75rem 1rem;
+  padding: 0;
   border: 1px solid $history-line;
   border-radius: $border-radius;
   overflow-y: auto;
 }
-.preview-section { margin: 0.75rem 0; }
-.preview-section-title {
-  margin: 0 0 0.5rem;
-  padding-bottom: 0.25rem;
-  border-bottom: 2px solid $vcu-gold;
-  font-size: 1rem;
+// A codebook-style table: Variable ID | Question Text | Variable Coding
+.questionnaire-table {
+  margin: 0;
+  font-size: 0.9rem;
+  th, td { padding: 0.4rem 0.6rem; vertical-align: top; }
+  // the header row is drawn as every table's is (_grid-table.scss), and stays put as the rows scroll
+  thead th {
+    position: sticky;
+    top: 0;
+    z-index: 1;
+    white-space: nowrap;
+  }
+  .qt-id { width: 9rem; }
+  .qt-coding { width: 32%; }
+  // a section heads the rows under it
+  .qt-section > th {
+    padding-top: 0.6rem;
+    border-bottom: 2px solid $vcu-gold;
+    background: rgba($vcu-gold, 0.15);
+    color: $vcu-black;
+    font-size: 0.95rem;
+    font-weight: 700;
+  }
+  .qt-section:hover { background: none; }
+  .qt-section[data-depth="1"] > th { padding-left: 1.25rem; }
+  .qt-section[data-depth="2"] > th { padding-left: 2rem; }
+  .qt-block > td { color: $vcu-gray; }
 }
-.preview-section-body { margin-left: 0.75rem; }
-.preview-block, .preview-question { margin: 0.5rem 0; }
-.preview-block { display: flex; align-items: baseline; gap: 0.5rem; }
-.preview-question-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 0.5rem; }
-.preview-number { font-weight: 700; }
 .preview-text { white-space: pre-wrap; }
 .preview-note { color: $vcu-gray; font-size: 0.85rem; }
-.preview-variables { margin: 0.25rem 0 0 1.5rem; padding-left: 1rem; font-size: 0.9rem; }
-// One line per variable: MATR ID and label, then its choices and their codes beside them
-.preview-variable {
-  display: grid;
-  grid-template-columns: minmax(6rem, max-content) minmax(0, 12rem) minmax(0, 1fr);
-  align-items: baseline;
-  gap: 0.35rem 0.75rem;
-}
 .preview-matr-id { font-family: $font-family-monospace; font-weight: 700; }
-.preview-variable-meta { color: $vcu-gray; }
-.preview-choices { min-width: 0; }
-
-@media (max-width: 767.98px) {
-  .preview-variable { grid-template-columns: minmax(0, 1fr); }
-}
+.qt-tags { color: $vcu-gray; }
+.qt-choice { white-space: normal; }
+.qt-code { font-family: $font-family-monospace; font-weight: 700; }
+.qt-write-in { color: $vcu-gray; }
 
 // ------ The changed rows ------------------------------------------------------------------
 .change-list { display: flex; flex-direction: column; gap: 0.5rem; max-height: 55vh; overflow-y: auto; }
@@ -192,4 +198,14 @@ $history-line: rgba($vcu-gray, 0.35);
   dd { margin: 0; overflow-wrap: anywhere; }
   del { background: rgba($vcu-red, 0.12); color: $vcu-red; text-decoration: line-through; }
   ins { background: rgba($vcu-gold, 0.4); text-decoration: none; font-weight: 700; }
+}
+
+// ------ An extraction's Basic Info, on Change Requests ---------------------------------------------
+.basic-info-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.75rem;
+  margin-top: 0.25rem;
 }

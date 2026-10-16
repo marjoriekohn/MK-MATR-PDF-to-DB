@@ -143,40 +143,21 @@ make_edit_server <- function(id, connection, me, show_page) {
         ))
       }
       blocked <- can_message()
-      tagList(
-        p(class = "edit-hint", entity()$about),
-        if (!is.null(blocked)) {
-          edit_callout(
-            "warning",
-            title = paste("You can't", verb(), paste0(entity()$article, " ", entity()$noun), "here"), blocked,
-            if (!is.null(entity()$redirect)) {
-              actionButton(ns("redirect"), entity()$redirect$label, class = "btn-sm btn-primary")
-            }
-          )
-        } else {
-          switch(verb(),
-            add = NULL,
-            update = edit_callout(
-              "info",
-              "Pick the one to change, then change it. Before you send anything you'll see everywhere it's used."
-            ),
-            delete = edit_callout(
-              "danger",
-              title = "Deleting needs care",
-              paste0(
-                "You'll see everything that would be deleted along with it, and you'll have to confirm, before ",
-                "anything is sent. ",
-                if (needs_approval()) {
-                  "Nothing is deleted until one other staff member approves it on Change Requests."
-                } else {
-                  "As an ADMIN your delete is applied at once, with nothing to approve."
-                }
-              )
-            )
-          )
-        }
+      if (!is.null(blocked)) {
+        return(edit_callout(
+          "warning",
+          title = paste("You can't", verb(), paste0(entity()$article, " ", entity()$noun), "here"),
+          p(entity()$about), p(blocked),
+          if (!is.null(entity()$redirect)) {
+            actionButton(ns("redirect"), entity()$redirect$label, class = "btn-sm btn-primary")
+          }
+        ))
+      }
+      edit_info_block(
+        entity(), verb(),
+        approval = nzchar(verb()) && needs_approval(), editing_request = editing_request()
       )
-    }) |> bindEvent(entity(), verb(), load_problem(), snapshot())
+    }) |> bindEvent(entity(), verb(), load_problem(), snapshot(), editing_request())
 
     observeEvent(input$retry, {
       load_problem(NULL)
@@ -357,11 +338,7 @@ make_edit_server <- function(id, connection, me, show_page) {
             },
             if (needs_approval() && !editing_request() && length(reviewers()) > 0) {
               card(card_body(
-                selectInput(
-                  ns("reviewer"), "Ask someone to review it (optional)",
-                  c("Anyone" = "", reviewers()), selected = isolate(draft()$requested_reviewer$id) %||% "",
-                  width = "100%", selectize = FALSE
-                ),
+                reviewer_select(ns("reviewer"), reviewers(), selected = isolate(draft()$requested_reviewer$id) %||% ""),
                 p(class = "form-text", "They are emailed a link once sign-in is set up. Until then, any staff member can approve it.")
               ))
             }
@@ -388,20 +365,9 @@ make_edit_server <- function(id, connection, me, show_page) {
       updateActionButton(session, "submit", disabled = !change$ready())
     })
 
+    # What is left to do before it can be sent. What sending does is in the info block at the top.
     output$footer_note <- renderUI({
-      if (!change$ready()) {
-        return(change$blockers()[1])
-      }
-      if (editing_request()) {
-        return("Saving makes a new version of this request. Nobody has approved it yet.")
-      }
-      if (needs_approval()) {
-        return(paste(
-          "Sending puts this on Change Requests.",
-          "Nothing changes in the MATR metadata database until another staff member approves it."
-        ))
-      }
-      "This changes the MATR metadata database right away. It is recorded in the Edit history."
+      if (!change$ready()) change$blockers()[1]
     })
 
     # Other open edits that change the same record: staff should talk first.

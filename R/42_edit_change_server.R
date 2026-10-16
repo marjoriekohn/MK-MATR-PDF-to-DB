@@ -172,7 +172,7 @@ edit_change_server <- function(
       }, all_fields, seq_along(all_fields))
 
       div(
-        class = "edit-columns",
+        class = c("edit-columns", if (ctx$mode == "add") "is-single"),
         card(card_body(
           h2(if (ctx$mode == "add") "Fill in the details" else "Change it"),
           edit_empty_choices_ui(all_fields),
@@ -185,7 +185,8 @@ edit_change_server <- function(
             ), width = "100%")
           }
         )),
-        card(card_body(uiOutput(ns("impact"))))
+        # an add reaches nothing yet; what it is is said in the info block at the top
+        if (ctx$mode != "add") card(card_body(uiOutput(ns("impact"))))
       )
     }
 
@@ -219,18 +220,9 @@ edit_change_server <- function(
 
     output$impact <- renderUI({
       ctx <- context()
-      if (ctx$mode == "add") {
-        return(add_aside(ctx))
-      }
+      req(ctx$mode == "update")
       update_aside(ctx)
     })
-
-    add_aside <- function(ctx) {
-      tagList(
-        h2("What you're adding"),
-        edit_callout("info", ctx$entity$about)
-      )
-    }
 
     update_aside <- function(ctx) {
       title <- edit_label(ctx$snap, ctx$entity$table, ctx$row)
@@ -242,22 +234,12 @@ edit_change_server <- function(
           edit_callout(
             "warning",
             title = paste("Shared by", use$shared, "questionnaires"),
-            ctx$entity$update_about,
             p("If only one questionnaire should have the new words, change it there instead. That edits just that questionnaire's copy."),
             review_button(
               paste("Change it in one questionnaire only"), "jump",
               `data-kind` = if (ctx$entity$key == "question") "questionnaire_question" else "questionnaire_component",
               `data-verb` = "update", class = "btn btn-sm btn-outline-dark"
             )
-          )
-        } else if (!is.null(ctx$entity$update_about) && !local) {
-          edit_callout("info", ctx$entity$update_about)
-        },
-        if (local) {
-          edit_callout(
-            "info",
-            title = paste("This changes", edit_questionnaire_short(ctx$snap, as.numeric(ctx$scope)), "only"),
-            ctx$entity$update_about
           )
         },
         if (words_changed) {
@@ -291,7 +273,11 @@ edit_change_server <- function(
         if (!is.null(found$problems[[id]])) {
           return(span(class = "field-problem", found$problems[[id]]))
         }
-        if (!is.null(found$warnings[[id]])) span(class = "field-warning", found$warnings[[id]])
+        if (!is.null(found$warnings[[id]])) {
+          return(span(class = "field-warning", found$warnings[[id]]))
+        }
+        # a required field left empty: outlined in red, and said to screen readers
+        if (id %in% found$missing_ids) span(class = "field-missing visually-hidden", "Required")
       })
     })
 

@@ -370,14 +370,14 @@
 #     session$setInputs(`outline-action` = list(action = "check", id = "c3"))
 #     expect_equal(checked_blocks(draft()), "c3")
 #     session$flushReact()
-#     one_checked <- sprintf("Structure %d%% complete", floor(100 / nrow(draft()$components)))
+#     one_checked <- sprintf("Structure %d%% human-reviewed", floor(100 / nrow(draft()$components)))
 #     expect_match(text_of(output$progress), one_checked)
 #
 #     session$setInputs(`outline-edit` = list(table = "components", id = "c3", field = "text", value = "Do you worry a lot?", typed = TRUE))
 #     expect_equal(component(draft(), "c3")$text, "Do you worry a lot?")
 #     expect_length(checked_blocks(draft()), 0)
 #     session$flushReact()
-#     expect_match(text_of(output$progress), "Structure 0% complete")
+#     expect_match(text_of(output$progress), "0% human-reviewed")
 #
 #     session$setInputs(undo = 1)
 #     expect_equal(checked_blocks(draft()), "c3")

@@ -91,7 +91,7 @@ draft_service_counts <- function(draft) {
 
 #' How much of a draft has been checked, as a whole percentage.
 #'
-#' The Edit Extraction page's "N% complete" and the Existing Draft cards both show it.
+#' The Edit Extraction page's "N% human-reviewed" and the Existing Draft cards both show it.
 #'
 #' @param counts From `draft_service_counts()`.
 #' @return A whole number from 0 to 100, rounded down; 0 for a draft with no blocks.

@@ -20,7 +20,10 @@ test_that("only a STAFF member's delete, or push of an extraction, needs approva
 test_that("a person can approve what someone else prepared and last changed, and withdraw only their own", {
   request <- list(prepared_by_id = 2L, saved_by_id = 2L, requested_reviewer = NULL)
   state <- change_request_service_state(request, staff_member)
-  expect_equal(state, list(mine = FALSE, changed_by_me = FALSE, asked_of_me = FALSE, can_approve = TRUE, can_send_back = TRUE, can_withdraw = FALSE))
+  expect_equal(state, list(
+    mine = FALSE, changed_by_me = FALSE, asked_of_me = FALSE, needs_info = FALSE, can_approve = TRUE,
+    can_add = FALSE, can_send_back = TRUE, can_withdraw = FALSE
+  ))
 
   mine <- change_request_service_state(list(prepared_by_id = 1L, saved_by_id = 1L), staff_member)
   expect_true(mine$mine)
@@ -38,6 +41,28 @@ test_that("a person can approve what someone else prepared and last changed, and
   asked <- change_request_service_state(list(prepared_by_id = 2L, saved_by_id = 2L, requested_reviewer = list(id = 1L, name = "Maggie Kohn")), staff_member)
   expect_true(asked$asked_of_me)
   expect_true(asked$can_approve)
+})
+
+test_that("an extraction needs its Basic Info, and an ADMIN can add their own without approval", {
+  admin <- list(staff_id = 1L, name = "Admin", role = "ADMIN")
+  blank <- list(kind = extraction_kind, prepared_by_id = 1L, saved_by_id = 1L, info = list())
+  state <- change_request_service_state(blank, admin)
+  expect_true(state$needs_info)
+  expect_true(state$can_add)
+  expect_false(state$can_approve)
+  expect_false(change_request_service_state(blank, staff_member)$can_add) # not theirs
+
+  placed <- utils::modifyList(blank, list(info = list(registry_id = "1", study_id = "1", questionnaire_id = "1", wave_id = "2")))
+  expect_false(change_request_service_state(placed, admin)$needs_info)
+  expect_false(change_request_service_state(utils::modifyList(blank, list(prepared_by_id = 1L)), staff_member)$can_add)
+
+  # their own extraction waiting for its Basic Info is waiting for them
+  expect_named(change_request_service_filter(list("9" = blank), staff_member, "me"), "9")
+  expect_length(change_request_service_filter(list("9" = placed), staff_member, "me"), 0)
+
+  # approving or adding one without its Basic Info is refused before the database is asked
+  expect_error(change_request_service_add(NULL, blank, admin), "Fill in its Basic Info")
+  expect_error(change_request_service_approve(NULL, utils::modifyList(blank, list(prepared_by_id = 2L)), staff_member), "Fill in its Basic Info")
 })
 
 test_that("the requests a person sees: those they can approve (the ones asked of them first), their own, or all", {

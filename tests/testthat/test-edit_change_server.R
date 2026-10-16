@@ -130,14 +130,14 @@ test_that("something that is not shared has no such box, and its aside says noth
   })
 })
 
-test_that("adding a study asks only for the study", {
+test_that("adding a study asks only for the study, in one column: what it is is said in the info block", {
   page <- change_page("study", "add")
   shiny::testServer(edit_change_server, args = change_args(page), {
     draw()
-    aside <- text_of(output$impact)
-    expect_match(aside, "What you're adding")
-    expect_false(grepl("It comes with more", aside))
-    expect_match(text_of(output$main), "Fill in the details")
+    main <- paste(as.character(output$main$html), collapse = "")
+    expect_match(main, "Fill in the details")
+    expect_match(main, "is-single")
+    expect_false(grepl("What you're adding|It comes with more", main))
   })
 })
 
@@ -145,7 +145,7 @@ test_that("new words for a block in one questionnaire say the questionnaire gets
   page <- change_page("questionnaire_component", "update", "4|4", scope = "4")
   shiny::testServer(edit_change_server, args = change_args(page), {
     draw()
-    expect_match(text_of(output$impact), "This changes MQ only")
+    expect_false(grepl("This changes MQ only|This only changes the one questionnaire", text_of(output$impact))) # the info block says so
     expect_false(grepl("New words mean a new component", text_of(output$impact)))
 
     session$setInputs(questionnaire_component__text = "Do you currently smoke cigarettes?")

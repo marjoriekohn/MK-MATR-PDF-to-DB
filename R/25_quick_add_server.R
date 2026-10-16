@@ -1,11 +1,11 @@
-#' The pop-ups that add a row from inside an extraction drop-down.
+#' The pop-ups that add a row from inside a Basic Info drop-down.
 #'
-#' A respondent type, a study or an investigator that is missing from a drop-down can be added where
-#' staff are working. It is the Make an edit form for one row (`edit_change_server()`), and like any add
-#' it is applied at once for STAFF and ADMIN alike and written to the Edit history. What was typed is
-#' checked for something like it already there as it is typed; that is a warning, not a block. A study
-#' needs a lead investigator, so its pop-up can open the investigator's and come back with the new one
-#' picked.
+#' A registry, study, questionnaire or wave that is missing from a drop-down can be added where staff are
+#' working. It is the Make an edit form for one row (`edit_change_server()`), and like any add it is
+#' applied at once for STAFF and ADMIN alike and written to the Edit history. What was typed is checked
+#' for something like it already there as it is typed; that is a warning, not a block. What a form
+#' needs that isn't there yet (a study's investigator, a questionnaire's respondent type;
+#' `edit_quick_needs`) can be added from its pop-up, which comes back with the new one picked.
 #'
 #' @param id The module's id.
 #' @param connection The MATR database, `list(url, key)`; see `model_database.R`.
@@ -97,25 +97,28 @@ quick_add_server <- function(
       if (is.function(back)) back()
     })
 
-    # A study's lead investigator that isn't in the list: add one, and come back to the study with them picked.
-    add_investigator <- function() {
+    # What the form needs that isn't in its list (a study's investigator, a questionnaire's respondent
+    # type): add one, and come back to the form with it picked.
+    add_needed <- function(needed) {
+      field <- edit_quick_needs[[kind()]][[needed]]
       started <- change$values()
+      outer <- kind()
       then <- after()
       back <- before()
-      reopen <- function(extra = list()) open("study", values = utils::modifyList(started, extra), then = then, back = back)
+      reopen <- function(extra = list()) open(outer, values = utils::modifyList(started, extra), then = then, back = back)
       open(
-        "investigator",
-        then = function(key) reopen(list(study__principal_investigator_id = key)),
+        needed,
+        then = function(key) reopen(stats::setNames(list(key), field)),
         back = function() reopen()
       )
     }
-    observeEvent(input$add_investigator, add_investigator())
+    observeEvent(input$add_needed, add_needed(names(edit_quick_needs[[kind()]])[1]))
 
-    # The form's own "Add one first" buttons: only the investigator can be added from here.
+    # The form's own "Add one first" buttons: only what the form needs can be added from here.
     observeEvent(change$jump(), {
       wanted <- edit_entities[[change$jump()$kind]]
-      if (identical(change$jump()$kind, "investigator") && identical(kind(), "study")) {
-        add_investigator()
+      if (change$jump()$kind %in% names(edit_quick_needs[[kind()]])) {
+        add_needed(change$jump()$kind)
       } else {
         showNotification(
           paste0("Add ", wanted$article, " ", wanted$noun, " on Make an edit first."),

@@ -1,11 +1,19 @@
 # ------ Adding from inside a drop-down ------------------------------------------------------
-# The extraction pages' drop-downs can add what is missing without leaving the page: a respondent
-# type, a study, and the investigator a study needs. It is the Make an edit form for one row, and
+# The Basic Info drop-downs on Change Requests can add what is missing without leaving the page: a
+# registry, a study, a questionnaire and a wave, and what those need (a study's investigator, a
+# questionnaire's respondent type). It is the Make an edit form for one row, and
 # like any add it is applied at once (for STAFF and ADMIN alike), written to the Edit history, and
 # warned about if it looks like something that is already there (`edit_service_duplicates()`).
 
 # The kinds that can be added this way.
-edit_quick_kinds <- c("respondent_type", "investigator", "study")
+edit_quick_kinds <- c("registry", "study", "questionnaire", "wave", "respondent_type", "investigator")
+
+# What a kind's form needs that may not be there yet, and can be added from its pop-up: the field it
+# fills, by the kind that adds it.
+edit_quick_needs <- list(
+  study = c(investigator = "study__principal_investigator_id"),
+  questionnaire = c(respondent_type = "questionnaire__respondent_type_id")
+)
 
 #' The kind of thing a drop-down can add, as one row.
 #'
@@ -14,12 +22,13 @@ edit_quick_kinds <- c("respondent_type", "investigator", "study")
 edit_service_quick_entity <- function(key) {
   if (!key %in% edit_quick_kinds) stop("That can't be added from here.", call. = FALSE)
   entity <- edit_entities[[key]]
-  if (key == "study") {
-    entity$about <- paste0(
-      "One research project run under a registry. It is added to the database now; the questionnaire you are ",
-      "extracting is added to it when its change request is approved."
-    )
-  }
+  later <- "It is added to the database now; the extraction goes into it when its change request is approved."
+  entity$about <- switch(key,
+    study = paste("One research project run under a registry.", later),
+    questionnaire = paste("A survey, with its respondent type and the study it belongs to.", later),
+    wave = paste("One time the questionnaire was given. It is added now with no questions;", "the extraction's questions go into it when its change request is approved."),
+    entity$about
+  )
   entity
 }
 
@@ -70,7 +79,10 @@ edit_service_quick_key <- function(items, table) {
 #' @param key The new row's key, as text.
 #' @return A one-row data frame of the row in the catalog, or `NULL` if it is not there.
 edit_service_quick_row <- function(catalog, kind, key) {
-  table <- switch(kind, respondent_type = "respondent_types", study = "studies", investigator = NULL)
+  table <- switch(kind,
+    registry = "registries", study = "studies", questionnaire = "questionnaires", wave = "waves",
+    respondent_type = "respondent_types", investigator = NULL
+  )
   if (is.null(table)) {
     return(NULL)
   }

@@ -113,7 +113,7 @@
 #     open("study", values = list(study__registry_id = as.character(registry$registry_id)))
 #     # (what the browser sends back for the registry the form was drawn with)
 #     fill(session, output, change, study__name = "Half typed study", study__registry_id = as.character(registry$registry_id))
-#     session$setInputs(add_investigator = 1)
+#     session$setInputs(add_needed = 1)
 #     expect_match(seen$modals[[2]], "Add an investigator")
 #     expect_match(seen$modals[[2]], "Back") # the button goes back to the study
 #
@@ -135,7 +135,7 @@
 #   shiny::testServer(quick_add_server, args = popup_args(me), {
 #     open("study", values = list(study__registry_id = "7"))
 #     fill(session, output, change, study__name = "Kept", study__registry_id = "7")
-#     session$setInputs(add_investigator = 1)
+#     session$setInputs(add_needed = 1)
 #     session$setInputs(cancel = 1) # Back
 #     expect_match(seen$modals[[3]], "Add a study")
 #     expect_match(paste(output[["change-main"]]$html, collapse = ""), 'value="Kept"', fixed = TRUE)
@@ -165,11 +165,10 @@
 test_that("the pop-up draws only the form and its buttons", {
   html <- text_of(quick_add_dialog(edit_service_quick_entity("study"), shiny::NS("q"), back = FALSE))
   expect_match(html, "Add a study")
-  expect_match(html, "the questionnaire you are extracting is added to it when its change request is approved")
-  expect_match(html, "The lead investigator isn't in the list\\? Add an investigator")
+  expect_match(html, "the extraction goes into it when its change request is approved")
+  expect_match(html, "The investigator isn't in the list\\? Add an investigator")
+  expect_match(text_of(quick_add_dialog(edit_service_quick_entity("questionnaire"), shiny::NS("q"))), "Add a respondent type")
   expect_no_match(html, "Why are you adding it")
-  expect_no_match(text_of(quick_add_dialog(edit_service_quick_entity("respondent_type"), shiny::NS("q"))), "lead investigator")
+  expect_no_match(text_of(quick_add_dialog(edit_service_quick_entity("respondent_type"), shiny::NS("q"))), "Add an investigator")
   expect_match(text_of(quick_add_dialog(edit_service_quick_entity("study"), shiny::NS("q"), back = TRUE)), "Back")
-  link <- htmltools::renderTags(quick_add_link("go", "Not in the list? Add a thing"))$html
-  expect_match(link, 'id="go"')
 })

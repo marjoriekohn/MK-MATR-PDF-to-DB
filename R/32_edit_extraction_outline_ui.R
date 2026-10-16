@@ -359,7 +359,7 @@ variable_card <- function(box, draft, problems, lookups, ns) {
           blank = "Select who this question is about", label = "Question subject", problems = problems
         )
       ),
-      span(class = "details-field", field_text("variables", box, "label", placeholder = "Optional Label", label = "Optional label")),
+      span(class = "details-field", field_text("variables", box, "label", placeholder = "Label (optional)", label = "Optional label")),
       if (!is_choice_box) {
         span(
           class = "details-field",
@@ -427,12 +427,12 @@ choice_row <- function(choice, problems, ns) {
       span("Printed")
     ),
     if (printed_fields) {
-      field_text("response_options", choice, "printed_label", placeholder = "Printed as", label = "Printed as")
+      field_text("response_options", choice, "printed_label", placeholder = "Printed as (optional)", label = "Printed as")
     } else {
       span()
     },
     if (printed_fields) {
-      field_text("response_options", choice, "skip_instruction", placeholder = "Skip to", label = "Skip to")
+      field_text("response_options", choice, "skip_instruction", placeholder = "Skip to (optional)", label = "Skip to")
     } else {
       span()
     },

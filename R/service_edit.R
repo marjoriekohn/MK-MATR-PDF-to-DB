@@ -310,8 +310,9 @@ edit_service_active <- function(fields, values) {
 #'
 #' @param fields The form's fields, from `edit_service_fields()`.
 #' @param values What is in the form: a named list of strings by field id.
-#' @return A list: `missing` (required fields left empty, as their labels), and
-#'   `problems` and `warnings` (a sentence for each field, by id, that has one).
+#' @return A list: `missing` (required fields left empty, as their labels), `problems` and
+#'   `warnings` (a sentence for each field, by id, that has one), and `missing_ids` (the ids of the
+#'   required fields left empty, so the form can outline them in red).
 edit_service_check <- function(fields, values) {
   missing <- list()
   problems <- list()
@@ -327,7 +328,10 @@ edit_service_check <- function(fields, values) {
     warning <- if (!is.null(field$warn) && is.null(problem)) field$warn(value, part_values)
     if (!is.null(warning)) warnings[[field$id]] <- warning
   }
-  list(missing = edit_missing_labels(missing), problems = problems, warnings = warnings)
+  list(
+    missing = edit_missing_labels(missing), problems = problems, warnings = warnings,
+    missing_ids = vapply(missing, function(field) field$id, character(1))
+  )
 }
 
 # The labels of the fields left empty. Where two have the same label (a study's

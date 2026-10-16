@@ -45,6 +45,39 @@ edit_sentence_ui <- function(ns) {
   )
 }
 
+# ------ The info block ----------------------------------------------------------------------------
+#' Everything staff should know about the edit they are making, in one place under the sentence: what
+#' the kind of thing is, what the verb involves for it, and what happens when it is sent. Nothing else
+#' on the page says these again.
+#'
+#' @param entity The kind of thing; see `edit_entities`.
+#' @param verb `"add"`, `"update"`, `"delete"`, or `""` while it isn't picked yet.
+#' @param approval Whether it waits on Change Requests for another staff member's approval.
+#' @param editing_request Whether a request already waiting for approval is being changed.
+#' @return A UI element.
+edit_info_block <- function(entity, verb, approval = FALSE, editing_request = FALSE) {
+  doing <- c(add = "Adding", update = "Changing", delete = "Deleting")
+  how <- switch(verb,
+    update = c(entity$update_about, "Pick the one to change, then change it. You'll see everywhere it's used before you send it."),
+    delete = c(entity$delete_about, "You'll see everything that goes with it, and confirm, before anything is sent."),
+    NULL
+  )
+  sent <- if (!nzchar(verb)) {
+    NULL
+  } else if (editing_request) {
+    "Saving makes a new version of this request, which nobody has approved yet."
+  } else if (approval) {
+    "Nothing changes in the MATR metadata database until one other staff member approves it on Change Requests."
+  } else {
+    "It changes the MATR metadata database as soon as you send it, and is recorded in the Edit history."
+  }
+  edit_callout(
+    if (identical(verb, "delete")) "danger" else "info",
+    title = if (nzchar(verb)) paste(doing[[verb]], entity$article, entity$noun),
+    lapply(c(entity$about, how, sent), p)
+  )
+}
+
 # ------ Steps -----------------------------------------------------------------------------------
 #' Where staff are in the steps.
 #'
@@ -70,8 +103,11 @@ edit_steps_ui <- function(labels, current) {
 # ------ Fields -----------------------------------------------------------------------------------
 #' One field of a form.
 #'
-#' A field that is locked is shown, not typed, with the reason. Fields that only matter
-#' while another has a value are wrapped so the page hides them.
+#' Like every form on the site it has no label above it: what it holds is said inside it (a text box's
+#' placeholder, a drop-down's empty choice) and, for screen readers and when pointed at, in its
+#' `aria-label` and `title`. A required field that is blank is outlined in red (the note under it marks
+#' it; see `edit_change_server()`). A field that is locked shows its value, greyed, with the reason.
+#' Fields that only matter while another has a value are wrapped so the page hides them.
 #'
 #' @param ns The module's namespace function.
 #' @param field One of the form's fields, from `edit_service_fields()`.
@@ -80,30 +116,35 @@ edit_steps_ui <- function(labels, current) {
 #' @return A UI element.
 edit_field_ui <- function(ns, field, value, slot) {
   id <- ns(field$id)
-  label <- field_label(field$label, isTRUE(field$required))
-  if (!is.null(field$tooltip)) label <- tagList(label, field_tooltip(field$tooltip, field$label))
+  inside <- edit_field_placeholder(field)
+  named <- function(tag, element) {
+    tag_input_attributes(tag, element, `aria-label` = field$label, title = field$label, `aria-describedby` = slot)
+  }
   control <- if (!is.null(field$locked)) {
     div(
       class = "locked-field",
-      tags$label(class = "form-label", field$label),
-      div(class = "locked-value", edit_display_value(field, edit_service_normalize(field, value))),
+      div(
+        class = "locked-value", `aria-label` = field$label, title = field$label,
+        edit_display_value(field, edit_service_normalize(field, value))
+      ),
       div(class = "form-text locked-reason", icon("lock"), " ", field$locked)
     )
   } else {
     switch(field$type,
-      textarea = textAreaInput(id, label, value, rows = field$rows %||% 3, width = "100%", placeholder = field$placeholder),
-      select = selectInput(
-        id, label, field$choices,
-        selected = value, width = "100%",
-        selectize = length(field$choices) > 30
+      textarea = named(
+        textAreaInput(id, NULL, value, rows = field$rows %||% 3, width = "100%", placeholder = inside),
+        "textarea"
+      ),
+      select = named(
+        selectInput(id, NULL, edit_select_choices(field), selected = value, width = "100%", selectize = length(field$choices) > 30),
+        "select"
       ),
       choice = div(
-        role = "group", `aria-label` = field$label,
-        tags$label(class = "form-label", label),
+        role = "group", `aria-label` = field$label, title = field$label,
         toggle_input(id, field$choices, selected = value, label = field$label)
       ),
       {
-        box <- textInput(id, label, value, placeholder = field$placeholder, width = "100%")
+        box <- named(textInput(id, NULL, value, placeholder = inside, width = "100%"), "input")
         if (!is.null(field$suggest)) {
           list_id <- paste0(id, "-list")
           box <- tagList(tag_input_attributes(box, "input", list = list_id), suggestions(list_id, field$suggest))
@@ -113,10 +154,11 @@ edit_field_ui <- function(ns, field, value, slot) {
       }
     )
   }
+  help <- c(field$hint, field$tooltip)
   field_div <- div(
     class = c("form-field", "edit-field", if (field$type == "textarea") "is-wide"),
     control,
-    if (!is.null(field$hint) && is.null(field$locked)) div(class = "form-text field-help", field$hint),
+    if (length(help) > 0 && is.null(field$locked)) div(class = "form-text field-help", paste(help, collapse = " ")),
     uiOutput(slot, class = "form-text field-note")
   )
   if (is.null(field$show_when)) {
@@ -126,6 +168,37 @@ edit_field_ui <- function(ns, field, value, slot) {
     sprintf("input['%s__%s'] == '%s'", field$part, field$show_when$field, field$show_when$value),
     ns = ns, field_div
   )
+}
+
+#' A drop-down's choices, its empty choice naming the field ("Select lead investigator"), so two
+#' drop-downs of the same rows can be told apart without labels.
+#'
+#' @param field One of the form's fields, from `edit_service_fields()`, of type `"select"`.
+#' @return The choices, as `selectInput()` takes them.
+edit_select_choices <- function(field) {
+  choices <- field$choices
+  blank <- which(unname(choices) == "")
+  if (length(blank) == 0 || is.null(names(choices))) {
+    return(choices)
+  }
+  names(choices)[blank[1]] <- paste0("Select ", field$short, if (!isTRUE(field$required)) " (optional)")
+  choices
+}
+
+#' What a text box says while it is empty: its name, an example or format if it has one, and whether
+#' it can be left empty.
+#'
+#' @param field One of the form's fields, from `edit_service_fields()`.
+#' @return A string, e.g. `"Name (e.g. Adult Health Study)"` or `"Description (optional)"`.
+edit_field_placeholder <- function(field) {
+  notes <- c(
+    if (!isTRUE(field$required)) "optional",
+    if (has_text(field$placeholder)) trimws(field$placeholder)
+  )
+  if (length(notes) == 0) {
+    return(field$label)
+  }
+  paste0(field$label, " (", paste(notes, collapse = ", "), ")")
 }
 
 #' A heading above the fields of one part of a form that is several rows.
@@ -225,9 +298,7 @@ edit_usage_ui <- function(entity, title, usage) {
   div(
     class = "edit-usage",
     h2("Where this appears"),
-    if (local) {
-      p(class = "form-text", "This only changes the one questionnaire you picked.")
-    } else if (length(usage$uses) > 0 || length(usage$pointing) > 0) {
+    if (!local && (length(usage$uses) > 0 || length(usage$pointing) > 0)) {
       p(class = "form-text", "Everything below changes if you make this edit.")
     },
     if (entity$table == "component") div(class = "edit-usage-title", paste0("“", title, "”")),
@@ -288,7 +359,6 @@ edit_delete_ui <- function(entity, title, plan) {
         strong(class = "delete-banner-title", title)
       )
     ),
-    p(class = "delete-about", entity$delete_about),
     if (blocked) edit_blocked_ui(plan$blocked),
     if (!blocked) edit_reach_ui(entity, reach, plan)
   )
@@ -389,7 +459,8 @@ edit_delete_confirm_ui <- function(ns, plan) {
       value = FALSE, width = "100%"
     ),
     if (plan$far_reaching) {
-      textInput(ns("confirm_word"), "To be sure, type DELETE", width = "20rem")
+      textInput(ns("confirm_word"), NULL, width = "20rem", placeholder = "To be sure, type DELETE") |>
+        tag_input_attributes("input", `aria-label` = "To be sure, type DELETE")
     }
   )
 }

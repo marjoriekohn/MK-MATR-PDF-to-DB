@@ -77,6 +77,26 @@ extraction_service_info <- function(record = NULL) {
   info
 }
 
+#' An extraction's Basic Info, as the Change Requests form holds it.
+#'
+#' The form picks a recorded registry, study, questionnaire and wave (one that asks no questions yet);
+#' anything new is added from its drop-down first. So only those four are kept, and the rest is set to
+#' say so: `kind` `"new_wave"` (a recorded questionnaire) and `wave_choice` `"existing"`.
+#'
+#' @param info Where it goes, as `extraction_service_info()` returns it.
+#' @return `info`, in the same shape, with only the four picks.
+extraction_service_basic_info <- function(info) {
+  kept <- c("registry_id", "study_id", "questionnaire_id", "wave_id")
+  basic <- stats::setNames(as.list(rep("", length(extraction_info_fields))), extraction_info_fields)
+  basic[kept] <- lapply(info[kept], function(value) {
+    value <- as.character(value %||% "")
+    if (identical(value, add_new_choice)) "" else value
+  })
+  basic$kind <- "new_wave"
+  basic$wave_choice <- "existing"
+  basic
+}
+
 #' Whether an extraction goes into a wave that is recorded already.
 #'
 #' Only a recorded questionnaire's wave can be: a new questionnaire's wave is new too.
@@ -343,7 +363,7 @@ extraction_service_reading_steps <- function(record) {
 #' The steps on each Existing Draft card.
 #'
 #' How it was read (or that it was typed by hand), and how much of it has been checked on the Edit
-#' Extraction page, as the page's own "N% complete" counts it.
+#' Extraction page, as the page's own "N% human-reviewed" counts it.
 #'
 #' @param record An extraction record, as `extraction_model_get_all()` returns it.
 #' @param draft The questionnaire it read, or `NULL` until reading has finished.
@@ -376,7 +396,7 @@ structure_progress <- function(draft) {
   }
   counts <- draft_service_counts(draft)
   progress_step(
-    paste0("Structure · ", draft_service_percent_checked(counts), "% complete"),
+    paste0(draft_service_percent_checked(counts), "% human-reviewed"),
     count_state(counts$checked, counts$blocks)
   )
 }
@@ -471,15 +491,29 @@ questionnaire_name <- function(name, abbreviation) {
 #' @param info Where it goes, as `extraction_service_info()` returns it.
 #' @return The names of the fields, as the form labels them; empty if none.
 extraction_service_missing <- function(info) {
+  required <- extraction_service_required(info)
+  unname(required[extraction_service_missing_fields(info)])
+}
+
+#' The required fields still blank, by their names in `extraction_info_fields`.
+#'
+#' @param info Where it goes, as `extraction_service_info()` returns it.
+#' @return A character vector of field names, e.g. `c("registry_id", "wave_name")`.
+extraction_service_missing_fields <- function(info) {
+  required <- extraction_service_required(info)
+  blank <- !vapply(names(required), function(field) has_text(info[[field]]), logical(1))
+  names(required)[blank]
+}
+
+# The fields `info` needs, named by field, with what each is called in sentences.
+extraction_service_required <- function(info) {
   required <- c(registry_id = "registry", study_id = "study")
-  required <- c(required, if (info$kind == "new_questionnaire") {
+  required <- c(required, if (identical(info$kind, "new_questionnaire")) {
     c(name = "questionnaire name", abbreviation = "abbreviation", respondent_type_id = "respondent type")
   } else {
     c(questionnaire_id = "questionnaire")
   })
-  required <- c(required, if (extraction_service_uses_recorded_wave(info)) c(wave_id = "wave") else c(wave_name = "wave name"))
-  blank <- !vapply(names(required), function(field) has_text(info[[field]]), logical(1))
-  unname(required[blank])
+  c(required, if (extraction_service_uses_recorded_wave(info)) c(wave_id = "wave") else c(wave_name = "wave name"))
 }
 
 # The rest return a sentence saying what to do, or NULL if all is well.

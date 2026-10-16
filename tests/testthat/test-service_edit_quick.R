@@ -5,9 +5,11 @@
 #   list(fields = fields, values = utils::modifyList(edit_service_initial(entity, fields, snap, "add"), list(...)))
 # }
 
-test_that("only a respondent type, an investigator and a study can be added this way, and a study comes without its questionnaire", {
-  expect_equal(edit_quick_kinds, c("respondent_type", "investigator", "study"))
-  expect_error(edit_service_quick_entity("registry"), "can't be added from here")
+test_that("a registry, study, questionnaire or wave, and what they need, can be added this way; a study comes without its questionnaire", {
+  expect_setequal(edit_quick_kinds, c("registry", "study", "questionnaire", "wave", "respondent_type", "investigator"))
+  expect_error(edit_service_quick_entity("component"), "can't be added from here")
+  expect_match(edit_service_quick_entity("wave")$about, "no questions")
+  expect_equal(unname(edit_quick_needs$questionnaire), "questionnaire__respondent_type_id")
   expect_equal(edit_service_quick_entity("respondent_type")$table, "respondent_type")
   study <- edit_service_quick_entity("study")
   expect_null(study$parts)

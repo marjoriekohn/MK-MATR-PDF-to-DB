@@ -90,3 +90,19 @@ confirm_dialog <- function(title, ..., confirm_id, confirm_label, keep_label = "
     easyClose = easy_close
   )
 }
+
+#' The drop-down that asks a particular staff member to review a change request.
+#'
+#' No label: its empty choice says what it is for.
+#'
+#' @param input_id The input's id.
+#' @param reviewers People who can be asked: a named vector of staff ids.
+#' @param selected The staff id picked, or `""` for anyone.
+#' @return A UI element.
+reviewer_select <- function(input_id, reviewers, selected = "") {
+  selectInput(
+    input_id, NULL, c("Ask someone to review it (optional)" = "", reviewers),
+    selected = selected, width = "100%", selectize = FALSE
+  ) |>
+    tag_input_attributes("select", `aria-label` = "Ask someone to review it", title = "Ask someone to review it")
+}

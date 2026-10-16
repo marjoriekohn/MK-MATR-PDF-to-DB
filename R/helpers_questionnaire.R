@@ -1,10 +1,12 @@
 # ------ A questionnaire, laid out to read -----------------------------------------------------
-# A draft's questionnaire drawn as it would be read, with nothing to edit: its sections with what
-# they hold, each question numbered with its words, and under a question its variables (MATR ID and
-# label, and a write-in's kind of answer), each with its choices and their codes beside it. A change
-# request shows this before it is submitted and while it waits for a reviewer to approve it.
+# A draft's questionnaire drawn as a table to read, with nothing to edit, the way a codebook lists it:
+# one row for each variable, with its MATR ID (Variable ID), the words of its question with the
+# variable's label and who it is about in square brackets (Question Text), and its codes and choices,
+# or a write-in's kind of answer (Variable Coding). Sections, and blocks that aren't questions, are
+# rows across the whole table, in printed order. A change request shows this before it is submitted
+# and while it waits for a reviewer to approve it.
 
-#' A draft's questionnaire, laid out to read.
+#' A draft's questionnaire, laid out to read as a table.
 #'
 #' @param draft A draft: `list(questionnaire, components, variables, response_options)`; see the top of `service_draft.R`.
 #' @return A UI element.
@@ -12,35 +14,39 @@ questionnaire_preview_ui <- function(draft) {
   if (nrow(draft$components) == 0) {
     return(p(class = "form-text", "This questionnaire has no blocks."))
   }
-  div(class = "questionnaire-preview", preview_blocks(draft, NA))
+  div(
+    class = "questionnaire-preview",
+    tags$table(
+      class = "table table-sm questionnaire-table",
+      tags$thead(tags$tr(
+        tags$th(scope = "col", class = "qt-id", "Variable ID"),
+        tags$th(scope = "col", class = "qt-text", "Question Text"),
+        tags$th(scope = "col", class = "qt-coding", "Variable Coding")
+      )),
+      tags$tbody(preview_rows(draft, NA, depth = 0L))
+    )
+  )
 }
 
-# The blocks inside a section (or at the top level, for `parent_id = NA`), in printed order.
-preview_blocks <- function(draft, parent_id) {
-  map_rows(draft_service_children(draft, "components", parent_id), preview_block, draft)
+# The rows for the blocks inside a section (or at the top level, for `parent_id = NA`), in printed order.
+preview_rows <- function(draft, parent_id, depth) {
+  rows <- map_rows(draft_service_children(draft, "components", parent_id), preview_block_rows, draft, depth)
+  do.call(tagList, rows)
 }
 
-preview_block <- function(block, draft) {
+preview_block_rows <- function(block, draft, depth) {
   switch(block$component_type,
-    Section = div(
-      class = "preview-section",
-      h3(class = "preview-section-title", if (is.na(block$text)) "Untitled section" else block$text),
-      div(class = "preview-section-body", preview_blocks(draft, block$id))
-    ),
-    Question = div(
-      class = "preview-question",
-      div(
-        class = "preview-question-head",
-        span(class = "preview-number", paste0("Q", if (is.na(block$question_number)) "?" else block$question_number)),
-        span(class = "preview-text", preview_words(block)),
-        preview_question_note(block, draft)
+    Section = tagList(
+      tags$tr(
+        class = "qt-section", `data-depth` = depth,
+        tags$th(colspan = 3, type_chip(block$component_type), scope = "rowgroup", if (is.na(block$text)) " " else block$text)
       ),
-      preview_variables(block, draft)
+      preview_rows(draft, block$id, depth + 1L)
     ),
-    div(
-      class = "preview-block",
-      type_chip(block$component_type),
-      span(class = "preview-text", preview_words(block))
+    Question = preview_question_rows(block, draft),
+    tags$tr(
+      class = "qt-block",
+      tags$td(colspan = 3, type_chip(block$component_type), " ", span(class = "preview-text", preview_words(block)))
     )
   )
 }
@@ -49,76 +55,100 @@ preview_words <- function(block) {
   if (is.na(block$text)) tags$em("(no words)") else block$text
 }
 
-# "Follows Q3" and the skip condition, when a question has them.
-preview_question_note <- function(block, draft) {
-  follows <- question_number_of(draft, block$parent_question_id)
-  notes <- c(
-    if (!is.na(follows)) paste0("Follows Q", follows),
-    if (!is.na(block$condition)) block$condition
-  )
-  if (length(notes) > 0) span(class = "preview-note", paste(notes, collapse = " · "))
-}
-
-preview_variables <- function(block, draft) {
+# One row for each of a question's variables; a question with none still has its row.
+preview_question_rows <- function(block, draft) {
+  words <- preview_question_words(block)
   boxes <- draft_service_children(draft, "variables", block$id)
   if (nrow(boxes) == 0) {
-    return(p(class = "preview-note", "No variables."))
+    return(tags$tr(
+      class = "qt-question",
+      tags$td(class = "qt-id", tags$em("no variables")),
+      tags$td(class = "qt-text", span(class = "preview-text", words)),
+      tags$td(class = "qt-coding")
+    ))
   }
-  tags$ul(class = "preview-variables", map_rows(boxes, preview_variable, draft))
+  map_rows(boxes, function(box) {
+    tags$tr(
+      class = "qt-question",
+      tags$td(class = "qt-id", if (is.na(box$matr_id)) tags$em("no MATR ID") else span(class = "preview-matr-id", box$matr_id)),
+      tags$td(class = "qt-text", span(class = "preview-text", words), preview_variable_tags(box)),
+      tags$td(class = "qt-coding", preview_coding(box, draft))
+    )
+  })
 }
 
-# One line: the MATR ID and label, then the choices with their codes (or a write-in's kind of answer).
-preview_variable <- function(box, draft) {
-  is_choice_box <- box$variable_type == "closed_ended"
-  tags$li(
-    class = "preview-variable",
-    span(class = "preview-matr-id", if (is.na(box$matr_id)) tags$em("no MATR ID") else box$matr_id),
-    span(class = "preview-variable-meta", if (!is.na(box$label)) box$label),
-    if (is_choice_box) {
-      preview_choices(box, draft)
-    } else {
-      span(class = "preview-choices", paste("Answer:", if (is.na(box$answer_data_type)) "not picked" else tolower(box$answer_data_type)))
-    }
-  )
+# The question's words, without its number at the start if they were read with it ("3. Have you ...").
+preview_question_words <- function(block) {
+  if (is.na(block$text)) {
+    return(tags$em("(no words)"))
+  }
+  number <- block$question_number
+  if (is.na(number) || !nzchar(number)) {
+    return(block$text)
+  }
+  escaped <- gsub("([][{}()+*^$|\\\\?.])", "\\\\\\1", number)
+  trimmed <- sub(paste0("^\\s*(Q(uestion)?\\s*)?", escaped, "\\s*[.):-]\\s+"), "", block$text, ignore.case = TRUE)
+  if (nzchar(trimmed)) trimmed else block$text
 }
 
-# "Yes (1), No (2)": each choice with its code; a choice not printed on the form is marked.
-preview_choices <- function(box, draft) {
+# " [Lifetime] [Self]": the variable's label and who it is about, each when it has one.
+preview_variable_tags <- function(box) {
+  tags <- c(box$label, box$subject)
+  tags <- trimws(tags[!is.na(tags)])
+  tags <- tags[nzchar(tags)]
+  if (length(tags) > 0) span(class = "qt-tags", paste0(" ", paste0("[", tags, "]", collapse = " ")))
+}
+
+# Each choice on its own line with its code ("1 = Yes"), or a write-in's kind of answer.
+preview_coding <- function(box, draft) {
+  if (box$variable_type != "closed_ended") {
+    return(span(
+      class = "qt-write-in",
+      paste("Write-in:", if (is.na(box$answer_data_type)) "answer type not picked" else box$answer_data_type)
+    ))
+  }
   choices <- draft_service_children(draft, "response_options", box$id)
   if (nrow(choices) == 0) {
-    return(span(class = "preview-choices", tags$em("no choices")))
+    return(tags$em("no choices"))
   }
-  words <- paste0(
-    ifelse(is.na(choices$answer_option), "(blank)", choices$answer_option),
-    ifelse(is.na(choices$code_value), "", paste0(" (", choices$code_value, ")")),
-    ifelse(choices$printed %in% FALSE, " [not printed]", "")
-  )
-  span(class = "preview-choices", paste(words, collapse = ", "))
+  lines <- lapply(seq_len(nrow(choices)), function(i) {
+    choice <- choices[i, , drop = FALSE]
+    div(
+      class = "qt-choice",
+      span(class = "qt-code", if (is.na(choice$code_value)) "?" else choice$code_value),
+      " = ",
+      if (is.na(choice$answer_option)) tags$em("(blank)") else choice$answer_option,
+      if (choice$printed %in% FALSE) span(class = "preview-note", " [not printed]")
+    )
+  })
+  do.call(tagList, lines)
 }
 
 # ------ A change request, laid out to read --------------------------------------------------------
-# What an extraction's change request comes to: where it goes (the registry, study, questionnaire and
-# wave, each as a card, recorded or NEW), what it adds (a card for each kind of row, saying how many
-# rows are new, how many are already in the database and are used again, and which only link the two),
-# and the questionnaire itself. The Edit Extraction page shows it before the request is submitted, and
-# Change Requests while it waits for a reviewer.
+# What an extraction's change request comes to: on Change Requests, its Basic Info (the registry, study,
+# questionnaire and wave it goes into, filled in there) and what it adds (a card for each kind of row,
+# saying how many rows are new, how many are already in the database and are used again, and which only
+# link the two); and, on both pages, the questionnaire itself. The Edit Extraction page shows the
+# questionnaire before the request is submitted, and Change Requests the whole of it while it waits for
+# a reviewer.
 
 #' What an extraction's change request comes to, laid out to read.
 #'
-#' @param preview From `extraction_service_request_preview()`: `where` and `what` (lists of cards),
+#' @param preview A list: `what` (a list of cards, from `extraction_service_request_preview()`),
 #'   `summary` (a sentence), `problem` (why it can't be added, or `NULL`) and `unchecked` (how many
-#'   blocks haven't been marked as checked).
+#'   blocks haven't been marked as checked). Any can be left out.
 #' @param draft The questionnaire, or `NULL` if it couldn't be read.
 #' @param pdf_url The address of its PDF, or `NULL`.
+#' @param basic_info The Basic Info form, to show first, or `NULL`.
 #' @return A UI element.
-extraction_request_ui <- function(preview, draft, pdf_url = NULL) {
+extraction_request_ui <- function(preview, draft, pdf_url = NULL, basic_info = NULL) {
   div(
     class = "request-preview",
+    if (!is.null(basic_info)) {
+      div(class = "request-section", h3("Basic Info"), basic_info)
+    },
     if (!is.null(preview$problem)) {
       edit_callout("danger", title = "This can't be added as it is", preview$problem)
-    },
-    if (length(preview$where) > 0) {
-      div(class = "request-section", h3("Where it goes"), div(class = "request-cards", lapply(preview$where, request_card_ui)))
     },
     if (length(preview$what) > 0) {
       div(
@@ -133,7 +163,7 @@ extraction_request_ui <- function(preview, draft, pdf_url = NULL) {
     },
     div(
       class = "request-section",
-      div(class = "change-request-questionnaire-head", pdf_open_button(pdf_url)),
+      if (!is.null(pdf_url)) div(class = "change-request-questionnaire-head", pdf_open_button(pdf_url)),
       if (is.null(draft)) {
         p(class = "form-text", "The questionnaire couldn't be read. Edit opens it on the Edit Extraction page.")
       } else {

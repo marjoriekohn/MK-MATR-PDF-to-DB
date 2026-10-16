@@ -60,7 +60,7 @@ pdf_open_button <- function(url) {
 #' How far the checking has got: a bar that fills as blocks are marked as checked.
 #'
 #' @param counts From `draft_service_counts()`.
-#' @return A UI element saying "N% complete", with the counts in its tooltip.
+#' @return A UI element saying "N% human-reviewed", with the counts in its tooltip.
 structure_progress_ui <- function(counts) {
   percent <- draft_service_percent_checked(counts)
   bslib::tooltip(
@@ -70,7 +70,7 @@ structure_progress_ui <- function(counts) {
         class = "progress review-structure-bar", role = "progressbar", `aria-label` = "Blocks checked",
         `aria-valuenow` = percent, `aria-valuemin` = 0, `aria-valuemax` = 100,
         div(class = "progress-bar", style = paste0("width: ", percent, "%")),
-        span(class = "review-structure-text", paste0(percent, "% complete"))
+        span(class = "review-structure-text", paste0(percent, "% human-reviewed"))
       )
     ),
     sprintf("%d of %d blocks marked as checked", counts$checked, counts$blocks)
@@ -158,9 +158,10 @@ matr_ids_dialog <- function(ns, can_apply, recorded = FALSE) {
   )
 }
 
-#' The Preview Change Request dialog: where the extraction goes, and what the request comes to.
+#' The Preview Change Request dialog: the questionnaire as its change request shows it.
 #'
-#' Nothing is written while it is open. Submit Change Request goes on to sending it.
+#' Nothing is written while it is open. Submit Change Request goes on to sending it. Where it goes
+#' (its Basic Info) isn't asked here: it is filled in on Change Requests.
 #'
 #' @param ns The module's namespace function.
 #' @return A `modalDialog()`, for `showModal()`.
@@ -169,15 +170,6 @@ preview_request_dialog <- function(ns) {
     title = "Preview Change Request",
     size = "xl",
     easyClose = FALSE,
-    card(card_body(
-      h3("Where it goes"),
-      p(
-        class = "form-text",
-        "Pick the registry, study, questionnaire and wave this extraction goes into. A questionnaire or a wave ",
-        "can be one already in the database, or a new one."
-      ),
-      extraction_info_ui(ns("info"))
-    )),
     uiOutput(ns("preview")),
     footer = tagList(
       actionButton(ns("preview_cancel"), "Cancel", class = "btn-outline-dark"),
@@ -189,15 +181,18 @@ preview_request_dialog <- function(ns) {
 
 #' The dialog that submits an extraction's change request.
 #'
+#' Every request goes to Change Requests, where its Basic Info is filled in.
+#'
 #' @param ns The module's namespace function.
-#' @param summary What it adds, in words.
+#' @param summary What the questionnaire holds, in words.
 #' @param unchecked How many blocks haven't been marked as checked.
-#' @param approval Whether it goes to Change Requests (a STAFF member's request) rather than being added at once.
+#' @param approval Whether it needs another staff member's approval (a STAFF member's request) rather
+#'   than being added by whoever submits it (an ADMIN).
 #' @param reviewers People who can be asked to review it: a named vector of staff ids, or empty.
 #' @return A `modalDialog()`, for `showModal()`.
 submit_request_dialog <- function(ns, summary, unchecked, approval, reviewers) {
   modalDialog(
-    title = if (approval) "Submit Change Request" else "Add this to the database",
+    title = "Submit Change Request",
     size = "l",
     easyClose = FALSE,
     p(strong(summary)),
@@ -211,28 +206,27 @@ submit_request_dialog <- function(ns, summary, unchecked, approval, reviewers) {
     if (approval) {
       edit_callout(
         "info",
-        title = "One other staff member has to approve it",
-        "It waits on Change Requests. Nothing is added to the MATR metadata database until they do, and then all of it is added at once."
+        title = "It goes to Change Requests",
+        "Fill in its Basic Info there: the registry, study, questionnaire and wave it goes into. Then one other ",
+        "staff member approves it. Nothing is added to the MATR metadata database until they do, and then all of it is added at once."
       )
     } else {
       edit_callout(
         "info",
-        title = "This is added at once",
-        "As an ADMIN your change request needs no approval. It is recorded in the Edit history."
+        title = "It goes to Change Requests",
+        "Fill in its Basic Info there: the registry, study, questionnaire and wave it goes into. As an ADMIN you can ",
+        "then add it yourself, without approval. It is recorded in the Edit history."
       )
     },
     if (approval && length(reviewers) > 0) {
       tagList(
-        selectInput(
-          ns("request_reviewer"), "Ask someone to review it (optional)", c("Anyone" = "", reviewers),
-          width = "100%", selectize = FALSE
-        ),
+        reviewer_select(ns("request_reviewer"), reviewers),
         p(class = "form-text", "They are emailed a link once sign-in is set up. Until then, any other staff member can approve it.")
       )
     },
     footer = tagList(
       actionButton(ns("back_to_preview"), "Back", class = "btn-outline-dark"),
-      actionButton(ns("confirm_request"), if (approval) "Send for approval" else "Add it to the database", class = "btn-primary")
+      actionButton(ns("confirm_request"), "Send to Change Requests", class = "btn-primary")
     )
   )
 }

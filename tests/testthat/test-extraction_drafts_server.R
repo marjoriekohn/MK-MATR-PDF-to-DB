@@ -51,7 +51,6 @@
 #     expect_match(cards, "Started by you")
 #     expect_match(cards, "Yours")
 #     expect_match(cards, "Read by Gemini")
-#     expect_match(cards, "Structure checked · 0 of")
 #     expect_false(grepl("Wave 6|Wave 7", cards)) # set aside and sent: not open
 #     expect_length(errors(), 0)
 #   })

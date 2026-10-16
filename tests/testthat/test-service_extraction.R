@@ -208,12 +208,12 @@ test_that("the progress on each card is how it was read and how much of it is ch
 
   percent <- draft_service_percent_checked(draft_service_counts(draft))
   expect_equal(percent, as.integer(floor(100 * 10 / nrow(draft$components))))
-  expect_equal(progress$label, c("Read by Gemini", paste0("Structure · ", percent, "% complete")))
+  expect_equal(progress$label, c("Read by Gemini", paste0(percent, "% human-reviewed")))
   expect_equal(progress$state, c("done", "in_progress"))
   expect_false(any(grepl("MATR IDs|Submitted|Wave details", progress$label)))
 
   unread <- extraction_service_progress(list(status = "Draft", extraction_status = "failed", info = list(), matr_csv = NULL))
-  expect_equal(unread$label, c("Read by Gemini · failed", "Structure"))
+  expect_equal(unread$label, c("Read by Gemini · failed"))
   expect_equal(unread$state, c("attention", "not_started"))
   expect_equal(draft_service_percent_checked(list(blocks = 0, checked = 0)), 0L)
 })
