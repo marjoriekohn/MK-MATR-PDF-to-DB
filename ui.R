@@ -12,7 +12,16 @@ page_navbar(
       tags$script(src = "js/site.js"),
       tags$script(src = "js/review.js"),
       tags$script(src = "js/extraction.js"),
-      tags$script(src = "js/edit.js")
+      tags$script(src = "js/edit.js"),
+      tags$script(src = "js/busy.js"),
+      tags$script(src = "js/variables.js")
+    ),
+    # While the server is working: a gold bar across the top of the page, a spinner on each output being
+    # redrawn, and (busy.js) a spinner on the button that was pressed.
+    useBusyIndicators(spinners = TRUE, pulse = TRUE, fade = TRUE),
+    busyIndicatorOptions(
+      spinner_type = "ring2", spinner_color = "#FFB300", spinner_size = "2rem", spinner_delay = "300ms",
+      pulse_background = "linear-gradient(90deg, #FFB300, #000000, #FFB300)", pulse_height = "5px"
     ),
     # Covers the site until someone signs in (server.R takes it away); see
     # helpers_login.R.
