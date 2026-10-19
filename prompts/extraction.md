@@ -1,6 +1,6 @@
 # Reading a questionnaire for the MATR metadata database
 
-You are reading a printed questionnaire from the Mid-Atlantic Twin Registry (MATR). Record everything respondents were shown and asked, in printed order, as JSON in the shape described below. Researchers use the record to find questions and to see exactly how each was printed, so record what is on the page: never invent or reword questions, choices or instructions (the one exception, the unprinted "No" of a lone check box, is described below). Copy every `text` letter for letter, keeping its capitals and punctuation even where they look odd: don't correct, add or drop a comma, full stop or capital.
+You are reading a printed questionnaire from the Mid-Atlantic Twin Registry (MATR). Record everything respondents were shown and asked, in printed order, as JSON in the shape described below. Researchers use the record to find questions and to see exactly how each was printed, so record what is on the page: never invent or reword questions, choices or instructions, and never add a choice that isn't printed. Copy every `text` letter for letter, keeping its capitals and punctuation even where they look odd: don't correct, add or drop a comma, full stop or capital.
 
 ## The JSON
 
@@ -9,9 +9,9 @@ Answer with one JSON object and nothing else: no prose, no markdown fences, no e
 - the questionnaire: `questionnaire` (an object with `name` and `abbreviation`), then `components` (a list of blocks)
 - a block: `component_type`, `continued`, `text`, `question_number`, `self_contained`, `condition`, `parent_question`, `variables` (a list of variables), `children` (a list of blocks)
 - a variable: `variable_type`, `label`, `subject`, `answer_data_type`, `response_options` (a list of choices)
-- a choice: `answer_option`, `printed`, `printed_label`, `skip_instruction`
+- a choice: `answer_option`, `printed_label`, `skip_instruction`
 
-`continued`, `self_contained` and `printed` are true or false; every other field holds text. Leave out any field that would be empty: never write null, "" or [] for a field, and never fill one in to be helpful when nothing is printed for it.
+`continued` and `self_contained` are true or false; every other field holds text. Leave out any field that would be empty: never write null, "" or [] for a field, and never fill one in to be helpful when nothing is printed for it.
 
 ## Leave out
 
@@ -65,16 +65,15 @@ A question has one variable for each separate answer a respondent can record, th
 - `label`: what this box records, when the question has several boxes or the box has a printed caption or unit; leave it out for a question's only box when it needs no explanation. Use the column heading, caption or unit printed with the box, in sentence case (a capital first letter, the rest as ordinary prose, no capitals used for emphasis), with abbreviations written out: a column headed "If yes, age started" with "yrs." beside the box is "If yes, age started (years)", and a blank followed by "times per week" is "Times per week". People rows in a grid are "First child", "Second child", "First sibling", and so on.
 - `subject`: who the recorded answer is about. "Self" when it describes the respondent. When the box records something about other people, the subject naming them: the respondent's children, brothers and sisters, or family (parents, brothers, sisters and children together, as in "has any family member had …"). A question asking whether the respondent has more than five children is about the children. Allowed: {{subjects}}.
 - `answer_data_type`, open-ended boxes only: "NUMBER" for counts, ages, years, amounts and other numbers; "TEXT" for words; "DATE" for a date or part of one; "TIME" for a time of day. Allowed: {{answer_data_types}}.
-- `response_options`, closed-ended boxes only: the choices, in printed order. When the choices are laid out in several columns, list them in the order of the scale they form, which is normally down the first column, then down the next. When a battery or grid prints its choices once as column headings, every question repeats them.
+- `response_options`, closed-ended boxes only: the choices printed on the form, in printed order. A respondent can only mark a choice that is printed, so never add one that isn't (such as a "No" for a box left empty). When the choices are laid out in several columns, list them in the order of the scale they form, which is normally down the first column, then down the next. When a battery or grid prints its choices once as column headings, every question repeats them.
 
 ## Choices (`response_options`)
 
 - `answer_option`: the choice in standard wording: ordinary sentence capitals (no words capitalised for emphasis), abbreviations written out ("M" is "Male", "DK" is "Don't know"), and no routing. When one of these registry wordings means the same thing, use it exactly:
 {{answer_options}}
-- `printed`: true when the choice is printed on the form.
-- `printed_label`: the exact printed words when they differ from `answer_option` in any way, even only in capitals ("NEVER", "M"). Leave it out when they don't, and for a choice that isn't printed.
+- `printed_label`: the exact printed words when they differ from `answer_option` in any way, even only in capitals ("NEVER", "M"). Leave it out when they don't.
 - `skip_instruction`: the routing printed beside the choice, without brackets, such as "Go to Question 10".
-- **A lone check box.** When a question or a grid column offers a single box to mark (a "Yes" bubble on its own, or a box beside "All of my life"), its variable still has two choices: "Yes", printed, then "No", not printed (`printed: false`), meaning the box was left empty. If the box's printed words aren't "Yes", they are the Yes choice's `printed_label` and the variable's `label`. A check-all-that-apply list works the same way, with one variable per box.
+- **A lone check box.** When a question or a grid column offers a single box to mark (a "Yes" bubble on its own, or a box beside "All of my life"), its variable has one choice: "Yes". Don't add a "No" for the box left empty: it isn't printed. If the box's printed words aren't "Yes", they are the Yes choice's `printed_label` and the variable's `label`. A check-all-that-apply list works the same way, with one variable per box, each with its one choice.
 
 ## The questionnaire
 
@@ -108,37 +107,35 @@ Recorded as `components` (written out here with line breaks so it's easy to read
 [{"component_type": "Section", "text": "PART B. YOUR HABITS", "children": [
   {"component_type": "Question", "text": "Do you drink coffee?", "question_number": "3", "self_contained": true,
    "variables": [{"variable_type": "closed_ended", "subject": "Self", "response_options": [
-     {"answer_option": "Yes", "printed": true},
-     {"answer_option": "No", "printed": true, "skip_instruction": "Go to Question 5"}]}]},
+     {"answer_option": "Yes"},
+     {"answer_option": "No", "skip_instruction": "Go to Question 5"}]}]},
   {"component_type": "Section", "children": [
     {"component_type": "Instruction", "text": "On a typical day:"},
     {"component_type": "Question", "text": "How many cups of coffee do you drink?", "question_number": "4a", "self_contained": true, "parent_question": "3",
      "variables": [{"variable_type": "open_ended", "label": "Cups", "subject": "Self", "answer_data_type": "NUMBER"}]},
     {"component_type": "Question", "text": "Do you take it with sugar?", "question_number": "4b", "self_contained": false, "parent_question": "3",
      "variables": [{"variable_type": "closed_ended", "subject": "Self", "response_options": [
-       {"answer_option": "Yes", "printed": true},
-       {"answer_option": "No", "printed": true}]}]}]},
+       {"answer_option": "Yes"},
+       {"answer_option": "No"}]}]}]},
   {"component_type": "Question", "text": "Mark each place you have lived.", "question_number": "5", "self_contained": true,
    "variables": [
      {"variable_type": "closed_ended", "label": "City", "subject": "Self", "response_options": [
-       {"answer_option": "Yes", "printed": true, "printed_label": "CITY"},
-       {"answer_option": "No", "printed": false}]},
+       {"answer_option": "Yes", "printed_label": "CITY"}]},
      {"variable_type": "closed_ended", "label": "Farm", "subject": "Self", "response_options": [
-       {"answer_option": "Yes", "printed": true, "printed_label": "Farm"},
-       {"answer_option": "No", "printed": false}]}]},
+       {"answer_option": "Yes", "printed_label": "Farm"}]}]},
   {"component_type": "Section", "children": [
     {"component_type": "Question", "text": "In the past week I have walked to work.", "question_number": "6a", "self_contained": true,
      "variables": [{"variable_type": "closed_ended", "subject": "Self", "response_options": [
-       {"answer_option": "Yes", "printed": true},
-       {"answer_option": "No", "printed": true}]}]},
+       {"answer_option": "Yes"},
+       {"answer_option": "No"}]}]},
     {"component_type": "Question", "text": "In the past week I have cooked dinner at home.", "question_number": "6b", "self_contained": true,
      "variables": [{"variable_type": "closed_ended", "subject": "Self", "response_options": [
-       {"answer_option": "Yes", "printed": true},
-       {"answer_option": "No", "printed": true}]}]}]}]}]
+       {"answer_option": "Yes"},
+       {"answer_option": "No"}]}]}]}]}]
 ```
 
-Everything under the heading is inside its Section, and each battery is a Section inside that. 4b isn't self contained ("it" is the coffee from question 3). 4a and 4b hang off 3 because "No" skips them. Questions 5 and 6 are everyone's again, so they have no parent. The lead-in of 4 sets the scene for two whole questions, so it is an Instruction; the lead-in of 6 is half a sentence that each sub-item finishes, so it begins both questions' `text` and there is no Instruction.
+Everything under the heading is inside its Section, and each battery is a Section inside that. 4b isn't self contained ("it" is the coffee from question 3). 4a and 4b hang off 3 because "No" skips them. Questions 5 and 6 are everyone's again, so they have no parent. Each box of 5 is a lone check box, so its variable has the one printed choice, "Yes", and no "No". The lead-in of 4 sets the scene for two whole questions, so it is an Instruction; the lead-in of 6 is half a sentence that each sub-item finishes, so it begins both questions' `text` and there is no Instruction.
 
 ## Before you answer
 
-Check that you went through every page to the end, that every Section holds the blocks printed under it, that no Instruction is half a sentence that the questions after it finish, that every question has at least one variable, that every closed-ended variable has at least two choices, that no two questions share a number, that every question that isn't self contained names a parent, and that every parent is a question printed earlier.
+Check that you went through every page to the end, that every Section holds the blocks printed under it, that no Instruction is half a sentence that the questions after it finish, that every question has at least one variable, that every closed-ended variable has at least one choice and no choice that isn't printed, that no two questions share a number, that every question that isn't self contained names a parent, and that every parent is a question printed earlier.
