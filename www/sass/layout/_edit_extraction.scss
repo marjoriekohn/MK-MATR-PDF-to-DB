@@ -168,13 +168,13 @@ button.review-pill:hover { background: rgba($vcu-gold, 0.2); }
 .outline-order {
   width: 1.5rem;
   flex-shrink: 0;
-  color: rgba($vcu-gray, 0.2);
+  color: rgba($vcu-gray);
   font-variant-numeric: tabular-nums;
   font-weight: 700;
   text-align: right;
 }
 
-.outline-number { flex-shrink: 0; font-weight: 700; }
+.outline-number { flex-shrink: 0; font-weight: 700; color: $vcu-gray; }
 
 // The block's words, typed in its row: drawn as plain words until pointed at or typed in
 .outline-text {
