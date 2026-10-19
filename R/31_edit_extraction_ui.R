@@ -30,7 +30,7 @@ edit_extraction_ui <- function(id) {
         uiOutput(ns("pdf_link"), inline = TRUE),
         review_button(
           tagList(icon("id-badge"), " MATR IDs"), "matr_ids",
-          class = "btn btn-outline-dark", title = "Upload the variables' MATR IDs from a CSV, and give them out"
+          class = "btn btn-outline-dark", title = "Give the variables their MATR IDs: from a CSV, or from a questionnaire that asks the same questions"
         ),
         uiOutput(ns("request_button"), inline = TRUE)
       )
@@ -98,30 +98,23 @@ edit_extraction_banner <- function(record) {
   }
 }
 
-#' The MATR IDs dialog: upload a CSV of them, then give them to the variables.
+#' The MATR IDs dialog: three ways to give the variables their MATR IDs.
 #'
-#' Two ways: Auto Apply gives them out in the order the variables appear; Manual Assignment leaves each
-#' variable's MATR ID to be picked, from the uploaded IDs no other variable has, or typed.
+#' From a CSV, uploaded here: Auto Apply gives them out in the order the variables appear; Manual
+#' Assignment leaves each variable's MATR ID to be picked, from the uploaded IDs no other variable has, or
+#' typed. From a questionnaire: a question worded the same as one a recorded questionnaire asks gets the
+#' MATR IDs that question's variables have.
 #'
 #' @param ns The module's namespace function.
 #' @param can_apply Whether there are uploaded IDs to give out.
-#' @param recorded Whether the questionnaire's earlier waves have MATR IDs to fill in from.
+#' @param questionnaires The recorded questionnaires to pick from (`questionnaire_service_all_choices()`).
+#' @param picked The questionnaire picked to start with: the one the extraction goes into, if it is known.
 #' @return A `modalDialog()`, for `showModal()`.
-matr_ids_dialog <- function(ns, can_apply, recorded = FALSE) {
+matr_ids_dialog <- function(ns, can_apply, questionnaires = character(), picked = "") {
   modalDialog(
     title = "MATR IDs",
     size = "l",
     easyClose = TRUE,
-    if (recorded) {
-      tagList(
-        p(
-          "This questionnaire is recorded already, so a question worded the same as one it already asks ",
-          "gets the MATR IDs that question has. That was done when the draft opened; do it again after changing ",
-          "a question's words."
-        ),
-        p(actionButton(ns("fill_recorded"), "Fill from the earlier waves", class = "btn-outline-dark"))
-      )
-    },
     p("Upload a CSV that lists the MATR IDs in the order the variables appear on the questionnaire."),
     drop_zone(
       fileInput(ns("matr_csv"), NULL, accept = c(".csv", "text/csv"), buttonLabel = "Choose file") |>
@@ -152,6 +145,21 @@ matr_ids_dialog <- function(ns, can_apply, recorded = FALSE) {
           "Open a question's variables in the outline to do it."
         ),
         actionButton(ns("manual_assign"), "Assign by hand", class = "btn-outline-dark", disabled = !can_apply)
+      ),
+      div(
+        class = "matr-mode",
+        h3("From a questionnaire"),
+        p(
+          class = "form-text",
+          "A question worded the same as one the questionnaire asks gets the MATR IDs that question's ",
+          "variables have, first to first. Only variables without a MATR ID are filled in."
+        ),
+        selectInput(
+          ns("matr_questionnaire"), NULL,
+          c(if (length(questionnaires) == 0) c("No questionnaires recorded yet" = "") else c("Select questionnaire" = ""), questionnaires),
+          selected = picked, width = "100%", selectize = length(questionnaires) > 30
+        ) |> tag_input_attributes("select", `aria-label` = "Questionnaire to take MATR IDs from"),
+        actionButton(ns("import_matr_ids"), "Import MATR IDs", class = "btn-outline-dark", disabled = !has_text(picked))
       )
     ),
     footer = modalButton("Close")

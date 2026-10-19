@@ -11,9 +11,10 @@ undo_depth <- 50
 #' Preview Change Request shows the questionnaire the way Change Requests shows it to a reviewer;
 #' previewing writes nothing. Submit Change Request saves anything unsaved and sends it to Change
 #' Requests, where its Basic Info (registry, study, questionnaire, wave) is filled in; then one other
-#' staff member approves it, or an ADMIN adds their own (`service_extraction_push.R`). Questions are
-#' numbered by their place in the outline, and a wave of a recorded questionnaire gets the MATR IDs its
-#' questions already have.
+#' staff member approves it, or an ADMIN adds their own (`service_extraction_push.R`). Each question
+#' shows its place among the questions (kept up to date as blocks move) and the number printed beside
+#' it, which staff type; the wave asks it as the printed number, or as its place if none is typed. A
+#' draft going into a recorded questionnaire gets the MATR IDs its questions already have.
 #'
 #' @param id The module's id.
 #' @param extractions The extraction drafts as `server.R` shares them: `all()` is a reactive list
@@ -214,10 +215,16 @@ edit_extraction_server <- function(
     # The CSV lists one MATR ID per variable, in the order they appear. It belongs to the draft's
     # record, so adding one saves it at once. Giving the IDs out changes the questionnaire, so Undo and
     # the page's Save apply: all at once in order (Auto Apply), or one by one from each variable's
-    # MATR ID drop-down, which offers the uploaded IDs no other variable has (Manual Assignment).
+    # MATR ID drop-down, which offers the uploaded IDs no other variable has (Manual Assignment). Or they
+    # are taken from a recorded questionnaire that asks the same questions (From a questionnaire), which
+    # starts on the questionnaire the extraction goes into, once that is known.
     show_matr_ids <- function() {
-      known <- recorded()$matr_ids
-      showModal(matr_ids_dialog(ns, can_apply = length(matr_ids()) > 0, recorded = !is.null(known) && nrow(known) > 0))
+      showModal(matr_ids_dialog(
+        ns,
+        can_apply = length(matr_ids()) > 0,
+        questionnaires = questionnaire_service_all_choices(catalog$get()),
+        picked = extraction_service_info(record())$questionnaire_id
+      ))
     }
 
     observeEvent(input$matr_csv, {
@@ -254,11 +261,33 @@ edit_extraction_server <- function(
       showNotification(sprintf("Pick each variable's MATR ID from its drop-down, or type one. %s still free.", free), type = "message")
     })
 
-    observeEvent(input$fill_recorded, {
+    observeEvent(input$matr_questionnaire, {
+      updateActionButton(session, "import_matr_ids", disabled = !has_text(input$matr_questionnaire))
+    })
+
+    # A questionnaire that asks the same questions: its MATR IDs go to the questions worded the same. Like
+    # any change it can be undone, and it doesn't take a check off.
+    observeEvent(input$import_matr_ids, {
+      questionnaire_id <- input$matr_questionnaire %||% ""
+      source <- questionnaire_service_get(catalog$get(), questionnaire_id)
+      known <- tryCatch(extraction_service_questionnaire_matr_ids(connection, questionnaire_id), error = function(problem) {
+        show_problem(problem, "Couldn't read that questionnaire's MATR IDs")
+        NULL
+      })
+      if (is.null(known)) {
+        return()
+      }
+      name <- if (is.null(source)) "that questionnaire" else source$abbreviation
+      if (nrow(known) == 0) {
+        showNotification(sprintf("%s has no variables with MATR IDs yet, so there is nothing to take.", name), type = "warning")
+        return()
+      }
       before <- draft()
-      fill_recorded_matr_ids()
+      change_draft(draft_service_fill_recorded_matr_ids(draft(), known, from = name), keep_checked = TRUE)
       if (identical(before, draft())) {
-        showNotification("Nothing to fill in: every question worded like a recorded one has its MATR IDs already.", type = "message")
+        showNotification(sprintf(
+          "Nothing to fill in: no question without MATR IDs is worded like one of %s's.", name
+        ), type = "message")
       } else {
         removeModal()
       }
