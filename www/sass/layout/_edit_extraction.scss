@@ -168,13 +168,27 @@ button.review-pill:hover { background: rgba($vcu-gold, 0.2); }
 .outline-order {
   width: 1.5rem;
   flex-shrink: 0;
-  color: rgba($vcu-gray);
+  color: $vcu-gray;
   font-variant-numeric: tabular-nums;
   font-weight: 700;
   text-align: right;
 }
 
-.outline-number { flex-shrink: 0; font-weight: 700; color: $vcu-gray; }
+// A question's place among the questions, then the number printed beside it (typed)
+.outline-numbers { display: inline-flex; flex-shrink: 0; align-items: center; gap: 0.35rem; }
+.outline-number {
+  min-width: 1.5rem;
+  color: $vcu-gray;
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+  text-align: right;
+}
+.outline-printed-number.form-control {
+  width: 4.5rem;
+  padding: 0.15rem 0.35rem;
+  font-weight: 700;
+  &::placeholder { color: rgba($vcu-gray, 0.8); font-weight: 400; font-style: italic; }
+}
 
 // The block's words, typed in its row: drawn as plain words until pointed at or typed in
 .outline-text {
@@ -319,20 +333,12 @@ button.review-pill:hover { background: rgba($vcu-gold, 0.2); }
 .choice-table { margin-top: 0.6rem; }
 .choice-list { display: flex; flex-direction: column; gap: 0.3rem; }
 
-// Code, then the response option it codes, whether it is printed, how, and where it skips to
+// Code, then the response option it codes, how it is printed, and where it skips to
 .choice-row {
   display: grid;
-  grid-template-columns: 1.25rem $code-width minmax(0, 2fr) 5rem minmax(0, 1.4fr) minmax(0, 1.4fr) 2rem;
+  grid-template-columns: 1.25rem $code-width minmax(0, 2fr) minmax(0, 1.4fr) minmax(0, 1.4fr) 2rem;
   align-items: center;
   gap: 0.35rem;
-}
-.choice-printed {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.35rem;
-  margin: 0;
-  font-size: 0.85rem;
-  .form-check-input { margin: 0; }
 }
 
 // Lined up with the choice rows: Apply to all under the codes, + Choice under the choices
@@ -348,7 +354,7 @@ button.review-pill:hover { background: rgba($vcu-gold, 0.2); }
 // ------ The MATR IDs dialog: two ways to give the uploaded IDs out --------------------------
 .matr-modes {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(16rem, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(14rem, 1fr));
   gap: 1rem;
   margin-top: 1rem;
 }

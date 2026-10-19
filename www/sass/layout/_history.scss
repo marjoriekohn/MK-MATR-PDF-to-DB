@@ -129,7 +129,9 @@ $history-line: rgba($vcu-gray, 0.35);
   border-radius: $border-radius;
   overflow-y: auto;
 }
-// A codebook-style table: Variable ID | Question Text | Variable Coding
+// A codebook-style table: No. | Variable ID | Question Text | Variable Coding
+$qt-indent: 1.25rem; // how far each section's rows sit in from the one around it
+
 .questionnaire-table {
   margin: 0;
   font-size: 0.9rem;
@@ -141,22 +143,39 @@ $history-line: rgba($vcu-gray, 0.35);
     z-index: 1;
     white-space: nowrap;
   }
+  .qt-number { width: 4.5rem; white-space: nowrap; }
   .qt-id { width: 9rem; }
   .qt-coding { width: 32%; }
-  // a section heads the rows under it
+
+  // a section heads the rows under it, which sit in under its heading, and a gold line closes it
   .qt-section > th {
     padding-top: 0.6rem;
-    border-bottom: 2px solid $vcu-gold;
+    border-bottom: 1px solid rgba($vcu-gold, 0.6);
     background: rgba($vcu-gold, 0.15);
     color: $vcu-black;
     font-size: 0.95rem;
     font-weight: 700;
   }
-  .qt-section:hover { background: none; }
-  .qt-section[data-depth="1"] > th { padding-left: 1.25rem; }
-  .qt-section[data-depth="2"] > th { padding-left: 2rem; }
+  .qt-section:hover, .qt-section-end:hover { background: none; }
+  .qt-section-end > td {
+    padding-top: 0.1rem;
+    padding-bottom: 0.15rem;
+    border-bottom: 2px solid $vcu-gold;
+    text-align: right;
+  }
+  .qt-section-end-label { color: $vcu-gray; font-size: 0.75rem; font-style: italic; }
+
+  @for $depth from 1 through 5 {
+    .qt-section[data-depth="#{$depth}"] > th,
+    .qt-section-end[data-depth="#{$depth}"] > td,
+    .qt-question[data-depth="#{$depth}"] > .qt-text,
+    .qt-block[data-depth="#{$depth}"] > .qt-text { padding-left: 0.6rem + $qt-indent * $depth; }
+  }
+  // the rows inside a section have a gold rule down their left edge, so what it holds can be seen
+  tr[data-depth]:not([data-depth="0"]) > :first-child { box-shadow: inset 3px 0 0 rgba($vcu-gold, 0.6); }
   .qt-block > td { color: $vcu-gray; }
 }
+.preview-number { font-weight: 700; }
 .preview-text { white-space: pre-wrap; }
 .preview-note { color: $vcu-gray; font-size: 0.85rem; }
 .preview-matr-id { font-family: $font-family-monospace; font-weight: 700; }
