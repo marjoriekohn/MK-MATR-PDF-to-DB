@@ -11,7 +11,7 @@
 #'     ),
 #'     extraction_status = "queued", reading_started = "2026-10-02T10:00:00Z",
 #'     reading_claimed_at = NULL, reading_pid = NULL, error = NULL,
-#'     info = list(kind = "new_wave", questionnaire_id = "1", wave_name = "Wave 3"),
+#'     info = list(questionnaire_id = "1", wave_id = "2"),
 #'     matr_csv = NULL, sent_back = NULL
 #'   )
 #'   utils::modifyList(record, list(...), keep.null = TRUE)
@@ -32,9 +32,9 @@
 #'   extraction_model_get(test_connection, record$id)
 #' }
 #'
-#' # A draft typed by hand, saved in the database for the test. `...` are what staff typed (the info form's fields).
+#' # A draft typed by hand, saved in the database for the test. `...` are its Basic Info picks.
 #' local_manual_extraction <- function(staff, ..., env = parent.frame()) {
-#'   typed <- utils::modifyList(list(kind = "new_wave", questionnaire_id = "1", wave_name = "Wave 3"), list(...))
+#'   typed <- utils::modifyList(list(questionnaire_id = "1", wave_id = "2"), list(...))
 #'   record <- extraction_service_create_manual(test_connection, staff, extraction_service_info(list(info = typed)))
 #'   withr::defer(test_delete_draft(record$id), envir = env)
 #'   record
@@ -74,18 +74,11 @@
 #'   draft
 #' }
 #'
-#' # What staff type about a new questionnaire in the tree's study, or a new wave of a recorded one.
-#' typed_new_questionnaire <- function(tree, wave_name = "Wave 1") {
+#' # The Basic Info of an extraction going into the tree's questionnaire and wave (or the ones given).
+#' picked_basic_info <- function(tree, questionnaire_id = tree$questionnaire$questionnaire_id, wave_id = tree$wave$wave_id) {
 #'   list(
-#'     kind = "new_questionnaire", registry_id = as.character(tree$registry$registry_id), study_id = as.character(tree$study$study_id),
-#'     name = test_name("Recorded"), abbreviation = "ZR", respondent_type_id = as.character(tree$respondent_type$respondent_type_id),
-#'     wave_name = wave_name
-#'   )
-#' }
-#' typed_new_wave <- function(tree, questionnaire_id = tree$questionnaire$questionnaire_id, wave_name = "Wave 2") {
-#'   list(
-#'     kind = "new_wave", registry_id = as.character(tree$registry$registry_id), study_id = as.character(tree$study$study_id),
-#'     questionnaire_id = as.character(questionnaire_id), wave_name = wave_name
+#'     registry_id = as.character(tree$registry$registry_id), study_id = as.character(tree$study$study_id),
+#'     questionnaire_id = as.character(questionnaire_id), wave_id = as.character(wave_id)
 #'   )
 #' }
 #'
@@ -97,15 +90,14 @@
 #' #' @param tree The registry and study it goes in, from `local_tree()`.
 #' #' @param draft The questionnaire; `test_questionnaire_draft()` by default.
 #' #' @param env The test's environment.
-#' #' @return A list: `questionnaire_id` (as text), `draft` and `typed` (what was typed about it).
+#' #' @return A list: `questionnaire_id` (as text), `draft` and `typed` (its Basic Info).
 #' local_pushed_questionnaire <- function(admin, tree, draft = test_questionnaire_draft(), env = parent.frame()) {
-#'   typed <- typed_new_questionnaire(tree)
+#'   typed <- picked_basic_info(tree)
 #'   record <- extraction_service_create_manual(test_connection, admin, extraction_service_info(list(info = typed)))
 #'   withr::defer(test_delete_draft(record$id), envir = env)
 #'   draft_service_save(test_connection, record$id, draft, admin$staff_id)
 #'   record <- extraction_model_get(test_connection, record$id)
 #'   outcome <- extraction_service_push(test_connection, record, admin, questionnaire_service_get_catalog(test_connection))
-#'   local_applied(outcome$history_id, env = env)
-#'   questionnaire <- database_model_get(test_connection, "questionnaire", "questionnaire_id", filters = list(name = database_eq(typed$name)))
-#'   list(questionnaire_id = as.character(questionnaire$questionnaire_id), draft = draft, typed = typed)
+#'   local_applied(change_request_service_add(test_connection, outcome$record, admin), env = env)
+#'   list(questionnaire_id = typed$questionnaire_id, draft = draft, typed = typed)
 #' }

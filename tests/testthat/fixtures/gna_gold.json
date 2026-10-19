@@ -27,13 +27,11 @@
               "response_options": [
                 {
                   "display_order": 1,
-                  "answer_option": "Yes",
-                  "printed": true
+                  "answer_option": "Yes"
                 },
                 {
                   "display_order": 2,
-                  "answer_option": "No",
-                  "printed": true
+                  "answer_option": "No"
                 }
               ]
             }
@@ -53,13 +51,11 @@
               "response_options": [
                 {
                   "display_order": 1,
-                  "answer_option": "Yes",
-                  "printed": true
+                  "answer_option": "Yes"
                 },
                 {
                   "display_order": 2,
-                  "answer_option": "No",
-                  "printed": true
+                  "answer_option": "No"
                 }
               ]
             }
@@ -79,13 +75,11 @@
               "response_options": [
                 {
                   "display_order": 1,
-                  "answer_option": "Yes",
-                  "printed": true
+                  "answer_option": "Yes"
                 },
                 {
                   "display_order": 2,
-                  "answer_option": "No",
-                  "printed": true
+                  "answer_option": "No"
                 }
               ]
             }
@@ -105,13 +99,11 @@
               "response_options": [
                 {
                   "display_order": 1,
-                  "answer_option": "Yes",
-                  "printed": true
+                  "answer_option": "Yes"
                 },
                 {
                   "display_order": 2,
-                  "answer_option": "No",
-                  "printed": true
+                  "answer_option": "No"
                 }
               ]
             }
@@ -131,13 +123,11 @@
               "response_options": [
                 {
                   "display_order": 1,
-                  "answer_option": "Yes",
-                  "printed": true
+                  "answer_option": "Yes"
                 },
                 {
                   "display_order": 2,
-                  "answer_option": "No",
-                  "printed": true
+                  "answer_option": "No"
                 }
               ]
             }
@@ -157,13 +147,11 @@
               "response_options": [
                 {
                   "display_order": 1,
-                  "answer_option": "Yes",
-                  "printed": true
+                  "answer_option": "Yes"
                 },
                 {
                   "display_order": 2,
-                  "answer_option": "No",
-                  "printed": true
+                  "answer_option": "No"
                 }
               ]
             }
@@ -183,13 +171,11 @@
               "response_options": [
                 {
                   "display_order": 1,
-                  "answer_option": "Yes",
-                  "printed": true
+                  "answer_option": "Yes"
                 },
                 {
                   "display_order": 2,
-                  "answer_option": "No",
-                  "printed": true
+                  "answer_option": "No"
                 }
               ]
             }
@@ -209,13 +195,11 @@
               "response_options": [
                 {
                   "display_order": 1,
-                  "answer_option": "Yes",
-                  "printed": true
+                  "answer_option": "Yes"
                 },
                 {
                   "display_order": 2,
-                  "answer_option": "No",
-                  "printed": true
+                  "answer_option": "No"
                 }
               ]
             }
@@ -235,13 +219,11 @@
               "response_options": [
                 {
                   "display_order": 1,
-                  "answer_option": "Yes",
-                  "printed": true
+                  "answer_option": "Yes"
                 },
                 {
                   "display_order": 2,
-                  "answer_option": "No",
-                  "printed": true
+                  "answer_option": "No"
                 }
               ]
             }
@@ -261,13 +243,11 @@
               "response_options": [
                 {
                   "display_order": 1,
-                  "answer_option": "Yes",
-                  "printed": true
+                  "answer_option": "Yes"
                 },
                 {
                   "display_order": 2,
-                  "answer_option": "No",
-                  "printed": true
+                  "answer_option": "No"
                 }
               ]
             }
@@ -287,13 +267,11 @@
               "response_options": [
                 {
                   "display_order": 1,
-                  "answer_option": "Yes",
-                  "printed": true
+                  "answer_option": "Yes"
                 },
                 {
                   "display_order": 2,
-                  "answer_option": "No",
-                  "printed": true
+                  "answer_option": "No"
                 }
               ]
             }
@@ -313,13 +291,11 @@
               "response_options": [
                 {
                   "display_order": 1,
-                  "answer_option": "Yes",
-                  "printed": true
+                  "answer_option": "Yes"
                 },
                 {
                   "display_order": 2,
-                  "answer_option": "No",
-                  "printed": true
+                  "answer_option": "No"
                 }
               ]
             }
@@ -339,13 +315,11 @@
               "response_options": [
                 {
                   "display_order": 1,
-                  "answer_option": "Yes",
-                  "printed": true
+                  "answer_option": "Yes"
                 },
                 {
                   "display_order": 2,
-                  "answer_option": "No",
-                  "printed": true
+                  "answer_option": "No"
                 }
               ]
             }
@@ -365,13 +339,11 @@
               "response_options": [
                 {
                   "display_order": 1,
-                  "answer_option": "Yes",
-                  "printed": true
+                  "answer_option": "Yes"
                 },
                 {
                   "display_order": 2,
-                  "answer_option": "No",
-                  "printed": true
+                  "answer_option": "No"
                 }
               ]
             }
@@ -391,13 +363,11 @@
               "response_options": [
                 {
                   "display_order": 1,
-                  "answer_option": "Yes",
-                  "printed": true
+                  "answer_option": "Yes"
                 },
                 {
                   "display_order": 2,
-                  "answer_option": "No",
-                  "printed": true
+                  "answer_option": "No"
                 }
               ]
             }
@@ -417,13 +387,11 @@
               "response_options": [
                 {
                   "display_order": 1,
-                  "answer_option": "Yes",
-                  "printed": true
+                  "answer_option": "Yes"
                 },
                 {
                   "display_order": 2,
-                  "answer_option": "No",
-                  "printed": true
+                  "answer_option": "No"
                 }
               ]
             }
@@ -443,13 +411,11 @@
               "response_options": [
                 {
                   "display_order": 1,
-                  "answer_option": "Yes",
-                  "printed": true
+                  "answer_option": "Yes"
                 },
                 {
                   "display_order": 2,
-                  "answer_option": "No",
-                  "printed": true
+                  "answer_option": "No"
                 }
               ]
             }
@@ -469,13 +435,11 @@
               "response_options": [
                 {
                   "display_order": 1,
-                  "answer_option": "Yes",
-                  "printed": true
+                  "answer_option": "Yes"
                 },
                 {
                   "display_order": 2,
-                  "answer_option": "No",
-                  "printed": true
+                  "answer_option": "No"
                 }
               ]
             }
@@ -495,13 +459,11 @@
               "response_options": [
                 {
                   "display_order": 1,
-                  "answer_option": "Yes",
-                  "printed": true
+                  "answer_option": "Yes"
                 },
                 {
                   "display_order": 2,
-                  "answer_option": "No",
-                  "printed": true
+                  "answer_option": "No"
                 }
               ]
             }
@@ -521,13 +483,11 @@
               "response_options": [
                 {
                   "display_order": 1,
-                  "answer_option": "Yes",
-                  "printed": true
+                  "answer_option": "Yes"
                 },
                 {
                   "display_order": 2,
-                  "answer_option": "No",
-                  "printed": true
+                  "answer_option": "No"
                 }
               ]
             }
@@ -547,13 +507,11 @@
               "response_options": [
                 {
                   "display_order": 1,
-                  "answer_option": "Yes",
-                  "printed": true
+                  "answer_option": "Yes"
                 },
                 {
                   "display_order": 2,
-                  "answer_option": "No",
-                  "printed": true
+                  "answer_option": "No"
                 }
               ]
             }
@@ -573,13 +531,11 @@
               "response_options": [
                 {
                   "display_order": 1,
-                  "answer_option": "Yes",
-                  "printed": true
+                  "answer_option": "Yes"
                 },
                 {
                   "display_order": 2,
-                  "answer_option": "No",
-                  "printed": true
+                  "answer_option": "No"
                 }
               ]
             }
@@ -599,13 +555,11 @@
               "response_options": [
                 {
                   "display_order": 1,
-                  "answer_option": "Yes",
-                  "printed": true
+                  "answer_option": "Yes"
                 },
                 {
                   "display_order": 2,
-                  "answer_option": "No",
-                  "printed": true
+                  "answer_option": "No"
                 }
               ]
             }
@@ -625,13 +579,11 @@
               "response_options": [
                 {
                   "display_order": 1,
-                  "answer_option": "Yes",
-                  "printed": true
+                  "answer_option": "Yes"
                 },
                 {
                   "display_order": 2,
-                  "answer_option": "No",
-                  "printed": true
+                  "answer_option": "No"
                 }
               ]
             }
@@ -651,13 +603,11 @@
               "response_options": [
                 {
                   "display_order": 1,
-                  "answer_option": "Yes",
-                  "printed": true
+                  "answer_option": "Yes"
                 },
                 {
                   "display_order": 2,
-                  "answer_option": "No",
-                  "printed": true
+                  "answer_option": "No"
                 }
               ]
             }
@@ -677,13 +627,11 @@
               "response_options": [
                 {
                   "display_order": 1,
-                  "answer_option": "Yes",
-                  "printed": true
+                  "answer_option": "Yes"
                 },
                 {
                   "display_order": 2,
-                  "answer_option": "No",
-                  "printed": true
+                  "answer_option": "No"
                 }
               ]
             }
@@ -703,13 +651,11 @@
               "response_options": [
                 {
                   "display_order": 1,
-                  "answer_option": "Yes",
-                  "printed": true
+                  "answer_option": "Yes"
                 },
                 {
                   "display_order": 2,
-                  "answer_option": "No",
-                  "printed": true
+                  "answer_option": "No"
                 }
               ]
             }
@@ -729,13 +675,11 @@
               "response_options": [
                 {
                   "display_order": 1,
-                  "answer_option": "Yes",
-                  "printed": true
+                  "answer_option": "Yes"
                 },
                 {
                   "display_order": 2,
-                  "answer_option": "No",
-                  "printed": true
+                  "answer_option": "No"
                 }
               ]
             }
@@ -755,13 +699,11 @@
               "response_options": [
                 {
                   "display_order": 1,
-                  "answer_option": "Yes",
-                  "printed": true
+                  "answer_option": "Yes"
                 },
                 {
                   "display_order": 2,
-                  "answer_option": "No",
-                  "printed": true
+                  "answer_option": "No"
                 }
               ]
             }
@@ -781,13 +723,11 @@
               "response_options": [
                 {
                   "display_order": 1,
-                  "answer_option": "Yes",
-                  "printed": true
+                  "answer_option": "Yes"
                 },
                 {
                   "display_order": 2,
-                  "answer_option": "No",
-                  "printed": true
+                  "answer_option": "No"
                 }
               ]
             }
@@ -807,13 +747,11 @@
               "response_options": [
                 {
                   "display_order": 1,
-                  "answer_option": "Yes",
-                  "printed": true
+                  "answer_option": "Yes"
                 },
                 {
                   "display_order": 2,
-                  "answer_option": "No",
-                  "printed": true
+                  "answer_option": "No"
                 }
               ]
             }
@@ -833,13 +771,11 @@
               "response_options": [
                 {
                   "display_order": 1,
-                  "answer_option": "Yes",
-                  "printed": true
+                  "answer_option": "Yes"
                 },
                 {
                   "display_order": 2,
-                  "answer_option": "No",
-                  "printed": true
+                  "answer_option": "No"
                 }
               ]
             }
@@ -859,13 +795,11 @@
               "response_options": [
                 {
                   "display_order": 1,
-                  "answer_option": "Yes",
-                  "printed": true
+                  "answer_option": "Yes"
                 },
                 {
                   "display_order": 2,
-                  "answer_option": "No",
-                  "printed": true
+                  "answer_option": "No"
                 }
               ]
             }
@@ -897,13 +831,11 @@
               "response_options": [
                 {
                   "display_order": 1,
-                  "answer_option": "Male",
-                  "printed": true
+                  "answer_option": "Male"
                 },
                 {
                   "display_order": 2,
-                  "answer_option": "Female",
-                  "printed": true
+                  "answer_option": "Female"
                 }
               ]
             },
@@ -915,13 +847,11 @@
               "response_options": [
                 {
                   "display_order": 1,
-                  "answer_option": "Male",
-                  "printed": true
+                  "answer_option": "Male"
                 },
                 {
                   "display_order": 2,
-                  "answer_option": "Female",
-                  "printed": true
+                  "answer_option": "Female"
                 }
               ]
             },
@@ -933,13 +863,11 @@
               "response_options": [
                 {
                   "display_order": 1,
-                  "answer_option": "Male",
-                  "printed": true
+                  "answer_option": "Male"
                 },
                 {
                   "display_order": 2,
-                  "answer_option": "Female",
-                  "printed": true
+                  "answer_option": "Female"
                 }
               ]
             },
@@ -951,13 +879,11 @@
               "response_options": [
                 {
                   "display_order": 1,
-                  "answer_option": "Male",
-                  "printed": true
+                  "answer_option": "Male"
                 },
                 {
                   "display_order": 2,
-                  "answer_option": "Female",
-                  "printed": true
+                  "answer_option": "Female"
                 }
               ]
             },
@@ -969,13 +895,11 @@
               "response_options": [
                 {
                   "display_order": 1,
-                  "answer_option": "Male",
-                  "printed": true
+                  "answer_option": "Male"
                 },
                 {
                   "display_order": 2,
-                  "answer_option": "Female",
-                  "printed": true
+                  "answer_option": "Female"
                 }
               ]
             }
@@ -996,18 +920,15 @@
               "response_options": [
                 {
                   "display_order": 1,
-                  "answer_option": "Biological (Blood)",
-                  "printed": true
+                  "answer_option": "Biological (Blood)"
                 },
                 {
                   "display_order": 2,
-                  "answer_option": "Adopted",
-                  "printed": true
+                  "answer_option": "Adopted"
                 },
                 {
                   "display_order": 3,
-                  "answer_option": "Step",
-                  "printed": true
+                  "answer_option": "Step"
                 }
               ]
             },
@@ -1019,18 +940,15 @@
               "response_options": [
                 {
                   "display_order": 1,
-                  "answer_option": "Biological (Blood)",
-                  "printed": true
+                  "answer_option": "Biological (Blood)"
                 },
                 {
                   "display_order": 2,
-                  "answer_option": "Adopted",
-                  "printed": true
+                  "answer_option": "Adopted"
                 },
                 {
                   "display_order": 3,
-                  "answer_option": "Step",
-                  "printed": true
+                  "answer_option": "Step"
                 }
               ]
             },
@@ -1042,18 +960,15 @@
               "response_options": [
                 {
                   "display_order": 1,
-                  "answer_option": "Biological (Blood)",
-                  "printed": true
+                  "answer_option": "Biological (Blood)"
                 },
                 {
                   "display_order": 2,
-                  "answer_option": "Adopted",
-                  "printed": true
+                  "answer_option": "Adopted"
                 },
                 {
                   "display_order": 3,
-                  "answer_option": "Step",
-                  "printed": true
+                  "answer_option": "Step"
                 }
               ]
             },
@@ -1065,18 +980,15 @@
               "response_options": [
                 {
                   "display_order": 1,
-                  "answer_option": "Biological (Blood)",
-                  "printed": true
+                  "answer_option": "Biological (Blood)"
                 },
                 {
                   "display_order": 2,
-                  "answer_option": "Adopted",
-                  "printed": true
+                  "answer_option": "Adopted"
                 },
                 {
                   "display_order": 3,
-                  "answer_option": "Step",
-                  "printed": true
+                  "answer_option": "Step"
                 }
               ]
             },
@@ -1088,18 +1000,15 @@
               "response_options": [
                 {
                   "display_order": 1,
-                  "answer_option": "Biological (Blood)",
-                  "printed": true
+                  "answer_option": "Biological (Blood)"
                 },
                 {
                   "display_order": 2,
-                  "answer_option": "Adopted",
-                  "printed": true
+                  "answer_option": "Adopted"
                 },
                 {
                   "display_order": 3,
-                  "answer_option": "Step",
-                  "printed": true
+                  "answer_option": "Step"
                 }
               ]
             }
@@ -1120,13 +1029,11 @@
               "response_options": [
                 {
                   "display_order": 1,
-                  "answer_option": "Yes",
-                  "printed": true
+                  "answer_option": "Yes"
                 },
                 {
                   "display_order": 2,
-                  "answer_option": "No",
-                  "printed": true
+                  "answer_option": "No"
                 }
               ]
             },
@@ -1138,13 +1045,11 @@
               "response_options": [
                 {
                   "display_order": 1,
-                  "answer_option": "Yes",
-                  "printed": true
+                  "answer_option": "Yes"
                 },
                 {
                   "display_order": 2,
-                  "answer_option": "No",
-                  "printed": true
+                  "answer_option": "No"
                 }
               ]
             },
@@ -1156,13 +1061,11 @@
               "response_options": [
                 {
                   "display_order": 1,
-                  "answer_option": "Yes",
-                  "printed": true
+                  "answer_option": "Yes"
                 },
                 {
                   "display_order": 2,
-                  "answer_option": "No",
-                  "printed": true
+                  "answer_option": "No"
                 }
               ]
             },
@@ -1174,13 +1077,11 @@
               "response_options": [
                 {
                   "display_order": 1,
-                  "answer_option": "Yes",
-                  "printed": true
+                  "answer_option": "Yes"
                 },
                 {
                   "display_order": 2,
-                  "answer_option": "No",
-                  "printed": true
+                  "answer_option": "No"
                 }
               ]
             },
@@ -1192,13 +1093,11 @@
               "response_options": [
                 {
                   "display_order": 1,
-                  "answer_option": "Yes",
-                  "printed": true
+                  "answer_option": "Yes"
                 },
                 {
                   "display_order": 2,
-                  "answer_option": "No",
-                  "printed": true
+                  "answer_option": "No"
                 }
               ]
             }
@@ -1220,13 +1119,7 @@
           "response_options": [
             {
               "display_order": 1,
-              "answer_option": "Yes",
-              "printed": true
-            },
-            {
-              "display_order": 2,
-              "answer_option": "No",
-              "printed": false
+              "answer_option": "Yes"
             }
           ]
         }
@@ -1257,13 +1150,11 @@
                 {
                   "display_order": 1,
                   "answer_option": "Male",
-                  "printed": true,
                   "printed_label": "M"
                 },
                 {
                   "display_order": 2,
                   "answer_option": "Female",
-                  "printed": true,
                   "printed_label": "F"
                 }
               ]
@@ -1277,13 +1168,11 @@
                 {
                   "display_order": 1,
                   "answer_option": "Male",
-                  "printed": true,
                   "printed_label": "M"
                 },
                 {
                   "display_order": 2,
                   "answer_option": "Female",
-                  "printed": true,
                   "printed_label": "F"
                 }
               ]
@@ -1297,13 +1186,11 @@
                 {
                   "display_order": 1,
                   "answer_option": "Male",
-                  "printed": true,
                   "printed_label": "M"
                 },
                 {
                   "display_order": 2,
                   "answer_option": "Female",
-                  "printed": true,
                   "printed_label": "F"
                 }
               ]
@@ -1317,13 +1204,11 @@
                 {
                   "display_order": 1,
                   "answer_option": "Male",
-                  "printed": true,
                   "printed_label": "M"
                 },
                 {
                   "display_order": 2,
                   "answer_option": "Female",
-                  "printed": true,
                   "printed_label": "F"
                 }
               ]
@@ -1337,13 +1222,11 @@
                 {
                   "display_order": 1,
                   "answer_option": "Male",
-                  "printed": true,
                   "printed_label": "M"
                 },
                 {
                   "display_order": 2,
                   "answer_option": "Female",
-                  "printed": true,
                   "printed_label": "F"
                 }
               ]
@@ -1366,13 +1249,7 @@
           "response_options": [
             {
               "display_order": 1,
-              "answer_option": "Yes",
-              "printed": true
-            },
-            {
-              "display_order": 2,
-              "answer_option": "No",
-              "printed": false
+              "answer_option": "Yes"
             }
           ]
         }
@@ -1393,20 +1270,17 @@
             {
               "display_order": 1,
               "answer_option": "I have never smoked a cigarette",
-              "printed": true,
               "printed_label": "I have NEVER smoked a cigarette",
               "skip_instruction": "Go to Question 10"
             },
             {
               "display_order": 2,
               "answer_option": "I have smoked fewer than 50 cigarettes (2 1/2 packs) altogether in my life",
-              "printed": true,
               "skip_instruction": "Go to Question 10"
             },
             {
               "display_order": 3,
               "answer_option": "I have smoked 50 or more cigarettes in my entire life",
-              "printed": true,
               "skip_instruction": "Go to Question 8"
             }
           ]
@@ -1437,13 +1311,11 @@
               "response_options": [
                 {
                   "display_order": 1,
-                  "answer_option": "Within 30 minutes of waking",
-                  "printed": true
+                  "answer_option": "Within 30 minutes of waking"
                 },
                 {
                   "display_order": 2,
-                  "answer_option": "More than 30 minutes after waking",
-                  "printed": true
+                  "answer_option": "More than 30 minutes after waking"
                 }
               ]
             }
@@ -1464,23 +1336,19 @@
               "response_options": [
                 {
                   "display_order": 1,
-                  "answer_option": "Often",
-                  "printed": true
+                  "answer_option": "Often"
                 },
                 {
                   "display_order": 2,
-                  "answer_option": "Sometimes",
-                  "printed": true
+                  "answer_option": "Sometimes"
                 },
                 {
                   "display_order": 3,
-                  "answer_option": "Rarely",
-                  "printed": true
+                  "answer_option": "Rarely"
                 },
                 {
                   "display_order": 4,
-                  "answer_option": "Never",
-                  "printed": true
+                  "answer_option": "Never"
                 }
               ]
             }
@@ -1501,23 +1369,19 @@
               "response_options": [
                 {
                   "display_order": 1,
-                  "answer_option": "Very Difficult",
-                  "printed": true
+                  "answer_option": "Very Difficult"
                 },
                 {
                   "display_order": 2,
-                  "answer_option": "Somewhat Difficult",
-                  "printed": true
+                  "answer_option": "Somewhat Difficult"
                 },
                 {
                   "display_order": 3,
-                  "answer_option": "A Little Difficult",
-                  "printed": true
+                  "answer_option": "A Little Difficult"
                 },
                 {
                   "display_order": 4,
-                  "answer_option": "Not Difficult At All",
-                  "printed": true
+                  "answer_option": "Not Difficult At All"
                 }
               ]
             }
@@ -1538,23 +1402,19 @@
               "response_options": [
                 {
                   "display_order": 1,
-                  "answer_option": "Very strong",
-                  "printed": true
+                  "answer_option": "Very strong"
                 },
                 {
                   "display_order": 2,
-                  "answer_option": "Strong",
-                  "printed": true
+                  "answer_option": "Strong"
                 },
                 {
                   "display_order": 3,
-                  "answer_option": "Moderate",
-                  "printed": true
+                  "answer_option": "Moderate"
                 },
                 {
                   "display_order": 4,
-                  "answer_option": "Hardly any",
-                  "printed": true
+                  "answer_option": "Hardly any"
                 }
               ]
             }
@@ -1605,20 +1465,17 @@
             {
               "display_order": 1,
               "answer_option": "I have never had an alcoholic drink",
-              "printed": true,
               "printed_label": "I have NEVER had an alcoholic drink",
               "skip_instruction": "Go to Question 13"
             },
             {
               "display_order": 2,
               "answer_option": "I have had fewer than 10 alcoholic drinks altogether in my life",
-              "printed": true,
               "skip_instruction": "Go to Question 13"
             },
             {
               "display_order": 3,
               "answer_option": "I have had at least 10 alcoholic drinks altogether in my life",
-              "printed": true,
               "skip_instruction": "Go to Question 11"
             }
           ]
@@ -1649,23 +1506,19 @@
               "response_options": [
                 {
                   "display_order": 1,
-                  "answer_option": "About once a month or less",
-                  "printed": true
+                  "answer_option": "About once a month or less"
                 },
                 {
                   "display_order": 2,
-                  "answer_option": "About 2 to 4 times a month",
-                  "printed": true
+                  "answer_option": "About 2 to 4 times a month"
                 },
                 {
                   "display_order": 3,
-                  "answer_option": "About 2 to 3 times a week",
-                  "printed": true
+                  "answer_option": "About 2 to 3 times a week"
                 },
                 {
                   "display_order": 4,
-                  "answer_option": "About 4 or more times a week",
-                  "printed": true
+                  "answer_option": "About 4 or more times a week"
                 }
               ]
             }
@@ -1709,23 +1562,19 @@
               "response_options": [
                 {
                   "display_order": 1,
-                  "answer_option": "Never",
-                  "printed": true
+                  "answer_option": "Never"
                 },
                 {
                   "display_order": 2,
-                  "answer_option": "Monthly or less than monthly",
-                  "printed": true
+                  "answer_option": "Monthly or less than monthly"
                 },
                 {
                   "display_order": 3,
-                  "answer_option": "Weekly",
-                  "printed": true
+                  "answer_option": "Weekly"
                 },
                 {
                   "display_order": 4,
-                  "answer_option": "Daily or almost daily",
-                  "printed": true
+                  "answer_option": "Daily or almost daily"
                 }
               ]
             }
@@ -1746,23 +1595,19 @@
               "response_options": [
                 {
                   "display_order": 1,
-                  "answer_option": "Never",
-                  "printed": true
+                  "answer_option": "Never"
                 },
                 {
                   "display_order": 2,
-                  "answer_option": "Monthly or less than monthly",
-                  "printed": true
+                  "answer_option": "Monthly or less than monthly"
                 },
                 {
                   "display_order": 3,
-                  "answer_option": "Weekly",
-                  "printed": true
+                  "answer_option": "Weekly"
                 },
                 {
                   "display_order": 4,
-                  "answer_option": "Daily or almost daily",
-                  "printed": true
+                  "answer_option": "Daily or almost daily"
                 }
               ]
             }
@@ -1783,23 +1628,19 @@
               "response_options": [
                 {
                   "display_order": 1,
-                  "answer_option": "Never",
-                  "printed": true
+                  "answer_option": "Never"
                 },
                 {
                   "display_order": 2,
-                  "answer_option": "Monthly or less than monthly",
-                  "printed": true
+                  "answer_option": "Monthly or less than monthly"
                 },
                 {
                   "display_order": 3,
-                  "answer_option": "Weekly",
-                  "printed": true
+                  "answer_option": "Weekly"
                 },
                 {
                   "display_order": 4,
-                  "answer_option": "Daily or almost daily",
-                  "printed": true
+                  "answer_option": "Daily or almost daily"
                 }
               ]
             }
@@ -1820,23 +1661,19 @@
               "response_options": [
                 {
                   "display_order": 1,
-                  "answer_option": "Never",
-                  "printed": true
+                  "answer_option": "Never"
                 },
                 {
                   "display_order": 2,
-                  "answer_option": "Monthly or less than monthly",
-                  "printed": true
+                  "answer_option": "Monthly or less than monthly"
                 },
                 {
                   "display_order": 3,
-                  "answer_option": "Weekly",
-                  "printed": true
+                  "answer_option": "Weekly"
                 },
                 {
                   "display_order": 4,
-                  "answer_option": "Daily or almost daily",
-                  "printed": true
+                  "answer_option": "Daily or almost daily"
                 }
               ]
             }
@@ -1857,23 +1694,19 @@
               "response_options": [
                 {
                   "display_order": 1,
-                  "answer_option": "Never",
-                  "printed": true
+                  "answer_option": "Never"
                 },
                 {
                   "display_order": 2,
-                  "answer_option": "Monthly or less than monthly",
-                  "printed": true
+                  "answer_option": "Monthly or less than monthly"
                 },
                 {
                   "display_order": 3,
-                  "answer_option": "Weekly",
-                  "printed": true
+                  "answer_option": "Weekly"
                 },
                 {
                   "display_order": 4,
-                  "answer_option": "Daily or almost daily",
-                  "printed": true
+                  "answer_option": "Daily or almost daily"
                 }
               ]
             }
@@ -1894,23 +1727,19 @@
               "response_options": [
                 {
                   "display_order": 1,
-                  "answer_option": "Never",
-                  "printed": true
+                  "answer_option": "Never"
                 },
                 {
                   "display_order": 2,
-                  "answer_option": "Monthly or less than monthly",
-                  "printed": true
+                  "answer_option": "Monthly or less than monthly"
                 },
                 {
                   "display_order": 3,
-                  "answer_option": "Weekly",
-                  "printed": true
+                  "answer_option": "Weekly"
                 },
                 {
                   "display_order": 4,
-                  "answer_option": "Daily or almost daily",
-                  "printed": true
+                  "answer_option": "Daily or almost daily"
                 }
               ]
             }
@@ -1931,23 +1760,19 @@
               "response_options": [
                 {
                   "display_order": 1,
-                  "answer_option": "Never",
-                  "printed": true
+                  "answer_option": "Never"
                 },
                 {
                   "display_order": 2,
-                  "answer_option": "Monthly or less than monthly",
-                  "printed": true
+                  "answer_option": "Monthly or less than monthly"
                 },
                 {
                   "display_order": 3,
-                  "answer_option": "Weekly",
-                  "printed": true
+                  "answer_option": "Weekly"
                 },
                 {
                   "display_order": 4,
-                  "answer_option": "Daily or almost daily",
-                  "printed": true
+                  "answer_option": "Daily or almost daily"
                 }
               ]
             }
@@ -1968,23 +1793,19 @@
               "response_options": [
                 {
                   "display_order": 1,
-                  "answer_option": "Never",
-                  "printed": true
+                  "answer_option": "Never"
                 },
                 {
                   "display_order": 2,
-                  "answer_option": "Monthly or less than monthly",
-                  "printed": true
+                  "answer_option": "Monthly or less than monthly"
                 },
                 {
                   "display_order": 3,
-                  "answer_option": "Weekly",
-                  "printed": true
+                  "answer_option": "Weekly"
                 },
                 {
                   "display_order": 4,
-                  "answer_option": "Daily or almost daily",
-                  "printed": true
+                  "answer_option": "Daily or almost daily"
                 }
               ]
             }
@@ -2007,19 +1828,16 @@
             {
               "display_order": 1,
               "answer_option": "No, never",
-              "printed": true,
               "skip_instruction": "Go to Question 15"
             },
             {
               "display_order": 2,
               "answer_option": "Yes, only after the death of a loved one",
-              "printed": true,
               "skip_instruction": "Go to Question 14"
             },
             {
               "display_order": 3,
               "answer_option": "Yes, not only after the death of a loved one",
-              "printed": true,
               "skip_instruction": "Go to Question 14"
             }
           ]
@@ -2050,18 +1868,15 @@
               "response_options": [
                 {
                   "display_order": 1,
-                  "answer_option": "Yes, most of the time",
-                  "printed": true
+                  "answer_option": "Yes, most of the time"
                 },
                 {
                   "display_order": 2,
-                  "answer_option": "Maybe or Somewhat",
-                  "printed": true
+                  "answer_option": "Maybe or Somewhat"
                 },
                 {
                   "display_order": 3,
-                  "answer_option": "No",
-                  "printed": true
+                  "answer_option": "No"
                 }
               ]
             }
@@ -2082,18 +1897,15 @@
               "response_options": [
                 {
                   "display_order": 1,
-                  "answer_option": "Yes, most of the time",
-                  "printed": true
+                  "answer_option": "Yes, most of the time"
                 },
                 {
                   "display_order": 2,
-                  "answer_option": "Maybe or Somewhat",
-                  "printed": true
+                  "answer_option": "Maybe or Somewhat"
                 },
                 {
                   "display_order": 3,
-                  "answer_option": "No",
-                  "printed": true
+                  "answer_option": "No"
                 }
               ]
             }
@@ -2114,18 +1926,15 @@
               "response_options": [
                 {
                   "display_order": 1,
-                  "answer_option": "Yes, most of the time",
-                  "printed": true
+                  "answer_option": "Yes, most of the time"
                 },
                 {
                   "display_order": 2,
-                  "answer_option": "Maybe or Somewhat",
-                  "printed": true
+                  "answer_option": "Maybe or Somewhat"
                 },
                 {
                   "display_order": 3,
-                  "answer_option": "No",
-                  "printed": true
+                  "answer_option": "No"
                 }
               ]
             }
@@ -2146,18 +1955,15 @@
               "response_options": [
                 {
                   "display_order": 1,
-                  "answer_option": "Yes, most of the time",
-                  "printed": true
+                  "answer_option": "Yes, most of the time"
                 },
                 {
                   "display_order": 2,
-                  "answer_option": "Maybe or Somewhat",
-                  "printed": true
+                  "answer_option": "Maybe or Somewhat"
                 },
                 {
                   "display_order": 3,
-                  "answer_option": "No",
-                  "printed": true
+                  "answer_option": "No"
                 }
               ]
             }
@@ -2178,18 +1984,15 @@
               "response_options": [
                 {
                   "display_order": 1,
-                  "answer_option": "Yes, most of the time",
-                  "printed": true
+                  "answer_option": "Yes, most of the time"
                 },
                 {
                   "display_order": 2,
-                  "answer_option": "Maybe or Somewhat",
-                  "printed": true
+                  "answer_option": "Maybe or Somewhat"
                 },
                 {
                   "display_order": 3,
-                  "answer_option": "No",
-                  "printed": true
+                  "answer_option": "No"
                 }
               ]
             }
@@ -2210,18 +2013,15 @@
               "response_options": [
                 {
                   "display_order": 1,
-                  "answer_option": "Yes, most of the time",
-                  "printed": true
+                  "answer_option": "Yes, most of the time"
                 },
                 {
                   "display_order": 2,
-                  "answer_option": "Maybe or Somewhat",
-                  "printed": true
+                  "answer_option": "Maybe or Somewhat"
                 },
                 {
                   "display_order": 3,
-                  "answer_option": "No",
-                  "printed": true
+                  "answer_option": "No"
                 }
               ]
             }
@@ -2242,18 +2042,15 @@
               "response_options": [
                 {
                   "display_order": 1,
-                  "answer_option": "Yes, most of the time",
-                  "printed": true
+                  "answer_option": "Yes, most of the time"
                 },
                 {
                   "display_order": 2,
-                  "answer_option": "Maybe or Somewhat",
-                  "printed": true
+                  "answer_option": "Maybe or Somewhat"
                 },
                 {
                   "display_order": 3,
-                  "answer_option": "No",
-                  "printed": true
+                  "answer_option": "No"
                 }
               ]
             }
@@ -2274,18 +2071,15 @@
               "response_options": [
                 {
                   "display_order": 1,
-                  "answer_option": "Yes, most of the time",
-                  "printed": true
+                  "answer_option": "Yes, most of the time"
                 },
                 {
                   "display_order": 2,
-                  "answer_option": "Maybe or Somewhat",
-                  "printed": true
+                  "answer_option": "Maybe or Somewhat"
                 },
                 {
                   "display_order": 3,
-                  "answer_option": "No",
-                  "printed": true
+                  "answer_option": "No"
                 }
               ]
             }
@@ -2306,18 +2100,15 @@
               "response_options": [
                 {
                   "display_order": 1,
-                  "answer_option": "Yes, most of the time",
-                  "printed": true
+                  "answer_option": "Yes, most of the time"
                 },
                 {
                   "display_order": 2,
-                  "answer_option": "Maybe or Somewhat",
-                  "printed": true
+                  "answer_option": "Maybe or Somewhat"
                 },
                 {
                   "display_order": 3,
-                  "answer_option": "No",
-                  "printed": true
+                  "answer_option": "No"
                 }
               ]
             }
@@ -2338,18 +2129,15 @@
               "response_options": [
                 {
                   "display_order": 1,
-                  "answer_option": "Yes, most of the time",
-                  "printed": true
+                  "answer_option": "Yes, most of the time"
                 },
                 {
                   "display_order": 2,
-                  "answer_option": "Maybe or Somewhat",
-                  "printed": true
+                  "answer_option": "Maybe or Somewhat"
                 },
                 {
                   "display_order": 3,
-                  "answer_option": "No",
-                  "printed": true
+                  "answer_option": "No"
                 }
               ]
             }
@@ -2370,18 +2158,15 @@
               "response_options": [
                 {
                   "display_order": 1,
-                  "answer_option": "Yes, most of the time",
-                  "printed": true
+                  "answer_option": "Yes, most of the time"
                 },
                 {
                   "display_order": 2,
-                  "answer_option": "Maybe or Somewhat",
-                  "printed": true
+                  "answer_option": "Maybe or Somewhat"
                 },
                 {
                   "display_order": 3,
-                  "answer_option": "No",
-                  "printed": true
+                  "answer_option": "No"
                 }
               ]
             }
@@ -2413,13 +2198,7 @@
               "response_options": [
                 {
                   "display_order": 1,
-                  "answer_option": "Yes",
-                  "printed": true
-                },
-                {
-                  "display_order": 2,
-                  "answer_option": "No",
-                  "printed": false
+                  "answer_option": "Yes"
                 }
               ]
             },
@@ -2438,13 +2217,7 @@
               "response_options": [
                 {
                   "display_order": 1,
-                  "answer_option": "Yes",
-                  "printed": true
-                },
-                {
-                  "display_order": 2,
-                  "answer_option": "No",
-                  "printed": false
+                  "answer_option": "Yes"
                 }
               ]
             },
@@ -2456,13 +2229,7 @@
               "response_options": [
                 {
                   "display_order": 1,
-                  "answer_option": "Yes",
-                  "printed": true
-                },
-                {
-                  "display_order": 2,
-                  "answer_option": "No",
-                  "printed": false
+                  "answer_option": "Yes"
                 }
               ]
             }
@@ -2483,13 +2250,7 @@
               "response_options": [
                 {
                   "display_order": 1,
-                  "answer_option": "Yes",
-                  "printed": true
-                },
-                {
-                  "display_order": 2,
-                  "answer_option": "No",
-                  "printed": false
+                  "answer_option": "Yes"
                 }
               ]
             },
@@ -2508,13 +2269,7 @@
               "response_options": [
                 {
                   "display_order": 1,
-                  "answer_option": "Yes",
-                  "printed": true
-                },
-                {
-                  "display_order": 2,
-                  "answer_option": "No",
-                  "printed": false
+                  "answer_option": "Yes"
                 }
               ]
             },
@@ -2526,13 +2281,7 @@
               "response_options": [
                 {
                   "display_order": 1,
-                  "answer_option": "Yes",
-                  "printed": true
-                },
-                {
-                  "display_order": 2,
-                  "answer_option": "No",
-                  "printed": false
+                  "answer_option": "Yes"
                 }
               ]
             }
@@ -2553,13 +2302,7 @@
               "response_options": [
                 {
                   "display_order": 1,
-                  "answer_option": "Yes",
-                  "printed": true
-                },
-                {
-                  "display_order": 2,
-                  "answer_option": "No",
-                  "printed": false
+                  "answer_option": "Yes"
                 }
               ]
             },
@@ -2578,13 +2321,7 @@
               "response_options": [
                 {
                   "display_order": 1,
-                  "answer_option": "Yes",
-                  "printed": true
-                },
-                {
-                  "display_order": 2,
-                  "answer_option": "No",
-                  "printed": false
+                  "answer_option": "Yes"
                 }
               ]
             },
@@ -2596,13 +2333,7 @@
               "response_options": [
                 {
                   "display_order": 1,
-                  "answer_option": "Yes",
-                  "printed": true
-                },
-                {
-                  "display_order": 2,
-                  "answer_option": "No",
-                  "printed": false
+                  "answer_option": "Yes"
                 }
               ]
             }
@@ -2623,13 +2354,7 @@
               "response_options": [
                 {
                   "display_order": 1,
-                  "answer_option": "Yes",
-                  "printed": true
-                },
-                {
-                  "display_order": 2,
-                  "answer_option": "No",
-                  "printed": false
+                  "answer_option": "Yes"
                 }
               ]
             },
@@ -2648,13 +2373,7 @@
               "response_options": [
                 {
                   "display_order": 1,
-                  "answer_option": "Yes",
-                  "printed": true
-                },
-                {
-                  "display_order": 2,
-                  "answer_option": "No",
-                  "printed": false
+                  "answer_option": "Yes"
                 }
               ]
             },
@@ -2666,13 +2385,7 @@
               "response_options": [
                 {
                   "display_order": 1,
-                  "answer_option": "Yes",
-                  "printed": true
-                },
-                {
-                  "display_order": 2,
-                  "answer_option": "No",
-                  "printed": false
+                  "answer_option": "Yes"
                 }
               ]
             }
@@ -2693,13 +2406,7 @@
               "response_options": [
                 {
                   "display_order": 1,
-                  "answer_option": "Yes",
-                  "printed": true
-                },
-                {
-                  "display_order": 2,
-                  "answer_option": "No",
-                  "printed": false
+                  "answer_option": "Yes"
                 }
               ]
             },
@@ -2718,13 +2425,7 @@
               "response_options": [
                 {
                   "display_order": 1,
-                  "answer_option": "Yes",
-                  "printed": true
-                },
-                {
-                  "display_order": 2,
-                  "answer_option": "No",
-                  "printed": false
+                  "answer_option": "Yes"
                 }
               ]
             },
@@ -2736,13 +2437,7 @@
               "response_options": [
                 {
                   "display_order": 1,
-                  "answer_option": "Yes",
-                  "printed": true
-                },
-                {
-                  "display_order": 2,
-                  "answer_option": "No",
-                  "printed": false
+                  "answer_option": "Yes"
                 }
               ]
             }
@@ -2763,13 +2458,7 @@
               "response_options": [
                 {
                   "display_order": 1,
-                  "answer_option": "Yes",
-                  "printed": true
-                },
-                {
-                  "display_order": 2,
-                  "answer_option": "No",
-                  "printed": false
+                  "answer_option": "Yes"
                 }
               ]
             },
@@ -2788,13 +2477,7 @@
               "response_options": [
                 {
                   "display_order": 1,
-                  "answer_option": "Yes",
-                  "printed": true
-                },
-                {
-                  "display_order": 2,
-                  "answer_option": "No",
-                  "printed": false
+                  "answer_option": "Yes"
                 }
               ]
             },
@@ -2806,13 +2489,7 @@
               "response_options": [
                 {
                   "display_order": 1,
-                  "answer_option": "Yes",
-                  "printed": true
-                },
-                {
-                  "display_order": 2,
-                  "answer_option": "No",
-                  "printed": false
+                  "answer_option": "Yes"
                 }
               ]
             }
@@ -2833,13 +2510,7 @@
               "response_options": [
                 {
                   "display_order": 1,
-                  "answer_option": "Yes",
-                  "printed": true
-                },
-                {
-                  "display_order": 2,
-                  "answer_option": "No",
-                  "printed": false
+                  "answer_option": "Yes"
                 }
               ]
             },
@@ -2858,13 +2529,7 @@
               "response_options": [
                 {
                   "display_order": 1,
-                  "answer_option": "Yes",
-                  "printed": true
-                },
-                {
-                  "display_order": 2,
-                  "answer_option": "No",
-                  "printed": false
+                  "answer_option": "Yes"
                 }
               ]
             },
@@ -2876,13 +2541,7 @@
               "response_options": [
                 {
                   "display_order": 1,
-                  "answer_option": "Yes",
-                  "printed": true
-                },
-                {
-                  "display_order": 2,
-                  "answer_option": "No",
-                  "printed": false
+                  "answer_option": "Yes"
                 }
               ]
             }
@@ -2903,13 +2562,7 @@
               "response_options": [
                 {
                   "display_order": 1,
-                  "answer_option": "Yes",
-                  "printed": true
-                },
-                {
-                  "display_order": 2,
-                  "answer_option": "No",
-                  "printed": false
+                  "answer_option": "Yes"
                 }
               ]
             },
@@ -2928,13 +2581,7 @@
               "response_options": [
                 {
                   "display_order": 1,
-                  "answer_option": "Yes",
-                  "printed": true
-                },
-                {
-                  "display_order": 2,
-                  "answer_option": "No",
-                  "printed": false
+                  "answer_option": "Yes"
                 }
               ]
             },
@@ -2946,13 +2593,7 @@
               "response_options": [
                 {
                   "display_order": 1,
-                  "answer_option": "Yes",
-                  "printed": true
-                },
-                {
-                  "display_order": 2,
-                  "answer_option": "No",
-                  "printed": false
+                  "answer_option": "Yes"
                 }
               ]
             }
@@ -2973,13 +2614,7 @@
               "response_options": [
                 {
                   "display_order": 1,
-                  "answer_option": "Yes",
-                  "printed": true
-                },
-                {
-                  "display_order": 2,
-                  "answer_option": "No",
-                  "printed": false
+                  "answer_option": "Yes"
                 }
               ]
             },
@@ -2998,13 +2633,7 @@
               "response_options": [
                 {
                   "display_order": 1,
-                  "answer_option": "Yes",
-                  "printed": true
-                },
-                {
-                  "display_order": 2,
-                  "answer_option": "No",
-                  "printed": false
+                  "answer_option": "Yes"
                 }
               ]
             },
@@ -3016,13 +2645,7 @@
               "response_options": [
                 {
                   "display_order": 1,
-                  "answer_option": "Yes",
-                  "printed": true
-                },
-                {
-                  "display_order": 2,
-                  "answer_option": "No",
-                  "printed": false
+                  "answer_option": "Yes"
                 }
               ]
             }
@@ -3043,13 +2666,7 @@
               "response_options": [
                 {
                   "display_order": 1,
-                  "answer_option": "Yes",
-                  "printed": true
-                },
-                {
-                  "display_order": 2,
-                  "answer_option": "No",
-                  "printed": false
+                  "answer_option": "Yes"
                 }
               ]
             },
@@ -3068,13 +2685,7 @@
               "response_options": [
                 {
                   "display_order": 1,
-                  "answer_option": "Yes",
-                  "printed": true
-                },
-                {
-                  "display_order": 2,
-                  "answer_option": "No",
-                  "printed": false
+                  "answer_option": "Yes"
                 }
               ]
             },
@@ -3086,13 +2697,7 @@
               "response_options": [
                 {
                   "display_order": 1,
-                  "answer_option": "Yes",
-                  "printed": true
-                },
-                {
-                  "display_order": 2,
-                  "answer_option": "No",
-                  "printed": false
+                  "answer_option": "Yes"
                 }
               ]
             }
@@ -3113,13 +2718,7 @@
               "response_options": [
                 {
                   "display_order": 1,
-                  "answer_option": "Yes",
-                  "printed": true
-                },
-                {
-                  "display_order": 2,
-                  "answer_option": "No",
-                  "printed": false
+                  "answer_option": "Yes"
                 }
               ]
             },
@@ -3138,13 +2737,7 @@
               "response_options": [
                 {
                   "display_order": 1,
-                  "answer_option": "Yes",
-                  "printed": true
-                },
-                {
-                  "display_order": 2,
-                  "answer_option": "No",
-                  "printed": false
+                  "answer_option": "Yes"
                 }
               ]
             },
@@ -3156,13 +2749,7 @@
               "response_options": [
                 {
                   "display_order": 1,
-                  "answer_option": "Yes",
-                  "printed": true
-                },
-                {
-                  "display_order": 2,
-                  "answer_option": "No",
-                  "printed": false
+                  "answer_option": "Yes"
                 }
               ]
             }
@@ -3183,13 +2770,7 @@
               "response_options": [
                 {
                   "display_order": 1,
-                  "answer_option": "Yes",
-                  "printed": true
-                },
-                {
-                  "display_order": 2,
-                  "answer_option": "No",
-                  "printed": false
+                  "answer_option": "Yes"
                 }
               ]
             },
@@ -3208,13 +2789,7 @@
               "response_options": [
                 {
                   "display_order": 1,
-                  "answer_option": "Yes",
-                  "printed": true
-                },
-                {
-                  "display_order": 2,
-                  "answer_option": "No",
-                  "printed": false
+                  "answer_option": "Yes"
                 }
               ]
             },
@@ -3226,13 +2801,7 @@
               "response_options": [
                 {
                   "display_order": 1,
-                  "answer_option": "Yes",
-                  "printed": true
-                },
-                {
-                  "display_order": 2,
-                  "answer_option": "No",
-                  "printed": false
+                  "answer_option": "Yes"
                 }
               ]
             }
@@ -3253,13 +2822,7 @@
               "response_options": [
                 {
                   "display_order": 1,
-                  "answer_option": "Yes",
-                  "printed": true
-                },
-                {
-                  "display_order": 2,
-                  "answer_option": "No",
-                  "printed": false
+                  "answer_option": "Yes"
                 }
               ]
             },
@@ -3278,13 +2841,7 @@
               "response_options": [
                 {
                   "display_order": 1,
-                  "answer_option": "Yes",
-                  "printed": true
-                },
-                {
-                  "display_order": 2,
-                  "answer_option": "No",
-                  "printed": false
+                  "answer_option": "Yes"
                 }
               ]
             },
@@ -3296,13 +2853,7 @@
               "response_options": [
                 {
                   "display_order": 1,
-                  "answer_option": "Yes",
-                  "printed": true
-                },
-                {
-                  "display_order": 2,
-                  "answer_option": "No",
-                  "printed": false
+                  "answer_option": "Yes"
                 }
               ]
             }
@@ -3323,13 +2874,7 @@
               "response_options": [
                 {
                   "display_order": 1,
-                  "answer_option": "Yes",
-                  "printed": true
-                },
-                {
-                  "display_order": 2,
-                  "answer_option": "No",
-                  "printed": false
+                  "answer_option": "Yes"
                 }
               ]
             },
@@ -3348,13 +2893,7 @@
               "response_options": [
                 {
                   "display_order": 1,
-                  "answer_option": "Yes",
-                  "printed": true
-                },
-                {
-                  "display_order": 2,
-                  "answer_option": "No",
-                  "printed": false
+                  "answer_option": "Yes"
                 }
               ]
             },
@@ -3366,13 +2905,7 @@
               "response_options": [
                 {
                   "display_order": 1,
-                  "answer_option": "Yes",
-                  "printed": true
-                },
-                {
-                  "display_order": 2,
-                  "answer_option": "No",
-                  "printed": false
+                  "answer_option": "Yes"
                 }
               ]
             }
@@ -3393,13 +2926,7 @@
               "response_options": [
                 {
                   "display_order": 1,
-                  "answer_option": "Yes",
-                  "printed": true
-                },
-                {
-                  "display_order": 2,
-                  "answer_option": "No",
-                  "printed": false
+                  "answer_option": "Yes"
                 }
               ]
             },
@@ -3418,13 +2945,7 @@
               "response_options": [
                 {
                   "display_order": 1,
-                  "answer_option": "Yes",
-                  "printed": true
-                },
-                {
-                  "display_order": 2,
-                  "answer_option": "No",
-                  "printed": false
+                  "answer_option": "Yes"
                 }
               ]
             },
@@ -3436,13 +2957,7 @@
               "response_options": [
                 {
                   "display_order": 1,
-                  "answer_option": "Yes",
-                  "printed": true
-                },
-                {
-                  "display_order": 2,
-                  "answer_option": "No",
-                  "printed": false
+                  "answer_option": "Yes"
                 }
               ]
             }
@@ -3463,13 +2978,7 @@
               "response_options": [
                 {
                   "display_order": 1,
-                  "answer_option": "Yes",
-                  "printed": true
-                },
-                {
-                  "display_order": 2,
-                  "answer_option": "No",
-                  "printed": false
+                  "answer_option": "Yes"
                 }
               ]
             },
@@ -3488,13 +2997,7 @@
               "response_options": [
                 {
                   "display_order": 1,
-                  "answer_option": "Yes",
-                  "printed": true
-                },
-                {
-                  "display_order": 2,
-                  "answer_option": "No",
-                  "printed": false
+                  "answer_option": "Yes"
                 }
               ]
             },
@@ -3506,13 +3009,7 @@
               "response_options": [
                 {
                   "display_order": 1,
-                  "answer_option": "Yes",
-                  "printed": true
-                },
-                {
-                  "display_order": 2,
-                  "answer_option": "No",
-                  "printed": false
+                  "answer_option": "Yes"
                 }
               ]
             }
@@ -3533,13 +3030,7 @@
               "response_options": [
                 {
                   "display_order": 1,
-                  "answer_option": "Yes",
-                  "printed": true
-                },
-                {
-                  "display_order": 2,
-                  "answer_option": "No",
-                  "printed": false
+                  "answer_option": "Yes"
                 }
               ]
             },
@@ -3558,13 +3049,7 @@
               "response_options": [
                 {
                   "display_order": 1,
-                  "answer_option": "Yes",
-                  "printed": true
-                },
-                {
-                  "display_order": 2,
-                  "answer_option": "No",
-                  "printed": false
+                  "answer_option": "Yes"
                 }
               ]
             },
@@ -3576,13 +3061,7 @@
               "response_options": [
                 {
                   "display_order": 1,
-                  "answer_option": "Yes",
-                  "printed": true
-                },
-                {
-                  "display_order": 2,
-                  "answer_option": "No",
-                  "printed": false
+                  "answer_option": "Yes"
                 }
               ]
             }
@@ -3603,13 +3082,7 @@
               "response_options": [
                 {
                   "display_order": 1,
-                  "answer_option": "Yes",
-                  "printed": true
-                },
-                {
-                  "display_order": 2,
-                  "answer_option": "No",
-                  "printed": false
+                  "answer_option": "Yes"
                 }
               ]
             },
@@ -3628,13 +3101,7 @@
               "response_options": [
                 {
                   "display_order": 1,
-                  "answer_option": "Yes",
-                  "printed": true
-                },
-                {
-                  "display_order": 2,
-                  "answer_option": "No",
-                  "printed": false
+                  "answer_option": "Yes"
                 }
               ]
             },
@@ -3646,13 +3113,7 @@
               "response_options": [
                 {
                   "display_order": 1,
-                  "answer_option": "Yes",
-                  "printed": true
-                },
-                {
-                  "display_order": 2,
-                  "answer_option": "No",
-                  "printed": false
+                  "answer_option": "Yes"
                 }
               ]
             }
@@ -3673,13 +3134,7 @@
               "response_options": [
                 {
                   "display_order": 1,
-                  "answer_option": "Yes",
-                  "printed": true
-                },
-                {
-                  "display_order": 2,
-                  "answer_option": "No",
-                  "printed": false
+                  "answer_option": "Yes"
                 }
               ]
             },
@@ -3698,13 +3153,7 @@
               "response_options": [
                 {
                   "display_order": 1,
-                  "answer_option": "Yes",
-                  "printed": true
-                },
-                {
-                  "display_order": 2,
-                  "answer_option": "No",
-                  "printed": false
+                  "answer_option": "Yes"
                 }
               ]
             },
@@ -3716,13 +3165,7 @@
               "response_options": [
                 {
                   "display_order": 1,
-                  "answer_option": "Yes",
-                  "printed": true
-                },
-                {
-                  "display_order": 2,
-                  "answer_option": "No",
-                  "printed": false
+                  "answer_option": "Yes"
                 }
               ]
             }
@@ -3743,13 +3186,7 @@
               "response_options": [
                 {
                   "display_order": 1,
-                  "answer_option": "Yes",
-                  "printed": true
-                },
-                {
-                  "display_order": 2,
-                  "answer_option": "No",
-                  "printed": false
+                  "answer_option": "Yes"
                 }
               ]
             },
@@ -3768,13 +3205,7 @@
               "response_options": [
                 {
                   "display_order": 1,
-                  "answer_option": "Yes",
-                  "printed": true
-                },
-                {
-                  "display_order": 2,
-                  "answer_option": "No",
-                  "printed": false
+                  "answer_option": "Yes"
                 }
               ]
             },
@@ -3786,13 +3217,7 @@
               "response_options": [
                 {
                   "display_order": 1,
-                  "answer_option": "Yes",
-                  "printed": true
-                },
-                {
-                  "display_order": 2,
-                  "answer_option": "No",
-                  "printed": false
+                  "answer_option": "Yes"
                 }
               ]
             }
@@ -3813,13 +3238,7 @@
               "response_options": [
                 {
                   "display_order": 1,
-                  "answer_option": "Yes",
-                  "printed": true
-                },
-                {
-                  "display_order": 2,
-                  "answer_option": "No",
-                  "printed": false
+                  "answer_option": "Yes"
                 }
               ]
             },
@@ -3838,13 +3257,7 @@
               "response_options": [
                 {
                   "display_order": 1,
-                  "answer_option": "Yes",
-                  "printed": true
-                },
-                {
-                  "display_order": 2,
-                  "answer_option": "No",
-                  "printed": false
+                  "answer_option": "Yes"
                 }
               ]
             },
@@ -3856,13 +3269,7 @@
               "response_options": [
                 {
                   "display_order": 1,
-                  "answer_option": "Yes",
-                  "printed": true
-                },
-                {
-                  "display_order": 2,
-                  "answer_option": "No",
-                  "printed": false
+                  "answer_option": "Yes"
                 }
               ]
             }
@@ -3883,13 +3290,7 @@
               "response_options": [
                 {
                   "display_order": 1,
-                  "answer_option": "Yes",
-                  "printed": true
-                },
-                {
-                  "display_order": 2,
-                  "answer_option": "No",
-                  "printed": false
+                  "answer_option": "Yes"
                 }
               ]
             },
@@ -3908,13 +3309,7 @@
               "response_options": [
                 {
                   "display_order": 1,
-                  "answer_option": "Yes",
-                  "printed": true
-                },
-                {
-                  "display_order": 2,
-                  "answer_option": "No",
-                  "printed": false
+                  "answer_option": "Yes"
                 }
               ]
             },
@@ -3926,13 +3321,7 @@
               "response_options": [
                 {
                   "display_order": 1,
-                  "answer_option": "Yes",
-                  "printed": true
-                },
-                {
-                  "display_order": 2,
-                  "answer_option": "No",
-                  "printed": false
+                  "answer_option": "Yes"
                 }
               ]
             }
@@ -3953,13 +3342,7 @@
               "response_options": [
                 {
                   "display_order": 1,
-                  "answer_option": "Yes",
-                  "printed": true
-                },
-                {
-                  "display_order": 2,
-                  "answer_option": "No",
-                  "printed": false
+                  "answer_option": "Yes"
                 }
               ]
             },
@@ -3978,13 +3361,7 @@
               "response_options": [
                 {
                   "display_order": 1,
-                  "answer_option": "Yes",
-                  "printed": true
-                },
-                {
-                  "display_order": 2,
-                  "answer_option": "No",
-                  "printed": false
+                  "answer_option": "Yes"
                 }
               ]
             },
@@ -3996,13 +3373,7 @@
               "response_options": [
                 {
                   "display_order": 1,
-                  "answer_option": "Yes",
-                  "printed": true
-                },
-                {
-                  "display_order": 2,
-                  "answer_option": "No",
-                  "printed": false
+                  "answer_option": "Yes"
                 }
               ]
             }
@@ -4023,13 +3394,7 @@
               "response_options": [
                 {
                   "display_order": 1,
-                  "answer_option": "Yes",
-                  "printed": true
-                },
-                {
-                  "display_order": 2,
-                  "answer_option": "No",
-                  "printed": false
+                  "answer_option": "Yes"
                 }
               ]
             },
@@ -4048,13 +3413,7 @@
               "response_options": [
                 {
                   "display_order": 1,
-                  "answer_option": "Yes",
-                  "printed": true
-                },
-                {
-                  "display_order": 2,
-                  "answer_option": "No",
-                  "printed": false
+                  "answer_option": "Yes"
                 }
               ]
             },
@@ -4066,13 +3425,7 @@
               "response_options": [
                 {
                   "display_order": 1,
-                  "answer_option": "Yes",
-                  "printed": true
-                },
-                {
-                  "display_order": 2,
-                  "answer_option": "No",
-                  "printed": false
+                  "answer_option": "Yes"
                 }
               ]
             }
@@ -4093,13 +3446,7 @@
               "response_options": [
                 {
                   "display_order": 1,
-                  "answer_option": "Yes",
-                  "printed": true
-                },
-                {
-                  "display_order": 2,
-                  "answer_option": "No",
-                  "printed": false
+                  "answer_option": "Yes"
                 }
               ]
             },
@@ -4118,13 +3465,7 @@
               "response_options": [
                 {
                   "display_order": 1,
-                  "answer_option": "Yes",
-                  "printed": true
-                },
-                {
-                  "display_order": 2,
-                  "answer_option": "No",
-                  "printed": false
+                  "answer_option": "Yes"
                 }
               ]
             },
@@ -4136,13 +3477,7 @@
               "response_options": [
                 {
                   "display_order": 1,
-                  "answer_option": "Yes",
-                  "printed": true
-                },
-                {
-                  "display_order": 2,
-                  "answer_option": "No",
-                  "printed": false
+                  "answer_option": "Yes"
                 }
               ]
             }
@@ -4163,13 +3498,7 @@
               "response_options": [
                 {
                   "display_order": 1,
-                  "answer_option": "Yes",
-                  "printed": true
-                },
-                {
-                  "display_order": 2,
-                  "answer_option": "No",
-                  "printed": false
+                  "answer_option": "Yes"
                 }
               ]
             },
@@ -4188,13 +3517,7 @@
               "response_options": [
                 {
                   "display_order": 1,
-                  "answer_option": "Yes",
-                  "printed": true
-                },
-                {
-                  "display_order": 2,
-                  "answer_option": "No",
-                  "printed": false
+                  "answer_option": "Yes"
                 }
               ]
             },
@@ -4206,13 +3529,7 @@
               "response_options": [
                 {
                   "display_order": 1,
-                  "answer_option": "Yes",
-                  "printed": true
-                },
-                {
-                  "display_order": 2,
-                  "answer_option": "No",
-                  "printed": false
+                  "answer_option": "Yes"
                 }
               ]
             }
@@ -4233,13 +3550,7 @@
               "response_options": [
                 {
                   "display_order": 1,
-                  "answer_option": "Yes",
-                  "printed": true
-                },
-                {
-                  "display_order": 2,
-                  "answer_option": "No",
-                  "printed": false
+                  "answer_option": "Yes"
                 }
               ]
             },
@@ -4258,13 +3569,7 @@
               "response_options": [
                 {
                   "display_order": 1,
-                  "answer_option": "Yes",
-                  "printed": true
-                },
-                {
-                  "display_order": 2,
-                  "answer_option": "No",
-                  "printed": false
+                  "answer_option": "Yes"
                 }
               ]
             },
@@ -4276,13 +3581,7 @@
               "response_options": [
                 {
                   "display_order": 1,
-                  "answer_option": "Yes",
-                  "printed": true
-                },
-                {
-                  "display_order": 2,
-                  "answer_option": "No",
-                  "printed": false
+                  "answer_option": "Yes"
                 }
               ]
             }
@@ -4303,13 +3602,7 @@
               "response_options": [
                 {
                   "display_order": 1,
-                  "answer_option": "Yes",
-                  "printed": true
-                },
-                {
-                  "display_order": 2,
-                  "answer_option": "No",
-                  "printed": false
+                  "answer_option": "Yes"
                 }
               ]
             },
@@ -4328,13 +3621,7 @@
               "response_options": [
                 {
                   "display_order": 1,
-                  "answer_option": "Yes",
-                  "printed": true
-                },
-                {
-                  "display_order": 2,
-                  "answer_option": "No",
-                  "printed": false
+                  "answer_option": "Yes"
                 }
               ]
             },
@@ -4346,13 +3633,7 @@
               "response_options": [
                 {
                   "display_order": 1,
-                  "answer_option": "Yes",
-                  "printed": true
-                },
-                {
-                  "display_order": 2,
-                  "answer_option": "No",
-                  "printed": false
+                  "answer_option": "Yes"
                 }
               ]
             }
@@ -4373,13 +3654,7 @@
               "response_options": [
                 {
                   "display_order": 1,
-                  "answer_option": "Yes",
-                  "printed": true
-                },
-                {
-                  "display_order": 2,
-                  "answer_option": "No",
-                  "printed": false
+                  "answer_option": "Yes"
                 }
               ]
             },
@@ -4398,13 +3673,7 @@
               "response_options": [
                 {
                   "display_order": 1,
-                  "answer_option": "Yes",
-                  "printed": true
-                },
-                {
-                  "display_order": 2,
-                  "answer_option": "No",
-                  "printed": false
+                  "answer_option": "Yes"
                 }
               ]
             },
@@ -4416,13 +3685,7 @@
               "response_options": [
                 {
                   "display_order": 1,
-                  "answer_option": "Yes",
-                  "printed": true
-                },
-                {
-                  "display_order": 2,
-                  "answer_option": "No",
-                  "printed": false
+                  "answer_option": "Yes"
                 }
               ]
             }
@@ -4443,13 +3706,7 @@
               "response_options": [
                 {
                   "display_order": 1,
-                  "answer_option": "Yes",
-                  "printed": true
-                },
-                {
-                  "display_order": 2,
-                  "answer_option": "No",
-                  "printed": false
+                  "answer_option": "Yes"
                 }
               ]
             },
@@ -4468,13 +3725,7 @@
               "response_options": [
                 {
                   "display_order": 1,
-                  "answer_option": "Yes",
-                  "printed": true
-                },
-                {
-                  "display_order": 2,
-                  "answer_option": "No",
-                  "printed": false
+                  "answer_option": "Yes"
                 }
               ]
             },
@@ -4486,13 +3737,7 @@
               "response_options": [
                 {
                   "display_order": 1,
-                  "answer_option": "Yes",
-                  "printed": true
-                },
-                {
-                  "display_order": 2,
-                  "answer_option": "No",
-                  "printed": false
+                  "answer_option": "Yes"
                 }
               ]
             }
@@ -4513,13 +3758,7 @@
               "response_options": [
                 {
                   "display_order": 1,
-                  "answer_option": "Yes",
-                  "printed": true
-                },
-                {
-                  "display_order": 2,
-                  "answer_option": "No",
-                  "printed": false
+                  "answer_option": "Yes"
                 }
               ]
             },
@@ -4538,13 +3777,7 @@
               "response_options": [
                 {
                   "display_order": 1,
-                  "answer_option": "Yes",
-                  "printed": true
-                },
-                {
-                  "display_order": 2,
-                  "answer_option": "No",
-                  "printed": false
+                  "answer_option": "Yes"
                 }
               ]
             },
@@ -4556,13 +3789,7 @@
               "response_options": [
                 {
                   "display_order": 1,
-                  "answer_option": "Yes",
-                  "printed": true
-                },
-                {
-                  "display_order": 2,
-                  "answer_option": "No",
-                  "printed": false
+                  "answer_option": "Yes"
                 }
               ]
             }
@@ -4583,13 +3810,7 @@
               "response_options": [
                 {
                   "display_order": 1,
-                  "answer_option": "Yes",
-                  "printed": true
-                },
-                {
-                  "display_order": 2,
-                  "answer_option": "No",
-                  "printed": false
+                  "answer_option": "Yes"
                 }
               ]
             },
@@ -4608,13 +3829,7 @@
               "response_options": [
                 {
                   "display_order": 1,
-                  "answer_option": "Yes",
-                  "printed": true
-                },
-                {
-                  "display_order": 2,
-                  "answer_option": "No",
-                  "printed": false
+                  "answer_option": "Yes"
                 }
               ]
             },
@@ -4626,13 +3841,7 @@
               "response_options": [
                 {
                   "display_order": 1,
-                  "answer_option": "Yes",
-                  "printed": true
-                },
-                {
-                  "display_order": 2,
-                  "answer_option": "No",
-                  "printed": false
+                  "answer_option": "Yes"
                 }
               ]
             }
@@ -4653,13 +3862,7 @@
               "response_options": [
                 {
                   "display_order": 1,
-                  "answer_option": "Yes",
-                  "printed": true
-                },
-                {
-                  "display_order": 2,
-                  "answer_option": "No",
-                  "printed": false
+                  "answer_option": "Yes"
                 }
               ]
             },
@@ -4678,13 +3881,7 @@
               "response_options": [
                 {
                   "display_order": 1,
-                  "answer_option": "Yes",
-                  "printed": true
-                },
-                {
-                  "display_order": 2,
-                  "answer_option": "No",
-                  "printed": false
+                  "answer_option": "Yes"
                 }
               ]
             },
@@ -4696,13 +3893,7 @@
               "response_options": [
                 {
                   "display_order": 1,
-                  "answer_option": "Yes",
-                  "printed": true
-                },
-                {
-                  "display_order": 2,
-                  "answer_option": "No",
-                  "printed": false
+                  "answer_option": "Yes"
                 }
               ]
             }
@@ -4723,13 +3914,7 @@
               "response_options": [
                 {
                   "display_order": 1,
-                  "answer_option": "Yes",
-                  "printed": true
-                },
-                {
-                  "display_order": 2,
-                  "answer_option": "No",
-                  "printed": false
+                  "answer_option": "Yes"
                 }
               ]
             },
@@ -4748,13 +3933,7 @@
               "response_options": [
                 {
                   "display_order": 1,
-                  "answer_option": "Yes",
-                  "printed": true
-                },
-                {
-                  "display_order": 2,
-                  "answer_option": "No",
-                  "printed": false
+                  "answer_option": "Yes"
                 }
               ]
             },
@@ -4766,13 +3945,7 @@
               "response_options": [
                 {
                   "display_order": 1,
-                  "answer_option": "Yes",
-                  "printed": true
-                },
-                {
-                  "display_order": 2,
-                  "answer_option": "No",
-                  "printed": false
+                  "answer_option": "Yes"
                 }
               ]
             }
@@ -4793,13 +3966,7 @@
               "response_options": [
                 {
                   "display_order": 1,
-                  "answer_option": "Yes",
-                  "printed": true
-                },
-                {
-                  "display_order": 2,
-                  "answer_option": "No",
-                  "printed": false
+                  "answer_option": "Yes"
                 }
               ]
             },
@@ -4818,13 +3985,7 @@
               "response_options": [
                 {
                   "display_order": 1,
-                  "answer_option": "Yes",
-                  "printed": true
-                },
-                {
-                  "display_order": 2,
-                  "answer_option": "No",
-                  "printed": false
+                  "answer_option": "Yes"
                 }
               ]
             },
@@ -4836,13 +3997,7 @@
               "response_options": [
                 {
                   "display_order": 1,
-                  "answer_option": "Yes",
-                  "printed": true
-                },
-                {
-                  "display_order": 2,
-                  "answer_option": "No",
-                  "printed": false
+                  "answer_option": "Yes"
                 }
               ]
             }
@@ -4863,13 +4018,7 @@
               "response_options": [
                 {
                   "display_order": 1,
-                  "answer_option": "Yes",
-                  "printed": true
-                },
-                {
-                  "display_order": 2,
-                  "answer_option": "No",
-                  "printed": false
+                  "answer_option": "Yes"
                 }
               ]
             },
@@ -4888,13 +4037,7 @@
               "response_options": [
                 {
                   "display_order": 1,
-                  "answer_option": "Yes",
-                  "printed": true
-                },
-                {
-                  "display_order": 2,
-                  "answer_option": "No",
-                  "printed": false
+                  "answer_option": "Yes"
                 }
               ]
             },
@@ -4906,13 +4049,7 @@
               "response_options": [
                 {
                   "display_order": 1,
-                  "answer_option": "Yes",
-                  "printed": true
-                },
-                {
-                  "display_order": 2,
-                  "answer_option": "No",
-                  "printed": false
+                  "answer_option": "Yes"
                 }
               ]
             }
@@ -4933,13 +4070,7 @@
               "response_options": [
                 {
                   "display_order": 1,
-                  "answer_option": "Yes",
-                  "printed": true
-                },
-                {
-                  "display_order": 2,
-                  "answer_option": "No",
-                  "printed": false
+                  "answer_option": "Yes"
                 }
               ]
             },
@@ -4958,13 +4089,7 @@
               "response_options": [
                 {
                   "display_order": 1,
-                  "answer_option": "Yes",
-                  "printed": true
-                },
-                {
-                  "display_order": 2,
-                  "answer_option": "No",
-                  "printed": false
+                  "answer_option": "Yes"
                 }
               ]
             },
@@ -4976,13 +4101,7 @@
               "response_options": [
                 {
                   "display_order": 1,
-                  "answer_option": "Yes",
-                  "printed": true
-                },
-                {
-                  "display_order": 2,
-                  "answer_option": "No",
-                  "printed": false
+                  "answer_option": "Yes"
                 }
               ]
             }
@@ -5003,13 +4122,7 @@
               "response_options": [
                 {
                   "display_order": 1,
-                  "answer_option": "Yes",
-                  "printed": true
-                },
-                {
-                  "display_order": 2,
-                  "answer_option": "No",
-                  "printed": false
+                  "answer_option": "Yes"
                 }
               ]
             },
@@ -5028,13 +4141,7 @@
               "response_options": [
                 {
                   "display_order": 1,
-                  "answer_option": "Yes",
-                  "printed": true
-                },
-                {
-                  "display_order": 2,
-                  "answer_option": "No",
-                  "printed": false
+                  "answer_option": "Yes"
                 }
               ]
             },
@@ -5046,13 +4153,7 @@
               "response_options": [
                 {
                   "display_order": 1,
-                  "answer_option": "Yes",
-                  "printed": true
-                },
-                {
-                  "display_order": 2,
-                  "answer_option": "No",
-                  "printed": false
+                  "answer_option": "Yes"
                 }
               ]
             }
@@ -5073,13 +4174,7 @@
               "response_options": [
                 {
                   "display_order": 1,
-                  "answer_option": "Yes",
-                  "printed": true
-                },
-                {
-                  "display_order": 2,
-                  "answer_option": "No",
-                  "printed": false
+                  "answer_option": "Yes"
                 }
               ]
             },
@@ -5098,13 +4193,7 @@
               "response_options": [
                 {
                   "display_order": 1,
-                  "answer_option": "Yes",
-                  "printed": true
-                },
-                {
-                  "display_order": 2,
-                  "answer_option": "No",
-                  "printed": false
+                  "answer_option": "Yes"
                 }
               ]
             },
@@ -5116,13 +4205,7 @@
               "response_options": [
                 {
                   "display_order": 1,
-                  "answer_option": "Yes",
-                  "printed": true
-                },
-                {
-                  "display_order": 2,
-                  "answer_option": "No",
-                  "printed": false
+                  "answer_option": "Yes"
                 }
               ]
             }
@@ -5143,13 +4226,7 @@
               "response_options": [
                 {
                   "display_order": 1,
-                  "answer_option": "Yes",
-                  "printed": true
-                },
-                {
-                  "display_order": 2,
-                  "answer_option": "No",
-                  "printed": false
+                  "answer_option": "Yes"
                 }
               ]
             },
@@ -5168,13 +4245,7 @@
               "response_options": [
                 {
                   "display_order": 1,
-                  "answer_option": "Yes",
-                  "printed": true
-                },
-                {
-                  "display_order": 2,
-                  "answer_option": "No",
-                  "printed": false
+                  "answer_option": "Yes"
                 }
               ]
             },
@@ -5186,13 +4257,7 @@
               "response_options": [
                 {
                   "display_order": 1,
-                  "answer_option": "Yes",
-                  "printed": true
-                },
-                {
-                  "display_order": 2,
-                  "answer_option": "No",
-                  "printed": false
+                  "answer_option": "Yes"
                 }
               ]
             }
@@ -5213,13 +4278,7 @@
               "response_options": [
                 {
                   "display_order": 1,
-                  "answer_option": "Yes",
-                  "printed": true
-                },
-                {
-                  "display_order": 2,
-                  "answer_option": "No",
-                  "printed": false
+                  "answer_option": "Yes"
                 }
               ]
             },
@@ -5238,13 +4297,7 @@
               "response_options": [
                 {
                   "display_order": 1,
-                  "answer_option": "Yes",
-                  "printed": true
-                },
-                {
-                  "display_order": 2,
-                  "answer_option": "No",
-                  "printed": false
+                  "answer_option": "Yes"
                 }
               ]
             },
@@ -5256,13 +4309,7 @@
               "response_options": [
                 {
                   "display_order": 1,
-                  "answer_option": "Yes",
-                  "printed": true
-                },
-                {
-                  "display_order": 2,
-                  "answer_option": "No",
-                  "printed": false
+                  "answer_option": "Yes"
                 }
               ]
             }
@@ -5303,13 +4350,11 @@
               "response_options": [
                 {
                   "display_order": 1,
-                  "answer_option": "Yes",
-                  "printed": true
+                  "answer_option": "Yes"
                 },
                 {
                   "display_order": 2,
-                  "answer_option": "No",
-                  "printed": true
+                  "answer_option": "No"
                 }
               ]
             }

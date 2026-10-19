@@ -192,15 +192,14 @@
 #   })
 # })
 #
-# test_that("a kind that can't be added here says so and offers the page that can", {
+# test_that("a question can be added to a questionnaire here: the page doesn't say it can't", {
 #   me <- local_staff()
 #   page <- page_args(me)
 #   shiny::testServer(make_edit_server, args = page$args, {
 #     session$setInputs(verb = "add", kind = "questionnaire_question")
-#     expect_match(text_of(output$explain), "You can't add")
-#     session$setInputs(redirect = 1)
+#     expect_false(grepl("You can't add", text_of(output$explain)))
+#     expect_match(text_of(output$explain), "A question as it's printed in one questionnaire")
 #   })
-#   expect_equal(page$pages(), "extraction")
 # })
 #
 # test_that("a database that can't be read says so, with Try again", {

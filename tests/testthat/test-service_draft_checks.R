@@ -24,12 +24,24 @@ test_that("each broken rule is reported against the block to fix", {
   edit <- function(table, id, field, value) draft_service_update(draft, table, id, field, value)
 
   expect_true(problem_for(edit("components", q1a, "text", ""), "Add the printed words"))
-  expect_true(problem_for(edit("components", q1a, "question_number", ""), "Add the question number"))
-  expect_true(problem_for(edit("components", q1a, "question_number", "1B"), "no other question has"))
+  unnumbered <- draft
+  unnumbered$components[unnumbered$components$id == q1a, c("question_number", "printed_number")] <- NA
+  expect_true(problem_for(unnumbered, "Add the question number"))
+  expect_true(problem_for(edit("components", q1a, "printed_number", "1B"), "no other question has"))
+  # a question with no number typed is asked as its place among the questions, which can clash too
+  places <- draft_service_renumber_questions(draft)
+  places <- draft_service_update(places, "components", q1a, "printed_number", "")
+  expect_false(any(draft_service_check(places, test_lookups())$id == q1a))
+  expect_true(any(grepl("no other question has", draft_service_check(
+    draft_service_update(places, "components", q1b, "printed_number", "1"), test_lookups()
+  )$message)))
   expect_true(problem_for(edit("components", q1a, "self_contained", "FALSE"), "Pick the question it follows"))
   expect_true(problem_for(edit("components", q1a, "parent_question_id", q1b), "printed before it"))
   expect_true(problem_for(suppressMessages(draft_service_delete(draft, "variables", box)), "Add at least one variable"))
-  expect_true(problem_for(suppressMessages(draft_service_delete(draft, "response_options", choices[2])), "add at least two choices"))
+  no_choices <- suppressMessages(draft_service_delete(draft_service_delete(draft, "response_options", choices[2]), "response_options", choices[1]))
+  expect_true(problem_for(no_choices, "add its choices"))
+  # a lone check box has one choice, and that is enough
+  expect_false(problem_for(suppressMessages(draft_service_delete(draft, "response_options", choices[2])), "add its choices"))
   expect_true(problem_for(draft_service_add_choice(draft, box), "fill in the blank choice"))
   expect_true(problem_for(edit("response_options", choices[2], "answer_option", "Yes"), "list each choice once"))
 
@@ -60,7 +72,12 @@ test_that("a problem with one field says which, so the page can outline it", {
   expect_equal(unlist(field_of(draft_service_update(draft, "variables", box, "matr_id", ""), "MATR ID")), c(table = "variables", row = box, field = "matr_id"))
   expect_equal(unlist(field_of(draft_service_update(draft, "response_options", choices[2], "answer_option", "Yes"), "each choice once")[2, ]), c(table = "response_options", row = choices[2], field = "answer_option"))
   expect_equal(unlist(field_of(draft_service_update(draft, "components", q1a, "text", ""), "printed words")), c(table = "components", row = q1a, field = "text"))
-  whole_box <- field_of(suppressMessages(draft_service_delete(draft, "response_options", choices[2])), "two choices")
+  expect_equal(
+    unlist(field_of(draft_service_update(draft, "components", q1a, "printed_number", "1b"), "no other question")[1, ]),
+    c(table = "components", row = q1a, field = "printed_number")
+  )
+  no_choices <- suppressMessages(draft_service_delete(draft_service_delete(draft, "response_options", choices[2]), "response_options", choices[1]))
+  whole_box <- field_of(no_choices, "add its choices")
   expect_equal(whole_box$row, box)
   expect_true(is.na(whole_box$field))
 })

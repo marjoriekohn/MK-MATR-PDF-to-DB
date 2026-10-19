@@ -21,11 +21,11 @@
 # # one already sent for approval.
 # seed_drafts <- function(me, colleague, tree, env = parent.frame()) {
 #   list(
-#     mine = local_read_extraction(me, saved = "2026-10-02T12:00:00Z", info = typed_new_wave(tree, wave_name = "Wave 3"), env = env),
-#     theirs = local_read_extraction(colleague, saved = "2026-10-02T11:00:00Z", info = typed_new_wave(tree, wave_name = "Wave 4"), env = env),
-#     reading = local_extraction(me, saved = "2026-10-02T10:00:00Z", info = typed_new_wave(tree, wave_name = "Wave 5"), env = env),
-#     set_aside = local_extraction(me, status = "Withdrawn", info = typed_new_wave(tree, wave_name = "Wave 6"), env = env),
-#     sent = local_extraction(me, status = "Awaiting Review", info = typed_new_wave(tree, wave_name = "Wave 7"), env = env)
+#     mine = local_read_extraction(me, saved = "2026-10-02T12:00:00Z", info = picked_basic_info(tree), env = env),
+#     theirs = local_read_extraction(colleague, saved = "2026-10-02T11:00:00Z", info = picked_basic_info(tree), env = env),
+#     reading = local_extraction(me, saved = "2026-10-02T10:00:00Z", info = picked_basic_info(tree), env = env),
+#     set_aside = local_extraction(me, status = "Withdrawn", info = picked_basic_info(tree), env = env),
+#     sent = local_extraction(me, status = "Awaiting Review", info = picked_basic_info(tree), env = env)
 #   )
 # }
 #
@@ -92,7 +92,7 @@
 # test_that("a reading that failed offers Try reading again, which queues it", {
 #   me <- local_staff()
 #   tree <- local_tree()
-#   failed <- local_extraction(me, extraction_status = "failed", error = "Gemini stopped before the end.", info = typed_new_wave(tree))
+#   failed <- local_extraction(me, extraction_status = "failed", error = "Gemini stopped before the end.", info = picked_basic_info(tree))
 #   page <- drafts_page(me)
 #   shiny::testServer(extraction_drafts_server, args = page$args, {
 #     cards <- text_of(output$drafts)
@@ -107,7 +107,7 @@
 #   me <- local_staff()
 #   tree <- local_tree()
 #   seen <- local_browser()
-#   mine <- local_read_extraction(me, info = typed_new_wave(tree))
+#   mine <- local_read_extraction(me, info = picked_basic_info(tree))
 #   page <- drafts_page(me)
 #   shiny::testServer(extraction_drafts_server, args = page$args, {
 #     session$setInputs(action = list(action = "discard", id = mine$id))

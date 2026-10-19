@@ -60,8 +60,14 @@ test_that("every block's words are typed in its row, with the words of its kind 
     expect_match(html, "Would you call yourself a nervous person?", fixed = TRUE)
     expect_match(html, 'id="[^"]*answer-options"')
     expect_match(html, 'id="[^"]*conditions"')
-    # questions are numbered as the draft has them, and every row has its check and delete buttons
-    expect_match(text_of(output$tree), "Q1a")
+    # a question's row has its place among the questions, without a "Q", and the number printed beside
+    # it, typed in its own field; every row has its check and delete buttons
+    expect_false(grepl("Q1a", text_of(output$tree), fixed = TRUE))
+    expect_match(html, '<span class="outline-number"[^>]*>1a</span>') # the draft's own number, until it is renumbered
+    number_field <- regmatches(html, regexpr('<input[^>]*data-field="printed_number" data-id="c3"[^>]*>', html))
+    expect_match(number_field, 'placeholder="No."', fixed = TRUE)
+    expect_match(number_field, 'value="1a"', fixed = TRUE) # read off the PDF
+    expect_equal(lengths(regmatches(html, gregexpr('data-field="printed_number"', html))), sum(gold_draft()$components$component_type == "Question"))
     expect_equal(lengths(regmatches(html, gregexpr('data-action="check"', html))), nrow(gold_draft()$components))
     expect_equal(lengths(regmatches(html, gregexpr('data-action="delete" data-table="components"', html))), nrow(gold_draft()$components))
   })
@@ -110,7 +116,10 @@ test_that("a question's arrow opens its panel of variables; the question it foll
     expect_false(grepl("Variables ·", panel))
     # what a field holds is said in it, and its label is kept for screen readers
     expect_match(html, 'placeholder="MATR ID"[^>]*aria-label="MATR ID"')
-    expect_match(html, 'placeholder="Optional Label"')
+    expect_match(html, 'placeholder="Label \\(optional\\)"')
+    # every choice is printed, so there is no check box to say one isn't
+    expect_false(grepl('type="checkbox"|data-field="printed"', html))
+    expect_match(html, 'data-field="printed_label"')
     expect_match(html, "Select who this question is about")
     expect_match(html, 'placeholder="Response Option"')
     expect_match(html, 'placeholder="Code"')

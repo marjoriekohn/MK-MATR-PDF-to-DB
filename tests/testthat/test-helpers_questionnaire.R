@@ -26,7 +26,7 @@ test_that("the questionnaire is a table: a row for each variable with its MATR I
 test_that("a variable's label and subject go in square brackets, and a number read with the words is left off", {
   draft <- draft_service_renumber_questions(with_matr_ids())
   question <- draft$components$id[draft$components$component_type == "Question"][1]
-  number <- draft$components$question_number[draft$components$id == question]
+  number <- draft_service_question_number(draft$components[draft$components$id == question, ]) # as printed: 1a
   words <- draft$components$text[draft$components$id == question]
   draft$components$text[draft$components$id == question] <- paste0(number, ". ", words)
   box <- draft$variables$id[draft$variables$component_id == question][1]

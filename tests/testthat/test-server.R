@@ -155,4 +155,9 @@ test_that("the site is drawn with the login screen over it, and the menu's place
   expect_match(html, 'id="navbar_user"')
   expect_match(paste(rendered$head, html), "js/site.js")
   expect_true(regexpr('id="login_screen"', html) < regexpr('id="home-extraction"', html))
+  # while the server works, the page says so: Shiny's busy indicators, and the pressed button's spinner
+  expect_match(paste(rendered$head, html), "js/busy.js")
+  expect_match(paste(rendered$head, html), "js/variables.js")
+  expect_match(paste(rendered$head, html), "shinyBusySpinners", fixed = TRUE)
+  expect_match(paste(rendered$head, html), "shinyBusyPulse", fixed = TRUE)
 })

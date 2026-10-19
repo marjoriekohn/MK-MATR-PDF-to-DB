@@ -77,7 +77,7 @@
 #   me <- local_staff()
 #   tree <- local_tree()
 #   seen <- local_browser()
-#   failed <- local_extraction(me, extraction_status = "failed", error = "Gemini stopped before the end.", info = typed_new_wave(tree))
+#   failed <- local_extraction(me, extraction_status = "failed", error = "Gemini stopped before the end.", info = picked_basic_info(tree))
 #   page <- ai_page(me)
 #   shiny::testServer(extraction_ai_server, args = page$args, {
 #     show_draft(failed)
@@ -94,7 +94,7 @@
 #   me <- local_staff()
 #   tree <- local_tree()
 #   seen <- local_browser()
-#   first <- local_extraction(me, info = typed_new_wave(tree))
+#   first <- local_extraction(me, info = picked_basic_info(tree))
 #   page <- ai_page(me)
 #   shiny::testServer(extraction_ai_server, args = page$args, {
 #     show_draft(first)

@@ -1,13 +1,13 @@
 test_that("a draft turns back into the same JSON the pipeline returned", {
   json <- gold_json()
   saved <- draft_service_to_json(draft_service_from_json(json))
-  # Review adds `checked` to blocks, `matr_id` to variables and `code_value`
-  # to choices; nothing else changes.
+  # Review adds `checked` to blocks, `printed_number` to questions (the number read off the PDF, kept
+  # apart from its place), `matr_id` to variables and `code_value` to choices; nothing else changes.
   without_review_fields <- function(x) {
     if (!is.list(x)) {
       return(x)
     }
-    if (!is.null(names(x))) x <- x[setdiff(names(x), c("checked", "matr_id", "code_value"))]
+    if (!is.null(names(x))) x <- x[setdiff(names(x), c("checked", "printed_number", "matr_id", "code_value"))]
     lapply(x, without_review_fields)
   }
   as_text <- function(x) jsonlite::toJSON(x, auto_unbox = TRUE, null = "null", na = "null")
@@ -18,7 +18,7 @@ test_that("blocks are flattened in printed order, numbered within their section"
   draft <- gold_draft()
   expect_equal(nrow(draft$components), 130)
   expect_equal(nrow(draft$variables), 251)
-  expect_equal(nrow(draft$response_options), 455)
+  expect_equal(nrow(draft$response_options), 330) # printed choices only
 
   first_three <- draft$components[1:3, ]
   expect_equal(first_three$component_type, c("Section", "Instruction", "Question"))
@@ -30,7 +30,8 @@ test_that("a follow-up keeps the id of the question it follows, not its number",
   draft <- gold_draft()
   expect_equal(block_numbered(draft, "8a")$parent_question_id, block_numbered(draft, "7")$id)
 
-  renumbered <- draft_service_update(draft, "components", block_numbered(draft, "7")$id, "question_number", "70")
+  renumbered <- draft
+  renumbered$components$question_number[renumbered$components$id == block_numbered(draft, "7")$id] <- "70"
   find_question <- function(blocks, number) {
     for (block in blocks) {
       if (identical(block$question_number, number)) {

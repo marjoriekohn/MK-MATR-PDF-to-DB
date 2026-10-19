@@ -340,8 +340,8 @@ test_that("every kind builds its forms from the tables it reads, whatever it's a
     }
   }
   # (so a kind that stopped being checked here would be noticed)
-  expect_equal(not_here, "questionnaire_question add") # a new question comes only with a New extraction
-  expect_equal(built, 2L * length(edit_entities) - 1L)
+  expect_length(not_here, 0) # every kind can be added, updated and deleted here, a questionnaire question too
+  expect_equal(built, 2L * length(edit_entities))
   expect_equal(planned, length(edit_entities))
 })
 
@@ -513,4 +513,11 @@ test_that("a form with things to fix is saved as an unfinished draft with no ite
   unfinished <- edit_service_unfinished("update", edit_entities$wave)
   expect_equal(unfinished$summary, "Unfinished: update a wave")
   expect_null(unfinished$items)
+})
+
+test_that("a typed date is checked as MM/DD/YYYY, and blank is fine", {
+  expect_null(edit_date_problem(""))
+  expect_null(edit_date_problem("04/15/2022"))
+  expect_match(edit_date_problem("13/45/2022"), "MM/DD/YYYY")
+  expect_match(edit_date_problem("2022-04-15"), "MM/DD/YYYY")
 })

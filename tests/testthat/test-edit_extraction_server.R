@@ -10,7 +10,7 @@
 #
 # # A draft that has been read (the hand-checked questionnaire), as a new wave of the tree's questionnaire.
 # read_draft <- function(me, tree, wave_name = "Wave 3", env = parent.frame()) {
-#   local_read_extraction(me, info = typed_new_wave(tree, wave_name = wave_name), env = env)
+#   local_read_extraction(me, info = picked_basic_info(tree), env = env)
 # }
 #
 # # A draft with one block's words changed, as staff would change them.
@@ -251,7 +251,7 @@
 #   tree <- local_tree()
 #   seen <- local_browser()
 #   first <- read_draft(me, tree)
-#   unread <- local_extraction(me, info = typed_new_wave(tree, wave_name = "Wave 5"))
+#   unread <- local_extraction(me, info = picked_basic_info(tree))
 #   shiny::testServer(edit_extraction_server, args = edit_page(me), {
 #     open(first)
 #     expect_false(open(unread))
@@ -322,7 +322,7 @@
 #   seen <- local_browser()
 #   pushed <- local_pushed_questionnaire(admin, tree)
 #   # the same questionnaire typed again for its second wave, without MATR IDs
-#   second_wave <- do.call(local_manual_extraction, c(list(me), typed_new_wave(tree, pushed$questionnaire_id), list(env = environment())))
+#   second_wave <- do.call(local_manual_extraction, c(list(me), picked_basic_info(tree, pushed$questionnaire_id), list(env = environment())))
 #   draft_service_save(test_connection, second_wave$id, test_questionnaire_draft(matr = c(NA, NA)), me$staff_id)
 #   second_wave <- extraction_model_get(test_connection, second_wave$id)
 #   shiny::testServer(edit_extraction_server, args = edit_page(me), {
@@ -335,15 +335,15 @@
 #     # the recorded blocks' words are offered while typing
 #     expect_true(paste(test_marker, "Part A") %in% suggestions()$Section)
 #
-#     # nothing left to fill: the dialog's button says so
+#     # the dialog starts on the questionnaire it goes into; nothing is left to fill, and it says so
 #     session$setInputs(action = list(action = "matr_ids"))
-#     expect_match(utils::tail(seen$modals, 1)[[1]], "Fill from the earlier waves")
-#     session$setInputs(fill_recorded = 1)
+#     expect_match(utils::tail(seen$modals, 1)[[1]], "From a questionnaire")
+#     session$setInputs(matr_questionnaire = pushed$questionnaire_id, import_matr_ids = 1)
 #     expect_match(utils::tail(notice_texts(seen), 1), "Nothing to fill in")
 #
-#     # a question reworded loses the match; a blank one filled again finds it
+#     # a blank one filled again finds it
 #     change_draft(draft_service_update(draft(), "variables", "v1", "matr_id", ""))
-#     session$setInputs(fill_recorded = 2)
+#     session$setInputs(import_matr_ids = 2)
 #     expect_equal(draft()$variables$matr_id[1], pushed$draft$variables$matr_id[1])
 #     expect_length(errors(), 0)
 #   })

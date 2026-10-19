@@ -61,7 +61,7 @@ golden_compare <- function(reading, answer) {
         same(box, field, gv[[field]], wv[[field]])
       }
       same(box, "choices", choice_field(gv, "answer_option"), choice_field(wv, "answer_option"))
-      for (field in c("printed", "printed_label", "skip_instruction")) {
+      for (field in c("printed_label", "skip_instruction")) {
         same(box, field, choice_field(gv, field), choice_field(wv, field))
       }
     }

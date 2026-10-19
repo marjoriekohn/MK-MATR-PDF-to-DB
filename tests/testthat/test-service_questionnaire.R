@@ -78,3 +78,10 @@ test_that("a study lists only its questionnaires", {
   expect_equal(unname(questionnaire_service_choices(catalog, "2")), c("2", "3", "4"))
   expect_length(questionnaire_service_choices(catalog, "3"), 0)
 })
+
+test_that("every questionnaire can be picked to take MATR IDs from, named with its study", {
+  choices <- questionnaire_service_all_choices(test_catalog())
+  expect_length(choices, nrow(test_catalog()$questionnaires))
+  expect_equal(unname(choices[names(choices) == "Adult Health and Personality (AHP) · Adult Health Study"]), "1")
+  expect_equal(names(choices), sort(names(choices), method = "radix"))
+})

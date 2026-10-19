@@ -76,15 +76,6 @@ test_that("deleting a questionnaire takes its waves, blocks and variables, but n
   expect_length(cascade$blocked, 0)
 })
 
-test_that("a wave can't be deleted if it's the questionnaire's only one", {
-  snap <- test_snapshot()
-  cascade <- cascade_of(snap, wave = "3")
-
-  expect_length(cascade$blocked, 1)
-  expect_match(cascade$blocked[[1]]$text, "Kid Questionnaire \\(KQ\\) would be left with no waves")
-  expect_match(cascade$blocked[[1]]$fix, "delete the whole questionnaire instead")
-})
-
 test_that("a wave takes the questions that were asked in nothing else", {
   snap <- test_snapshot()
   first_wave <- cascade_of(snap, wave = "1")
@@ -119,13 +110,20 @@ test_that("a respondent type in use can't be deleted", {
   expect_length(cascade_of(snap, respondent_type = "99")$blocked, 0)
 })
 
-test_that("the last questionnaire of a study can't be deleted, but the study can", {
+test_that("a study's last questionnaire and a questionnaire's last wave can be deleted", {
   snap <- test_snapshot(change = function(snap) {
     snap$questionnaire <- snap$questionnaire[snap$questionnaire$questionnaire_id != 3 & snap$questionnaire$questionnaire_id != 4, ]
     snap
   })
   only <- cascade_of(snap, questionnaire = "2")
-  expect_match(only$blocked[[1]]$text, "Child Development Study would be left with no questionnaires")
+  expect_length(only$blocked, 0)
+  expect_equal(only$removed$questionnaire, "2")
+  expect_null(only$removed$study) # the study stays, with no questionnaires until one is added
+
+  last_wave <- cascade_of(snap, wave = "3") # questionnaire 2's only wave
+  expect_length(last_wave$blocked, 0)
+  expect_null(last_wave$removed$questionnaire) # the questionnaire stays, with no waves until one is added
+  expect_equal(last_wave$removed$questionnaire_question, "2|9") # questions asked in no other wave go (BR69)
 
   whole <- cascade_of(snap, study = "2")
   expect_length(whole$blocked, 0)

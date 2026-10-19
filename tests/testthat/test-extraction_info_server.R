@@ -10,11 +10,9 @@ info_args <- function(extractions = fixed_extractions(), record_id = shiny::reac
 test_that("the form holds the four picks, always a recorded questionnaire's wave", {
   shiny::testServer(extraction_info_server, args = info_args(), {
     expect_equal(names(info()), extraction_info_fields)
-    expect_equal(info()$kind, "new_wave")
-    expect_equal(info()$wave_choice, "existing")
+    expect_equal(extraction_info_fields, c("registry_id", "study_id", "questionnaire_id", "wave_id"))
     session$setInputs(registry_id = "1", study_id = "1", questionnaire_id = "1", wave_id = "2")
-    expect_equal(unlist(info()[c("registry_id", "study_id", "questionnaire_id", "wave_id")]), c(registry_id = "1", study_id = "1", questionnaire_id = "1", wave_id = "2"))
-    expect_equal(info()$wave_name, "")
+    expect_equal(unlist(info()), c(registry_id = "1", study_id = "1", questionnaire_id = "1", wave_id = "2"))
   })
 })
 

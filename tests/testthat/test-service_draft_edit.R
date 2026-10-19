@@ -110,36 +110,63 @@ test_that("a block's kind decides what it can hold", {
   )
   expect_false("c3" %in% note$variables$component_id)
   expect_true(is.na(note$components$question_number[3]))
+  expect_true(is.na(note$components$printed_number[3]))
   expect_error(
     draft_service_update(draft, "components", "c1", "component_type", "Note"),
     "Move the blocks out"
   )
 })
 
-test_that("a write-in box has no choices; switching back starts two blank ones", {
+test_that("a write-in box has no choices; switching back starts one blank one", {
   draft <- gold_draft()
   box <- draft$variables$id[draft$variables$variable_type == "closed_ended"][1]
   write_in <- draft_service_update(draft, "variables", box, "variable_type", "open_ended")
   expect_false(box %in% write_in$response_options$variable_id)
 
   choices_again <- draft_service_update(write_in, "variables", box, "variable_type", "closed_ended")
-  expect_equal(nrow(draft_service_children(choices_again, "response_options", box)), 2)
+  expect_equal(nrow(draft_service_children(choices_again, "response_options", box)), 1)
 })
 
-test_that("a choice that isn't printed loses its Printed as and Skip to", {
+test_that("every choice is printed: there is no field to say one isn't, and a lone check box has one choice", {
   draft <- gold_draft()
+  expect_false("printed" %in% names(draft$response_options))
+  expect_error(draft_service_update(draft, "response_options", "o1", "printed", "FALSE"), "can't be changed")
   draft <- draft_service_update(draft, "response_options", "o1", "printed_label", "Yes, often")
   draft <- draft_service_update(draft, "response_options", "o1", "skip_instruction", "Go to Q5")
-  expect_message(
-    unprinted <- draft_service_update(draft, "response_options", "o1", "printed", "FALSE"),
-    "Undo"
-  )
-  choice <- unprinted$response_options[unprinted$response_options$id == "o1", ]
-  expect_false(choice$printed)
-  expect_true(is.na(choice$printed_label))
-  expect_true(is.na(choice$skip_instruction))
+  choice <- draft$response_options[draft$response_options$id == "o1", ]
+  expect_equal(choice$printed_label, "Yes, often")
+  expect_equal(choice$skip_instruction, "Go to Q5")
 
-  expect_silent(draft_service_update(gold_draft(), "response_options", "o1", "printed", "FALSE"))
+  # a draft saved with a choice that wasn't printed (a lone check box's "No") opens without it
+  json <- list(components = list(list(
+    component_type = "Question", text = "All of my life", question_number = "3", self_contained = TRUE,
+    variables = list(list(variable_type = "closed_ended", response_options = list(
+      list(answer_option = "Yes", printed = TRUE), list(answer_option = "No", printed = FALSE)
+    )))
+  )))
+  opened <- draft_service_from_json(json)
+  expect_equal(opened$response_options$answer_option, "Yes")
+  expect_null(draft_service_to_json(opened)$components[[1]]$variables[[1]]$response_options[[1]][["printed"]])
+})
+
+test_that("a question keeps the number printed beside it as staff type it; its place follows the outline", {
+  draft <- gold_draft()
+  q <- block_numbered(draft, "1a")$id
+  expect_equal(draft$components$printed_number[draft$components$id == q], "1a") # read off the PDF
+  typed <- draft_service_update(draft, "components", q, "printed_number", " 1a4 ")
+  expect_equal(typed$components$printed_number[typed$components$id == q], "1a4")
+  renumbered <- draft_service_renumber_questions(typed)
+  row <- renumbered$components[renumbered$components$id == q, ]
+  expect_equal(row$question_number, "1") # its place
+  expect_equal(row$printed_number, "1a4") # left as typed
+  expect_equal(draft_service_question_number(row), "1a4")
+  blank <- draft_service_update(renumbered, "components", q, "printed_number", "")
+  expect_equal(draft_service_question_number(blank$components[blank$components$id == q, ]), "1") # asked as its place
+  expect_equal(draft_service_question_name(blank, q), "question 1")
+  # a saved copy keeps the typed number
+  expect_equal(draft_service_from_json(draft_service_to_json(renumbered))$components$printed_number, renumbered$components$printed_number)
+  # a block that isn't a question has none
+  expect_true(all(is.na(draft$components$printed_number[draft$components$component_type != "Question"])))
 })
 
 test_that("codes typed for one box are used in every box with the same choices", {
@@ -176,7 +203,7 @@ test_that("new choices take the next code in their box, counting from 1", {
 
   write_in <- draft_service_update(draft, "variables", box, "variable_type", "open_ended")
   choices_again <- draft_service_update(write_in, "variables", box, "variable_type", "closed_ended")
-  expect_equal(codes_in(choices_again, box), 1:2)
+  expect_equal(codes_in(choices_again, box), 1L)
 
   # Other boxes keep the codes they have, even blank ones.
   other <- draft$variables$id[2]
@@ -278,13 +305,13 @@ test_that("a box is either choices or a write-in, and picking what it already is
   expect_identical(draft_service_update(draft, "variables", "v1", "variable_type", draft$variables$variable_type[1]), draft)
 })
 
-test_that("a question that has no variable yet gets one with two blank choices", {
+test_that("a question that has no variable yet gets one with a blank choice", {
   draft <- draft_service_update(gold_draft(), "components", "c2", "component_type", "Question")
   expect_equal(nrow(draft_service_children(draft, "variables", "c2")), 0)
   added <- draft_service_add_box(draft, "c2")
   box <- draft_service_children(added, "variables", "c2")
   expect_equal(nrow(box), 1)
-  expect_equal(nrow(draft_service_children(added, "response_options", box$id)), 2)
+  expect_equal(nrow(draft_service_children(added, "response_options", box$id)), 1)
 })
 
 test_that("the sentence about a CSV with too few or too many IDs counts one and several, in the singular and plural", {
@@ -309,7 +336,7 @@ test_that("changing a checked block's words takes the check off that block, and 
 test_that("each field of a block, when changed, takes its check off", {
   before <- checked_gold()
   edits <- list(
-    list("question_number", "9z"), list("self_contained", "FALSE"), list("condition", "If yes to 1a"), list("parent_question_id", "c4")
+    list("printed_number", "9z"), list("self_contained", "FALSE"), list("condition", "If yes to 1a"), list("parent_question_id", "c4")
   )
   for (edit in edits) {
     after <- draft_service_uncheck_edited(before, suppressMessages(draft_service_update(before, "components", "c5", edit[[1]], edit[[2]])))
@@ -453,6 +480,22 @@ test_that("a question worded like a recorded one gets its variables' MATR IDs, b
   # nothing recorded, nothing said
   expect_no_message(same <- draft_service_fill_recorded_matr_ids(draft, recorded[0, ]))
   expect_identical(same, draft)
+  # from another questionnaire picked in the MATR IDs dialog, the message names it
+  expect_message(draft_service_fill_recorded_matr_ids(draft, recorded, from = "AHP"), "MATR IDs of 2 variables from AHP, where")
+})
+
+test_that("a recorded questionnaire's MATR IDs are listed with their question's words, ready to fill a draft", {
+  existing <- list(
+    components = data.frame(component_id = c(100, 102), component_type_id = c(1, 2), text = c("Part A", "Do you smoke?")),
+    variables = data.frame(variable_key = c(900, 901), component_id = c(102, 102), matr_id = c("SM1", "SM2"), display_order = c(2, 1))
+  )
+  printed <- extraction_service_printed(existing)
+  expect_equal(printed$matr_ids, data.frame(text = c("Do you smoke?", "Do you smoke?"), matr_id = c("SM1", "SM2"), display_order = c(2, 1)))
+  expect_equal(nrow(printed$texts), 0) # no kinds of block given, so no words to offer
+  types <- data.frame(component_type_id = 1:2, name = c("Section", "Question"))
+  expect_equal(extraction_service_printed(existing, types)$texts$component_type, c("Section", "Question"))
+  expect_equal(nrow(extraction_service_printed(NULL)$matr_ids), 0)
+  expect_error(extraction_service_questionnaire_matr_ids(list(url = "", key = ""), ""), "Pick a questionnaire first")
 })
 
 # ------ Words offered as a block's words are typed ------------------------------------------------------

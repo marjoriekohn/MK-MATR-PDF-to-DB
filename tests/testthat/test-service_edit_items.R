@@ -538,3 +538,147 @@ test_that("the changes to a swapped-in question come before the old rows are rem
     )
   )
 })
+
+# ------ Adding one question to a questionnaire -----------------------------------------------------------------
+variables_json <- function(...) as.character(jsonlite::toJSON(list(...), auto_unbox = TRUE))
+yes_no_variable <- function(matr_id = "AH05EX", choices = list(list(code_value = "1", answer_option = "Yes"), list(code_value = "0", answer_option = "No"))) {
+  list(variable_type = "closed_ended", matr_id = matr_id, subject = "Self", label = "", response_options = choices)
+}
+
+test_that("a question can be added to a questionnaire, whole: no sentence says to go to Extraction", {
+  entity <- edit_entities$questionnaire_question
+  snap <- test_snapshot(edit_service_tables(entity))
+  expect_null(edit_service_can(entity, snap, "add"))
+  expect_null(entity$redirect)
+  expect_match(entity$about, "A question as it's printed in one questionnaire")
+  expect_true(all(c("subject", "answer_option", "option_set", "answer_option_set") %in% edit_service_tables(entity)))
+  form <- form_for("questionnaire_question", "add", scope = "1")
+  names <- vapply(form$fields, function(field) field$name, character(1))
+  expect_true(all(c("source", "text", "component_id", "parent_component_id", "display_order", "self_contained",
+                    "parent_question_id", "condition", "qn_1", "qn_2", "variables") %in% names))
+  # an existing question can be picked, but not one the questionnaire asks already
+  existing <- Filter(function(field) field$name == "component_id", form$fields)[[1]]
+  expect_true("11" %in% existing$choices) # Mother Questionnaire's pregnancy question
+  expect_false(any(c("3", "4", "5", "7") %in% existing$choices))
+})
+
+test_that("a new question is added with its place, its number in each wave that asks it, and its variables", {
+  form <- form_for(
+    "questionnaire_question", "add", scope = "1",
+    questionnaire_question__text = "Do you exercise?",
+    questionnaire_question__parent_component_id = "6", questionnaire_question__display_order = "1",
+    questionnaire_question__qn_2 = "1a4",
+    questionnaire_question__variables = variables_json(
+      yes_no_variable(),
+      list(variable_type = "open_ended", matr_id = "AH05HR", subject = "Self", label = "Hours a week", answer_data_type = "NUMBER")
+    )
+  )
+  found <- edit_service_check(form$fields, form$values)
+  expect_length(found$missing, 0)
+  expect_length(found$problems, 0)
+  built <- form_items(form)
+  lines <- item_lines(built$items)
+  expect_match(built$summary, "^Added the question “Do you exercise\\?” to AHP$")
+  expect_true('Insert component {"component_id":"new:component:1"} text: - -> Do you exercise?' %in% lines)
+  expect_true('Insert question {"component_id":"new:component:1"} component_id: - -> new:component:1' %in% lines)
+  # it goes first in section B, and what was there moves over
+  expect_true('Update questionnaire_component {"component_id":7,"questionnaire_id":1} display_order: 1 -> 2' %in% lines)
+  expect_true('Insert questionnaire_component {"component_id":"new:component:1","questionnaire_id":1} parent_component_id: - -> 6' %in% lines)
+  expect_true('Insert questionnaire_question {"component_id":"new:component:1","questionnaire_id":1} self_contained: - -> true' %in% lines)
+  # asked only in the wave it has a number in
+  waves <- built$items[built$items$entity_name == "wave_question", ]
+  expect_equal(nrow(waves), 1)
+  expect_match(waves$record_identifier, '"wave_id":2')
+  expect_equal(waves$new_value, "1a4")
+  # its variables, as an extraction adds them: Yes and No are used again, and so is the set they make
+  expect_true('Insert variable {"variable_key":"new:variable:1"} matr_id: - -> AH05EX' %in% lines)
+  expect_true('Insert closed_ended {"variable_key":"new:variable:1"} option_set_id: - -> 1' %in% lines)
+  expect_true('Insert open_ended {"variable_key":"new:variable:2"} answer_data_type: - -> NUMBER' %in% lines)
+  expect_false(any(built$items$entity_name %in% c("answer_option", "option_set")))
+  expect_equal(sum(built$items$entity_name == "response_option" & built$items$attribute_name == "code_value"), 2)
+  # the rows are added before what points at them
+  order_of <- function(table) min(which(built$items$entity_name == table))
+  expect_lt(order_of("component"), order_of("questionnaire_component"))
+  expect_lt(order_of("questionnaire_question"), order_of("wave_question"))
+  expect_lt(order_of("questionnaire_question"), order_of("variable"))
+})
+
+test_that("a lone check box is a variable with one choice, and a new answer choice makes a new set", {
+  form <- form_for(
+    "questionnaire_question", "add", scope = "1",
+    questionnaire_question__text = "All of my life", questionnaire_question__qn_1 = "9",
+    questionnaire_question__variables = variables_json(yes_no_variable(choices = list(list(code_value = "1", answer_option = "Always"))))
+  )
+  expect_length(edit_service_check(form$fields, form$values)$problems, 0)
+  lines <- item_lines(form_items(form)$items)
+  expect_true('Insert answer_option {"answer_option_id":"new:answer_option:1"} standardized_label: - -> Always' %in% lines)
+  expect_true('Insert option_set {"option_set_id":"new:option_set:1"} name: - -> Always' %in% lines)
+})
+
+test_that("a question already in the database can be added, keeping its wording shared", {
+  form <- form_for(
+    "questionnaire_question", "add", scope = "1",
+    questionnaire_question__source = "existing", questionnaire_question__component_id = "11",
+    questionnaire_question__self_contained = "FALSE", questionnaire_question__parent_question_id = "4",
+    questionnaire_question__condition = "Women only", questionnaire_question__qn_1 = "2b",
+    questionnaire_question__variables = variables_json(yes_no_variable())
+  )
+  expect_length(edit_service_check(form$fields, form$values)$problems, 0)
+  built <- form_items(form)
+  lines <- item_lines(built$items)
+  expect_false("component" %in% built$items$entity_name) # the wording is the one that is there
+  expect_true('Insert questionnaire_component {"component_id":11,"questionnaire_id":1} display_order: - -> 3' %in% lines)
+  expect_true('Insert questionnaire_question {"component_id":11,"questionnaire_id":1} parent_question_id: - -> 4' %in% lines)
+  expect_true('Insert questionnaire_question {"component_id":11,"questionnaire_id":1} condition: - -> Women only' %in% lines)
+  expect_match(built$summary, "Did you smoke during your pregnancy")
+})
+
+test_that("what stops a question being added is said under the field at fault", {
+  check <- function(...) {
+    form <- form_for("questionnaire_question", "add", scope = "1", questionnaire_question__text = "Do you exercise?", ...)
+    edit_service_check(form$fields, form$values)
+  }
+  problems <- function(...) check(...)$problems
+  # no wave number: a question is asked in at least one wave
+  expect_match(problems(questionnaire_question__variables = variables_json(yes_no_variable()))$questionnaire_question__qn_1, "at least one wave")
+  # a number the wave has already
+  expect_match(problems(questionnaire_question__qn_1 = "2", questionnaire_question__variables = variables_json(yes_no_variable()))$questionnaire_question__qn_1, "already “Do you now smoke cigarettes")
+  variables_problem <- function(...) problems(questionnaire_question__qn_1 = "9", questionnaire_question__variables = variables_json(...))$questionnaire_question__variables
+  expect_match(variables_problem(yes_no_variable(matr_id = "")), "Variable 1: fill in its MATR ID")
+  expect_match(variables_problem(yes_no_variable(matr_id = "AH01DB")), "AH01DB is already a MATR ID in this questionnaire")
+  expect_match(variables_problem(yes_no_variable(), yes_no_variable()), "Variable 2: give it a MATR ID no other variable has")
+  expect_match(variables_problem(yes_no_variable(choices = list())), "add its choices")
+  expect_match(variables_problem(yes_no_variable(choices = list(list(code_value = "1", answer_option = "")))), "blank choice")
+  expect_match(variables_problem(yes_no_variable(choices = list(list(code_value = "1", answer_option = "Yes"), list(code_value = "1", answer_option = "No")))), "its own code")
+  expect_match(variables_problem(list(variable_type = "open_ended", matr_id = "X1", subject = "Self")), "kind of answer")
+  expect_match(variables_problem(list(variable_type = "open_ended", matr_id = "X1", subject = "Nobody", answer_data_type = "TEXT")), "who it's about")
+  expect_match(problems(questionnaire_question__qn_1 = "9", questionnaire_question__variables = "[]")$questionnaire_question__variables, "at least one variable")
+  expect_match(problems(questionnaire_question__qn_1 = "9", questionnaire_question__variables = "not json")$questionnaire_question__variables, "couldn't be read")
+  expect_null(variables_problem(yes_no_variable()))
+  # a questionnaire with no waves can't have a question yet
+  no_waves <- form_for("questionnaire_question", "add", scope = "1", snap = test_snapshot(
+    edit_service_tables(edit_entities$questionnaire_question),
+    change = function(snap) {
+      snap$wave <- snap$wave[snap$wave$questionnaire_id != 1, ]
+      snap
+    }
+  ))
+  expect_match(edit_service_check(no_waves$fields, no_waves$values)$problems$questionnaire_question__qn_none, "no waves yet")
+})
+
+test_that("the variables start as one, about the respondent, with one blank choice", {
+  snap <- test_snapshot(c("subject"))
+  variables <- edit_variables_parse(edit_variables_default(snap))
+  expect_length(variables, 1)
+  expect_equal(variables[[1]]$subject, "Self")
+  expect_length(variables[[1]]$response_options, 1)
+  html <- htmltools::renderTags(edit_field_ui(
+    shiny::NS("change"), Filter(function(field) field$name == "variables", form_for("questionnaire_question", "add", scope = "1")$fields)[[1]] |>
+      utils::modifyList(list(id = "questionnaire_question__variables", part = "questionnaire_question")),
+    edit_variables_default(snap), "change-note_1"
+  ))$html
+  expect_match(html, 'class="edit-variables"')
+  expect_match(html, 'data-input="change-questionnaire_question__variables"')
+  expect_match(html, 'data-subjects="\\[&quot;Respondent')
+  expect_match(html, "edit-variables-add")
+})

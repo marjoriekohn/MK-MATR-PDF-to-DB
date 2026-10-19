@@ -118,6 +118,23 @@ test_that("tidying numbers each list, cleans the text and keeps only each block'
   expect_equal(vapply(choices, function(choice) choice$display_order, integer(1)), 1:2)
   expect_equal(choices[[1]]$printed_label, "M")
   expect_null(choices[[2]]$printed_label) # printed as the standard wording
+  expect_null(choices[[1]][["printed"]]) # every choice kept is printed, so it isn't said
+})
+
+test_that("a choice the reading says isn't printed is left out: a lone check box has the one choice", {
+  reading <- list(components = list(question("5", boxes = list(list(
+    variable_type = "closed_ended", label = "City", subject = "Self",
+    response_options = list(
+      list(answer_option = "Yes", printed = TRUE, printed_label = "CITY"),
+      list(answer_option = "No", printed = FALSE)
+    )
+  )))))
+  choices <- reading_service_tidy(reading)$components[[1]]$variables[[1]]$response_options
+  expect_length(choices, 1)
+  expect_equal(choices[[1]]$answer_option, "Yes")
+  expect_equal(choices[[1]]$display_order, 1)
+  # and the checks take one choice as enough
+  expect_false(any(grepl("choices", reading_service_problems(reading_service_tidy(reading), test_lookups()))))
 })
 
 test_that("a block put inside one that isn't a section moves out to follow it", {
