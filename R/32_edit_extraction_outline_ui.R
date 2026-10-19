@@ -2,9 +2,9 @@
 #'
 #' A block's words are typed straight into its row (with the words of other blocks of the same kind
 #' offered as it is typed), and its row holds the buttons to mark it as checked and to delete it. A
-#' question's row also has the question it follows, and opens a nested panel for what else a question
-#' has: its skip condition, and its variables with their choices. Question numbers follow the questions'
-#' places in the outline.
+#' question's row also has its place among the questions (kept up to date as blocks move), the number
+#' printed beside it, the question it follows, and opens a nested panel for what else a question has:
+#' its skip condition, and its variables with their choices.
 #'
 #' @param id The module's id.
 #' @return The page's UI.
@@ -149,11 +149,28 @@ outline_row <- function(block, draft, view, ns) {
       span(class = "btn-toggle")
     ),
     type_chip(block$component_type),
-    if (!is.na(block$question_number)) span(class = "outline-number", paste0("Q", block$question_number)),
+    if (block$component_type == "Question") question_number_fields(block, view$problems),
     outline_text_field(block, view$problems, ns),
     if (block$component_type == "Question") parent_question_field(block, draft, view$problems),
     outline_badges(block, draft, view$problems),
     outline_actions(block, draft)
+  )
+}
+
+# A question's place among the questions (1, 2, 3..., which follows the outline), then the number printed
+# beside it, typed (it can have letters: 1a4). The printed number is what the wave records; a question
+# without one is asked as its place.
+question_number_fields <- function(block, problems) {
+  span(
+    class = "outline-numbers",
+    span(
+      class = "outline-number", title = "Its place among the questions, which follows the outline",
+      if (is.na(block$question_number)) "?" else block$question_number
+    ),
+    field_text(
+      "components", block, "printed_number",
+      placeholder = "No.", label = "Question number as printed, e.g. 1a4", problems = problems
+    ) |> tagAppendAttributes(class = "outline-printed-number", title = "Question number as printed, e.g. 1a4")
   )
 }
 
@@ -280,7 +297,7 @@ question_fields <- function(block, ns) {
   )
 }
 
-# Questions printed before this one, as "Q7 · Have you smoked…". The current
+# Questions printed before this one, as "7 · Have you smoked…" (the number it is asked as). The current
 # pick stays listed even if a move put it after this question.
 parent_question_choices <- function(block, draft) {
   printed <- draft_service_printed_order(draft)
@@ -288,8 +305,9 @@ parent_question_choices <- function(block, draft) {
   questions <- questions[questions$component_type == "Question" & questions$id != block$id, ]
   is_earlier <- match(questions$id, printed) < match(block$id, printed)
   keep <- is_earlier | questions$id %in% block$parent_question_id
+  numbers <- draft_service_question_number(questions)
   labels <- paste0(
-    "Q", ifelse(is.na(questions$question_number), "?", questions$question_number),
+    ifelse(is.na(numbers), "?", numbers),
     " · ", shorten(questions$text, 50),
     ifelse(is_earlier, "", " (printed after it)")
   )
@@ -404,15 +422,9 @@ choice_table <- function(box, draft, problems, ns) {
   )
 }
 
-# Printed as and Skip to only mean something for choices printed on the form.
-# They still show if they have words, so nothing is hidden.
-shows_printed_fields <- function(choices) {
-  choices$printed %in% TRUE | !is.na(choices$printed_label) | !is.na(choices$skip_instruction)
-}
-
-# Code first, then the response option it codes.
+# Code first, then the response option it codes, how it is printed and where it skips to. Every choice is
+# printed on the form: one that isn't can't be marked, so it isn't a choice (a lone check box has one).
 choice_row <- function(choice, problems, ns) {
-  printed_fields <- shows_printed_fields(choice)
   div(
     class = "choice-row", `data-id` = choice$id,
     span(class = "choice-handle", title = "Drag to reorder", icon("grip-vertical")),
@@ -421,21 +433,8 @@ choice_row <- function(choice, problems, ns) {
       "response_options", choice, "answer_option",
       placeholder = "Response Option", list = ns("answer-options"), label = "Response option", problems = problems
     ),
-    tags$label(
-      class = "choice-printed",
-      field_checkbox("response_options", choice, "printed", "Printed on the form"),
-      span("Printed")
-    ),
-    if (printed_fields) {
-      field_text("response_options", choice, "printed_label", placeholder = "Printed as (optional)", label = "Printed as")
-    } else {
-      span()
-    },
-    if (printed_fields) {
-      field_text("response_options", choice, "skip_instruction", placeholder = "Skip to (optional)", label = "Skip to")
-    } else {
-      span()
-    },
+    field_text("response_options", choice, "printed_label", placeholder = "Printed as (optional)", label = "Printed as"),
+    field_text("response_options", choice, "skip_instruction", placeholder = "Skip to (optional)", label = "Skip to"),
     review_button(
       icon("trash-can"), "delete",
       `data-table` = "response_options", `data-id` = choice$id,

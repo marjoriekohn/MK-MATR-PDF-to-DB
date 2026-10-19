@@ -10,9 +10,10 @@
 #   clear   they stay, and what points at it is emptied (a study's contact)
 #   block   they're in the way: the delete can't go ahead until they're dealt
 #           with (a study's lead investigator, which never changes)
-# A link can also say its parent must keep at least one of these rows
-# (`needs_child`): "block" refuses to delete the last one, "remove_parent"
-# deletes the parent too, as a question asked in no wave can't exist.
+# A link can also say its parent can't be without these rows (`needs_child =
+# "remove_parent"`): the parent is deleted too, as a question asked in no wave
+# can't exist. A study can be left with no questionnaires, and a questionnaire
+# with no waves, until more are added.
 #
 # A row's identity is its key columns joined with "|" (edit_key()).
 
@@ -21,21 +22,17 @@
 #' @param child The table that holds the reference.
 #' @param parent The table it points at.
 #' @param by The child's columns, named, each holding the parent's column of that name's value.
-#' @param on_delete What happens to the child's rows when the parent's go: e.g. `"block"`, `"cascade"` or `"clear"`.
-#' @param needs_child For `"block"`, whether the parent must keep at least one child.
+#' @param on_delete What happens to the child's rows when the parent's go: `"remove"`, `"block"` or `"clear"`.
+#' @param needs_child `"remove_parent"` if a parent left with none of these rows goes too; `NULL` otherwise.
 #' @param why,fix For a block: why the child's rows are in the way, and what to do.
-#' @param empty_why,empty_fix For `needs_child = "block"`: the same for leaving the parent without any.
 #' @param clears For a clear: what is emptied, e.g. `"contact investigator"`.
 #' @return A list.
-relation <- function(child, parent, by, on_delete, needs_child = NULL,
-                     why = NULL, fix = NULL, empty_why = NULL, empty_fix = NULL,
-                     clears = NULL) {
+relation <- function(child, parent, by, on_delete, needs_child = NULL, why = NULL, fix = NULL, clears = NULL) {
   list(
     child = child, parent = parent,
     by = by, # the child's columns, named, each holding the parent's column of that name's value
     on_delete = on_delete, needs_child = needs_child,
     why = why, fix = fix, # a block: why the rows are in the way, and what to do
-    empty_why = empty_why, empty_fix = empty_fix, # needs_child = "block": the same for leaving the parent empty
     clears = clears # a clear: what's emptied, e.g. "contact investigator"
   )
 }
@@ -52,23 +49,13 @@ edit_relations <- list(
     "clear",
     clears = "contact investigator"
   ),
-  relation(
-    "questionnaire", "study", c(study_id = "study_id"), "remove",
-    needs_child = "block",
-    empty_why = "Every study needs at least one questionnaire.",
-    empty_fix = "Add another questionnaire first, or delete the whole study instead."
-  ),
+  relation("questionnaire", "study", c(study_id = "study_id"), "remove"),
   relation(
     "questionnaire", "respondent_type", c(respondent_type_id = "respondent_type_id"), "block",
     why = "Every questionnaire has a respondent type, so a respondent type can't go while questionnaires use it.",
     fix = "Change those questionnaires to another respondent type first (Update, then Questionnaire)."
   ),
-  relation(
-    "wave", "questionnaire", c(questionnaire_id = "questionnaire_id"), "remove",
-    needs_child = "block",
-    empty_why = "Every questionnaire needs at least one wave.",
-    empty_fix = "Add another wave first, or delete the whole questionnaire instead."
-  ),
+  relation("wave", "questionnaire", c(questionnaire_id = "questionnaire_id"), "remove"),
   relation(
     "component", "component_type", c(component_type_id = "component_type_id"), "block",
     why = "Every component has a kind, so a component type can't go while components use it.",
@@ -306,18 +293,13 @@ edit_left_empty <- function(snap, relation, removed) {
     setdiff(removed[[relation$parent]])
 }
 
-# Rows in the way: pointing at something that's going, but staying; and parents
-# left with no children they need.
+# Rows in the way: pointing at something that's going, but staying.
 edit_blockers <- function(snap, removed) {
   blockers <- list()
   for (relation in edit_relations) {
     if (relation$on_delete == "block" && length(removed[[relation$parent]]) > 0) {
       hits <- setdiff(edit_referencing(snap, relation, removed[[relation$parent]]), removed[[relation$child]])
       if (length(hits) > 0) blockers <- c(blockers, list(edit_in_the_way(snap, relation, hits)))
-    }
-    if (identical(relation$needs_child, "block") && length(removed[[relation$child]]) > 0) {
-      lonely <- edit_left_empty(snap, relation, removed)
-      if (length(lonely) > 0) blockers <- c(blockers, list(edit_left_alone(snap, relation, lonely)))
     }
   }
   blockers
@@ -331,15 +313,6 @@ edit_in_the_way <- function(snap, relation, child_keys) {
       plural_noun(nrow(rows), relation$child), " ", if (nrow(rows) == 1) "is" else "are", " in the way. ", relation$why
     ),
     fix = relation$fix, labels = labels, table = relation$child
-  )
-}
-
-edit_left_alone <- function(snap, relation, parent_keys) {
-  rows <- edit_rows(snap, relation$parent, parent_keys)
-  labels <- edit_label(snap, relation$parent, rows)
-  list(
-    text = paste0(word_list(labels), " would be left with no ", edit_nouns[[relation$child]][2], ". ", relation$empty_why),
-    fix = relation$empty_fix, labels = labels, table = relation$parent
   )
 }
 

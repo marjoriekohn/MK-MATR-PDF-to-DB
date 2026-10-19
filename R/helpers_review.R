@@ -60,14 +60,17 @@ review_button <- function(label, action, ..., class = "btn btn-sm btn-outline-da
 
 #' A short name for a block in sentences.
 #'
-#' For example "Drop here: inside section 3, after Q4".
+#' For example "Drop here: inside section 3, after question 4".
 #'
 #' @param block One row of a draft's `components`.
 #' @return A string.
 block_label <- function(block) {
   switch(block$component_type,
     Section = if (is.na(block$text)) "the untitled section" else paste("section", shorten(block$text, 40)),
-    Question = if (is.na(block$question_number)) "the unnumbered question" else paste0("Q", block$question_number),
+    Question = {
+      number <- draft_service_question_number(block)
+      if (is.na(number)) "the unnumbered question" else paste("question", number)
+    },
     paste0(tolower(block$component_type), " “", shorten(block$text, 30), "”")
   )
 }
@@ -181,19 +184,6 @@ field_toggle <- function(table, row, field, choices, label) {
   toggle_buttons(
     paste(row$id, field, sep = "-"), choices, as.character(row[[field]]), label,
     attributes = field_attributes(table, row, field), small = TRUE
-  )
-}
-
-#' A check box of the Edit Extraction page.
-#'
-#' @param label Names it for screen readers.
-#' @inheritParams field_text
-#' @return A UI element.
-field_checkbox <- function(table, row, field, label) {
-  tags$input(
-    type = "checkbox", class = "form-check-input", `aria-label` = label,
-    checked = if (isTRUE(row[[field]])) NA,
-    !!!field_attributes(table, row, field)
   )
 }
 

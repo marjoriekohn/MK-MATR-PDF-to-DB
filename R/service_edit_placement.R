@@ -517,21 +517,19 @@ edit_question_items <- function(mode, snap, row, scope, fields, values) {
   edit_service_swap_items(snap, q, c_old, new_component, is_question = TRUE, between = edits)
 }
 
-#' The items for a new question.
+#' The items for a new question's wording.
 #'
-#' A component of the kind Question, and its question row.
+#' A component of the kind Question (`new:component:1`), and its question row.
 #'
 #' @param snap The tables the kind needs, as `edit_service_load()` reads them: a list of data frames named after the tables.
-#' @param fields The form's fields, from `edit_service_fields()`.
-#' @param values What is in the form, by field id.
+#' @param text The question's words, as saved (`edit_service_normalize()`).
 #' @return A data frame of items; see `edit_item()`.
-edit_question_add_items <- function(snap, fields, values) {
+edit_new_question_items <- function(snap, text) {
   token <- "new:component:1"
   identifier <- edit_identifier(list(component_id = token))
-  field <- Filter(function(f) f$name == "text", fields)[[1]]
   rbind(
     edit_item("component", identifier, "Insert", "component_type_id", NA, edit_type_id(snap, "Question")),
-    edit_item("component", identifier, "Insert", "text", NA, edit_service_normalize(field, values[["question__text"]])),
+    edit_item("component", identifier, "Insert", "text", NA, text),
     edit_item("question", identifier, "Insert", "component_id", NA, token)
   )
 }

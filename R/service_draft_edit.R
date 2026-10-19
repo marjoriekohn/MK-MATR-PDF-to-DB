@@ -6,13 +6,11 @@
 # The fields staff can change by typing or picking. A value keeps its column's type.
 editable_fields <- list(
   components = c(
-    "component_type", "text", "question_number", "self_contained",
+    "component_type", "text", "printed_number", "self_contained",
     "condition", "parent_question_id", "checked"
   ),
   variables = c("variable_type", "label", "subject", "answer_data_type", "matr_id"),
-  response_options = c(
-    "answer_option", "code_value", "printed", "printed_label", "skip_instruction"
-  )
+  response_options = c("answer_option", "code_value", "printed_label", "skip_instruction")
 )
 
 #' Change one field of one row.
@@ -34,7 +32,6 @@ draft_service_update <- function(draft, table, id, field, value) {
   switch(field,
     component_type = set_component_type(draft, row, value),
     variable_type = set_variable_type(draft, row, value),
-    printed = set_printed(draft, row, value),
     matr_id = set_matr_id(draft, row, value),
     {
       draft[[table]][row, field] <- value
@@ -63,7 +60,7 @@ set_component_type <- function(draft, row, type) {
     if (is.na(block$self_contained)) draft$components$self_contained[row] <- TRUE
     return(draft)
   }
-  draft$components[row, c("question_number", "condition", "parent_question_id")] <- NA
+  draft$components[row, c("question_number", "printed_number", "condition", "parent_question_id")] <- NA
   draft$components$self_contained[row] <- NA
   n_boxes <- sum(draft$variables$component_id == block$id)
   if (n_boxes > 0) {
@@ -89,7 +86,7 @@ set_variable_type <- function(draft, row, type) {
     return(draft)
   }
   draft$variables$answer_data_type[row] <- NA
-  add_blank_choices(draft, box$id, 2)
+  add_blank_choices(draft, box$id, 1)
 }
 
 # A MATR ID names one variable of the questionnaire (BR93), so one another variable has is refused,
@@ -99,28 +96,12 @@ set_matr_id <- function(draft, row, matr_id) {
   taken_by <- which(boxes$matr_id %in% matr_id & seq_len(nrow(boxes)) != row)
   if (!is.na(matr_id) && length(taken_by) > 0) {
     other <- boxes[taken_by[1], ]
-    question <- question_number_of(draft, other$component_id)
     stop(sprintf(
-      "%s is already the MATR ID of variable %d of Q%s. Give each variable its own.",
-      matr_id, as.integer(other$display_order), if (is.na(question)) "?" else question
+      "%s is already the MATR ID of variable %d of %s. Give each variable its own.",
+      matr_id, as.integer(other$display_order), draft_service_question_name(draft, other$component_id)
     ))
   }
   draft$variables$matr_id[row] <- matr_id
-  draft
-}
-
-# Printed as and Skip to only mean something for a choice printed on the form,
-# so a choice that isn't printed loses them.
-set_printed <- function(draft, row, printed) {
-  draft$response_options$printed[row] <- printed
-  if (!isFALSE(printed)) {
-    return(draft)
-  }
-  printed_fields <- c("printed_label", "skip_instruction")
-  if (!all(is.na(draft$response_options[row, printed_fields]))) {
-    message("Cleared Printed as and Skip to, since the choice isn't printed. Undo brings them back.")
-  }
-  draft$response_options[row, printed_fields] <- NA
   draft
 }
 
@@ -238,7 +219,7 @@ draft_service_add_block <- function(draft, component_type, id, near_id = NULL) {
 #'
 #' It copies the question's last variable (its kind, who it is about and its choices), since
 #' one question's variables are usually alike; a write-in has no choices to copy. A question's first
-#' variable starts with two blank choices.
+#' variable starts with one blank choice: a lone check box has only the one.
 #'
 #' @param draft A draft: `list(questionnaire, components, variables, response_options)`; see the top of `service_draft.R`.
 #' @param component_id The question's id.
@@ -248,7 +229,7 @@ draft_service_add_box <- function(draft, component_id) {
   id <- draft_service_next_id(draft, "variables")
   if (nrow(boxes) == 0) {
     draft <- add_rows(draft, "variables", data.frame(id = id, component_id = component_id))
-    return(add_blank_choices(draft, id, 2))
+    return(add_blank_choices(draft, id, 1))
   }
   template <- boxes[nrow(boxes), ]
   draft <- add_rows(draft, "variables", data.frame(
@@ -420,19 +401,20 @@ draft_service_auto_apply_matr_ids <- function(draft, matr_ids, replace = FALSE) 
   draft
 }
 
-#' Fill the variables' MATR IDs from the questionnaire's earlier waves.
+#' Fill the variables' MATR IDs from a recorded questionnaire's questions.
 #'
-#' For a new wave of a recorded questionnaire: a question with the same words as one the questionnaire
-#' already asks (ignoring capitals and extra spaces) gets its variables' MATR IDs, first variable to first
-#' variable and so on. Only blank MATR IDs are filled, so nothing typed or filled from a CSV is lost. Says
-#' how many were filled with `message()`; a MATR ID already used by another variable of the draft isn't
-#' used again.
+#' A question with the same words as one the questionnaire asks (ignoring capitals and extra spaces) gets
+#' its variables' MATR IDs, first variable to first variable and so on. Used for the questionnaire the
+#' extraction goes into (its earlier waves), and for any questionnaire picked in the MATR IDs dialog. Only
+#' blank MATR IDs are filled, so nothing typed or filled from a CSV is lost. Says how many were filled with
+#' `message()`; a MATR ID already used by another variable of the draft isn't used again.
 #'
 #' @param draft A draft: `list(questionnaire, components, variables, response_options)`; see the top of `service_draft.R`.
 #' @param recorded The recorded questions' MATR IDs: a data frame with `text`, `matr_id` and `display_order`
-#'   (`extraction_service_recorded_matr_ids()`).
+#'   (`extraction_service_recorded()$matr_ids`, `extraction_service_questionnaire_matr_ids()`).
+#' @param from Where they come from, for the message: e.g. `"the questionnaire's earlier waves"`.
 #' @return The changed draft; the same draft if nothing matched.
-draft_service_fill_recorded_matr_ids <- function(draft, recorded) {
+draft_service_fill_recorded_matr_ids <- function(draft, recorded, from = "the questionnaire's earlier waves") {
   same_words <- function(text) tolower(trimws(gsub("[[:space:]]+", " ", ifelse(is.na(text), "", text))))
   blocks <- draft$components
   questions <- blocks[blocks$component_type == "Question" & !is.na(blocks$text), , drop = FALSE]
@@ -452,8 +434,8 @@ draft_service_fill_recorded_matr_ids <- function(draft, recorded) {
   }
   if (n_filled > 0) {
     message(sprintf(
-      "Filled in the MATR IDs of %s from the questionnaire's earlier waves, where the question is worded the same.",
-      plural(n_filled, "variable")
+      "Filled in the MATR IDs of %s from %s, where the question is worded the same.",
+      plural(n_filled, "variable"), from
     ))
   }
   draft
@@ -480,8 +462,9 @@ draft_service_text_suggestions <- function(draft, recorded_texts = NULL) {
 
 #' Number the questions 1, 2, 3... in the order they are printed.
 #'
-#' A question's number follows its place in the questionnaire, so moving, adding or deleting a question
-#' renumbers the ones after it. Blocks that aren't questions have no number.
+#' A question's place follows its place in the questionnaire, so moving, adding or deleting a question
+#' renumbers the ones after it. Blocks that aren't questions have no number. The number printed beside a
+#' question (`printed_number`) is staff's, and is left as it is.
 #'
 #' @param draft A draft: `list(questionnaire, components, variables, response_options)`; see the top of `service_draft.R`.
 #' @return The changed draft.

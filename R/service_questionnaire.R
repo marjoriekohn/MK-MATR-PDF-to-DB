@@ -168,3 +168,22 @@ questionnaire_service_choices <- function(catalog, study_id) {
   )
   stats::setNames(as.character(questionnaires$questionnaire_id), labels)
 }
+
+#' Every recorded questionnaire for a drop-down, each with its study.
+#'
+#' For example "Adult Health and Personality (AHP) · Adult Health Study". Used to pick a questionnaire to
+#' take MATR IDs from, which can be any study's.
+#'
+#' @param catalog The live tables the pages pick from, from `questionnaire_service_get_catalog()`.
+#' @return A named character vector, as `questionnaire_service_registry_choices()`, by name.
+questionnaire_service_all_choices <- function(catalog) {
+  questionnaires <- catalog$questionnaires
+  questionnaires <- questionnaires[order(questionnaires$name, questionnaires$abbreviation), , drop = FALSE]
+  study <- catalog$studies$name[match(questionnaires$study_id, catalog$studies$study_id)]
+  labels <- paste0(
+    questionnaires$name, " (", questionnaires$abbreviation, ")",
+    ifelse(is.na(study), "", paste0(" · ", study)),
+    recycle0 = TRUE
+  )
+  stats::setNames(as.character(questionnaires$questionnaire_id), labels)
+}

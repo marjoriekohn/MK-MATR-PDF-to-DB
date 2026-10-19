@@ -358,10 +358,23 @@ edit_type_problem <- function(field, value) {
         )
       }
     },
-    date = extraction_service_date_problem(value),
+    date = edit_date_problem(value),
     select = if (!value %in% unname(field$choices)) "Pick one from the list.",
     NULL
   )
+}
+
+#' A problem with a typed date, or `NULL`.
+#'
+#' @param text What was typed; blank is fine.
+#' @return A sentence saying what to do, or `NULL`.
+edit_date_problem <- function(text) {
+  text <- trimws(text)
+  if (!nzchar(text)) {
+    return(NULL)
+  }
+  ok <- grepl("^[0-9]{1,2}/[0-9]{1,2}/[0-9]{4}$", text) && !is.na(as.Date(text, "%m/%d/%Y"))
+  if (!ok) "Type the date as MM/DD/YYYY, e.g. 04/15/2022."
 }
 
 # ------ What changed ------------------------------------------------------------------------------------------------
@@ -507,10 +520,14 @@ edit_service_build <- function(entity, mode, snap, row = NULL, scope = NULL, fie
   } else {
     edit_update_items(entity, snap, row, fields, values)
   }
-  list(
-    items = edit_number_items(items),
-    summary = if (mode == "add") edit_summary_add(entity, snap, fields, values) else edit_summary_update(entity, snap, row, fields, values)
-  )
+  summary <- if (mode != "add") {
+    edit_summary_update(entity, snap, row, fields, values)
+  } else if (!is.null(entity$summary_add)) {
+    entity$summary_add(snap, scope, fields, values)
+  } else {
+    edit_summary_add(entity, snap, fields, values)
+  }
+  list(items = edit_number_items(items), summary = summary)
 }
 
 # ------ * Add ------------------------------------------------------------------------------------------------------------

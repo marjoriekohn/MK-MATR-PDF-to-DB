@@ -69,11 +69,16 @@ question_problems <- function(draft) {
   parent_field <- function(condition, message) {
     problems_where(questions$id, condition, message, table = "components", rows = questions$id, field = "parent_question_id")
   }
+  numbers <- draft_service_question_number(questions)
   rbind(
-    problems_where(questions$id, is.na(questions$question_number), "Add the question number."),
     problems_where(
-      questions$id, duplicated_within(tolower(questions$question_number), "wave"),
-      "Give it a number no other question has." # BR71
+      questions$id, is.na(numbers), "Add the question number.",
+      table = "components", rows = questions$id, field = "printed_number"
+    ),
+    problems_where(
+      questions$id, duplicated_within(tolower(numbers), "wave"),
+      "Give it a number no other question has.", # BR71
+      table = "components", rows = questions$id, field = "printed_number"
     ),
     problems_where(
       questions$id, !questions$id %in% draft$variables$component_id,
@@ -113,7 +118,7 @@ variable_problems <- function(draft, lookups, matr_ids = TRUE) {
     )
   }
   rbind(
-    box_problem(is_choice_box & n_choices < 2, "add at least two choices."), # BR99
+    box_problem(is_choice_box & n_choices < 1, "add its choices."), # BR99: a lone check box has one
     choice_problem(is.na(choices$answer_option), "fill in the blank choice.", "answer_option"),
     choice_problem(duplicated_within(choices$answer_option, choices$variable_id), "list each choice once.", "answer_option"),
     choice_problem(

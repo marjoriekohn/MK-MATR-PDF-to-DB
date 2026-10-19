@@ -231,7 +231,10 @@ tidy_boxes <- function(boxes) {
   })
 }
 
+# A choice that isn't printed on the form (an older answer's "No" for an empty check box) can't be marked,
+# so it isn't a response option, and is left out.
 tidy_choices <- function(choices) {
+  choices <- Filter(function(choice) !isFALSE(choice[["printed"]]), choices)
   lapply(seq_along(choices), function(i) {
     choice <- choices[[i]]
     answer_option <- clean_text(choice$answer_option)
@@ -239,7 +242,6 @@ tidy_choices <- function(choices) {
     without_blanks(list(
       display_order = i,
       answer_option = answer_option,
-      printed = !isFALSE(choice$printed),
       printed_label = if (!identical(printed_label, answer_option)) printed_label,
       skip_instruction = clean_text(choice$skip_instruction)
     ))
@@ -297,9 +299,10 @@ reading_service_problems <- function(json, lookups) {
 
 # "Question 14a", "Instruction "During the worst time:"", or "A section with no heading".
 block_name <- function(blocks) {
+  numbers <- draft_service_question_number(blocks)
   ifelse(
-    !is.na(blocks$question_number),
-    paste(blocks$component_type, blocks$question_number),
+    !is.na(numbers),
+    paste(blocks$component_type, numbers),
     ifelse(
       is.na(blocks$text),
       paste("A", tolower(blocks$component_type), "with no heading"),

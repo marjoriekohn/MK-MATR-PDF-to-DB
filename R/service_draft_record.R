@@ -19,9 +19,9 @@
 
 # The fields that are compared, for each table of a draft.
 review_edit_fields <- list(
-  components = c("component_type", "text", "question_number", "self_contained", "condition", "parent_question_id"),
+  components = c("component_type", "text", "printed_number", "self_contained", "condition", "parent_question_id"),
   variables = c("variable_type", "label", "subject", "answer_data_type"),
-  response_options = c("answer_option", "code_value", "printed", "printed_label", "skip_instruction")
+  response_options = c("answer_option", "code_value", "printed_label", "skip_instruction")
 )
 review_edit_items <- c(components = "block", variables = "variable", response_options = "choice")
 
@@ -78,7 +78,9 @@ draft_service_review_edits <- function(before, after, me, now = Sys.time()) {
 # A field's value as text, or NULL for none. A follow-up's parent is shown as the question's number.
 review_edit_value <- function(draft, table, id, field) {
   value <- draft[[table]][[field]][match(id, draft[[table]]$id)]
-  if (field == "parent_question_id") value <- question_number_of(draft, value)
+  if (field == "parent_question_id") {
+    value <- draft_service_question_number(draft$components[match(value, draft$components$id), , drop = FALSE])
+  }
   if (length(value) == 0 || is.na(value)) NULL else as.character(value)
 }
 

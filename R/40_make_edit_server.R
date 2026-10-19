@@ -146,11 +146,8 @@ make_edit_server <- function(id, connection, me, show_page) {
       if (!is.null(blocked)) {
         return(edit_callout(
           "warning",
-          title = paste("You can't", verb(), paste0(entity()$article, " ", entity()$noun), "here"),
-          p(entity()$about), p(blocked),
-          if (!is.null(entity()$redirect)) {
-            actionButton(ns("redirect"), entity()$redirect$label, class = "btn-sm btn-primary")
-          }
+          title = paste("You can't", verb(), paste0(entity()$article, " ", entity()$noun), "yet"),
+          p(entity()$about), p(blocked)
         ))
       }
       edit_info_block(
@@ -162,11 +159,6 @@ make_edit_server <- function(id, connection, me, show_page) {
     observeEvent(input$retry, {
       load_problem(NULL)
       if (!is.null(entity())) load_tables()
-    })
-
-    observeEvent(input$redirect, {
-      req(entity()$redirect)
-      show_page(entity()$redirect$page)
     })
 
     # A kind that belongs to one questionnaire asks which first.

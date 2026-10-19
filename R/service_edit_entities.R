@@ -14,7 +14,8 @@
 #   delete_about, update_about            what staff should know before they do it
 #   build(mode, ...)                      writes a change as items, if it's not
 #                                         just the fields that differ
-#   can(mode)                             a sentence if the kind can't be added,
+#   summary_add(snap, scope, fields, values)  an add's sentence, if not "Added the ... “words”"
+#   can(snap, mode)                       a sentence if the kind can't be added,
 #                                         updated or deleted here
 #   duplicates(snap, values)              the rows an add looks like, if it looks like any: a
 #                                         list of list(rows, why). A warning, not a block
@@ -114,8 +115,9 @@ edit_choice_labels <- list(
 )
 
 # How a form's field is described. `type` is text, textarea, number, date,
-# select (`choices`), choice (side-by-side buttons), or static (shown, not
-# typed). `locked` is the reason a field can't change once the row exists.
+# select (`choices`), choice (side-by-side buttons), or variables (a question's
+# variables and their choices, as JSON, drawn by www/js/variables.js from what
+# `options` lists). `locked` is the reason a field can't change once the row exists.
 # `show_when` is list(field, value): the field only matters while another has
 # that value. `problem` and `warn` are functions of (value, values), where
 # `values` is everything typed in the same part of the form by field name,
@@ -124,11 +126,11 @@ edit_choice_labels <- list(
 edit_field <- function(name, label, type = "text", required = FALSE, choices = NULL, hint = NULL,
                        placeholder = NULL, locked = NULL, min = NULL, rows = NULL, show_when = NULL,
                        problem = NULL, warn = NULL, suggest = NULL, default = NULL, short = NULL,
-                       tooltip = NULL) {
+                       tooltip = NULL, options = NULL) {
   list(
     name = name, label = label, type = type, required = required, choices = choices, hint = hint,
     placeholder = placeholder, locked = locked, min = min, rows = rows, show_when = show_when,
-    problem = problem, warn = warn, suggest = suggest, default = default, tooltip = tooltip,
+    problem = problem, warn = warn, suggest = suggest, default = default, tooltip = tooltip, options = options,
     short = short %||% tolower_first(label) # what a sentence calls it: "changed the ..."
   )
 }
@@ -805,7 +807,8 @@ question_entity <- list(
   },
   build = function(mode, snap, row, scope, fields, values) {
     if (mode == "add") {
-      edit_question_add_items(snap, fields, values)
+      text_field <- Filter(function(f) f$name == "text", fields)[[1]]
+      edit_new_question_items(snap, edit_service_normalize(text_field, values[["question__text"]]))
     } else {
       edit_update_items(edit_entities[["question"]], snap, row, fields, values)
     }
@@ -869,7 +872,8 @@ questionnaire_question_entity <- list(
   about = paste0(
     "A question as it's printed in one questionnaire: whether it stands on its own, what it's ",
     "conditional on, and the number it was given in each wave. Changes here only affect that ",
-    "questionnaire."
+    "questionnaire. A new question comes with its variables and their MATR IDs, typed here, so it is ",
+    "added whole."
   ),
   update_about = "You're changing this questionnaire only. Other questionnaires that ask the same question are not affected.",
   delete_about = paste0(
@@ -878,18 +882,26 @@ questionnaire_question_entity <- list(
     "stays in the database for any other questionnaire that asks it."
   ),
   delete_start = function(snap, row) edit_placement_start(snap, row),
-  reads = c("question", "component", "component_type", "wave", "wave_question", "variable", "question_category"),
+  reads = c(
+    "question", "component", "component_type", "wave", "wave_question", "variable", "question_category",
+    # adding a question (service_edit_question_add.R): who variables can be about, and the answer choices
+    # and sets of choices there are
+    "subject", "answer_option", "option_set", "answer_option_set"
+  ),
   initial = function(snap, row, scope) edit_question_initial(snap, row, scope),
-  build = function(mode, snap, row, scope, fields, values) edit_question_items(mode, snap, row, scope, fields, values),
-  can = function(snap, mode) {
+  build = function(mode, snap, row, scope, fields, values) {
     if (mode == "add") {
-      paste0(
-        "A new question comes with its variables and their MATR IDs, which are read from the ",
-        "questionnaire PDF. Add it through Extraction, so nothing is left half-finished."
-      )
+      edit_question_add_items_in(snap, scope, fields, values)
+    } else {
+      edit_question_items(mode, snap, row, scope, fields, values)
     }
   },
-  redirect = list(page = "extraction", label = "Go to Extraction"),
+  summary_add = function(snap, scope, fields, values) edit_question_add_summary(snap, scope, fields, values),
+  can = function(snap, mode) {
+    if (mode == "add" && !is.null(snap$component_type) && is.na(edit_type_id(snap, "Question"))) {
+      "The database has no component type called Question, so a question can't be added yet."
+    }
+  },
   cards = function(snap, scope) {
     if (!nzchar(scope %||% "")) {
       return(edit_cards(character(), character()))
@@ -925,7 +937,9 @@ questionnaire_question_entity <- list(
       tag = "Question"
     )
   },
-  fields = function(snap, mode, row, scope) edit_question_fields(snap, row, scope)
+  fields = function(snap, mode, row, scope) {
+    if (mode == "add") edit_question_add_fields(snap, scope) else edit_question_fields(snap, row, scope)
+  }
 )
 
 # What deleting a block from one questionnaire starts from: its placement, and
@@ -1013,7 +1027,7 @@ edit_placement_fields <- function(snap, mode, row, scope) {
     edit_field("component_id", "The component", "select",
       required = TRUE, show_when = list(field = "source", value = "existing"),
       choices = c("Choose a component" = "", choices),
-      hint = "Questions are added through Extraction, so they aren't listed. Blocks already in this questionnaire aren't either."
+      hint = "Questions are added as a questionnaire question (Add, then Questionnaire question), so they aren't listed. Blocks already in this questionnaire aren't either."
     ),
     edit_field("component_type_id", "Kind of block", "select",
       required = TRUE, show_when = list(field = "source", value = "new"),

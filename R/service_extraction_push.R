@@ -1,8 +1,7 @@
 # ------ Sending an extraction to the database --------------------------------------------
-# An extraction becomes rows of the MATR metadata database: a questionnaire (or a wave of one that
-# is recorded, new or recorded without questions yet), its blocks as components placed in the
-# questionnaire, its questions and their numbers in the wave, and each question's variables with
-# their choices. It is written the way an edit is, as a list of items that only add rows
+# An extraction becomes rows of the MATR metadata database, in a recorded questionnaire's wave that
+# asks no questions yet: its blocks as components placed in the questionnaire, its questions and
+# their numbers in the wave, and each question's variables with their choices. It is written the way an edit is, as a list of items that only add rows
 # (service_edit.R), so the same database function applies it, in one transaction, and the Edit
 # history lists every row it added.
 #
@@ -17,13 +16,12 @@
 #     there (exactly) is the one that is there; the others are added.
 #   * A set of choices is kept once, so a variable whose choices are those of an existing option
 #     set (in any order) uses it; otherwise a set is added, named after its choices.
-#   * A new questionnaire adds every block as a new component. Nothing is shared with another
-#     questionnaire; that can be done afterwards on Make an edit.
-#   * A wave of a questionnaire that is recorded finds its blocks where it prints them: a
-#     block with the same kind and words, in the same place, is that block (so the wave asks the
-#     same question, and finds its variables by MATR ID). The blocks that aren't there are
-#     added, after the ones that are in the same section.
-#   * A recorded wave is used as it is; it has to ask no questions yet.
+#   * The questionnaire's blocks are found where it prints them: a block with the same kind and
+#     words, in the same place, is that block (so the wave asks the same question, and finds its
+#     variables by MATR ID). The blocks that aren't there are added, after the ones that are in the
+#     same section. A questionnaire with nothing printed yet gets every block as a new component.
+#   * The wave is used as it is; it has to ask no questions yet. A questionnaire or wave that isn't
+#     recorded yet is added first, from the Basic Info form's drop-downs.
 #   * Nothing already recorded is changed or deleted.
 #   * Each variable's choices are its RESPONSE_OPTION rows: one per variable and answer choice, with
 #     its code. They are always new, since the variable is, even where the words repeat; the answer
@@ -71,17 +69,10 @@ extraction_service_draft_blockers <- function(draft, lookups) {
 extraction_service_info_blockers <- function(record, info = extraction_service_info(record), catalog,
                                              records = list(), question_counts = integer()) {
   missing <- extraction_service_missing(info)
-  problems <- c(
-    extraction_service_name_problem(info, catalog, records, record$id),
-    extraction_service_abbreviation_problem(info, catalog),
-    extraction_service_recorded_wave_problem(info, catalog, question_counts, records, record$id),
-    extraction_service_wave_name_problem(info, catalog, records, record$id),
-    extraction_service_date_problem(info$administered_date),
-    extraction_service_count_problem(info$respondent_count)
-  )
+  problem <- extraction_service_recorded_wave_problem(info, catalog, question_counts, records, record$id)
   as.character(c(
     if (length(missing) > 0) paste0("Fill in the ", word_list(missing), " under Basic Info."),
-    if (length(problems) > 0) "Fix the fields outlined in red under Basic Info."
+    if (!is.null(problem)) "Fix the fields outlined in red under Basic Info."
   ))
 }
 
@@ -152,9 +143,9 @@ extraction_service_push_context <- function(connection) {
 #'
 #' @param connection The MATR database, `list(url, key)`; see `model_database.R`.
 #' @param info Where it goes, as `extraction_service_info()` returns it.
-#' @return From `push_model_existing()`, or `NULL` for a new questionnaire (or none picked yet).
+#' @return From `push_model_existing()`, or `NULL` while none is picked.
 extraction_service_push_existing <- function(connection, info) {
-  if (identical(info$kind, "new_wave") && grepl("^[0-9]+$", info$questionnaire_id)) {
+  if (grepl("^[0-9]+$", info$questionnaire_id)) {
     push_model_existing(connection, info$questionnaire_id)
   }
 }
@@ -172,33 +163,16 @@ extraction_service_push_items <- function(connection, record) {
 #' Pure: everything it needs is given. See the top of this file for what is reused.
 #'
 #' @param draft The questionnaire as saved; see `draft_service_from_json()`.
-#' @param info What staff typed about the questionnaire and wave, from `extraction_service_info()`.
+#' @param info Where it goes, from `extraction_service_info()`.
 #' @param ids `component_types` and `subjects` as data frames with their ids.
-#' @param existing For a recorded questionnaire, what it has printed already, from
-#'   `push_model_existing()`; `NULL` for a new questionnaire.
+#' @param existing What the questionnaire has printed already, from `push_model_existing()`.
 #' @param options The answer choices and option sets there are, from `push_model_options()`.
 #' @return A list: `items` and `summary`; see `extraction_service_push_build()`.
 extraction_service_build_items <- function(draft, info, ids, existing, options) {
   if (nrow(draft$components) == 0) stop("There is nothing in this questionnaire to add yet.", call. = FALSE)
-  push <- push_start(info, ids, existing, options)
-
-  # ---- the questionnaire and its wave
-  questionnaire <- if (push$summary$questionnaire) push$token("questionnaire") else as.numeric(info$questionnaire_id)
-  if (push$summary$questionnaire) {
-    push$insert("questionnaire", list(questionnaire_id = questionnaire), list(
-      study_id = as.numeric(info$study_id), respondent_type_id = as.numeric(info$respondent_type_id),
-      name = trimws(info$name), abbreviation = trimws(info$abbreviation), description = blank_to_na(info$description)
-    ))
-  }
-  if (push$summary$wave) {
-    wave <- push$token("wave")
-    push$insert("wave", list(wave_id = wave), list(
-      questionnaire_id = questionnaire, name = trimws(info$wave_name),
-      respondent_count = push_count(info$respondent_count), administered_date = push_date(info$administered_date)
-    ))
-  } else {
-    wave <- push_recorded_wave(info, existing)
-  }
+  push <- push_start(ids, existing, options)
+  questionnaire <- as.numeric(info$questionnaire_id)
+  wave <- push_recorded_wave(info, existing)
 
   # ---- the blocks, parents before what is inside them
   blocks <- draft$components
@@ -237,7 +211,7 @@ extraction_service_build_items <- function(draft, info, ids, existing, options) 
     if (block$component_type != "Question") next
     push$summary$questions <- push$summary$questions + 1L
     push$insert("wave_question", list(component_id = component_of[[id]], questionnaire_id = questionnaire, wave_id = wave), list(
-      question_number = block$question_number
+      question_number = draft_service_question_number(block)
     ))
     push_variables(push, draft, block, component_of[[id]], questionnaire)
   }
@@ -246,13 +220,12 @@ extraction_service_build_items <- function(draft, info, ids, existing, options) 
 
 # The tools a push uses while it works: names for rows that don't exist yet (`token`), a way to add a
 # row (`insert`), the ids of kinds of block and subjects, and the count of what it has done so far.
-push_start <- function(info, ids, existing, options) {
+push_start <- function(ids, existing, options) {
   items <- list()
   counts <- integer()
   made <- new.env() # answer choices and option sets this push has already added
   push <- new.env()
   push$summary <- list(
-    questionnaire = identical(info$kind, "new_questionnaire"), wave = !extraction_service_uses_recorded_wave(info),
     blocks = 0L, blocks_found = 0L, questions = 0L, variables = 0L, variables_found = 0L, choices = 0L,
     answer_options = 0L, answer_options_found = 0L, option_sets = 0L, option_sets_found = 0L
   )
@@ -322,7 +295,7 @@ push_variables <- function(push, draft, block, component, questionnaire) {
       choice <- choices[j, ]
       push$insert("response_option", list(variable_key = variable, answer_option_id = push_answer_option(push, choice$answer_option)), list(
         display_order = j, code_value = if (is.na(choice$code_value)) NA else as.character(choice$code_value),
-        printed = tolower(as.character(choice$printed)), printed_label = choice$printed_label,
+        printed_label = choice$printed_label,
         skip_instruction = choice$skip_instruction
       ))
       push$summary$choices <- push$summary$choices + 1L
@@ -471,15 +444,13 @@ push_taken <- function(existing, parent) {
 # ------ Said in words ---------------------------------------------------------------------------
 #' What an extraction's rows come to, in words.
 #'
-#' For example "Adds the questionnaire, the wave, 14 new blocks, 9 questions asked in the wave, 11 new
-#' variables and 20 response options."
+#' For example "Adds 14 new blocks, 9 questions asked in the wave, 11 new variables and 20 response
+#' options."
 #'
 #' @param summary From `extraction_service_push_build()`.
 #' @return A string.
 extraction_service_push_summary <- function(summary) {
   parts <- c(
-    if (summary$questionnaire) "the questionnaire",
-    if (!isFALSE(summary$wave)) "the wave",
     if (summary$blocks > 0) plural(summary$blocks, "new block"),
     if (summary$blocks_found > 0) paste0(plural(summary$blocks_found, "block"), " already there"),
     if (summary$questions > 0) paste(plural(summary$questions, "question"), "asked in the wave"),
@@ -527,7 +498,7 @@ extraction_service_request_preview <- function(draft, info, catalog, context, ex
   preview
 }
 
-#' The cards for where an extraction goes: its registry, study, questionnaire and wave, each recorded or NEW.
+#' The cards for where an extraction goes: its registry, study, questionnaire and wave, all recorded.
 #'
 #' @param info Where it goes, as `extraction_service_info()` returns it.
 #' @param catalog The live tables the pages pick from, from `questionnaire_service_get_catalog()`.
@@ -536,15 +507,8 @@ extraction_service_where_cards <- function(info, catalog) {
   not_picked <- function(kind) list(kind = kind, title = "Not picked yet", subtitle = "", facts = character(), is_missing = TRUE)
   registry <- catalog$registries[as.character(catalog$registries$registry_id) %in% info$registry_id, , drop = FALSE]
   study <- questionnaire_service_get_study(catalog, info$study_id)
-  questionnaire <- if (info$kind == "new_wave") questionnaire_service_get(catalog, info$questionnaire_id)
+  questionnaire <- questionnaire_service_get(catalog, info$questionnaire_id)
   wave <- catalog$waves[as.character(catalog$waves$wave_id) %in% info$wave_id, , drop = FALSE]
-  respondent_type <- catalog$respondent_types$name[as.character(catalog$respondent_types$respondent_type_id) %in% info$respondent_type_id]
-  wave_facts <- function(date, count) {
-    c(
-      if (has_text(date)) paste("Given", date),
-      if (has_text(count)) paste(count, "respondents")
-    )
-  }
   list(
     if (nrow(registry) == 1) {
       list(
@@ -563,13 +527,7 @@ extraction_service_where_cards <- function(info, catalog) {
     } else {
       not_picked("Study")
     },
-    if (info$kind == "new_questionnaire" && has_text(info$name)) {
-      list(
-        kind = "Questionnaire", title = questionnaire_name(trimws(info$name), trimws(info$abbreviation)),
-        subtitle = if (length(respondent_type) == 1) paste("For", respondent_type) else "",
-        facts = character(), is_new = TRUE
-      )
-    } else if (!is.null(questionnaire)) {
+    if (!is.null(questionnaire)) {
       list(
         kind = "Questionnaire", title = questionnaire_name(questionnaire$name, questionnaire$abbreviation),
         subtitle = paste0("For ", questionnaire$respondent_type, " · already in the database"),
@@ -578,19 +536,14 @@ extraction_service_where_cards <- function(info, catalog) {
     } else {
       not_picked("Questionnaire")
     },
-    if (extraction_service_uses_recorded_wave(info) && nrow(wave) == 1) {
+    if (nrow(wave) == 1) {
       list(
         kind = "Wave", title = wave$name, subtitle = "Already in the database, with no questions yet",
-        facts = wave_facts(
-          if (!is.na(wave$administered_date)) format(as.Date(wave$administered_date), "%m/%d/%Y") else "",
-          if (!is.na(wave$respondent_count)) format(wave$respondent_count, big.mark = ",") else ""
+        facts = c(
+          if (!is.na(wave$administered_date)) paste("Given", format(as.Date(wave$administered_date), "%m/%d/%Y")),
+          if (!is.na(wave$respondent_count)) paste(format(wave$respondent_count, big.mark = ","), "respondents")
         ),
         is_new = FALSE
-      )
-    } else if (!extraction_service_uses_recorded_wave(info) && has_text(info$wave_name)) {
-      list(
-        kind = "Wave", title = trimws(info$wave_name), subtitle = "",
-        facts = wave_facts(info$administered_date, info$respondent_count), is_new = TRUE
       )
     } else {
       not_picked("Wave")
@@ -700,23 +653,4 @@ extraction_service_save_info <- function(connection, record, info, me, catalog) 
   placed <- utils::modifyList(record, list(info = info), keep.null = TRUE)
   described <- utils::modifyList(placed, list(summary = extraction_service_push_title(placed, catalog)), keep.null = TRUE)
   extraction_model_save(connection, described, c("summary", "info"), me$staff_id, expected_revision = record$revision)
-}
-
-# ------ Small things ------------------------------------------------------------------------------------
-blank_to_na <- function(text) if (has_text(text)) trimws(text) else NA_character_
-
-# "1,200" as 1200; NA for nothing.
-push_count <- function(text) {
-  if (!has_text(text)) {
-    return(NA)
-  }
-  as.numeric(gsub(",", "", trimws(text), fixed = TRUE))
-}
-
-# "04/15/2022" as "2022-04-15"; NA for nothing.
-push_date <- function(text) {
-  if (!has_text(text)) {
-    return(NA_character_)
-  }
-  format(as.Date(trimws(text), "%m/%d/%Y"))
 }

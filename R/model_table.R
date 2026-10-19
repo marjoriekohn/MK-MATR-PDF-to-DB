@@ -108,6 +108,10 @@ database_tables <- list(
     key = "subject_id", order_by = "name",
     columns = c(subject_id = "id", name = "text")
   ),
+  option_set = list(
+    key = "option_set_id", order_by = "name",
+    columns = c(option_set_id = "id", name = "text", description = "text")
+  ),
   answer_option_set = list(
     key = c("option_set_id", "answer_option_id"), order_by = c("option_set_id", "answer_option_id"),
     columns = c(option_set_id = "id", answer_option_id = "id")
@@ -146,7 +150,7 @@ database_tables <- list(
     key = c("variable_key", "answer_option_id"), order_by = c("variable_key", "answer_option_id"),
     columns = c(
       variable_key = "id", answer_option_id = "id", display_order = "number",
-      code_value = "text", printed = "flag", printed_label = "text",
+      code_value = "text", printed_label = "text",
       skip_instruction = "text"
     )
   )

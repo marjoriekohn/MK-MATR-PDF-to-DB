@@ -143,6 +143,7 @@ edit_field_ui <- function(ns, field, value, slot) {
         role = "group", `aria-label` = field$label, title = field$label,
         toggle_input(id, field$choices, selected = value, label = field$label)
       ),
+      variables = edit_variables_ui(id, value, field),
       {
         box <- named(textInput(id, NULL, value, placeholder = inside, width = "100%"), "input")
         if (!is.null(field$suggest)) {
@@ -156,7 +157,7 @@ edit_field_ui <- function(ns, field, value, slot) {
   }
   help <- c(field$hint, field$tooltip)
   field_div <- div(
-    class = c("form-field", "edit-field", if (field$type == "textarea") "is-wide"),
+    class = c("form-field", "edit-field", if (field$type %in% c("textarea", "variables")) "is-wide"),
     control,
     if (length(help) > 0 && is.null(field$locked)) div(class = "form-text field-help", paste(help, collapse = " ")),
     uiOutput(slot, class = "form-text field-note")
@@ -167,6 +168,34 @@ edit_field_ui <- function(ns, field, value, slot) {
   conditionalPanel(
     sprintf("input['%s__%s'] == '%s'", field$part, field$show_when$field, field$show_when$value),
     ns = ns, field_div
+  )
+}
+
+#' The variables of a question, and their choices, edited together.
+#'
+#' The field's value is a hidden text box holding the variables as JSON; the page script
+#' (www/js/variables.js) draws an editor from it, like the Edit Extraction page's variable cards, and
+#' writes it back as they are changed. Who a variable can be about, the kinds of answer and the answer
+#' choices to offer come from `field$options`.
+#'
+#' @param id The input's id.
+#' @param value The variables as JSON.
+#' @param field The field, from `edit_service_fields()`.
+#' @return A UI element.
+edit_variables_ui <- function(id, value, field) {
+  options <- field$options
+  list_id <- paste0(id, "-answers")
+  div(
+    class = "edit-variables", role = "group", `aria-label` = field$label,
+    `data-input` = id,
+    `data-subjects` = jsonlite::toJSON(as.character(options$subjects)),
+    `data-answer-types` = jsonlite::toJSON(as.character(options$answer_data_types)),
+    `data-answers` = list_id,
+    div(class = "edit-variables-title", field$label),
+    div(class = "edit-variables-value", textInput(id, NULL, value)),
+    suggestions(list_id, options$answer_options),
+    div(class = "edit-variables-list"),
+    tags$button(type = "button", class = "btn btn-sm btn-outline-dark edit-variables-add", icon("plus"), " Variable")
   )
 }
 

@@ -7,10 +7,11 @@
 # Extraction page (see draft_service_load()). `status` belongs to the draft: Draft until its
 # change request is submitted, Awaiting Review while it waits for approval, Sent Back when a
 # reviewer returns it, Withdrawn if discarded, Applied once it is in the MATR metadata database.
-# `info` is where it goes in the database: its registry, study, questionnaire and wave (all
-# text; rows picked from the live tables are saved as their IDs). It is picked when the change
-# request is submitted, so a draft can have none. Records are kept in the database
-# (model_extraction.R); `connection` is the one made in global.R.
+# `info` is where it goes in the database (its Basic Info): a recorded registry, study,
+# questionnaire and one of that questionnaire's waves that asks no questions yet, each saved as
+# its ID (text). It is picked on Change Requests, after the change request is submitted, so a draft
+# can have none; anything that isn't recorded yet is added from the form's drop-downs first.
+# Records are kept in the database (model_extraction.R); `connection` is the one made in global.R.
 
 extraction_open_statuses <- c("Draft", "Sent Back")
 
@@ -18,17 +19,8 @@ extraction_open_statuses <- c("Draft", "Sent Back")
 # prepared, and those waiting for approval.
 extraction_pending_statuses <- c(extraction_open_statuses, "Awaiting Review")
 
-extraction_info_fields <- c(
-  "registry_id", "study_id", # the registry and study it belongs to
-  "kind", # "new_wave": a recorded questionnaire, or "new_questionnaire"
-  "questionnaire_id", # new_wave: which questionnaire
-  "name", "abbreviation", # new_questionnaire: about it, and its respondent type
-  "respondent_type_id",
-  "description",
-  "wave_choice", # a recorded questionnaire's wave: "new", or "existing" (a recorded wave with no questions)
-  "wave_id", # wave_choice "existing": which wave
-  "wave_name", "administered_date", "respondent_count" # a new wave: about it
-)
+# Where an extraction goes: the IDs of a recorded registry, study, questionnaire and wave.
+extraction_info_fields <- c("registry_id", "study_id", "questionnaire_id", "wave_id")
 
 #' Every extraction draft, newest saved first.
 #'
@@ -63,48 +55,33 @@ extraction_service_open_drafts <- function(records, prepared_by_id = NULL) {
 
 #' A record's info with every field present.
 #'
+#' Only the four picks are read: what drafts saved before the form was cut down to them also hold (a
+#' new questionnaire's or new wave's name, and the like) is left out, so such a draft asks for the
+#' questionnaire or wave to be picked again.
+#'
 #' @param record An extraction record, as `extraction_model_get_all()` returns it. `NULL` for an empty form.
-#' @return A named list of strings, one per field in `extraction_info_fields`, blanks as
-#'   `""`; `kind` is `"new_wave"` and `wave_choice` `"new"` unless the record says otherwise.
+#' @return A named list of strings, one per field in `extraction_info_fields`, blanks as `""`.
 extraction_service_info <- function(record = NULL) {
   info <- lapply(extraction_info_fields, function(field) {
     value <- record$info[[field]]
     if (is.null(value)) "" else as.character(value)
   })
-  info <- stats::setNames(info, extraction_info_fields)
-  if (!nzchar(info$kind)) info$kind <- "new_wave"
-  if (!nzchar(info$wave_choice)) info$wave_choice <- "new"
-  info
+  stats::setNames(info, extraction_info_fields)
 }
 
 #' An extraction's Basic Info, as the Change Requests form holds it.
 #'
 #' The form picks a recorded registry, study, questionnaire and wave (one that asks no questions yet);
-#' anything new is added from its drop-down first. So only those four are kept, and the rest is set to
-#' say so: `kind` `"new_wave"` (a recorded questionnaire) and `wave_choice` `"existing"`.
+#' anything new is added from its drop-down first, so its "+ Add new …" choice isn't a pick.
 #'
-#' @param info Where it goes, as `extraction_service_info()` returns it.
-#' @return `info`, in the same shape, with only the four picks.
+#' @param info Where it goes, as `extraction_service_info()` returns it, or the form's picks.
+#' @return `info`, in the same shape, with "+ Add new …" as blank.
 extraction_service_basic_info <- function(info) {
-  kept <- c("registry_id", "study_id", "questionnaire_id", "wave_id")
-  basic <- stats::setNames(as.list(rep("", length(extraction_info_fields))), extraction_info_fields)
-  basic[kept] <- lapply(info[kept], function(value) {
-    value <- as.character(value %||% "")
+  basic <- lapply(extraction_info_fields, function(field) {
+    value <- as.character(info[[field]] %||% "")
     if (identical(value, add_new_choice)) "" else value
   })
-  basic$kind <- "new_wave"
-  basic$wave_choice <- "existing"
-  basic
-}
-
-#' Whether an extraction goes into a wave that is recorded already.
-#'
-#' Only a recorded questionnaire's wave can be: a new questionnaire's wave is new too.
-#'
-#' @param info Where it goes, as `extraction_service_info()` returns it.
-#' @return `TRUE` or `FALSE`.
-extraction_service_uses_recorded_wave <- function(info) {
-  identical(info$kind, "new_wave") && identical(info$wave_choice, "existing")
+  stats::setNames(basic, extraction_info_fields)
 }
 
 #' Fill in the study and registry a recorded questionnaire belongs to.
@@ -118,7 +95,7 @@ extraction_service_uses_recorded_wave <- function(info) {
 #' @return `info`, with `study_id` and `registry_id` filled in where they were blank.
 extraction_service_place <- function(info, catalog) {
   questionnaire <- questionnaire_service_get(catalog, info$questionnaire_id)
-  if (info$kind == "new_wave" && !is.null(questionnaire) && !nzchar(info$study_id)) {
+  if (!is.null(questionnaire) && !nzchar(info$study_id)) {
     info$study_id <- as.character(questionnaire$study_id)
   }
   study <- questionnaire_service_get_study(catalog, info$study_id)
@@ -194,23 +171,6 @@ extraction_service_create_manual <- function(connection, staff, info = extractio
     questionnaire = draft_service_to_json(draft_service_empty())
   )
   extraction_model_create(connection, record)
-}
-
-#' Save where an extraction goes, by itself.
-#'
-#' The site saves it with the change request instead (`extraction_service_push()`); the database tests
-#' use this to check that saving one field never undoes another.
-#'
-#' @param connection The MATR database, `list(url, key)`; see `model_database.R`.
-#' @param id The draft's id.
-#' @param info Where it goes in the database, as `extraction_service_info()` returns it.
-#' @param me Who is saving: `list(staff_id, name, role)`.
-#' @return The record as saved.
-extraction_service_save_info <- function(connection, id, info, me) {
-  change_record(connection, id, me, function(record) {
-    record$info <- info
-    record
-  })
 }
 
 #' Keep an uploaded CSV of MATR IDs with the draft.
@@ -430,13 +390,10 @@ extraction_service_title <- function(record, catalog, read = NULL) {
   ), collapse = " · ")
 }
 
-# The wave's name: the recorded one's, or as typed for a new one; "" if neither is known yet.
+# The recorded wave's name; "" if none is picked yet.
 extraction_service_wave_name <- function(info, catalog) {
-  if (extraction_service_uses_recorded_wave(info)) {
-    wave <- catalog$waves[as.character(catalog$waves$wave_id) %in% info$wave_id, , drop = FALSE]
-    return(if (nrow(wave) == 1) trimws(wave$name) else "")
-  }
-  trimws(info$wave_name)
+  wave <- catalog$waves[as.character(catalog$waves$wave_id) %in% info$wave_id, , drop = FALSE]
+  if (nrow(wave) == 1) trimws(wave$name) else ""
 }
 
 #' The Edit Extraction page's heading.
@@ -460,15 +417,9 @@ extraction_service_heading <- function(record, catalog, read = NULL) {
   )
 }
 
-# The questionnaire's name and abbreviation: the recorded one's, or as typed
-# for a new one. NULL if neither is known yet.
+# The recorded questionnaire picked, or NULL if none is picked yet.
 extraction_service_questionnaire <- function(info, catalog) {
-  if (info$kind == "new_wave") {
-    return(questionnaire_service_get(catalog, info$questionnaire_id))
-  }
-  if (has_text(info$name) || has_text(info$abbreviation)) {
-    list(name = trimws(info$name), abbreviation = trimws(info$abbreviation))
-  }
+  questionnaire_service_get(catalog, info$questionnaire_id)
 }
 
 questionnaire_name <- function(name, abbreviation) {
@@ -481,145 +432,30 @@ questionnaire_name <- function(name, abbreviation) {
   paste0(name, " (", abbreviation, ")")
 }
 
-# ------ Checks on what staff typed ---------------------------------------------------
-#' The required fields left blank.
+# ------ Checks on what staff picked ---------------------------------------------------
+#' The Basic Info fields still blank.
 #'
-#' The form goes registry, study, then the questionnaire: a recorded questionnaire needs picking, and a
-#' new questionnaire everything the QUESTIONNAIRE row will hold. Then the wave: a recorded one needs
-#' picking, and a new one a name.
+#' The form goes registry, study, questionnaire, then one of the questionnaire's waves.
 #'
 #' @param info Where it goes, as `extraction_service_info()` returns it.
-#' @return The names of the fields, as the form labels them; empty if none.
+#' @return The names of the fields, as sentences call them; empty if none.
 extraction_service_missing <- function(info) {
-  required <- extraction_service_required(info)
-  unname(required[extraction_service_missing_fields(info)])
+  unname(extraction_required_fields[extraction_service_missing_fields(info)])
 }
 
-#' The required fields still blank, by their names in `extraction_info_fields`.
+#' The Basic Info fields still blank, by their names in `extraction_info_fields`.
 #'
 #' @param info Where it goes, as `extraction_service_info()` returns it.
-#' @return A character vector of field names, e.g. `c("registry_id", "wave_name")`.
+#' @return A character vector of field names, e.g. `c("registry_id", "wave_id")`.
 extraction_service_missing_fields <- function(info) {
-  required <- extraction_service_required(info)
-  blank <- !vapply(names(required), function(field) has_text(info[[field]]), logical(1))
-  names(required)[blank]
+  blank <- !vapply(names(extraction_required_fields), function(field) has_text(info[[field]]), logical(1))
+  names(extraction_required_fields)[blank]
 }
 
-# The fields `info` needs, named by field, with what each is called in sentences.
-extraction_service_required <- function(info) {
-  required <- c(registry_id = "registry", study_id = "study")
-  required <- c(required, if (identical(info$kind, "new_questionnaire")) {
-    c(name = "questionnaire name", abbreviation = "abbreviation", respondent_type_id = "respondent type")
-  } else {
-    c(questionnaire_id = "questionnaire")
-  })
-  c(required, if (extraction_service_uses_recorded_wave(info)) c(wave_id = "wave") else c(wave_name = "wave name"))
-}
-
-# The rest return a sentence saying what to do, or NULL if all is well.
-
-#' A problem with a new questionnaire's name, or `NULL`.
-#'
-#' The name must be new for its study. The database allows repeats (BR14), but two
-#' questionnaires named alike would be hard to tell apart.
-#' #' The same goes for another draft that is being prepared, or waiting for approval, as a new
-#' questionnaire of the same study, so the two don't add it twice.
-#'
-#' The same goes for another draft that is being prepared, or waiting for approval, as a new
-#' questionnaire of the same study, so the two don't add it twice.
-#'
-#' @param info Where it goes, as `extraction_service_info()` returns it.
-#' @param catalog The live tables the pages pick from, from `questionnaire_service_get_catalog()`.
-#' @param records All the extraction records, to find other drafts of a new questionnaire.
-#' @param id This draft's id, so it doesn't clash with itself.
-#' @return A sentence saying what to do, or `NULL`.
-extraction_service_name_problem <- function(info, catalog, records = list(), id = NULL) {
-  same <- same_in_study(info, catalog, "name")
-  if (nrow(same) > 0) {
-    return(sprintf("This study already has a questionnaire called %s. Pick another name, or choose Existing questionnaire.", same$name[1]))
-  }
-  typed <- tolower(trimws(info$name))
-  if (info$kind != "new_questionnaire" || !nzchar(typed)) {
-    return(NULL)
-  }
-  others <- Filter(function(record) {
-    other <- extraction_service_info(record)
-    !identical(record$id, id) && other$kind == "new_questionnaire" && identical(other$study_id, info$study_id) &&
-      tolower(trimws(other$name)) == typed
-  }, draft_row_service_open(records, extraction_pending_statuses))
-  if (length(others) > 0) {
-    sprintf(
-      "%s already has a draft adding %s to this study. Pick another name, or continue that draft.",
-      others[[1]]$prepared_by %||% "Someone", trimws(info$name)
-    )
-  }
-}
-
-#' A problem with a new questionnaire's abbreviation, or `NULL`.
-#'
-#' @param info Where it goes in the database, as `extraction_service_info()` returns it.
-#' @param catalog The live tables the pages pick from, from `questionnaire_service_get_catalog()`.
-#' @return A sentence saying what to do, or `NULL`.
-extraction_service_abbreviation_problem <- function(info, catalog) {
-  same <- same_in_study(info, catalog, "abbreviation")
-  if (nrow(same) > 0) sprintf("Already used for %s. Pick another.", same$name[1])
-}
-
-# The study's recorded questionnaires whose `field` matches what was typed for
-# a new one, ignoring case and spaces at either end.
-same_in_study <- function(info, catalog, field) {
-  questionnaires <- catalog$questionnaires
-  typed <- tolower(trimws(info[[field]]))
-  if (info$kind != "new_questionnaire" || !nzchar(typed)) {
-    return(questionnaires[0, ])
-  }
-  questionnaires[
-    questionnaires$study_id %in% info$study_id & tolower(trimws(questionnaires[[field]])) %in% typed,
-  ]
-}
-
-#' A problem with a new wave's name, or `NULL` (BR21).
-#'
-#' A questionnaire's wave names are unique, among its recorded waves and the drafts
-#' being prepared for it or waiting for approval.
-#'
-#' @param info Where it goes, as `extraction_service_info()` returns it.
-#' @param catalog The live tables the pages pick from, from `questionnaire_service_get_catalog()`.
-#' @param records All the extraction records, to find other drafts of the same wave.
-#' @param id This draft's id, so it doesn't clash with itself.
-#' @param me Who is using the site, `list(staff_id, name)`, so a clash with their own
-#'   draft says "You".
-#' @return A sentence saying what to do, or `NULL`.
-extraction_service_wave_name_problem <- function(info, catalog, records, id = NULL, me = NULL) {
-  wave_name <- trimws(info$wave_name)
-  if (info$kind != "new_wave" || extraction_service_uses_recorded_wave(info) || !nzchar(wave_name)) {
-    return(NULL)
-  }
-  questionnaire <- questionnaire_service_get(catalog, info$questionnaire_id)
-  if (is.null(questionnaire)) {
-    return(NULL)
-  }
-  same_name <- function(names) tolower(trimws(names)) == tolower(wave_name)
-
-  waves <- catalog$waves[catalog$waves$questionnaire_id == questionnaire$questionnaire_id, ]
-  if (any(same_name(waves$name))) {
-    existing <- waves$name[same_name(waves$name)][1]
-    return(sprintf("%s already has a %s. Pick another name.", questionnaire$abbreviation, existing))
-  }
-  others <- Filter(function(record) {
-    other <- extraction_service_info(record)
-    !identical(record$id, id) && other$kind == "new_wave" && !extraction_service_uses_recorded_wave(other) &&
-      identical(other$questionnaire_id, info$questionnaire_id) && same_name(other$wave_name)
-  }, draft_row_service_open(records, extraction_pending_statuses))
-  if (length(others) > 0) {
-    who <- if (draft_row_service_is_mine(others[[1]], me)) "You" else others[[1]]$prepared_by
-    return(sprintf(
-      "%s already started a draft of %s %s. Pick another name, or continue that draft.",
-      who, questionnaire$abbreviation, wave_name
-    ))
-  }
-  NULL
-}
+# Every Basic Info field is needed, named by field, with what each is called in sentences.
+extraction_required_fields <- c(
+  registry_id = "registry", study_id = "study", questionnaire_id = "questionnaire", wave_id = "wave"
+)
 
 #' A problem with the recorded wave an extraction goes into, or `NULL`.
 #'
@@ -637,7 +473,7 @@ extraction_service_wave_name_problem <- function(info, catalog, records, id = NU
 #' @return A sentence saying what to do, or `NULL`.
 extraction_service_recorded_wave_problem <- function(info, catalog, question_counts = integer(), records = list(),
                                                      id = NULL, me = NULL) {
-  if (!extraction_service_uses_recorded_wave(info) || !has_text(info$wave_id)) {
+  if (!has_text(info$wave_id)) {
     return(NULL)
   }
   wave <- catalog$waves[as.character(catalog$waves$wave_id) %in% info$wave_id, , drop = FALSE]
@@ -652,38 +488,14 @@ extraction_service_recorded_wave_problem <- function(info, catalog, question_cou
   }
   others <- Filter(function(record) {
     other <- extraction_service_info(record)
-    !identical(record$id, id) && extraction_service_uses_recorded_wave(other) && identical(other$wave_id, info$wave_id)
+    !identical(record$id, id) && identical(other$wave_id, info$wave_id)
   }, draft_row_service_open(records, extraction_pending_statuses))
   if (length(others) > 0) {
     who <- if (draft_row_service_is_mine(others[[1]], me)) "You" else others[[1]]$prepared_by %||% "Someone"
-    return(sprintf("%s already has a draft going into %s. Pick another wave, or continue that draft.", who, wave$name))
+    has <- if (identical(who, "You")) "have" else "has"
+    return(sprintf("%s already %s a draft going into %s. Pick another wave, or continue that draft.", who, has, wave$name))
   }
   NULL
-}
-
-#' A problem with a typed date, or `NULL`.
-#'
-#' @param text What was typed; blank is fine.
-#' @return A sentence saying what to do, or `NULL`.
-extraction_service_date_problem <- function(text) {
-  text <- trimws(text)
-  if (!nzchar(text)) {
-    return(NULL)
-  }
-  ok <- grepl("^[0-9]{1,2}/[0-9]{1,2}/[0-9]{4}$", text) && !is.na(as.Date(text, "%m/%d/%Y"))
-  if (!ok) "Type the date as MM/DD/YYYY, e.g. 04/15/2022."
-}
-
-#' A problem with a typed number of respondents, or `NULL`.
-#'
-#' @param text What was typed; blank is fine.
-#' @return A sentence saying what to do, or `NULL`.
-extraction_service_count_problem <- function(text) {
-  text <- trimws(text)
-  if (!nzchar(text)) {
-    return(NULL)
-  }
-  if (!grepl("^[0-9][0-9,]*$", text)) "Type a whole number, e.g. 1,200."
 }
 
 #' The MATR IDs in a CSV, in order.
@@ -719,32 +531,65 @@ matr_id_headings <- "^((matr|variable)[ _.]?(ids?|names?)?|ids?)$"
 # ------ What a recorded questionnaire prints already ----------------------------------------
 #' The blocks a recorded questionnaire prints, and its questions' MATR IDs.
 #'
-#' For a new wave of a recorded questionnaire, the Edit Extraction page offers the blocks the questionnaire already
+#' For the questionnaire an extraction goes into, the Edit Extraction page offers the blocks it already
 #' prints as suggestions while a block's words are typed, and a question with the same words as one the
 #' questionnaire already asks keeps its variables' MATR IDs (BR93: a MATR ID names the variable within its
-#' questionnaire), so they are filled in instead of asked for. For a new questionnaire there is nothing yet.
+#' questionnaire), so they are filled in instead of asked for. Until a questionnaire is picked there is
+#' nothing.
 #'
 #' @param connection The MATR database, `list(url, key)`; see `model_database.R`.
 #' @param record An extraction record, as `extraction_model_get_all()` returns it.
 #' @param component_types The kinds of block with their ids; read from the database unless given.
 #' @return A list of two data frames: `texts` (`component_type`, `text`: one row per block the questionnaire
 #'   prints) and `matr_ids` (`text`, `matr_id`, `display_order`: one row per variable, with its question's
-#'   words and its place in the question). Both have no rows for a new questionnaire.
+#'   words and its place in the question). Both have no rows until a questionnaire is picked.
 extraction_service_recorded <- function(connection, record, component_types = NULL) {
   info <- extraction_service_info(record)
+  if (!has_text(info$questionnaire_id)) {
+    return(extraction_service_printed(NULL, component_types))
+  }
+  existing <- push_model_existing(connection, info$questionnaire_id)
+  if (is.null(component_types)) component_types <- lookup_model_get_component_types(connection)
+  extraction_service_printed(existing, component_types)
+}
+
+#' The MATR IDs of any recorded questionnaire's questions, to give a draft's questions worded the same.
+#'
+#' The MATR IDs dialog's "From a questionnaire": a questionnaire asked the same questions before (an
+#' earlier version, or another respondent's), so its MATR IDs are used again where the words match.
+#'
+#' @param connection The MATR database, `list(url, key)`; see `model_database.R`.
+#' @param questionnaire_id The questionnaire's id.
+#' @return A data frame with `text`, `matr_id` and `display_order`: one row per variable, with its
+#'   question's words and its place in the question; no rows if it has none.
+extraction_service_questionnaire_matr_ids <- function(connection, questionnaire_id) {
+  if (!grepl("^[0-9]+$", questionnaire_id %||% "")) {
+    stop("Pick a questionnaire first.", call. = FALSE)
+  }
+  extraction_service_printed(push_model_existing(connection, questionnaire_id))$matr_ids
+}
+
+#' What a recorded questionnaire prints: its blocks' words, and its variables' MATR IDs by question.
+#'
+#' @param existing From `push_model_existing()`, or `NULL` for none.
+#' @param component_types The kinds of block with their ids; only needed for `texts`.
+#' @return A list of two data frames, `texts` and `matr_ids`; see `extraction_service_recorded()`.
+extraction_service_printed <- function(existing, component_types = NULL) {
   none <- list(
     texts = data.frame(component_type = character(), text = character()),
     matr_ids = data.frame(text = character(), matr_id = character(), display_order = numeric())
   )
-  if (!identical(info$kind, "new_wave") || !has_text(info$questionnaire_id)) {
+  if (is.null(existing)) {
     return(none)
   }
-  existing <- push_model_existing(connection, info$questionnaire_id)
-  if (is.null(component_types)) component_types <- lookup_model_get_component_types(connection)
   components <- existing$components
   type_of <- component_types$name[match(components$component_type_id, component_types$component_type_id)]
-  texts <- data.frame(component_type = as.character(type_of), text = as.character(components$text), stringsAsFactors = FALSE)
-  texts <- texts[!is.na(texts$text) & !is.na(texts$component_type), , drop = FALSE]
+  texts <- if (is.null(component_types)) {
+    none$texts
+  } else {
+    texts <- data.frame(component_type = as.character(type_of), text = as.character(components$text), stringsAsFactors = FALSE)
+    texts[!is.na(texts$text) & !is.na(texts$component_type), , drop = FALSE]
+  }
   variables <- existing$variables
   question_text <- components$text[match(variables$component_id, components$component_id)]
   matr_ids <- data.frame(

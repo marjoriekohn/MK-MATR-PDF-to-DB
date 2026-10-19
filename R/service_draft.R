@@ -10,6 +10,12 @@
 #   response_options  one row per choice, pointing at its variable
 #
 # Rows get ids when a draft is loaded (c1, v1, o1...). Ids aren't saved.
+#
+# A question has two numbers. `question_number` is its place among the questions (1, 2, 3...), kept
+# up to date as blocks move (draft_service_renumber_questions()); `printed_number` is the number
+# printed beside it on the questionnaire ("1a4"), typed by staff or read off the PDF. The printed one
+# is the number the wave asks it as; the place stands in for a question that has none
+# (draft_service_question_number()).
 
 # The column that says which row each row sits under. display_order counts
 # 1, 2, 3... among the rows that share it.
@@ -26,8 +32,8 @@ new_row_defaults <- list(
   components = data.frame(
     id = NA_character_, parent_id = NA_character_, display_order = Inf,
     component_type = NA_character_, text = NA_character_,
-    question_number = NA_character_, self_contained = NA, condition = NA_character_,
-    parent_question_id = NA_character_, checked = FALSE
+    question_number = NA_character_, printed_number = NA_character_, self_contained = NA,
+    condition = NA_character_, parent_question_id = NA_character_, checked = FALSE
   ),
   variables = data.frame(
     id = NA_character_, component_id = NA_character_, display_order = Inf,
@@ -36,7 +42,7 @@ new_row_defaults <- list(
   ),
   response_options = data.frame(
     id = NA_character_, variable_id = NA_character_, display_order = Inf,
-    answer_option = NA_character_, code_value = NA_integer_, printed = TRUE,
+    answer_option = NA_character_, code_value = NA_integer_,
     printed_label = NA_character_, skip_instruction = NA_character_
   )
 )
@@ -103,14 +109,16 @@ draft_service_percent_checked <- function(counts) {
 #' Turn the questionnaire JSON into the three tables the Edit Extraction page edits.
 #'
 #' Rows get ids when a draft is loaded (c1, v1, o1...); ids aren't saved. Positions are
-#' numbered 1, 2, 3... within each parent, and choices without a code are coded.
+#' numbered 1, 2, 3... within each parent, and choices without a code are coded. A choice marked as
+#' not printed (`printed: false`, from drafts read before only printed choices were kept) is left out:
+#' a respondent can't mark it, so it isn't a response option.
 #'
 #' @param json The questionnaire as nested lists: `questionnaire` and `components`.
 #' @return A draft: `list(questionnaire, components, variables, response_options)`.
 draft_service_from_json <- function(json) {
   blocks <- flatten_blocks(json$components)
   boxes <- flatten_children(blocks, "variables")
-  choices <- flatten_children(boxes, "response_options")
+  choices <- Filter(function(choice) !isFALSE(choice[["printed"]]), flatten_children(boxes, "response_options"))
   question_numbers <- pluck(blocks, "question_number")
   block_ids <- ids_for("c", seq_along(blocks))
 
@@ -123,6 +131,7 @@ draft_service_from_json <- function(json) {
       component_type = pluck(blocks, "component_type"),
       text = pluck(blocks, "text"),
       question_number = question_numbers,
+      printed_number = printed_numbers(blocks),
       self_contained = pluck(blocks, "self_contained", NA),
       condition = pluck(blocks, "condition"),
       parent_question_id = find_parent_questions(
@@ -146,7 +155,6 @@ draft_service_from_json <- function(json) {
       display_order = as.numeric(seq_along(choices)),
       answer_option = pluck(choices, "answer_option"),
       code_value = pluck(choices, "code_value", NA_integer_),
-      printed = pluck(choices, "printed", NA),
       printed_label = pluck(choices, "printed_label"),
       skip_instruction = pluck(choices, "skip_instruction")
     )
@@ -190,6 +198,19 @@ pluck <- function(rows, field, missing = NA_character_) {
     function(row) as.vector(row[[field]] %||% missing, typeof(missing)),
     missing
   )
+}
+
+# The number printed beside each question. A block straight from the reading job (it has no `checked`,
+# which a saved copy always has) was given the printed number as its `question_number`; a saved copy
+# keeps it as `printed_number`.
+printed_numbers <- function(blocks) {
+  vapply(blocks, function(block) {
+    if (!identical(block$component_type, "Question")) {
+      return(NA_character_)
+    }
+    number <- block$printed_number %||% if (is.null(block$checked)) block$question_number
+    as.character(number %||% NA_character_)
+  }, NA_character_)
 }
 
 ids_for <- function(prefix, positions) {
@@ -238,6 +259,7 @@ blocks_json <- function(draft, parent_id) {
     }
     if (block$component_type == "Question") {
       json$question_number <- block$question_number
+      json$printed_number <- block$printed_number
       json$self_contained <- block$self_contained
       json$condition <- block$condition
       json$parent_question <- question_number_of(draft, block$parent_question_id)
@@ -272,7 +294,6 @@ choices_json <- function(draft, variable_id) {
       display_order = as.integer(choice$display_order),
       answer_option = choice$answer_option,
       code_value = choice$code_value,
-      printed = choice$printed,
       printed_label = choice$printed_label,
       skip_instruction = choice$skip_instruction
     ))
@@ -356,13 +377,36 @@ draft_service_next_id <- function(draft, table, n = 1) {
   paste0(id_prefixes[[table]], max(c(0L, used)) + seq_len(n), recycle0 = TRUE)
 }
 
-#' The printed number of a question.
+#' A question's place among the questions (1, 2, 3...), which links a follow-up to its parent in the JSON.
 #'
 #' @param draft A draft: `list(questionnaire, components, variables, response_options)`; see the top of `service_draft.R`.
 #' @param id Component ids.
 #' @return Their question numbers, `NA` for a block with none.
 question_number_of <- function(draft, id) {
   draft$components$question_number[match(id, draft$components$id)]
+}
+
+#' The number questions are asked as: the one printed beside them, or, where none was typed, their
+#' place among the questions.
+#'
+#' What the wave records (`wave_question.question_number`), and what the preview and the messages call
+#' a question.
+#'
+#' @param blocks Rows of a draft's `components`.
+#' @return A character vector, one number for each row; `NA` for a block that isn't a question.
+draft_service_question_number <- function(blocks) {
+  printed <- trimws(blocks$printed_number %||% rep(NA_character_, nrow(blocks)))
+  ifelse(!is.na(printed) & nzchar(printed), printed, blocks$question_number)
+}
+
+#' What a question is called in sentences: "question 1a4".
+#'
+#' @param draft A draft: `list(questionnaire, components, variables, response_options)`; see the top of `service_draft.R`.
+#' @param id A component id.
+#' @return A string; "an unnumbered question" for a question without a number.
+draft_service_question_name <- function(draft, id) {
+  number <- draft_service_question_number(draft$components[match(id, draft$components$id), , drop = FALSE])
+  if (length(number) == 0 || is.na(number)) "an unnumbered question" else paste("question", number)
 }
 
 #' Apply a function to each row of a data frame.
