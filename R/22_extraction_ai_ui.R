@@ -11,19 +11,18 @@ extraction_ai_ui <- function(id) {
   div(
     class = "extraction-mode extraction-ai",
     `data-ns` = ns(""),
-    card(card_body(h2("Questionnaire PDF"), uiOutput(ns("pdf_card")))),
-    edit_callout(
-      "info",
-      title = "Reading happens in the background",
-      "It takes a few minutes. You can leave this page: the draft waits under Existing Draft, where you can open ",
-      "it once reading has finished, review and edit what was extracted, and then submit it as a change request."
-    ),
-    uiOutput(ns("reading")),
     card(card_body(
-      div(
-        class = "extraction-footer",
-        uiOutput(ns("footer_note"), inline = TRUE),
-        actionButton(ns("open_extraction"), "Open in Edit Extraction", class = "btn-primary", disabled = TRUE)
+      h2("Questionnaire PDF"),
+      edit_callout("info", title = "Reading happens in the background",
+                   "It takes a few minutes. You can leave this page: the draft
+                   waits under Existing Draft, where you can open it once
+                   reading has finished, review and edit what was extracted,
+                   and then submit it as a change request."),
+      uiOutput(ns("pdf_card")),
+      uiOutput(ns("reading")),
+      div(class = "extraction-footer",
+          uiOutput(ns("footer_note"), inline = TRUE),
+          actionButton(ns("open_extraction"), "Open in Edit Extraction", class = "btn-primary", disabled = TRUE)
       )
     ))
   )
