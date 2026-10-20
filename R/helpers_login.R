@@ -26,7 +26,7 @@ login_ui <- function() {
         "Enter your VCU email. A sign-in link will be emailed to you; opening it signs you in. ",
         "There is no password."
       ),
-      textInput("login_email", NULL, width = "100%", placeholder = "VCU email, e.g. you@vcu.edu") |>
+      textInput("login_email", NULL, width = "100%", placeholder = "you@vcu.edu") |>
         tag_input_attributes("input", `aria-label` = "Email", autocomplete = "email") |>
         tagAppendAttributes(class = "login-field"),
       actionButton("login_submit", "Email me a sign-in link", class = "btn-primary login-button", width = "100%"),
