@@ -21,6 +21,10 @@
 #'   reads them and `refresh()` reads them again.
 #' @param extractions The extraction drafts as `server.R` shares them: `all()` is a reactive list of
 #'   records, and `changed()` tells it this session changed one.
+#' @param active A reactive that says whether this page is the one on screen, or `NULL`. Opening the
+#'   page reads the requests again, since other staff send and approve them too.
+#' @param refresh A reactive that ticks when staff press Refresh in the menu, or `NULL`. Each tick
+#'   reads the page's lists again.
 #' @return Called for its effect.
 change_requests_server <- function(
   id,
@@ -29,29 +33,31 @@ change_requests_server <- function(
   open_edit,
   open_edit_extraction,
   catalog,
-  extractions
+  extractions,
+  active = NULL,
+  refresh = NULL
 ) {
   moduleServer(id, function(input, output, session) {
     ns <- session$ns
 
     # ------ REACTIVE ----------------------------------------------------------
     whose <- reactiveVal("me") # "me", "mine" or "everyone"
-    refreshed <- reactiveVal(0L) # ticks when this session approved, sent back or withdrew something
+    refreshed <- reactiveVal(0L) # ticks when the requests should be read again
     reviewing <- reactiveVal(NULL) # the request the dialog is about, as it was read
     reviewing_detail <- reactiveVal(NULL) # what the dialog shows of it, from request_detail()
 
-    # Read again when the database says something changed (other staff send requests and approve them
-    # too) and straight after this session did. If the database can't be reached the last requests
-    # read stay on screen, with a message, and the next change tries again.
-    stored <- reactivePoll(
-      change_requests_poll_ms, session,
-      checkFunc = function() change_request_service_signature(connection),
-      valueFunc = function() change_request_service_signature(connection)
-    )
+    # Read when the page is opened, when staff press Refresh (other staff send requests and approve them
+    # too) and straight after this session changed one; the database isn't asked over and over. If it
+    # can't be reached the last requests read stay on screen, with a message, and the next read tries again.
+    if (!is.null(active)) {
+      observeEvent(active(), if (isTRUE(active())) refreshed(refreshed() + 1L), ignoreInit = TRUE)
+    }
+    if (!is.null(refresh)) {
+      observeEvent(refresh(), refreshed(refreshed() + 1L), ignoreInit = TRUE)
+    }
     last_requests <- list()
     requests <- reactive({
       refreshed()
-      stored()
       tryCatch(
         {
           last_requests <<- change_request_service_waiting(connection)

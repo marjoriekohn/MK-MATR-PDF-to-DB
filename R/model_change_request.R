@@ -26,20 +26,6 @@ change_request_model_waiting <- function(connection) {
   )
 }
 
-#' A summary that changes whenever a request is sent for review, changed, sent back, withdrawn or applied.
-#'
-#' @param connection The MATR database, `list(url, key)`; see `model_database.R`.
-#' @return A string; compare it with an earlier one.
-change_request_model_signature <- function(connection) {
-  waiting <- database_model_select(
-    connection, draft_table, c("draft_id", "kind", "revision", "saved_at"),
-    order_by = "draft_id", filters = list(status = database_eq(change_request_waiting_status))
-  )
-  paste(vapply(waiting, function(row) {
-    paste(row$draft_id, row$kind, row$revision, row$saved_at, sep = "/")
-  }, character(1)), collapse = "|")
-}
-
 #' Approve a change request, which applies it.
 #'
 #' The database checks that the request is waiting for approval, that it is still the revision

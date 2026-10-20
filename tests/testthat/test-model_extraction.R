@@ -124,16 +124,6 @@
 #   expect_equal(extraction_model_get(test_connection, record$id)$reading_claimed_at, "2026-10-02T10:00:05Z")
 # })
 #
-# test_that("a draft's signature changes as it is saved and as it is read", {
-#   me <- local_staff()
-#   before <- extraction_model_signature(test_connection)
-#   record <- local_extraction(me)
-#   added <- extraction_model_signature(test_connection)
-#   expect_false(added == before)
-#   extraction_model_save_reading(test_connection, record$id, list(extraction_status = "sent"), record$reading_started)
-#   expect_false(extraction_model_signature(test_connection) == added)
-# })
-
 test_that("an upload is kept once, named by its hash, in the PDF cache", {
   dir <- local_pdf_cache()
   upload <- fake_upload()

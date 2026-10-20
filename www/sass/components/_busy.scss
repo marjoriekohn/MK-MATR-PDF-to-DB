@@ -23,6 +23,3 @@
 }
 
 @keyframes busy-spin { to { transform: rotate(360deg); } }
-
-// The pointer says the site is working too
-html.shiny-busy, html.shiny-busy .btn { cursor: progress; }

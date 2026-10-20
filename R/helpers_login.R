@@ -52,6 +52,20 @@ login_message <- function(text, kind = "problem") {
 #' @param me Who is signed in: `list(staff_id, name, role, email)`.
 #' @param development Whether this is a development sign-in (STAFF_EMAIL), which the menu says.
 #' @return A UI element.
+#' The menu's Refresh button: reads everything on the pages again from the database.
+#'
+#' The site doesn't keep asking the database whether something changed, so what other staff did since
+#' a page was opened shows when the page is opened again, when this is pressed, or when the browser
+#' reloads the page (the sign-in is kept).
+#'
+#' @return A UI element.
+refresh_button <- function() {
+  actionButton(
+    "refresh_data", "Refresh", icon = icon("rotate-right"), class = "btn navbar-refresh",
+    title = "Read everything again from the database, with what other staff have changed"
+  )
+}
+
 user_menu <- function(me, development = FALSE) {
   div(
     class = "dropdown navbar-user",

@@ -13,6 +13,7 @@ function(input, output, session) {
     if (!is.null(isolate(signed_in()))) return(invisible()) # already signed in this session
     tokens <<- signed_in_tokens
     removeUI(paste0("#", login_screen_id))
+    output$navbar_refresh <- renderUI(refresh_button())
     output$navbar_user <- renderUI(user_menu(me, development))
     build_site(me)
   }
@@ -126,22 +127,31 @@ function(input, output, session) {
       }
     )
 
-    # Every extraction draft. Read again when the database's copy changes (other
-    # staff and the reading job change it too), and straight after this session
-    # changes one, which it says by calling extractions$changed().
+    # The database isn't asked over and over whether something changed: every read makes the page
+    # busy, and the gold bar would never go away. What other staff changed is read when a page that
+    # shows it is opened, and when the menu's Refresh is pressed (`refreshed`, which every page that
+    # reads the database is given).
+    refreshed <- reactiveVal(0L)
+    observeEvent(input$refresh_data, {
+      refreshed(refreshed() + 1L)
+      catalog$refresh()
+      showNotification("Read everything again from the database.", type = "message", duration = 3)
+    })
+
+    # Every extraction draft. Read again straight after this session changes one, which it says by
+    # calling extractions$changed(); when a page that shows drafts is opened, or Refresh is pressed
+    # (other staff change them too); and every few seconds while a draft this person started is being
+    # read, so they see how far the reading job has got.
     extractions_written <- reactiveVal(0L)
-    extractions_stored <- reactivePoll(
-      drafts_poll_ms, session,
-      checkFunc = function() extraction_service_signature(database),
-      valueFunc = function() extraction_service_signature(database)
-    )
+    reading_checked <- reactiveVal(0L)
     # If the database can't be reached the last drafts read stay on screen, with a
     # message, and the next change tries again.
     last_extractions <- list()
     extractions <- list(
       all = reactive({
         extractions_written()
-        extractions_stored()
+        reading_checked()
+        refreshed()
         tryCatch(
           {
             last_extractions <<- extraction_service_get_all(database)
@@ -156,18 +166,27 @@ function(input, output, session) {
       changed = function() extractions_written(extractions_written() + 1L)
     )
 
-    # Drafts waiting to be read go to Gemini in a background job. Looked at
-    # whenever the drafts change, and every few seconds while one is being read
-    # in case its job has died, or the database couldn't be reached.
+    # Drafts waiting to be read go to Gemini in a background job. Looked at whenever the drafts are
+    # read, which is every few seconds while one this person started is being read (to show how far it
+    # has got, and in case its job has died), and only then: the gold bar shows while it is checked.
+    my_reading <- reactiveVal(FALSE)
     observe({
-      watching <- tryCatch(
-        reading_service_watch(extractions$all(), database),
-        error = function(problem) {
-          showNotification(conditionMessage(problem), type = "error", id = "database_problem")
-          TRUE
-        }
+      records <- extractions$all()
+      tryCatch(
+        reading_service_watch(records, database),
+        error = function(problem) showNotification(conditionMessage(problem), type = "error", id = "database_problem")
       )
-      if (watching) invalidateLater(reading_check_ms)
+      my_reading(extraction_service_is_reading(records, me))
+    })
+    waiting <- FALSE # whether the timer below has been started, so its next run is the timer's
+    observe({
+      if (!my_reading()) {
+        waiting <<- FALSE
+        return()
+      }
+      if (waiting) isolate(reading_checked(reading_checked() + 1L))
+      waiting <<- TRUE
+      invalidateLater(reading_check_ms)
     })
 
     # Modules call this too, so it names this session: theirs would look for
@@ -181,10 +200,18 @@ function(input, output, session) {
     # from it is opened.
     observeEvent(input$nav, if (input$nav %in% c("extraction", "edit_extraction")) catalog$refresh())
 
+    # Opening a page that lists drafts reads them again, since other staff change them too.
+    observeEvent(input$nav,
+      {
+        if (input$nav %in% c("extraction", "edit_extraction", "change_requests")) extractions$changed()
+      },
+      ignoreInit = TRUE
+    )
+
     # ------ MODULES -----------------------------------------------------------
 
     # ------ * Home ------------------------------------------------------------
-    home_server("home", database, me, show_page, active = on_page("home"))
+    home_server("home", database, me, show_page, active = on_page("home"), refresh = refreshed)
     observeEvent(input$to_home, show_page("home"))
 
     # ------ * Extraction ------------------------------------------------------
@@ -199,10 +226,10 @@ function(input, output, session) {
     edit_extraction <- edit_extraction_server("edit_extraction", extractions, catalog, database, me, show_page)
 
     # ------ * Make an edit ----------------------------------------------------
-    make_edit <- make_edit_server("make_edit", database, me, show_page)
+    make_edit <- make_edit_server("make_edit", database, me, show_page, active = on_page("make_edit"), refresh = refreshed)
 
     # ------ * Edit history ----------------------------------------------------
-    edit_history_server("edit_history", database, active = on_page("edit_history"))
+    edit_history_server("edit_history", database, active = on_page("edit_history"), refresh = refreshed)
 
     # ------ * Change Requests -------------------------------------------------
     # Editing a request opens it where it was made: an edit on Make an edit, an
@@ -215,7 +242,9 @@ function(input, output, session) {
       },
       open_edit_extraction = open_edit_extraction,
       catalog = catalog,
-      extractions = extractions
+      extractions = extractions,
+      active = on_page("change_requests"),
+      refresh = refreshed
     )
     site <<- list(catalog = catalog, extractions = extractions)
     invisible()

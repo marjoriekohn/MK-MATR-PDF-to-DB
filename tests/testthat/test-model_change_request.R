@@ -16,25 +16,18 @@
 #   expect_false(plain$id %in% names(change_request_model_waiting(test_connection)))
 # })
 #
-# test_that("edits and extractions wait together, and the signature changes when one is sent, changed or withdrawn", {
+# test_that("edits and extractions wait together, and a withdrawn one stops waiting", {
 #   me <- local_staff()
-#   before <- change_request_model_signature(test_connection)
 #   request <- local_edit(me, status = "Awaiting Review")
 #   extraction <- local_read_extraction(me)
-#   sent <- change_request_model_signature(test_connection)
-#   expect_false(sent == before)
-#   expect_equal(change_request_model_signature(test_connection), sent) # nothing changed
-#
 #   record <- extraction_model_get(test_connection, extraction$id)
 #   extraction_model_save(test_connection, utils::modifyList(record, list(status = "Awaiting Review", submitted = format_time(Sys.time()))), c("status", "submitted"), me$staff_id)
 #   waiting <- change_request_model_waiting(test_connection)
 #   expect_true(all(c(request$id, extraction$id) %in% names(waiting)))
 #   expect_equal(waiting[[extraction$id]]$kind, "Extraction")
-#   expect_false(change_request_model_signature(test_connection) == sent)
 #
-#   after_both <- change_request_model_signature(test_connection)
 #   change_request_model_withdraw(test_connection, request$id, me$staff_id)
-#   expect_false(change_request_model_signature(test_connection) == after_both)
+#   expect_false(request$id %in% names(change_request_model_waiting(test_connection)))
 # })
 #
 # test_that("one approval from someone else applies a change, in one step", {

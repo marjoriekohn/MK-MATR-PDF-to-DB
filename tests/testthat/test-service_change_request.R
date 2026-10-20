@@ -130,8 +130,3 @@ test_that("the requests a person sees: those they can approve (the ones asked of
 #   expect_equal(edit_model_get(test_connection, other$id)$status, "Withdrawn")
 # })
 #
-# test_that("a database that can't be reached gives a signature of its own, so polling carries on", {
-#   first <- change_request_service_signature(list(url = "http://127.0.0.1:1", key = "sb_secret_x"))
-#   expect_match(first, "^unreachable")
-#   expect_false(grepl("^unreachable", change_request_service_signature(test_connection)))
-# })

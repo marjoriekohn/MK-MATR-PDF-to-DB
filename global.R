@@ -49,13 +49,10 @@ merriweather_link <- tags$link(
 database <- list(url = Sys.getenv("SUPABASE_URL"),
                  key = Sys.getenv("SUPABASE_SECRET_KEY"))
 
-# How often (milliseconds) a session asks the database whether any extraction
-# draft changed, so staff see each others work and the reading job's progress,
-# and how often it checks on a reading job in case the job has died.
-drafts_poll_ms <- 2000
+# The site doesn't keep asking the database whether something changed: each time
+# it asks, the page shows it is busy. Pages read again when they are opened, and
+# the menu's Refresh reads everything again. The one exception: while a draft a
+# staff member started is being read by Gemini, their drafts are read every
+# `reading_check_ms` milliseconds, so they see how far it has got (and a reading
+# job that died is noticed).
 reading_check_ms <- 5000
-
-# How often (milliseconds) the Change Requests page asks whether a request was
-# sent, changed, approved or withdrawn, and Make an edit whether one of the
-# edits saved there was sent back.
-change_requests_poll_ms <- 5000

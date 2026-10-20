@@ -13,8 +13,12 @@
 #' @param connection The MATR database, `list(url, key)`; see `model_database.R`.
 #' @param me Who is using the site: `list(staff_id, name, role)`.
 #' @param show_page A function taking a page's name and showing it.
+#' @param active A reactive that says whether this page is the one on screen, or `NULL`. Opening the
+#'   page reads the saved drafts again, since a reviewer can send one back.
+#' @param refresh A reactive that ticks when staff press Refresh in the menu, or `NULL`. Each tick
+#'   reads the page's lists again.
 #' @return A list with `open`, a function taking a saved edit's record that opens it on the form.
-make_edit_server <- function(id, connection, me, show_page) {
+make_edit_server <- function(id, connection, me, show_page, active = NULL, refresh = NULL) {
   moduleServer(id, function(input, output, session) {
     ns <- session$ns
 
@@ -30,7 +34,7 @@ make_edit_server <- function(id, connection, me, show_page) {
     resume <- reactiveVal(NULL) # a saved draft being opened again
     draft <- reactiveVal(NULL) # the saved draft this form is, to save over
     done <- reactiveVal(NULL) # what was just done: list(applied, record, history_id)
-    saved_count <- reactiveVal(0L) # ticks when a proposal is saved
+    saved_count <- reactiveVal(0L) # ticks when the saved drafts should be read again (one was saved, or the page was opened)
     duplicates <- reactiveVal(NULL) # the existing rows an add looks like, while staff decide
 
     # Whether what is on the form needs another staff member's approval before it is applied.
@@ -53,18 +57,18 @@ make_edit_server <- function(id, connection, me, show_page) {
       edit_service_row(entity(), snapshot(), picked())
     })
 
-    # Read again when the database says a proposal changed (a reviewer can send one back) and when this
-    # session saved or discarded one. If the database can't be reached the last proposals read stay on
-    # screen, with a message, and the next change tries again (as server.R does for the extraction drafts).
-    stored <- reactivePoll(
-      change_requests_poll_ms, session,
-      checkFunc = function() edit_service_signature(connection),
-      valueFunc = function() edit_service_signature(connection)
-    )
+    # Read when the page is opened, when staff press Refresh (a reviewer can send one back) and when this
+    # session saved or discarded one; the database isn't asked over and over. If it can't be reached the
+    # last proposals read stay on screen, with a message, and the next read tries again.
+    if (!is.null(active)) {
+      observeEvent(active(), if (isTRUE(active())) saved_count(saved_count() + 1L), ignoreInit = TRUE)
+    }
+    if (!is.null(refresh)) {
+      observeEvent(refresh(), saved_count(saved_count() + 1L), ignoreInit = TRUE)
+    }
     last_proposals <- list()
     proposals <- reactive({
       saved_count()
-      stored()
       tryCatch(
         {
           last_proposals <<- edit_service_get_all(connection)

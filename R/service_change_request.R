@@ -44,15 +44,6 @@ change_request_service_waiting <- function(connection) {
   records[order(waited)]
 }
 
-#' A summary that changes whenever something waiting changes.
-#'
-#' @param connection The MATR database, `list(url, key)`; see `model_database.R`.
-#' @return A string; compare it with an earlier one. A database that can't be reached gives one
-#'   of its own, so the page keeps polling and notices when it is back.
-change_request_service_signature <- function(connection) {
-  tryCatch(change_request_model_signature(connection), error = function(problem) paste("unreachable", Sys.time()))
-}
-
 #' Where a waiting request stands for one person.
 #'
 #' @param record A request.

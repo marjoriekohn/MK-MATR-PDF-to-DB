@@ -7,7 +7,7 @@
 #' # Each test makes the rows it needs and removes them again when it ends, however it ends. Every row
 #' # has the run's marker in its name ("ZZTEST0712ab ..."), so it can't be mistaken for real data, and a
 #' # test never changes or deletes a row it didn't make. test-zz_leftovers.R, the last test to run, checks
-#' # that nothing is left behind; tests/tools/clean_test_rows.R removes what a crashed run left.
+#' # that nothing is left behind; tests/database/clean_test_rows.R removes what a crashed run left.
 #' #
 #' # One kind of row stays: a draft that was applied is the record of what was done, and the database
 #' # refuses to delete it (draft_guard). So a test that applies a change (an edit, a pop-up add, a push)
@@ -17,7 +17,7 @@
 #' # `test_connection` is the connection. Looking it up checks the address, so a test that doesn't use the
 #' # database (the tests of pure functions) runs anywhere.
 #'
-#' # The project's folder: the first one up from here that has global.R. (Also where tests/tools/ run from.)
+#' # The project's folder: the first one up from here that has global.R. (Also where the scripts in tests/database/ run from.)
 #' project_file <- function(...) {
 #'   folder <- normalizePath(getwd())
 #'   while (!file.exists(file.path(folder, "global.R")) && dirname(folder) != folder) folder <- dirname(folder)

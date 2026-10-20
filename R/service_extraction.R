@@ -30,18 +30,17 @@ extraction_service_get_all <- function(connection) {
   extraction_model_get_all(connection)
 }
 
-#' A summary that changes whenever a draft is added or saved.
+#' Whether a draft this staff member started is being read.
 #'
-#' By this session or any other. A database that can't be reached gives a signature of
-#' its own, so the page keeps polling instead of failing, and notices when it is back.
+#' While one is, the site reads the drafts again every few seconds, so they see how far the reading job
+#' has got; otherwise it only reads them when asked (a page opened, Refresh).
 #'
-#' @param connection The MATR database, `list(url, key)`; see `model_database.R`.
-#' @return A string; compare it with an earlier one.
-extraction_service_signature <- function(connection) {
-  tryCatch(
-    extraction_model_signature(connection),
-    error = function(problem) paste("problem:", conditionMessage(problem))
-  )
+#' @param records The extraction records, from `extraction_service_get_all()`.
+#' @param me Who is using the site: `list(staff_id, name, role)`.
+#' @return `TRUE` or `FALSE`.
+extraction_service_is_reading <- function(records, me) {
+  mine <- extraction_service_open_drafts(records, prepared_by_id = me$staff_id)
+  any(vapply(mine, function(record) isTRUE(record$extraction_status %in% c("queued", "sent", "received")), logical(1)))
 }
 
 #' The drafts still being prepared: not yet submitted, or sent back.

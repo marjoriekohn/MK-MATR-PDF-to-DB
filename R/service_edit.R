@@ -892,20 +892,6 @@ edit_service_get_all <- function(connection) {
   edit_model_get_all(connection)
 }
 
-#' A summary that changes whenever a proposal is added, saved, sent back or withdrawn.
-#'
-#' Other staff change proposals too (a reviewer sends one back), so the page asks now and then.
-#'
-#' @param connection The MATR database, `list(url, key)`; see `model_database.R`.
-#' @return A string; compare it with an earlier one. If the database can't be reached it says why, so
-#'   the page that polls goes on and reads again once the answer changes.
-edit_service_signature <- function(connection) {
-  tryCatch(
-    edit_model_signature(connection),
-    error = function(problem) paste("problem:", conditionMessage(problem))
-  )
-}
-
 #' One saved proposal.
 #'
 #' @param connection The MATR database, `list(url, key)`; see `model_database.R`.

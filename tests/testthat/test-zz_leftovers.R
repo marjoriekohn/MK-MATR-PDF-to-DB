@@ -1,6 +1,6 @@
 # # Runs last (testthat runs the files in alphabetical order). Every test removes the rows it made, so
 # # nothing the tests name with their marker may still be in the live tables. If something is, a test
-# # made a row it didn't clean up (or an earlier run crashed): tests/tools/clean_test_rows.R removes
+# # made a row it didn't clean up (or an earlier run crashed): tests/database/clean_test_rows.R removes
 # # them. What stays on purpose: applied drafts (the database keeps the record of every applied change,
 # # and refuses to delete it), and the marked staff members those records point at, set inactive.
 #
@@ -29,5 +29,5 @@
 #     filters = list(name = "like.ZZTEST*", active = "is.true")
 #   )
 #   if (nrow(active) > 0) left$staff <- active$name
-#   expect_equal(left, list(), info = "marked rows were left in the database; run tests/tools/clean_test_rows.R")
+#   expect_equal(left, list(), info = "marked rows were left in the database; run tests/database/clean_test_rows.R")
 # })

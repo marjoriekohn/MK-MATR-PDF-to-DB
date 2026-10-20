@@ -93,7 +93,7 @@
 #   expect_equal(seen$pages, c("home", "make_edit", "extraction"))
 # })
 #
-# test_that("the drafts are read from the database, and a draft added elsewhere is noticed when the database is next asked", {
+# test_that("the drafts are read from the database, and a draft added elsewhere is noticed on Refresh or when a page opens", {
 #   me <- local_staff()
 #   seen <- local_browser()
 #   withr::local_envvar(STAFF_EMAIL = me$email)
@@ -105,8 +105,12 @@
 #     expect_true(first$id %in% names(extractions$all()))
 #     second <- local_read_extraction(me, env = here) # another session, or the reading job
 #     expect_false(second$id %in% names(extractions$all())) # nothing has asked yet
-#     session$elapse(drafts_poll_ms + 100)
+#     session$setInputs(refresh_data = 1) # the menu's Refresh
 #     expect_true(second$id %in% names(extractions$all()))
+#
+#     fourth <- local_read_extraction(me, env = here)
+#     session$setInputs(nav = "extraction") # opening a page that lists them
+#     expect_true(fourth$id %in% names(extractions$all()))
 #
 #     third <- local_read_extraction(me, env = here)
 #     extractions$changed() # a draft this session changes is read again straight away
@@ -140,7 +144,7 @@
 #     expect_equal(utils::tail(seen$notifications, 1)[[1]]$type, "error")
 #     net$down <- FALSE
 #     second <- local_read_extraction(me, env = here)
-#     session$elapse(drafts_poll_ms + 100)
+#     session$setInputs(refresh_data = 1)
 #     expect_true(second$id %in% names(extractions$all()))
 #   })
 # })
@@ -153,6 +157,8 @@ test_that("the site is drawn with the login screen over it, and the menu's place
   html <- rendered$html
   expect_match(html, 'id="login_screen"')
   expect_match(html, 'id="navbar_user"')
+  expect_match(html, 'id="navbar_refresh"')
+  expect_true(regexpr('id="navbar_refresh"', html) < regexpr('id="navbar_user"', html))
   expect_match(paste(rendered$head, html), "js/site.js")
   expect_true(regexpr('id="login_screen"', html) < regexpr('id="home-extraction"', html))
   # while the server works, the page says so: Shiny's busy indicators, and the pressed button's spinner

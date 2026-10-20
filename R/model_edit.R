@@ -62,14 +62,6 @@ edit_model_get <- function(connection, id) {
   edit_model_record(parent, detail)
 }
 
-#' A summary that changes whenever an edit is added, saved or withdrawn.
-#'
-#' @param connection The MATR database, `list(url, key)`; see `model_database.R`.
-#' @return A string; compare it with an earlier one.
-edit_model_signature <- function(connection) {
-  draft_row_model_signature(connection, edit_draft_kind)
-}
-
 #' Save an edit proposal.
 #'
 #' Added if it has no id yet; otherwise the row it names is changed, as the person saving it.

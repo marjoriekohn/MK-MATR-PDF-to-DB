@@ -1,6 +1,3 @@
-# How often the reading timer is brought up to date.
-reading_timer_refresh_ms <- 1000
-
 #' The AI-Powered mode of the Extraction page: the server.
 #'
 #' Upload a questionnaire PDF and watch it being read, in the background. Once reading has finished
@@ -104,13 +101,6 @@ extraction_ai_server <- function(
     output$reading <- renderUI({
       req(reading())
       reading_card(reading(), ns)
-    })
-
-    # How long reading has taken so far.
-    output$elapsed <- renderText({
-      req(reading(), !reading()$extraction_status %in% c("ready", "failed"))
-      invalidateLater(reading_timer_refresh_ms)
-      duration_text(difftime(Sys.time(), parse_time(reading()$reading_started), units = "secs"))
     })
 
     # Where reading has got to, and what comes next.

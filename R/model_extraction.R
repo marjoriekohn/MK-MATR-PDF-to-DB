@@ -84,16 +84,6 @@ extraction_model_get <- function(connection, id) {
   extraction_model_record(parent, detail)
 }
 
-#' A summary that changes whenever a draft is added or saved.
-#'
-#' By this session or any other, and as the reading job reports progress.
-#'
-#' @param connection The MATR database, `list(url, key)`; see `model_database.R`.
-#' @return A string; compare it with an earlier one.
-extraction_model_signature <- function(connection) {
-  draft_row_model_signature(connection, extraction_kind, c("reading_status", "reading_started"))
-}
-
 extraction_model_record <- function(parent, detail) {
   list(
     id = as.character(parent$draft_id),

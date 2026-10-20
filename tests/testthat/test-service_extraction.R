@@ -117,11 +117,6 @@ test_that("a draft is ready to review when it has been read, or was typed by han
 #   expect_equal(extraction_model_get(test_connection, record$id)$matr_csv$name, "ids.csv")
 # })
 
-# test_that("a database that can't be reached doesn't stop the polling", {
-#   expect_match(extraction_service_signature(list(url = "http://127.0.0.1:1", key = "sb_secret_x")), "^problem: Couldn't reach the MATR database")
-#   expect_false(grepl("^problem", extraction_service_signature(test_connection)))
-# })
-
 # test_that("saving a reviewed copy keeps a record of what the reviewer changed, for an AI draft only", {
 #   me <- local_staff()
 #   ai <- local_read_extraction(me)
@@ -147,6 +142,19 @@ test_that("a draft is ready to review when it has been read, or was typed by han
 #   expect_equal(draft_model_get_record(test_connection, manual$id)$edits, list())
 #   expect_identical(draft_service_load(test_connection, manual$id), typed)
 # })
+
+test_that("the drafts are read again every few seconds only while one this person started is being read", {
+  me <- list(staff_id = 7, name = "Maggie", role = "STAFF")
+  draft <- function(prepared_by_id, extraction_status, status = "Draft") {
+    list(prepared_by_id = prepared_by_id, extraction_status = extraction_status, status = status)
+  }
+  expect_true(extraction_service_is_reading(list(a = draft(7, "queued")), me))
+  expect_true(extraction_service_is_reading(list(a = draft(7L, "received"), b = draft(8, "ready")), me))
+  expect_false(extraction_service_is_reading(list(a = draft(7, "ready"), b = draft(7, "failed"), c = draft(7, NULL)), me))
+  expect_false(extraction_service_is_reading(list(a = draft(8, "sent")), me)) # someone else's
+  expect_false(extraction_service_is_reading(list(a = draft(7, "sent", status = "Discarded")), me)) # set aside
+  expect_false(extraction_service_is_reading(list(), me))
+})
 
 test_that("reading steps follow the reading job's status", {
   states <- function(status, error = NULL) {

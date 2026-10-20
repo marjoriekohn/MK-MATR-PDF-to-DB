@@ -8,11 +8,14 @@
 #' @param active A reactive that says whether this page is the one on screen, or `NULL`. Opening
 #'   the page reads the history again, since an add or an update goes in at once and the list
 #'   was read before it.
+#' @param refresh A reactive that ticks when staff press Refresh in the menu, or `NULL`. Each tick
+#'   reads the page's lists again.
 #' @return Called for its effect.
 edit_history_server <- function(
   id,
   connection,
-  active = NULL
+  active = NULL,
+  refresh = NULL
 ) {
   moduleServer(id, function(input, output, session) {
     ns <- session$ns
@@ -42,6 +45,9 @@ edit_history_server <- function(
     observeEvent(input$refresh, refreshed(refreshed() + 1L))
     if (!is.null(active)) {
       observeEvent(active(), if (isTRUE(active())) refreshed(refreshed() + 1L), ignoreInit = TRUE)
+    }
+    if (!is.null(refresh)) {
+      observeEvent(refresh(), refreshed(refreshed() + 1L), ignoreInit = TRUE)
     }
     observeEvent(list(input$kind, input$search), showing(history_page_size), ignoreInit = TRUE)
     observeEvent(input$action, {

@@ -1,5 +1,5 @@
 # # Removes the rows a crashed test run left in the database. From the project folder:
-# #   Rscript tests/tools/clean_test_rows.R
+# #   Rscript tests/database/clean_test_rows.R
 # # Every test names the rows it makes with a marker ("ZZTEST0712ab ..."); this finds the rows with such
 # # a name and removes them and what hangs off them. It refuses to run unless SUPABASE_URL is the dev
 # # project (supabase/dev_project.R) or a database on this computer, and never touches a row whose name

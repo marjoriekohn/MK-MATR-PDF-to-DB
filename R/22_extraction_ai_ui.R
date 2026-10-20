@@ -91,7 +91,7 @@ reading_card <- function(record, ns) {
     div(
       class = "reading-header",
       h2(if (finished) "Finished reading" else "Reading your questionnaire"),
-      textOutput(ns("elapsed"), inline = TRUE)
+      if (!finished && !failed) reading_elapsed(record$reading_started)
     ),
     tags$ol(class = "reading-steps", map_rows(steps, reading_step)),
     if (failed) actionButton(ns("retry"), "Try reading again", class = "btn-outline-dark"),
@@ -104,6 +104,22 @@ reading_card <- function(record, ns) {
     },
     div(actionButton(ns("cancel"), "Cancel extraction", class = "btn-outline-dark"))
   ))
+}
+
+#' How long reading has taken so far.
+#'
+#' The browser counts on from here each second (`www/js/extraction.js`), so the server isn't asked,
+#' and the page doesn't show it is busy, every second.
+#'
+#' @param started When reading started, as the database writes times, or `NULL`.
+#' @return A UI element, or `NULL` when reading hasn't started.
+reading_elapsed <- function(started) {
+  started <- if (!is.null(started) && length(started) == 1 && !is.na(started)) parse_time(started)
+  if (is.null(started) || is.na(started)) {
+    return(NULL)
+  }
+  seconds <- max(0, floor(as.numeric(difftime(Sys.time(), started, units = "secs"))))
+  span(class = "reading-elapsed", `data-elapsed` = seconds, duration_text(seconds))
 }
 
 reading_step <- function(step) {

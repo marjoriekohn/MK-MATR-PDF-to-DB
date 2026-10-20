@@ -120,3 +120,22 @@ test_that("the mode is drawn with the drop zone, the note about reading in the b
   expect_false(grepl("disabled", regmatches(manual, regexpr('<button[^>]*id="manual-start"[^>]*>', manual))))
   expect_false(grepl("Type the questionnaire in yourself, with no AI", manual))
 })
+
+test_that("how long reading has taken is drawn once, for the browser to count on from, and only while reading", {
+  started <- format(Sys.time() - 100, "%Y-%m-%dT%H:%M:%OS3Z", tz = "UTC")
+  html <- as.character(reading_elapsed(started))
+  expect_match(html, 'class="reading-elapsed"')
+  seconds <- as.numeric(sub('.*data-elapsed="([0-9]+)".*', "\\1", html))
+  expect_gte(seconds, 100)
+  expect_lt(seconds, 160)
+  expect_match(html, ">1 min [0-9]+ s<")
+  expect_null(reading_elapsed(NULL))
+  expect_null(reading_elapsed(NA))
+
+  reading <- list(extraction_status = "sent", reading_started = started, pdf = list(name = "q.pdf"))
+  expect_match(htmltools::renderTags(reading_card(reading, shiny::NS("ai")))$html, "reading-elapsed")
+  for (status in c("ready", "failed")) {
+    done <- htmltools::renderTags(reading_card(utils::modifyList(reading, list(extraction_status = status)), shiny::NS("ai")))$html
+    expect_false(grepl("reading-elapsed", done), info = status)
+  }
+})

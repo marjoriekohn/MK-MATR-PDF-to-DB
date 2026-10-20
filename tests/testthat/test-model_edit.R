@@ -165,13 +165,3 @@ test_that("the kind of an edit is what the form was made from", {
 #   expect_equal(saved$requested_reviewer, list(id = colleague$staff_id, name = colleague$name))
 # })
 #
-# test_that("the signature changes when a proposal is added, saved or withdrawn", {
-#   me <- local_staff()
-#   before <- edit_service_signature(test_connection)
-#   saved <- local_edit(me)
-#   added <- edit_service_signature(test_connection)
-#   expect_false(added == before)
-#   expect_equal(edit_service_signature(test_connection), added)
-#   edit_service_withdraw(test_connection, saved$id, me)
-#   expect_false(edit_service_signature(test_connection) == added)
-# })

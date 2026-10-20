@@ -221,29 +221,6 @@ test_that("an empty set of columns is sent as an empty object, not an empty list
 #   expect_equal(draft_row_model_get(test_connection, id)$revision, revision)
 # })
 #
-# test_that("the signature changes when a draft of that kind is added, saved or read further", {
-#   me <- local_staff()
-#   signature <- function() draft_row_model_signature(test_connection, "Edit")
-#   before <- signature()
-#   expect_equal(signature(), before) # nothing changed
-#
-#   id <- new_edit(me)
-#   added <- signature()
-#   expect_false(added == before)
-#   draft_row_model_save(test_connection, id, me$staff_id, list(summary = "changed"))
-#   saved <- signature()
-#   expect_false(saved == added)
-#   draft_row_model_save(test_connection, id, me$staff_id, list(status = "Awaiting Review"), new_revision = FALSE)
-#   expect_false(signature() == saved)
-#
-#   extraction <- draft_row_model_create(test_connection, "Extraction", me$staff_id, list(), list(method = "AI-Powered", pdf_name = "a.pdf", pdf_sha256 = "zztest", reading_status = "queued"))
-#   withr::defer(test_delete("draft", list(draft_id = database_eq(extraction))))
-#   reading <- function() draft_row_model_signature(test_connection, "Extraction", c("reading_status", "reading_started"))
-#   first <- reading()
-#   draft_row_model_update_detail(test_connection, extracted_draft_table, extraction, list(reading_status = "sent"))
-#   expect_false(reading() == first) # the reading job's progress is noticed too
-# })
-#
 # test_that("removing a draft removes its details, and a draft needs its details", {
 #   me <- local_staff()
 #   id <- draft_row_model_create(test_connection, "Edit", me$staff_id, list(), edit_detail())

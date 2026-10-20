@@ -122,32 +122,6 @@ draft_row_model_update_detail <- function(connection, table, id, changes, where 
   if (length(rows) > 0) rows[[1]]
 }
 
-#' A summary that changes whenever a draft of a kind is added, saved or read further.
-#'
-#' @param connection The MATR database, `list(url, key)`; see `model_database.R`.
-#' @param kind `"Extraction"` or `"Edit"`.
-#' @param detail_columns The columns of the kind's detail table that change as it goes (the
-#'   reading's progress), or none.
-#' @return A string; compare it with an earlier one.
-draft_row_model_signature <- function(connection, kind, detail_columns = character()) {
-  parents <- database_model_select(
-    connection, draft_table, c("draft_id", "status", "revision", "saved_at"),
-    order_by = "draft_id", filters = list(kind = database_eq(kind))
-  )
-  details <- if (length(detail_columns) > 0) {
-    database_model_select(
-      connection, if (kind == "Extraction") extracted_draft_table else edit_draft_table,
-      union("draft_id", detail_columns), order_by = "draft_id"
-    )
-  }
-  as_text <- function(rows) {
-    vapply(rows, function(row) {
-      paste(vapply(row, function(value) as.character(value %||% ""), character(1)), collapse = "/")
-    }, character(1))
-  }
-  paste(paste(as_text(parents), collapse = "|"), paste(as_text(details), collapse = "|"), sep = "||")
-}
-
 # Ids are numbers, and only numbers go into a filter.
 draft_row_filter <- function(id) {
   list(draft_id = database_eq(draft_row_number(id)))

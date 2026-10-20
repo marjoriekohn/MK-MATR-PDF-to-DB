@@ -35,3 +35,10 @@ test_that("the menu names the person, links to the problem form in a new tab, an
 test_that("the problem form's address is the Google Form", {
   expect_match(report_problem_url, "^https://forms\\.gle/")
 })
+
+test_that("the menu's Refresh asks the server to read everything again", {
+  button <- htmltools::renderTags(refresh_button())$html
+  expect_match(button, 'id="refresh_data"')
+  expect_match(button, "Refresh")
+  expect_match(button, "navbar-refresh")
+})
