@@ -17,6 +17,12 @@ jobs:
       GITHUB_PAT: ${{ secrets.GITHUB_TOKEN }}
       MY_API_KEY: ${{ secrets.MY_API_KEY }}
 
+      # The test Supabase project for the tests of the database.
+      # Without these secrets those tests can't reach a database.
+      TEST_SUPABASE_URL: ${{ secrets.TEST_SUPABASE_URL }}
+      TEST_SUPABASE_SECRET_KEY: ${{ secrets.TEST_SUPABASE_SECRET_KEY }}
+      TEST_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.TEST_SUPABASE_PUBLISHABLE_KEY }}
+
     steps:
       - uses: actions/checkout@v6
 
