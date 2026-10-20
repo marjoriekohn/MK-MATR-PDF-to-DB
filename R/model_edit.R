@@ -28,7 +28,7 @@ edit_item_columns <- c(
   "attribute_name", "old_value", "new_value"
 )
 
-#' Every edit proposal.
+#' Every edit proposal still being prepared or waiting for approval (not applied or withdrawn).
 #'
 #' @param connection The MATR database, `list(url, key)`; see `model_database.R`.
 #' @return A list of proposal records, newest saved first, named by id; see the top of this

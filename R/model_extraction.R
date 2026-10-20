@@ -50,7 +50,7 @@ extraction_list_columns <- c(
 )
 
 # ------ Reading --------------------------------------------------------------------
-#' Every extraction draft.
+#' Every extraction draft still being prepared or waiting for approval (not applied or discarded).
 #'
 #' @param connection The MATR database, `list(url, key)`; see `model_database.R`.
 #' @return A list of records, newest saved first, named by id; see the top of this file for
