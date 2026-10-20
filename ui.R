@@ -38,6 +38,8 @@ page_navbar(
   nav_panel("Edit history", edit_history_ui("edit_history"), value = "edit_history"),
   nav_panel("Change Requests", change_requests_ui("change_requests"), value = "change_requests"),
   nav_spacer(),
-  # The signed-in name, with the menu that reports a problem and logs out
+  # Refresh (reads everything again, with what other staff changed), then the signed-in name, with the
+  # menu that reports a problem and logs out. Both are drawn once someone has signed in.
+  nav_item(uiOutput("navbar_refresh", inline = TRUE)),
   nav_item(uiOutput("navbar_user", inline = TRUE))
 )
