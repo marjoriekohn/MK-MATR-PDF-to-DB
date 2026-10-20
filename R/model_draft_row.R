@@ -24,12 +24,21 @@ draft_columns <- c(
   "reviewer:staff!requested_reviewer(name)", "sender:staff!sent_back_by(name)"
 )
 
-# The drafts of one kind, newest saved first; only those with this status, if given.
+# The statuses of a draft that is finished with: applied to the MATR metadata database, or set aside. A list
+# of drafts leaves them out: every page that lists drafts shows only those still being prepared or waiting,
+# and the finished ones only grow in number (the database keeps every applied draft as its record).
+draft_closed_statuses <- c("Applied", "Withdrawn")
+
+# The drafts of one kind still being prepared or waiting, newest saved first; only those with this status,
+# if given. (One finished with is read on its own: draft_row_model_get().)
 draft_row_model_list <- function(connection, kind, status = NULL) {
   database_model_select(
     connection, draft_table, draft_columns,
     order_by = c("saved_at.desc", "draft_id.desc"),
-    filters = c(list(kind = database_eq(kind)), if (!is.null(status)) list(status = database_eq(status)))
+    filters = c(
+      list(kind = database_eq(kind)),
+      list(status = if (!is.null(status)) database_eq(status) else paste0("not.", database_in(draft_closed_statuses)))
+    )
   )
 }
 

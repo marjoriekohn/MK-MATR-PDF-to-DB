@@ -88,6 +88,8 @@ matr_id_list_id <- function(ns) ns("matr-ids")
 #' @param ns The module's namespace function.
 #' @return A UI element.
 outline_tree <- function(draft, view, lookups, ns) {
+  # every question's row offers the questions before it; they are worked out once for the whole tree
+  attr(draft, "outline_questions") <- outline_questions(draft)
   div(
     class = "outline-tree",
     outline_list(draft, section = NULL, view, lookups, ns),
@@ -300,18 +302,31 @@ question_fields <- function(block, ns) {
 # Questions printed before this one, as "7 · Have you smoked…" (the number it is asked as). The current
 # pick stays listed even if a move put it after this question.
 parent_question_choices <- function(block, draft) {
-  printed <- draft_service_printed_order(draft)
-  questions <- draft$components[match(printed, draft$components$id), ]
-  questions <- questions[questions$component_type == "Question" & questions$id != block$id, ]
-  is_earlier <- match(questions$id, printed) < match(block$id, printed)
+  all <- attr(draft, "outline_questions") %||% outline_questions(draft)
+  mine <- match(block$id, all$printed)
+  questions <- all$questions[all$questions$id != block$id, , drop = FALSE]
+  is_earlier <- questions$position < mine
   keep <- is_earlier | questions$id %in% block$parent_question_id
-  numbers <- draft_service_question_number(questions)
-  labels <- paste0(
-    ifelse(is.na(numbers), "?", numbers),
-    " · ", shorten(questions$text, 50),
-    ifelse(is_earlier, "", " (printed after it)")
-  )
+  labels <- paste0(questions$label, ifelse(is_earlier, "", " (printed after it)"))
   setNames(questions$id[keep], labels[keep])
+}
+
+# A draft's questions in printed order, each with its place and its label in a parent-question list
+# ("1a · Do you smoke?"), and every block's id in printed order.
+outline_questions <- function(draft) {
+  printed <- draft_service_printed_order(draft)
+  questions <- draft$components[match(printed, draft$components$id), , drop = FALSE]
+  questions <- questions[questions$component_type == "Question", , drop = FALSE]
+  numbers <- draft_service_question_number(questions)
+  list(
+    printed = printed,
+    questions = data.frame(
+      id = questions$id,
+      position = match(questions$id, printed),
+      label = paste0(ifelse(is.na(numbers), "?", numbers), " · ", shorten(questions$text, 50)),
+      stringsAsFactors = FALSE
+    )
+  )
 }
 
 # ------ Variables and choices -----------------------------------------------
