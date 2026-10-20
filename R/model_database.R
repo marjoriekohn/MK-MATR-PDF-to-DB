@@ -258,16 +258,16 @@ database_problem <- function(response) {
   status <- httr2::resp_status(response)
   body <- tryCatch(httr2::resp_body_json(response), error = function(problem) list())
   message <- body$message %||% ""
-  # P0001 is a function of ours refusing with a sentence for staff (supabase/migrations/): show it as written.
+  # P0001 is a function of ours refusing with a sentence for staff (docs/sql_scripts.sql): show it as written.
   if (identical(body$code, "P0001") && nzchar(message)) {
     return(message)
   }
   # 42501 is PostgreSQL's "permission denied": the key is fine, but the table
-  # hasn't been granted to it (supabase/migrations/).
+  # hasn't been granted to it (docs/sql_scripts.sql grants each table).
   if (identical(body$code, "42501")) {
     return(paste0(
       "The MATR database won't let the site use this table (", message, "). ",
-      "The table needs granting to the service_role; see the migrations in supabase/migrations/."
+      "The table needs granting to the service_role; see the grants in docs/sql_scripts.sql and docs/migrations/."
     ))
   }
   switch(as.character(status),
