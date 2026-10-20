@@ -1,0 +1,66 @@
+# How much of the code the unit tests run, shown by the README's coverage badge.
+# It runs tests/coverage/coverage.R, which draws the badge as coverage.svg, and keeps the
+# badge on a branch of its own, `badges`, so main isn't given a commit on every push. The
+# numbers for each file are on each run's summary page.
+on:
+  push:
+    branches: [main, master]
+  workflow_dispatch:
+
+name: coverage
+
+# writing to the badges branch
+permissions:
+  contents: write
+
+# two pushes close together: the later one's badge wins
+concurrency:
+  group: coverage
+  cancel-in-progress: true
+
+jobs:
+  coverage:
+    runs-on: ubuntu-latest
+
+    env:
+      GITHUB_PAT: ${{ secrets.GITHUB_TOKEN }}
+
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: r-lib/actions/setup-r@v2
+        with:
+          r-version: renv
+          use-public-rspm: true
+
+      - uses: r-lib/actions/setup-renv@v2
+
+      # covr measures the tests; the site doesn't need it, so it isn't in renv.lock
+      - name: Install covr
+        run: install.packages("covr")
+        shell: Rscript {0}
+
+      - name: Measure coverage
+        run: Rscript tests/coverage/coverage.R
+        env:
+          COVERAGE_BADGE: ${{ runner.temp }}/coverage.svg
+
+      - name: Put the badge on the badges branch
+        env:
+          BADGE: ${{ runner.temp }}/coverage.svg
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          if git fetch --depth=1 origin badges; then
+            git switch -c badges FETCH_HEAD
+          else
+            git switch --orphan badges
+          fi
+          cp "$BADGE" coverage.svg
+          git add coverage.svg
+          if git diff --cached --quiet; then
+            echo "The coverage hasn't changed."
+          else
+            git commit -m "Coverage badge for ${GITHUB_SHA::7}"
+            git push origin badges
+          fi
