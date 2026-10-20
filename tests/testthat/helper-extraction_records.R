@@ -12,14 +12,16 @@ sample_extraction <- function(staff, ...) {
     extraction_status = "queued", reading_started = "2026-10-02T10:00:00Z",
     reading_claimed_at = NULL, reading_pid = NULL, error = NULL,
     info = list(questionnaire_id = "1", wave_id = "2"),
-    matr_csv = NULL, sent_back = NULL
+    matr_csv = NULL
   )
   utils::modifyList(record, list(...), keep.null = TRUE)
 }
 
 # An extraction draft saved in the database for the test, and removed when it ends.
 local_extraction <- function(staff, ..., env = parent.frame()) {
-  record <- extraction_model_create(test_connection, sample_extraction(staff, ...))
+  sample <- sample_extraction(staff, ...)
+  withr::defer(test_delete_pdf(sample$pdf$sha256), envir = env) # after the draft, which points at it
+  record <- extraction_model_create(test_connection, sample)
   withr::defer(test_delete_draft(record$id), envir = env)
   record
 }

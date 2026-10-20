@@ -617,21 +617,21 @@ extraction_service_push_title <- function(record, catalog) {
 #' @param me Who is submitting it: `list(staff_id, name, role)`.
 #' @param catalog The live tables the pages pick from, from `questionnaire_service_get_catalog()`.
 #' @param reviewer The staff id of the person asked to review it, or `NULL`.
-#' @param now The time to record.
 #' @return A list: `applied` (always `FALSE`: it waits on Change Requests), `history_id` (`NULL`) and
-#'   `record` (as saved). An error with a sentence if the database refused.
-extraction_service_push <- function(connection, record, me, catalog, reviewer = NULL, now = Sys.time()) {
+#'   `record` (as saved, with when it was `submitted`, which the database records). An error with a
+#'   sentence if the database refused.
+extraction_service_push <- function(connection, record, me, catalog, reviewer = NULL) {
   asked <- if (!is.null(reviewer) && nzchar(as.character(reviewer))) list(id = as.numeric(reviewer))
   sent <- utils::modifyList(
     record,
     list(
       summary = extraction_service_push_title(record, catalog), status = "Awaiting Review",
-      submitted = format_time(now), requested_reviewer = asked
+      requested_reviewer = asked
     ),
     keep.null = TRUE
   )
   saved <- extraction_model_save(
-    connection, sent, c("status", "summary", "submitted", "requested_reviewer"), me$staff_id,
+    connection, sent, c("status", "summary", "requested_reviewer"), me$staff_id,
     expected_revision = record$revision, new_revision = FALSE
   )
   list(applied = FALSE, history_id = NULL, record = saved)

@@ -1,5 +1,6 @@
 # An extraction draft: who started it, how it was made, how far reading it has got and what staff typed about
-# it, kept in the database (a draft of kind Extraction with its extracted_draft row).
+# it, kept in the database (a draft of kind Extraction with its extracted_draft row, an AI-Powered one's reading in
+# its ai_extracted_draft row, and its PDF's pages and size in pdf_file).
 
 test_that("an extraction is saved to the database and read back as a record", {
   local_pdf_cache()
@@ -84,15 +85,16 @@ test_that("the fields of the shared row and of the details are saved together", 
   expect_equal(saved$requested_reviewer, list(id = colleague$staff_id, name = colleague$name))
   expect_equal(saved$info$notes, "page 6 is scanned")
 
-  sent <- utils::modifyList(saved, list(status = "Awaiting Review", submitted = "2026-10-02T12:00:00Z"))
-  sent <- extraction_model_save(test_connection, sent, c("status", "submitted"), me$staff_id, expected_revision = saved$revision, new_revision = FALSE)
+  expect_null(saved$submitted)
+  sent <- utils::modifyList(saved, list(status = "Awaiting Review"))
+  sent <- extraction_model_save(test_connection, sent, "status", me$staff_id, expected_revision = saved$revision, new_revision = FALSE)
   expect_equal(sent$status, "Awaiting Review")
-  expect_equal(sent$submitted, "2026-10-02T12:00:00Z")
+  expect_match(sent$submitted, "^[0-9]{4}-[0-9]{2}-[0-9]{2}T") # the database records when
   expect_equal(sent$revision, saved$revision) # sending isn't a change to the content
 
-  back <- utils::modifyList(sent, list(status = "Sent Back", sent_back = list(by = colleague$name, by_id = colleague$staff_id, date = "2026-10-02T13:00:00Z", note = "Check it")))
-  back <- extraction_model_save(test_connection, back, c("status", "sent_back"), colleague$staff_id, new_revision = FALSE)
-  expect_equal(back$sent_back, list(by = colleague$name, by_id = colleague$staff_id, date = "2026-10-02T13:00:00Z", note = "Check it"))
+  change_request_model_send_back(test_connection, sent$id, sent$revision, colleague$staff_id, "Check it")
+  back <- extraction_model_get(test_connection, sent$id)
+  expect_equal(back$sent_back[c("by", "by_id", "note")], list(by = colleague$name, by_id = colleague$staff_id, note = "Check it"))
 })
 
 test_that("a save of a version someone has since changed is refused", {

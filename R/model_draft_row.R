@@ -2,26 +2,31 @@
 # What staff are still working on before it reaches the live tables is a DRAFT: one row
 # of the columns both kinds share,
 #   status, prepared_by, saved_by, requested_reviewer (STAFF rows), revision, summary,
-#   sent_back_by / _at / _note, created_at, saved_at, submitted_at
+#   created_at, saved_at
 # and one row of a table for its kind:
-#   EXTRACTED_DRAFT  an extraction of a questionnaire (kind "Extraction")
-#   EDIT_DRAFT       an edit made on Make an edit (kind "Edit")
-# extraction_model_* and edit_model_* turn the two rows into the records the services work
+#   EXTRACTED_DRAFT     an extraction of a questionnaire (kind "Extraction"); an AI-Powered one
+#                       also has an AI_EXTRACTED_DRAFT row, and its PDF is a PDF_FILE row
+#   EDIT_DRAFT          an edit made on Make an edit (kind "Edit")
+# Each time it is submitted for review, sent back or approved is a DRAFT_REVIEW_EVENT row: who,
+# which revision, when, and a send back's note. A draft is read with its events.
+# extraction_model_* and edit_model_* turn the rows into the records the services work
 # with. Anything that changes several tables at once is a function of the database called
-# through /rpc/ (create_draft, save_draft, apply_draft, approve_draft;
-# supabase/migrations/20261007120000_drafts_entity.sql), because separate requests can't
+# through /rpc/ (create_draft, save_draft, send_back_draft, apply_draft, approve_draft;
+# docs/migrations/20261020_split_draft_details.sql), because separate requests can't
 # share a transaction. Changes to one table (the reading job's progress) are plain requests.
 
 draft_table <- "draft"
 extracted_draft_table <- "extracted_draft"
+ai_extracted_draft_table <- "ai_extracted_draft"
 edit_draft_table <- "edit_draft"
 
-# The shared columns, and the names of the people they point at.
+# The shared columns, the names of the people they point at, and the draft's reviews.
 draft_columns <- c(
   "draft_id", "kind", "status", "prepared_by", "saved_by", "requested_reviewer", "revision", "summary",
-  "sent_back_by", "sent_back_at", "sent_back_note", "created_at", "saved_at", "submitted_at",
+  "created_at", "saved_at",
   "preparer:staff!prepared_by(name)", "saver:staff!saved_by(name)",
-  "reviewer:staff!requested_reviewer(name)", "sender:staff!sent_back_by(name)"
+  "reviewer:staff!requested_reviewer(name)",
+  "reviews:draft_review_event(event,staff_id,revision,note,occurred_at,person:staff(name))"
 )
 
 # The statuses of a draft that is finished with: applied to the MATR metadata database, or set aside. A list
@@ -91,7 +96,9 @@ draft_row_model_create <- function(connection, kind, prepared_by, parent = list(
 #' Save a change to a draft and its details together.
 #'
 #' Only the columns named are written. The database raises the revision unless told not to,
-#' and records who saved it.
+#' and records who saved it, and who submitted it if the status becomes Awaiting Review. For an
+#' extraction, `detail` may name columns of extracted_draft, ai_extracted_draft and pdf_file
+#' (`pdf_pages`, `pdf_bytes`): the database puts each in its table.
 #'
 #' @param connection The MATR database, `list(url, key)`; see `model_database.R`.
 #' @param id The draft's id.
@@ -99,7 +106,7 @@ draft_row_model_create <- function(connection, kind, prepared_by, parent = list(
 #' @param parent,detail Named lists of columns to their new values; a `NULL` value empties the column.
 #' @param expected_revision The revision the person was looking at; the save is refused if
 #'   the draft has moved on. `NULL` skips the check.
-#' @param new_revision `FALSE` for a change that isn't to the content (sending back, withdrawing).
+#' @param new_revision `FALSE` for a change that isn't to the content (withdrawing).
 #' @return The revision after the save. An error with the database's sentence if it refused.
 draft_row_model_save <- function(connection, id, staff_id, parent = list(), detail = list(),
                                  expected_revision = NULL, new_revision = TRUE) {
@@ -154,14 +161,39 @@ database_time <- function(text) {
   if (!is.null(text)) format_time(parse_time(text))
 }
 
-# The person a draft was sent back by, or asked to review it: id and name, or NULL.
+# The person a draft's preparer asked to review it: id and name, or NULL.
 draft_row_person <- function(id, person) {
   if (!is.null(id)) list(id = id, name = person$name)
 }
 
-# What the shared row says about being sent back: only while it is.
+# A one-to-one row embedded in another: the row, or NULL. PostgREST sends it as an object, or as a
+# list of one when the key it follows isn't the embedded table's own.
+draft_row_one <- function(embedded) {
+  if (is.list(embedded) && is.null(names(embedded))) embedded <- if (length(embedded) > 0) embedded[[1]]
+  embedded
+}
+
+# The latest of a draft's reviews of one kind ("Submitted", "Sent Back" or "Approved"), or NULL.
+draft_row_latest <- function(row, event) {
+  reviews <- Filter(function(review) identical(review$event, event), row$reviews %||% list())
+  if (length(reviews) == 0) {
+    return(NULL)
+  }
+  times <- vapply(reviews, function(review) as.numeric(parse_time(review$occurred_at)), numeric(1))
+  reviews[[order(times, decreasing = TRUE)[1]]]
+}
+
+# When the draft was last sent for review, or NULL.
+draft_row_submitted <- function(row) {
+  database_time(draft_row_latest(row, "Submitted")$occurred_at)
+}
+
+# Who sent the draft back, when and why: only while it is sent back.
 draft_row_sent_back <- function(row) {
   if (identical(row$status, "Sent Back")) {
-    list(by = row$sender$name, by_id = row$sent_back_by, date = database_time(row$sent_back_at), note = row$sent_back_note)
+    sent <- draft_row_latest(row, "Sent Back")
+    if (!is.null(sent)) {
+      list(by = sent$person$name, by_id = sent$staff_id, date = database_time(sent$occurred_at), note = sent$note)
+    }
   }
 }

@@ -830,7 +830,6 @@ edit_service_record <- function(me, form, built, status, previous = NULL, review
     prepared_by_id = previous$prepared_by_id %||% me$staff_id,
     started = previous$started %||% format_time(now),
     saved = format_time(now),
-    submitted = if (status == "Awaiting Review") format_time(now) else previous$submitted,
     expected_revision = previous$revision,
     summary = built$summary,
     requested_reviewer = if (!is.null(reviewer) && nzchar(as.character(reviewer))) {

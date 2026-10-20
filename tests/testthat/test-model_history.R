@@ -66,7 +66,8 @@ test_that("an edit from before it had a sentence has empty words where it has no
   expect_null(record$applied)
 
   # an extraction that was pushed is an Add, whether its kind comes back as one row or a list of one
-  pushed <- history_model_record(list(draft_id = 2, kind = "Extraction", status = "Applied", edit = list(), approver = list(name = "Alex")))
+  approval <- list(event = "Approved", occurred_at = "2026-10-02T10:00:00+00:00", person = list(name = "Alex"))
+  pushed <- history_model_record(list(draft_id = 2, kind = "Extraction", status = "Applied", edit = list(), reviews = list(approval)))
   expect_equal(pushed$kind, "Add")
   expect_equal(pushed$source, "Extraction")
   expect_equal(pushed$approved_by, "Alex")

@@ -1,11 +1,11 @@
 # ------ Extraction drafts: the questionnaire ---------------------------------------
-# Three big jsonb columns of the draft's EXTRACTED_DRAFT row (model_draft_row.R), kept apart
-# from the rest of the record (model_extraction.R) because they are big:
+# Three big jsonb columns of the draft's details (model_draft_row.R), kept apart from the rest
+# of the record (model_extraction.R) because they are big:
+#   questionnaire the reviewed copy staff save; empty until they first save (EXTRACTED_DRAFT)
 #   ai_original   the questionnaire JSON the AI returned, written once by the reading job and
-#                 never changed afterwards (AI-Powered extractions only)
-#   questionnaire the reviewed copy staff save; empty until they first save
+#                 never changed afterwards (AI_EXTRACTED_DRAFT: AI-Powered extractions only)
 #   review_edits  what the reviewer changed in what the AI returned, a list that grows each
-#                 time they save (AI-Powered extractions only; see service_draft_record.R)
+#                 time they save (AI_EXTRACTED_DRAFT; see service_draft_record.R)
 
 #' A draft's questionnaire.
 #'
@@ -17,8 +17,8 @@
 #' @return The questionnaire JSON as nested lists, or `NULL` if reading hasn't finished.
 #'   An error if there is no such draft.
 draft_model_get <- function(connection, id) {
-  rows <- draft_model_detail(connection, id, c("questionnaire", "ai_original"))
-  rows$questionnaire %||% rows$ai_original
+  rows <- draft_model_detail(connection, id, "questionnaire", "ai_original")
+  rows$questionnaire %||% rows$ai$ai_original
 }
 
 #' What the AI returned, and what the reviewer has changed in it.
@@ -28,13 +28,17 @@ draft_model_get <- function(connection, id) {
 #' @return A list: `original` (the questionnaire JSON the AI returned, or `NULL`) and `edits`
 #'   (a list of the reviewer's changes, empty if none).
 draft_model_get_record <- function(connection, id) {
-  rows <- draft_model_detail(connection, id, c("ai_original", "review_edits"))
-  list(original = rows$ai_original, edits = rows$review_edits %||% list())
+  rows <- draft_model_detail(connection, id, character(), c("ai_original", "review_edits"))
+  list(original = rows$ai$ai_original, edits = rows$ai$review_edits %||% list())
 }
 
-draft_model_detail <- function(connection, id, columns) {
-  rows <- draft_row_model_details(connection, extracted_draft_table, id, columns)[[as.character(id)]]
+# `columns` of the draft's EXTRACTED_DRAFT row, and `ai_columns` of its AI_EXTRACTED_DRAFT row as
+# `ai` (NULL for a Manual extraction).
+draft_model_detail <- function(connection, id, columns, ai_columns) {
+  embedded <- sprintf("ai:%s(%s)", ai_extracted_draft_table, paste(ai_columns, collapse = ","))
+  rows <- draft_row_model_details(connection, extracted_draft_table, id, c(columns, embedded))[[as.character(id)]]
   if (is.null(rows)) stop("That draft is no longer in the database.", call. = FALSE)
+  rows$ai <- draft_row_one(rows$ai)
   rows
 }
 
@@ -66,7 +70,7 @@ draft_model_save_reviewed <- function(connection, id, draft_json, staff_id, revi
 #' @return Whether it was kept.
 draft_model_save_reading <- function(connection, id, draft_json, reading_started) {
   row <- draft_row_model_update_detail(
-    connection, extracted_draft_table, id, list(ai_original = draft_json),
+    connection, ai_extracted_draft_table, id, list(ai_original = draft_json),
     where = list(reading_started = database_eq(reading_started))
   )
   !is.null(row)

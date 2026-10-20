@@ -1,6 +1,7 @@
 # What the database does with a change request, called through /rpc/: approve (and so apply), apply at once,
 # send back and withdraw. The database enforces the rules whoever asks, so these are checked against it.
-# supabase/tests/drafts_and_apply.sql checks the same rules, and what applying does to every table, in SQL.
+# The build checks at the end of docs/migrations/sql_scripts.sql check the same rules, and what applying does to
+# every table, in SQL.
 
 test_that("a request waits for review with its status, who prepared it and when it was sent", {
   me <- local_staff()
@@ -21,7 +22,7 @@ test_that("edits and extractions wait together, and a withdrawn one stops waitin
   request <- local_edit(me, status = "Awaiting Review")
   extraction <- local_read_extraction(me)
   record <- extraction_model_get(test_connection, extraction$id)
-  extraction_model_save(test_connection, utils::modifyList(record, list(status = "Awaiting Review", submitted = format_time(Sys.time()))), c("status", "submitted"), me$staff_id)
+  extraction_model_save(test_connection, utils::modifyList(record, list(status = "Awaiting Review")), "status", me$staff_id)
   waiting <- change_request_model_waiting(test_connection)
   expect_true(all(c(request$id, extraction$id) %in% names(waiting)))
   expect_equal(waiting[[extraction$id]]$kind, "Extraction")
@@ -45,14 +46,20 @@ test_that("one approval from someone else applies a change, in one step", {
   expect_equal(entry$approved_by, approver$name)
   expect_equal(entry$prepared_by, me$name)
   expect_true(entry$approval_required)
-  # the approval is recorded on the draft itself, together with when it was applied
+  # the approval is one of the draft's reviews, of the revision the approver read, and the draft says when it was applied
   applied <- database_model_select(
-    test_connection, "draft", c("draft_id", "approved_by", "approved_at", "applied_at"),
+    test_connection, "draft", c("draft_id", "applied_at", "reviews:draft_review_event(event,staff_id,revision,occurred_at)"),
     filters = list(draft_id = database_eq(request$id))
   )[[1]]
-  expect_equal(applied$approved_by, approver$staff_id)
-  expect_false(is.null(applied$approved_at))
+  approval <- draft_row_latest(applied, "Approved")
+  expect_equal(approval$staff_id, approver$staff_id)
+  expect_equal(approval$revision, request$revision)
+  expect_false(is.null(approval$occurred_at))
   expect_false(is.null(applied$applied_at))
+  expect_error(
+    database_model_insert(test_connection, "draft_review_event", list(draft_id = request$id, event = "Sent Back", staff_id = approver$staff_id, revision = 1)),
+    "already been applied"
+  ) # an applied draft's record takes no more
   expect_equal(history_id, request$id) # an applied draft is its own record
 })
 
@@ -107,12 +114,23 @@ test_that("a request is sent back with a note, without a new revision, and only 
   me <- local_staff()
   reviewer <- local_staff()
   request <- local_edit(me, status = "Awaiting Review")
-  change_request_model_send_back(test_connection, request$id, request$revision, reviewer$staff_id, "Check the ages first", now = as.POSIXct("2026-10-05 09:00:00", tz = "UTC"))
+  change_request_model_send_back(test_connection, request$id, request$revision, reviewer$staff_id, "Check the ages first")
   back <- edit_model_get(test_connection, request$id)
   expect_equal(back$status, "Sent Back")
   expect_equal(back$revision, request$revision)
-  expect_equal(back$sent_back, list(by = reviewer$name, by_id = reviewer$staff_id, date = "2026-10-05T09:00:00Z", note = "Check the ages first"))
+  expect_equal(back$sent_back[c("by", "by_id", "note")], list(by = reviewer$name, by_id = reviewer$staff_id, note = "Check the ages first"))
+  expect_match(back$sent_back$date, "^[0-9]{4}-[0-9]{2}-[0-9]{2}T")
   expect_false(request$id %in% names(change_request_model_waiting(test_connection)))
+
+  # sent back again after it is sent again: both notes are kept, and the latest is the one shown
+  again <- edit_model_save(test_connection, utils::modifyList(back, list(status = "Awaiting Review", expected_revision = back$revision)), me$staff_id)
+  change_request_model_send_back(test_connection, again$id, again$revision, reviewer$staff_id, "And the dates")
+  expect_equal(edit_model_get(test_connection, request$id)$sent_back$note, "And the dates")
+  notes <- database_model_get(
+    test_connection, "draft_review_event", c("note", "occurred_at"), order_by = "occurred_at",
+    filters = list(draft_id = database_eq(request$id), event = database_eq("Sent Back"))
+  )$note
+  expect_equal(notes, c("Check the ages first", "And the dates"))
 
   plain <- local_edit(me, status = "Draft")
   expect_error(change_request_model_send_back(test_connection, plain$id, plain$revision, reviewer$staff_id, "no"), "Only a change waiting for review can be sent back")

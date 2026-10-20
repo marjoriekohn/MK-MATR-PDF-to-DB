@@ -472,7 +472,7 @@ test_that("a proposal records who, what, why and how to open it again", {
   expect_equal(record$prepared_by_id, 1L)
   expect_null(record$note) # no reason is asked for or kept
   expect_null(record$expected_revision) # a new proposal has no revision to check against
-  expect_null(record$submitted)
+  expect_null(record$submitted) # the database records when it is sent for review
   expect_equal(record$summary, "Changed the name of the registry “Mid-Atlantic Twin Registry”")
   expect_equal(nrow(record$items), 1)
 
@@ -484,7 +484,7 @@ test_that("a proposal records who, what, why and how to open it again", {
   expect_equal(later$prepared_by_id, 1L)
   expect_equal(later$started, record$started)
   expect_equal(later$expected_revision, 3L) # the one the person was looking at, which the database checks
-  expect_equal(later$submitted, "2026-10-02T15:31:12Z")
+  expect_equal(later$status, "Awaiting Review")
 })
 
 test_that("another open proposal that changes the same row is a conflict", {

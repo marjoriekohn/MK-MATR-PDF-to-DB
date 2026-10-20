@@ -2,8 +2,8 @@
 # One record per change staff make on the Make an edit page, saying who, what it comes
 # to in a sentence, how to open it again on the form, and the items to apply. Each is a
 # DRAFT row of kind "Edit" with an EDIT_DRAFT row (model_draft_row.R). Applying it (at once for
-# an add or an update, after one approval for a STAFF member's delete) makes it a
-# WRITE_HISTORY row with its WRITE_HISTORY_ITEM rows. `status` is Draft until it's sent for
+# an add or an update, after one approval for a STAFF member's delete) makes it Applied, with
+# its APPLIED_ITEM rows. `status` is Draft until it's sent for
 # review, then Awaiting Review; Sent Back if a reviewer returned it; Withdrawn if the
 # preparer discards it; Applied once it is in the MATR metadata database.
 #
@@ -11,9 +11,9 @@
 #   id, status, summary                            draft
 #   prepared_by (name), prepared_by_id, started    draft (created_at)
 #   saved, saved_by (name), saved_by_id, revision  draft
-#   submitted                                      draft (submitted_at)
+#   submitted                                      draft_review_event (the latest Submitted)
 #   requested_reviewer = list(id, name)            draft (requested_reviewer)
-#   sent_back = list(by, by_id, date, note)        draft (sent_back_*), only while Sent Back
+#   sent_back = list(by, by_id, date, note)        draft_review_event (the latest Sent Back), only while Sent Back
 #   edit_kind ("Add", "Update" or "Delete")        edit_draft
 #   form, reach, items                             edit_draft
 #
@@ -72,12 +72,11 @@ edit_model_get <- function(connection, id) {
 #'   `expected_revision`, if it has one, is the revision the person was looking at: the save is
 #'   refused if someone else has saved since.
 #' @param staff_id The staff id of the person saving.
-#' @param new_revision `FALSE` for a change that isn't to the content (sending back, withdrawing).
+#' @param new_revision `FALSE` for a change that isn't to the content (withdrawing).
 #' @return The record as saved, with its id. An error with the database's sentence if it refused.
+#'   A record saved with the status Awaiting Review is submitted: the database records when, and by whom.
 edit_model_save <- function(connection, record, staff_id = record$prepared_by_id, new_revision = TRUE) {
-  parent <- list(
-    status = record$status, summary = record$summary, submitted_at = record$submitted
-  )
+  parent <- list(status = record$status, summary = record$summary)
   parent["requested_reviewer"] <- list(record$requested_reviewer$id)
   detail <- list(
     edit_kind = record$edit_kind %||% edit_model_kind(record$form),
@@ -124,7 +123,7 @@ edit_model_record <- function(parent, detail) {
     saved = database_time(parent$saved_at),
     saved_by = parent$saver$name,
     saved_by_id = parent$saved_by,
-    submitted = database_time(parent$submitted_at),
+    submitted = draft_row_submitted(parent),
     revision = parent$revision,
     summary = parent$summary,
     requested_reviewer = draft_row_person(parent$requested_reviewer, parent$reviewer),

@@ -5,9 +5,10 @@
 # or last changed it approves it, which applies it to the MATR metadata database, or sends it back to the
 # preparer, or until the preparer withdraws it.
 #
-# Approving and applying are functions of the database, called through /rpc/, because applying
-# changes several tables at once and separate requests can't share a transaction
-# (supabase/migrations/20261007120000_drafts_entity.sql). The functions check the rules
+# Approving, applying and sending back are functions of the database, called through /rpc/,
+# because each changes several tables at once (an approval or a send back is a
+# DRAFT_REVIEW_EVENT row) and separate requests can't share a transaction
+# (docs/migrations/20261020_split_draft_details.sql). The functions check the rules
 # themselves; the site checks them only to know which buttons to offer.
 
 change_request_waiting_status <- "Awaiting Review"
@@ -71,18 +72,14 @@ change_request_model_apply <- function(connection, id, staff_id, items = NULL) {
 #' @param revision The revision the person was reading.
 #' @param staff_id Who sends it back.
 #' @param note What needs changing.
-#' @param now The time to record.
-#' @return Called for its effect. An error with the database's sentence if it refused, e.g.
-#'   because the request was changed after the person opened it.
-change_request_model_send_back <- function(connection, id, revision, staff_id, note, now = Sys.time()) {
-  draft_row_model_save(
-    connection, id, staff_id,
-    parent = list(
-      status = "Sent Back", sent_back_by = as.numeric(staff_id),
-      sent_back_at = format_time(now), sent_back_note = note
-    ),
-    expected_revision = revision, new_revision = FALSE
-  )
+#' @return Called for its effect. The database records who sent it back, when, and the note. An
+#'   error with the database's sentence if it refused, e.g. because the request was changed after
+#'   the person opened it.
+change_request_model_send_back <- function(connection, id, revision, staff_id, note) {
+  database_model_call(connection, "send_back_draft", list(
+    p_draft_id = draft_row_number(id), p_revision = as.integer(revision),
+    p_staff_id = as.numeric(staff_id), p_note = note
+  ))
   invisible()
 }
 

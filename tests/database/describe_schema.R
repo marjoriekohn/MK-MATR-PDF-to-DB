@@ -28,7 +28,8 @@ groups <- list(
   "Answers" = c("variable", "open_ended", "closed_ended", "answer_option", "option_set", "answer_option_set", "response_option", "subject"),
   "Classifying questions" = c("category", "question_category", "measurement_scale", "question_scale"),
   "Staff, drafts and applied changes (not shown to the public dashboard)" = c(
-    "staff", "draft", "edit_draft", "extracted_draft", "applied_item"
+    "staff", "draft", "draft_review_event", "edit_draft", "extracted_draft", "ai_extracted_draft",
+    "pdf_file", "applied_item"
   )
 )
 

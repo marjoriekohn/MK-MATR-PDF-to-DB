@@ -1,5 +1,5 @@
-# The questionnaire of an extraction draft: three big jsonb columns of the extracted_draft row, kept apart from the
-# rest of the record. The AI's answer is written once by the reading job; staff's copy and the record of their edits
+# The questionnaire of an extraction draft: three big jsonb columns, staff's copy in the extracted_draft row and the
+# AI's answer and the edits to it in the ai_extracted_draft row, kept apart from the rest of the record. The AI's answer is written once by the reading job; staff's copy and the record of their edits
 # are written when they save.
 
 test_that("what the AI returned and what staff saved are different columns, and staff's copy wins when there is one", {
@@ -50,8 +50,9 @@ test_that("a manual draft can't hold an AI's answer or a record of edits to it",
   record <- local_manual_extraction(me)
   expect_error(
     draft_model_save_reviewed(test_connection, record$id, list(x = 1), me$staff_id, list(list(change = "edited"))),
-    "extracted_draft_manual_has_no_ai"
+    "A Manual extraction has no reading and nothing from an AI"
   )
+  expect_equal(draft_model_get_record(test_connection, record$id), list(original = NULL, edits = list()))
 })
 
 test_that("a draft that isn't there is a sentence", {

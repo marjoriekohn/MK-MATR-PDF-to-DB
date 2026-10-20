@@ -61,11 +61,43 @@ test_that("an extraction's details are its own columns, with defaults for the re
   me <- local_staff()
   id <- draft_row_model_create(test_connection, "Extraction", me$staff_id, list(), list(method = "Manual", info = list(kind = "new_wave")))
   withr::defer(test_delete("draft", list(draft_id = database_eq(id))))
-  details <- draft_row_model_details(test_connection, extracted_draft_table, id, c("method", "info", "reading_status", "review_edits"))
+  details <- draft_row_model_details(test_connection, extracted_draft_table, id, c("method", "info", "reading:ai_extracted_draft(reading_status)"))
   expect_equal(details[[id]]$method, "Manual")
   expect_equal(details[[id]]$info$kind, "new_wave")
-  expect_null(details[[id]]$reading_status)
-  expect_equal(details[[id]]$review_edits, list())
+  expect_null(draft_row_one(details[[id]]$reading)) # a Manual extraction has no reading
+  expect_error(
+    draft_row_model_create(test_connection, "Extraction", me$staff_id, list(), list(method = "Manual", reading_status = "queued")),
+    "A Manual extraction has no reading"
+  )
+})
+
+test_that("an AI-Powered extraction's reading has its own row, and its PDF is kept once, by its hash", {
+  me <- local_staff()
+  sha256 <- paste0("zztest", test_marker, test_counter())
+  withr::defer(test_delete_pdf(sha256))
+  detail <- list(
+    method = "AI-Powered", pdf_name = "a.pdf", pdf_sha256 = sha256, pdf_pages = 3L, pdf_bytes = 120L,
+    reading_status = "queued", reading_started = "2026-10-02T10:00:00Z"
+  )
+  first <- draft_row_model_create(test_connection, "Extraction", me$staff_id, list(), detail)
+  withr::defer(test_delete("draft", list(draft_id = database_eq(first))))
+  # the same file again, under another name, and not knowing its pages: the file keeps what it knows
+  second <- draft_row_model_create(test_connection, "Extraction", me$staff_id, list(), utils::modifyList(detail, list(pdf_name = "b.pdf", pdf_pages = NULL), keep.null = TRUE))
+  withr::defer(test_delete("draft", list(draft_id = database_eq(second))))
+
+  reading <- draft_row_model_details(test_connection, ai_extracted_draft_table, first, c("reading_status", "review_edits"))[[first]]
+  expect_equal(reading$reading_status, "queued")
+  expect_equal(reading$review_edits, list()) # the column's default
+  files <- database_model_get(test_connection, "pdf_file", c("pdf_sha256", "pdf_pages", "pdf_bytes"), filters = list(pdf_sha256 = database_eq(sha256)))
+  expect_equal(nrow(files), 1)
+  expect_equal(files$pdf_pages, 3)
+  expect_equal(files$pdf_bytes, 120)
+  names <- draft_row_model_details(test_connection, extracted_draft_table, c(first, second), "pdf_name")
+  expect_equal(c(names[[first]]$pdf_name, names[[second]]$pdf_name), c("a.pdf", "b.pdf"))
+  expect_error(
+    draft_row_model_create(test_connection, "Extraction", me$staff_id, list(), list(method = "AI-Powered", reading_status = "queued")),
+    "extracted_draft_ai_has_pdf"
+  )
 })
 
 test_that("drafts are listed by kind, newest saved first, narrowed by status, without those finished with", {
@@ -176,20 +208,21 @@ test_that("a draft only moves forward: sent for review, sent back, withdrawn; an
   me <- local_staff()
   reviewer <- local_staff()
   id <- new_edit(me)
-  expect_error(
-    draft_row_model_save(test_connection, id, reviewer$staff_id, list(
-      status = "Sent Back", sent_back_by = reviewer$staff_id, sent_back_at = "2026-10-02T10:00:00Z", sent_back_note = "no"
-    )),
-    "Only a change waiting for review can be sent back"
-  )
-  draft_row_model_save(test_connection, id, me$staff_id, list(status = "Awaiting Review", submitted_at = "2026-10-02T10:00:00Z"))
+  expect_null(draft_row_submitted(draft_row_model_get(test_connection, id)))
+  expect_error(change_request_model_send_back(test_connection, id, 1L, reviewer$staff_id, "no"), "Only a change waiting for review can be sent back")
+  draft_row_model_save(test_connection, id, me$staff_id, list(status = "Awaiting Review"))
+  submitted <- draft_row_submitted(draft_row_model_get(test_connection, id))
+  expect_match(submitted, "^[0-9]{4}-[0-9]{2}-[0-9]{2}T") # the database records when, and who
   expect_error(draft_row_model_save(test_connection, id, me$staff_id, list(status = "Draft")), "can't go back to being a plain draft")
-  draft_row_model_save(test_connection, id, reviewer$staff_id, list(
-    status = "Sent Back", sent_back_by = reviewer$staff_id, sent_back_at = "2026-10-02T11:00:00Z", sent_back_note = "check the age"
-  ), new_revision = FALSE)
+  revision <- draft_row_model_get(test_connection, id)$revision
+  change_request_model_send_back(test_connection, id, revision, reviewer$staff_id, "check the age")
   row <- draft_row_model_get(test_connection, id)
   expect_equal(row$status, "Sent Back")
-  expect_equal(draft_row_sent_back(row), list(by = reviewer$name, by_id = reviewer$staff_id, date = "2026-10-02T11:00:00Z", note = "check the age"))
+  expect_equal(row$revision, revision) # sending back isn't a change to the content
+  sent <- draft_row_sent_back(row)
+  expect_equal(sent[c("by", "by_id", "note")], list(by = reviewer$name, by_id = reviewer$staff_id, note = "check the age"))
+  expect_match(sent$date, "^[0-9]{4}-[0-9]{2}-[0-9]{2}T")
+  expect_equal(draft_row_submitted(row), submitted) # still the one time it was sent
   expect_null(draft_row_sent_back(list(status = "Draft")))
 
   draft_row_model_save(test_connection, id, me$staff_id, list(status = "Withdrawn"), new_revision = FALSE)
@@ -203,8 +236,25 @@ test_that("a sent-back draft says who sent it back, in the database too", {
   draft_row_model_save(test_connection, id, me$staff_id, list(status = "Awaiting Review"))
   expect_error(
     draft_row_model_save(test_connection, id, me$staff_id, list(status = "Sent Back")),
-    "draft_sent_back_says_who"
+    "sent back with send_back_draft"
   )
+  expect_error(draft_row_model_save(test_connection, id, me$staff_id, list(submitted_at = "2026-10-02T10:00:00Z")), "submitted_at can't be set this way")
+})
+
+test_that("a draft's reviews are read newest first, and only a sent-back draft says who sent it back", {
+  row <- list(status = "Sent Back", reviews = list(
+    list(event = "Submitted", staff_id = 1, occurred_at = "2026-10-02T09:00:00+00:00"),
+    list(event = "Sent Back", staff_id = 2, note = "first", occurred_at = "2026-10-02T10:00:00+00:00", person = list(name = "Ana")),
+    list(event = "Submitted", staff_id = 1, occurred_at = "2026-10-02T11:00:00+00:00"),
+    list(event = "Sent Back", staff_id = 3, note = "second", occurred_at = "2026-10-02T12:00:00+00:00", person = list(name = "Ben"))
+  ))
+  expect_equal(draft_row_submitted(row), "2026-10-02T11:00:00Z")
+  expect_equal(draft_row_sent_back(row), list(by = "Ben", by_id = 3, date = "2026-10-02T12:00:00Z", note = "second"))
+  expect_null(draft_row_latest(row, "Approved"))
+  expect_null(draft_row_sent_back(utils::modifyList(row, list(status = "Awaiting Review"))))
+  expect_equal(draft_row_one(list(list(a = 1))), list(a = 1))
+  expect_equal(draft_row_one(list(a = 1)), list(a = 1))
+  expect_null(draft_row_one(list()))
 })
 
 test_that("a detail row can be changed where it still matches, without raising the revision", {
@@ -214,12 +264,12 @@ test_that("a detail row can be changed where it still matches, without raising t
   revision <- draft_row_model_get(test_connection, id)$revision
 
   stale <- draft_row_model_update_detail(
-    test_connection, extracted_draft_table, id, list(reading_status = "sent"),
+    test_connection, ai_extracted_draft_table, id, list(reading_status = "sent"),
     where = list(reading_started = database_eq("2026-10-02T09:00:00Z"))
   )
   expect_null(stale)
   current <- draft_row_model_update_detail(
-    test_connection, extracted_draft_table, id, list(reading_status = "sent"),
+    test_connection, ai_extracted_draft_table, id, list(reading_status = "sent"),
     where = list(reading_started = database_eq("2026-10-02T10:00:00Z")), select = c("draft_id", "reading_status")
   )
   expect_equal(current$reading_status, "sent")

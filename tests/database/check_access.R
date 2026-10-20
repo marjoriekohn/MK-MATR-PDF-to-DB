@@ -25,7 +25,8 @@ publishable <- list(url = Sys.getenv("SUPABASE_URL"),
 # Tables the public dashboard must NOT be able to read:
 # RLS on, no policy, no grant.
 private_tables <- c(
-  "staff", "draft", "extracted_draft", "edit_draft", "applied_item"
+  "staff", "draft", "extracted_draft", "ai_extracted_draft", "pdf_file", "edit_draft",
+  "draft_review_event", "applied_item"
 )
 
 # Each table with a column to read and filter on (a key: a number or text, so
@@ -40,7 +41,10 @@ other_tables <- list(
   staff = list(read = "staff_id", change = "name"),
   draft = list(read = "draft_id", change = "summary"),
   extracted_draft = list(read = "draft_id", change = "pdf_name"),
+  ai_extracted_draft = list(read = "draft_id", change = "reading_error"),
+  pdf_file = list(read = "pdf_sha256", change = "pdf_pages"),
   edit_draft = list(read = "draft_id", change = "form"),
+  draft_review_event = list(read = "draft_review_event_id", change = "note"),
   applied_item = list(read = "draft_id", change = "entity_name")
 )
 tables <- c(probe_columns, other_tables)

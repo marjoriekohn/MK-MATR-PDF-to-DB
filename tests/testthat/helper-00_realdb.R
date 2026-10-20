@@ -162,6 +162,21 @@ test_delete_draft <- function(id) {
   invisible()
 }
 
+# Removes a PDF's row (pdf_file) a test made, unless a draft still points at it: an applied one, which the
+# database keeps (see the top of this file).
+test_delete_pdf <- function(sha256) {
+  if (is.null(sha256)) {
+    return(invisible())
+  }
+  tryCatch(
+    test_delete("pdf_file", list(pdf_sha256 = database_eq(sha256))),
+    error = function(problem) {
+      if (!grepl("foreign key", conditionMessage(problem))) stop(problem)
+    }
+  )
+  invisible()
+}
+
 # The rows of `table` where some column is one of `ids`, a few hundred to a request.
 test_delete_in <- function(table, column, ids) {
   ids <- unique(ids[!is.na(ids)])
@@ -282,12 +297,16 @@ file_shared <- function(test_env, name, make) {
 }
 
 # Removes the drafts (not applied ones) that point at a staff member: what they prepared, saved, were asked to
-# review or sent back.
+# review, or submitted or sent back (their reviews go with the drafts).
 test_clear_drafts <- function(staff_id) {
   who <- as.character(staff_id)
+  reviewed <- test_ids("draft_review_event", "draft_id", list(staff_id = database_eq(who)))
+  for (chunk in split(unique(reviewed), ceiling(seq_along(unique(reviewed)) / 200))) {
+    test_delete("draft", list(status = paste0("neq.", history_applied_status), draft_id = database_in(chunk)))
+  }
   test_delete("draft", list(
     status = paste0("neq.", history_applied_status),
-    or = sprintf("(prepared_by.eq.%s,saved_by.eq.%s,requested_reviewer.eq.%s,sent_back_by.eq.%s)", who, who, who, who)
+    or = sprintf("(prepared_by.eq.%s,saved_by.eq.%s,requested_reviewer.eq.%s)", who, who, who)
   ))
 }
 

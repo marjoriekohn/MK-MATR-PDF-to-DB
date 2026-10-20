@@ -152,6 +152,10 @@ test_that("a missing table and an unreachable database are sentences too", {
 
 test_that("the database's description of itself is read from the API's root", {
   description <- database_model_describe(test_connection)
-  expect_true(all(c("registry", "staff", "draft", "edit_draft", "extracted_draft", "applied_item") %in% names(description$definitions)))
+  expect_true(all(c(
+    "registry", "staff", "draft", "edit_draft", "extracted_draft", "ai_extracted_draft", "pdf_file",
+    "draft_review_event", "applied_item"
+  ) %in% names(description$definitions)))
   expect_true("/rpc/approve_draft" %in% names(description$paths))
+  expect_true("/rpc/send_back_draft" %in% names(description$paths))
 })

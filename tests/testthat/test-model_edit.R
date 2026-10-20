@@ -52,11 +52,11 @@ test_that("saving again changes the proposal, raises its revision, and doesn't a
   saved <- edit_model_save(test_connection, made$record, me$staff_id)
   withr::defer(test_delete("draft", list(draft_id = database_eq(saved$id))))
 
-  sent <- utils::modifyList(saved, list(status = "Awaiting Review", submitted = "2026-10-02T16:00:00Z", expected_revision = saved$revision))
+  sent <- utils::modifyList(saved, list(status = "Awaiting Review", expected_revision = saved$revision))
   again <- edit_model_save(test_connection, sent, me$staff_id)
   expect_equal(again$id, saved$id)
   expect_equal(again$status, "Awaiting Review")
-  expect_equal(again$submitted, "2026-10-02T16:00:00Z")
+  expect_match(again$submitted, "^[0-9]{4}-[0-9]{2}-[0-9]{2}T") # the database records when it was sent
   expect_equal(again$revision, 2)
   expect_equal(length(Filter(function(record) identical(record$id, saved$id), edit_model_get_all(test_connection))), 1)
 
@@ -159,7 +159,6 @@ test_that("a request for a reviewer is kept with the proposal", {
   colleague <- local_staff()
   record <- sample_edit(me, local_respondent_type(), status = "Awaiting Review")
   record$requested_reviewer <- list(id = colleague$staff_id)
-  record$submitted <- "2026-10-02T16:00:00Z"
   saved <- edit_model_save(test_connection, record, me$staff_id)
   withr::defer(test_delete("draft", list(draft_id = database_eq(saved$id))))
   expect_equal(saved$requested_reviewer, list(id = colleague$staff_id, name = colleague$name))

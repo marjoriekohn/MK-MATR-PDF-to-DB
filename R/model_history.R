@@ -1,7 +1,8 @@
 # ------ Edit history ---------------------------------------------------------------
 # An applied change is a DRAFT row with the status Applied (model_draft_row.R): what it was in a
-# sentence, who prepared it, the one person who approved it (or nobody: an add or an
-# update, or anything an ADMIN did, needs no approval), and when it was applied. APPLIED_ITEM has
+# sentence, who prepared it, the one person who approved it (its Approved DRAFT_REVIEW_EVENT, or
+# none: an add or an update, or anything an ADMIN did, needs no approval), and when it was
+# applied. APPLIED_ITEM has
 # one row for each field it changed, with the old and new value (the same items the draft held,
 # with the numbers the database gave new rows). Only apply_draft() and approve_draft() in the
 # database write them; the site only reads. (Until 2026-10-09 these were the write_history and
@@ -23,9 +24,9 @@ history_applied_status <- "Applied"
 
 history_columns <- c(
   "draft_id", "kind", "status", "summary",
-  "created_at", "approved_at", "applied_at",
+  "created_at", "applied_at",
   "preparer:staff!prepared_by(name)",
-  "approver:staff!approved_by(name)",
+  "reviews:draft_review_event(event,occurred_at,person:staff(name))",
   "edit:edit_draft(edit_kind)"
 )
 
@@ -66,10 +67,9 @@ history_model_count <- function(connection) {
 }
 
 history_model_record <- function(row) {
-  approver <- row$approver$name
-  # the edit's own kind is embedded as one row (the detail table's key is the draft's), or as a list of one
-  edit <- row$edit
-  if (is.list(edit) && is.null(names(edit)) && length(edit) > 0) edit <- edit[[1]]
+  approval <- draft_row_latest(row, "Approved")
+  approver <- approval$person$name
+  edit <- draft_row_one(row$edit)
   list(
     id = as.character(row$draft_id),
     kind = if (identical(row$kind, extraction_kind)) "Add" else edit$edit_kind %||% "Edit",
@@ -78,9 +78,9 @@ history_model_record <- function(row) {
     summary = row$summary %||% "",
     prepared_by = as.character(row$preparer$name %||% NA),
     approved_by = as.character(approver %||% NA),
-    approval_required = !is.null(approver),
+    approval_required = !is.null(approval),
     prepared = database_time(row$created_at),
-    approved = database_time(row$approved_at),
+    approved = database_time(approval$occurred_at),
     applied = database_time(row$applied_at)
   )
 }

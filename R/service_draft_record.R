@@ -1,7 +1,7 @@
 # ------ What the AI extracted, and what the reviewer changed ---------------------------
 # For an AI-Powered extraction the database keeps the questionnaire exactly as the AI returned it
-# (extracted_draft.ai_original, never changed afterwards) and a list of what the reviewer changed
-# (extracted_draft.review_edits), added to each time they save. Later the list can be read to
+# (ai_extracted_draft.ai_original, never changed afterwards) and a list of what the reviewer changed
+# (ai_extracted_draft.review_edits), added to each time they save. Later the list can be read to
 # measure how often and where the AI needs correcting. A Manual extraction has neither.
 #
 # Each time the reviewer saves, the draft as it is then is compared with the draft as it was when

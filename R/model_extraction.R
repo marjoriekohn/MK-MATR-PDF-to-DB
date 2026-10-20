@@ -1,22 +1,26 @@
 # ------ Extraction drafts -----------------------------------------------------------
 # One record per extraction of a questionnaire, saying who started it, how it was made
 # (read from a PDF by an AI, or typed by hand), how far reading it has got, and what staff
-# typed about it. Each is a DRAFT row of kind "Extraction" with an EXTRACTED_DRAFT row
-# (model_draft_row.R); this turns the two into the record the services work with, and a
-# changed record back into the columns to save.
+# typed about it. Each is a DRAFT row of kind "Extraction" with an EXTRACTED_DRAFT row, and
+# for an AI-Powered one an AI_EXTRACTED_DRAFT row (model_draft_row.R); this turns them into the
+# record the services work with, and a changed record back into the columns to save.
 #
-# A record's fields and where they are kept (draft / extracted_draft):
+# A record's fields and where they are kept:
 #   id, status, summary                            draft
 #   kind (always "Extraction")                     draft, so a list of requests can tell it from an edit
 #   prepared_by (name), prepared_by_id, started    draft (created_at)
 #   saved, saved_by (name), saved_by_id, revision  draft
+#   submitted                                      draft_review_event (the latest Submitted)
 #   requested_reviewer = list(id, name)            draft (requested_reviewer)
-#   sent_back = list(by, by_id, date, note)        draft (sent_back_*), only while Sent Back
+#   sent_back = list(by, by_id, date, note)        draft_review_event (the latest Sent Back), only while Sent Back
 #   method ("AI-Powered" or "Manual")              extracted_draft
-#   pdf = list(name, path, pages, bytes, sha256)   pdf_name, pdf_sha256, pdf_pages, pdf_bytes
+#   pdf = list(name, path, pages, bytes, sha256)   extracted_draft (pdf_name, pdf_sha256), pdf_file (pdf_pages, pdf_bytes)
 #   extraction_status, reading_started, reading_claimed_at, reading_pid, error,
-#   model, prompt_version                          reading_*, model, prompt_version
-#   info, matr_csv                                 info, matr_csv
+#   model, prompt_version                          ai_extracted_draft (reading_*, model, prompt_version);
+#                                                  NULL for a Manual extraction
+#   info, matr_csv                                 extracted_draft
+# A save names the columns as if they were one table; the database puts each in its own
+# (draft_row_model_save()). The reading job writes its own columns to ai_extracted_draft directly.
 # The questionnaire itself, what the AI returned and what the reviewer changed aren't in the
 # record; they are big. See model_draft.R.
 #
@@ -29,7 +33,7 @@ extraction_kind <- "Extraction"
 extraction_ai <- "AI-Powered"
 extraction_manual <- "Manual"
 
-# Record field -> column of extracted_draft, for the fields that are one column each.
+# Record field -> column of extracted_draft or ai_extracted_draft, for the fields that are one column each.
 extraction_detail_columns <- c(
   method = "method", info = "info", matr_csv = "matr_csv", questionnaire = "questionnaire",
   extraction_status = "reading_status", reading_started = "reading_started",
@@ -37,16 +41,20 @@ extraction_detail_columns <- c(
   model = "model", prompt_version = "prompt_version"
 )
 # ... and of draft.
-extraction_parent_columns <- c(status = "status", summary = "summary", submitted = "submitted_at")
-# The fields of a record the reading job owns: it saves these, and staff never do.
+extraction_parent_columns <- c(status = "status", summary = "summary")
+# The fields of a record the reading job owns: it saves these, and staff never do. Their columns
+# are ai_extracted_draft's.
 extraction_reading_fields <- c(
   "extraction_status", "reading_started", "reading_claimed_at", "reading_pid", "error", "model",
   "prompt_version"
 )
 
-# The columns of extracted_draft a list of drafts reads (not the questionnaire, the AI's answer or the edits).
+# What a list of drafts reads of extracted_draft, with its PDF and reading (not the questionnaire,
+# the AI's answer or the edits).
 extraction_list_columns <- c(
-  setdiff(unname(extraction_detail_columns), "questionnaire"), "pdf_name", "pdf_sha256", "pdf_pages", "pdf_bytes"
+  setdiff(unname(extraction_detail_columns), c("questionnaire", extraction_detail_columns[extraction_reading_fields])),
+  "pdf_name", "pdf_sha256", "pdf:pdf_file(pdf_pages,pdf_bytes)",
+  sprintf("reading:%s(%s)", ai_extracted_draft_table, paste(extraction_detail_columns[extraction_reading_fields], collapse = ","))
 )
 
 # ------ Reading --------------------------------------------------------------------
@@ -85,6 +93,8 @@ extraction_model_get <- function(connection, id) {
 }
 
 extraction_model_record <- function(parent, detail) {
+  pdf <- draft_row_one(detail$pdf)
+  reading <- draft_row_one(detail$reading)
   list(
     id = as.character(parent$draft_id),
     kind = extraction_kind,
@@ -97,24 +107,24 @@ extraction_model_record <- function(parent, detail) {
     saved_by = parent$saver$name,
     saved_by_id = parent$saved_by,
     revision = parent$revision,
-    submitted = database_time(parent$submitted_at),
+    submitted = draft_row_submitted(parent),
     requested_reviewer = draft_row_person(parent$requested_reviewer, parent$reviewer),
     sent_back = draft_row_sent_back(parent),
     method = detail$method,
     pdf = list(
       name = detail$pdf_name,
       path = if (!is.null(detail$pdf_sha256)) extraction_model_pdf_path(detail$pdf_sha256),
-      pages = detail$pdf_pages,
-      bytes = detail$pdf_bytes,
+      pages = pdf$pdf_pages,
+      bytes = pdf$pdf_bytes,
       sha256 = detail$pdf_sha256
     ),
-    extraction_status = detail$reading_status,
-    reading_started = database_time(detail$reading_started),
-    reading_claimed_at = database_time(detail$reading_claimed_at),
-    reading_pid = detail$reading_pid,
-    error = detail$reading_error,
-    model = detail$model,
-    prompt_version = detail$prompt_version,
+    extraction_status = reading$reading_status,
+    reading_started = database_time(reading$reading_started),
+    reading_claimed_at = database_time(reading$reading_claimed_at),
+    reading_pid = reading$reading_pid,
+    error = reading$reading_error,
+    model = reading$model,
+    prompt_version = reading$prompt_version,
     info = detail$info,
     matr_csv = detail$matr_csv
   )
@@ -151,20 +161,14 @@ extraction_model_create <- function(connection, record) {
 extraction_model_save <- function(connection, record, changed, staff_id, expected_revision = NULL, new_revision = TRUE) {
   rows <- extraction_model_rows(record, setdiff(changed, "requested_reviewer"))
   if ("requested_reviewer" %in% changed) rows$parent["requested_reviewer"] <- list(record$requested_reviewer$id)
-  if ("sent_back" %in% changed) {
-    sent <- record$sent_back
-    rows$parent["sent_back_by"] <- list(sent$by_id)
-    rows$parent["sent_back_at"] <- list(sent$date)
-    rows$parent["sent_back_note"] <- list(sent$note)
-  }
   draft_row_model_save(connection, record$id, staff_id, rows$parent, rows$detail, expected_revision, new_revision)
   extraction_model_get(connection, record$id)
 }
 
 #' Save the reading job's progress.
 #'
-#' Only the reading's own columns, and only while the draft is still being read for the
-#' reading it was started for, so what the job and staff change at the same moment doesn't
+#' Only the reading's own columns (ai_extracted_draft), and only while the draft is still being
+#' read for the reading it was started for, so what the job and staff change at the same moment doesn't
 #' undo each other, and a job that was overtaken by a new PDF saves nothing.
 #'
 #' @param connection The MATR database, `list(url, key)`; see `model_database.R`.
@@ -178,7 +182,7 @@ extraction_model_save_reading <- function(connection, id, changes, reading_start
   if (length(not_its_own) > 0) stop("The reading job can't save ", paste(not_its_own, collapse = ", "), ".", call. = FALSE)
   columns <- unname(extraction_detail_columns[names(changes)])
   saved <- draft_row_model_update_detail(
-    connection, extracted_draft_table, id, stats::setNames(changes, columns),
+    connection, ai_extracted_draft_table, id, stats::setNames(changes, columns),
     where = list(reading_started = database_eq(reading_started))
   )
   !is.null(saved)
@@ -214,7 +218,7 @@ extraction_model_rows <- function(record, changed) {
 #'   the reading has since restarted).
 extraction_model_claim_reading <- function(connection, id, reading_started, now = Sys.time()) {
   claimed <- draft_row_model_update_detail(
-    connection, extracted_draft_table, id, list(reading_claimed_at = format_time(now)),
+    connection, ai_extracted_draft_table, id, list(reading_claimed_at = format_time(now)),
     where = list(reading_started = database_eq(reading_started), reading_claimed_at = "is.null")
   )
   !is.null(claimed)

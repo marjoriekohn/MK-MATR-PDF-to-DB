@@ -93,8 +93,9 @@ test_that("the kind of request is as staff chose it, and what an edit changes is
 
 test_that("the waiting requests come longest waiting first, edits and extractions together", {
   me <- local_staff()
-  later <- local_edit(me, status = "Awaiting Review", now = as.POSIXct("2026-10-03 10:00:00", tz = "UTC"))
-  earlier <- local_edit(me, status = "Awaiting Review", now = as.POSIXct("2026-10-02 10:00:00", tz = "UTC"))
+  # the database records when each was sent, so the one sent first has waited longest
+  earlier <- local_edit(me, status = "Awaiting Review")
+  later <- local_edit(me, status = "Awaiting Review")
   waiting <- change_request_service_waiting(test_connection)
   ours <- names(waiting)[names(waiting) %in% c(earlier$id, later$id)]
   expect_equal(ours, c(earlier$id, later$id))
