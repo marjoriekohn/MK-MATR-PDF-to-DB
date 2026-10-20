@@ -304,120 +304,120 @@ test_that("the request sends the PDF and then the prompt, and hides the key", {
 # ------ The job ------------------------------------------------------------------------
 # The watcher is given the drafts of the staff the test made only: the database holds other people's too, and it would
 # start (and stop) jobs for them.
-# my_drafts <- function(...) {
-#   who <- vapply(list(...), function(staff) staff$staff_id, numeric(1))
-#   Filter(function(record) record$prepared_by_id %in% who, extraction_service_get_all(test_connection))
-# }
+my_drafts <- function(...) {
+  who <- vapply(list(...), function(staff) staff$staff_id, numeric(1))
+  Filter(function(record) record$prepared_by_id %in% who, extraction_service_get_all(test_connection))
+}
 
-# test_that("the job saves what Gemini read and marks the draft ready", {
-#   me <- local_staff()
-#   local_pdf_cache()
-#   record <- extraction_service_create(test_connection, fake_upload(), me)
-#   seen <- character()
-#   read <- function(pdf_path, lookups, progress) {
-#     progress("sent")
-#     seen <<- extraction_model_get(test_connection, record$id)$extraction_status
-#     progress("received")
-#     list(json = gold_json(), model = "gemini-3.8-flash", prompt_version = "abc123")
-#   }
-#   reading_service_run(test_connection, record$id, record$reading_started, read = read)
-#
-#   saved <- extraction_model_get(test_connection, record$id)
-#   expect_equal(seen, "sent")
-#   expect_equal(saved$extraction_status, "ready")
-#   expect_equal(saved$prompt_version, "abc123")
-#   expect_equal(saved$model, "gemini-3.8-flash")
-#   expect_identical(draft_service_from_json(draft_model_get_record(test_connection, record$id)$original), gold_draft())
-#   expect_equal(nrow(extraction_service_load_draft(test_connection, saved)$components), nrow(gold_draft()$components))
-# })
+test_that("the job saves what Gemini read and marks the draft ready", {
+  me <- local_staff()
+  local_pdf_cache()
+  record <- extraction_service_create(test_connection, fake_upload(), me)
+  seen <- character()
+  read <- function(pdf_path, lookups, progress) {
+    progress("sent")
+    seen <<- extraction_model_get(test_connection, record$id)$extraction_status
+    progress("received")
+    list(json = gold_json(), model = "gemini-3.8-flash", prompt_version = "abc123")
+  }
+  reading_service_run(test_connection, record$id, record$reading_started, read = read)
 
-# test_that("the job reads the pick lists from the database for Gemini", {
-#   me <- local_staff()
-#   local_pdf_cache()
-#   record <- extraction_service_create(test_connection, fake_upload(), me)
-#   given <- NULL
-#   read <- function(pdf_path, lookups, progress) {
-#     given <<- lookups
-#     list(json = gold_json(), model = "m", prompt_version = "p")
-#   }
-#   subject <- local_row("subject", list(name = test_name("Subject")), "subject_id")
-#   reading_service_run(test_connection, record$id, record$reading_started, read = read)
-#   expect_true(subject$name %in% given$subjects)
-#   expect_true("Section" %in% given$component_types)
-# })
+  saved <- extraction_model_get(test_connection, record$id)
+  expect_equal(seen, "sent")
+  expect_equal(saved$extraction_status, "ready")
+  expect_equal(saved$prompt_version, "abc123")
+  expect_equal(saved$model, "gemini-3.8-flash")
+  expect_identical(draft_service_from_json(draft_model_get_record(test_connection, record$id)$original), gold_draft())
+  expect_equal(nrow(extraction_service_load_draft(test_connection, saved)$components), nrow(gold_draft()$components))
+})
 
-# test_that("a reading that fails says why", {
-#   me <- local_staff()
-#   local_pdf_cache()
-#   record <- extraction_service_create(test_connection, fake_upload(), me)
-#   read <- function(...) stop("Gemini is busy right now. Try reading again in a few minutes.")
-#   reading_service_run(test_connection, record$id, record$reading_started, read = read)
-#
-#   saved <- extraction_model_get(test_connection, record$id)
-#   expect_equal(saved$extraction_status, "failed")
-#   expect_equal(saved$error, "Gemini is busy right now. Try reading again in a few minutes.")
-# })
+test_that("the job reads the pick lists from the database for Gemini", {
+  me <- local_staff()
+  local_pdf_cache()
+  record <- extraction_service_create(test_connection, fake_upload(), me)
+  given <- NULL
+  read <- function(pdf_path, lookups, progress) {
+    given <<- lookups
+    list(json = gold_json(), model = "m", prompt_version = "p")
+  }
+  subject <- local_row("subject", list(name = test_name("Subject")), "subject_id")
+  reading_service_run(test_connection, record$id, record$reading_started, read = read)
+  expect_true(subject$name %in% given$subjects)
+  expect_true("Section" %in% given$component_types)
+})
 
-# test_that("a PDF that is no longer on this site fails the reading with a way forward", {
-#   me <- local_staff()
-#   local_pdf_cache()
-#   record <- extraction_service_create(test_connection, fake_upload(), me)
-#   unlink(record$pdf$path)
-#   reading_service_run(test_connection, record$id, record$reading_started, read = function(...) stop("not reached"))
-#
-#   saved <- extraction_model_get(test_connection, record$id)
-#   expect_equal(saved$extraction_status, "failed")
-#   expect_match(saved$error, "isn't on this site any more. Choose Replace PDF")
-# })
+test_that("a reading that fails says why", {
+  me <- local_staff()
+  local_pdf_cache()
+  record <- extraction_service_create(test_connection, fake_upload(), me)
+  read <- function(...) stop("Gemini is busy right now. Try reading again in a few minutes.")
+  reading_service_run(test_connection, record$id, record$reading_started, read = read)
 
-# test_that("a job whose reading was restarted saves nothing", {
-#   me <- local_staff()
-#   local_pdf_cache()
-#   record <- extraction_service_create(test_connection, fake_upload(), me, now = Sys.time() - 60)
-#   read <- function(pdf_path, lookups, progress) {
-#     extraction_service_retry(test_connection, record$id, me) # staff press Try reading again meanwhile
-#     list(json = gold_json(), model = "gemini-3.8-flash", prompt_version = "abc123")
-#   }
-#   reading_service_run(test_connection, record$id, record$reading_started, read = read)
-#
-#   saved <- extraction_model_get(test_connection, record$id)
-#   expect_equal(saved$extraction_status, "queued")
-#   expect_null(draft_model_get_record(test_connection, record$id)$original)
-# })
-#
-# test_that("a reading whose job has died is marked failed", {
-#   me <- local_staff()
-#   colleague <- local_staff()
-#   local_pdf_cache()
-#   record <- extraction_service_create(test_connection, fake_upload(), me)
-#   extraction_service_reading_update(test_connection, record$id, record$reading_started, list(
-#     extraction_status = "sent", reading_pid = 999999L, # no such process
-#     reading_claimed_at = format_time(Sys.time())
-#   ))
-#   withdrawn <- extraction_service_create(test_connection, fake_upload(), colleague, now = Sys.time() - 60)
-#   extraction_service_withdraw(test_connection, withdrawn$id, me)
-#
-#   still_reading <- reading_service_watch(my_drafts(me, colleague), test_connection)
-#   expect_true(still_reading)
-#   saved <- extraction_service_get_all(test_connection)
-#   expect_equal(saved[[record$id]]$extraction_status, "failed")
-#   expect_equal(saved[[record$id]]$error, "Reading stopped before it finished.")
-#   expect_equal(saved[[withdrawn$id]]$extraction_status, "queued") # discarded drafts are left alone
-# })
-#
-# test_that("a draft another copy of the site has claimed isn't started again", {
-#   me <- local_staff()
-#   colleague <- local_staff()
-#   withr::local_envvar(GEMINI_KEY = "") # a job started by mistake couldn't call Gemini
-#   local_pdf_cache()
-#   record <- extraction_service_create(test_connection, fake_upload(), me)
-#   extraction_model_claim_reading(test_connection, record$id, record$reading_started)
-#   extraction_service_reading_update(test_connection, record$id, record$reading_started, list(reading_pid = Sys.getpid()))
-#
-#   expect_true(reading_service_watch(my_drafts(me, colleague), test_connection))
-#   expect_null(reading_jobs[[record$id]])
-#   expect_equal(extraction_model_get(test_connection, record$id)$extraction_status, "queued")
-# })
+  saved <- extraction_model_get(test_connection, record$id)
+  expect_equal(saved$extraction_status, "failed")
+  expect_equal(saved$error, "Gemini is busy right now. Try reading again in a few minutes.")
+})
+
+test_that("a PDF that is no longer on this site fails the reading with a way forward", {
+  me <- local_staff()
+  local_pdf_cache()
+  record <- extraction_service_create(test_connection, fake_upload(), me)
+  unlink(record$pdf$path)
+  reading_service_run(test_connection, record$id, record$reading_started, read = function(...) stop("not reached"))
+
+  saved <- extraction_model_get(test_connection, record$id)
+  expect_equal(saved$extraction_status, "failed")
+  expect_match(saved$error, "isn't on this site any more. Choose Replace PDF")
+})
+
+test_that("a job whose reading was restarted saves nothing", {
+  me <- local_staff()
+  local_pdf_cache()
+  record <- extraction_service_create(test_connection, fake_upload(), me, now = Sys.time() - 60)
+  read <- function(pdf_path, lookups, progress) {
+    extraction_service_retry(test_connection, record$id, me) # staff press Try reading again meanwhile
+    list(json = gold_json(), model = "gemini-3.8-flash", prompt_version = "abc123")
+  }
+  reading_service_run(test_connection, record$id, record$reading_started, read = read)
+
+  saved <- extraction_model_get(test_connection, record$id)
+  expect_equal(saved$extraction_status, "queued")
+  expect_null(draft_model_get_record(test_connection, record$id)$original)
+})
+
+test_that("a reading whose job has died is marked failed", {
+  me <- local_staff()
+  colleague <- local_staff()
+  local_pdf_cache()
+  record <- extraction_service_create(test_connection, fake_upload(), me)
+  extraction_service_reading_update(test_connection, record$id, record$reading_started, list(
+    extraction_status = "sent", reading_pid = 999999L, # no such process
+    reading_claimed_at = format_time(Sys.time())
+  ))
+  withdrawn <- extraction_service_create(test_connection, fake_upload(), colleague, now = Sys.time() - 60)
+  extraction_service_withdraw(test_connection, withdrawn$id, me)
+
+  still_reading <- reading_service_watch(my_drafts(me, colleague), test_connection)
+  expect_true(still_reading)
+  saved <- extraction_service_get_all(test_connection)
+  expect_equal(saved[[record$id]]$extraction_status, "failed")
+  expect_equal(saved[[record$id]]$error, "Reading stopped before it finished.")
+  expect_equal(extraction_model_get(test_connection, withdrawn$id)$extraction_status, "queued") # discarded drafts are left alone
+})
+
+test_that("a draft another copy of the site has claimed isn't started again", {
+  me <- local_staff()
+  colleague <- local_staff()
+  withr::local_envvar(GEMINI_KEY = "") # a job started by mistake couldn't call Gemini
+  local_pdf_cache()
+  record <- extraction_service_create(test_connection, fake_upload(), me)
+  extraction_model_claim_reading(test_connection, record$id, record$reading_started)
+  extraction_service_reading_update(test_connection, record$id, record$reading_started, list(reading_pid = Sys.getpid()))
+
+  expect_true(reading_service_watch(my_drafts(me, colleague), test_connection))
+  expect_null(reading_jobs[[record$id]])
+  expect_equal(extraction_model_get(test_connection, record$id)$extraction_status, "queued")
+})
 
 test_that("a claimed draft whose job hasn't recorded its process yet gets a short grace", {
   claimed <- "2026-10-02T10:00:00Z"
@@ -428,18 +428,18 @@ test_that("a claimed draft whose job hasn't recorded its process yet gets a shor
   expect_false(job_is_lost(list(reading_pid = Sys.getpid(), reading_claimed_at = claimed)))
 })
 
-# test_that("a draft that loses the race to claim it isn't started by this site", {
-#   me <- local_staff()
-#   withr::local_envvar(GEMINI_KEY = "")
-#   local_pdf_cache()
-#   record <- extraction_service_create(test_connection, fake_upload(), me)
-#   # Another site claims it between this site reading the list and starting a job.
-#   stale <- my_drafts(me)
-#   extraction_model_claim_reading(test_connection, record$id, record$reading_started)
-#
-#   expect_true(reading_service_watch(stale, test_connection))
-#   expect_null(reading_jobs[[record$id]])
-# })
+test_that("a draft that loses the race to claim it isn't started by this site", {
+  me <- local_staff()
+  withr::local_envvar(GEMINI_KEY = "")
+  local_pdf_cache()
+  record <- extraction_service_create(test_connection, fake_upload(), me)
+  # Another site claims it between this site reading the list and starting a job.
+  stale <- my_drafts(me)
+  extraction_model_claim_reading(test_connection, record$id, record$reading_started)
+
+  expect_true(reading_service_watch(stale, test_connection))
+  expect_null(reading_jobs[[record$id]])
+})
 
 # ------ Gemini's other answers ---------------------------------------------------------
 test_that("the rest of Gemini's refusals, and an answer that stops early or says nothing, are sentences too", {
@@ -477,113 +477,113 @@ test_that("each prompt gets its own answer, in order, and a request that couldn'
 # ------ The jobs ------------------------------------------------------------------------
 # A job is an R process that reads one draft. These tests give the watcher a stand-in for the
 # process, so none is started; what it does to the database and to its list of jobs is real.
-# watch <- function(...) reading_service_watch(my_drafts(...), test_connection)
-#
-# local_jobs <- function(env = parent.frame()) {
-#   jobs <- new.env()
-#   jobs$started <- list()
-#   jobs$killed <- list()
-#   jobs$running <- TRUE
-#   local_stub("reading_model_start", function(connection, id, reading_started, log_path) {
-#     jobs$started[[length(jobs$started) + 1]] <- list(id = id, reading_started = reading_started, log_path = log_path)
-#     list(number = length(jobs$started))
-#   }, env = env)
-#   local_stub("reading_model_pid", function(process) 4000L + process$number, env = env)
-#   local_stub("reading_model_is_running", function(process) jobs$running, env = env)
-#   local_stub("reading_model_kill", function(process) jobs$killed[[length(jobs$killed) + 1]] <- process$number, env = env)
-#   withr::defer(rm(list = ls(reading_jobs), envir = reading_jobs), envir = env)
-#   jobs
-# }
-#
-# test_that("a draft waiting to be read gets a job, and the job's process id is kept with the draft", {
-#   me <- local_staff()
-#   local_pdf_cache()
-#   jobs <- local_jobs()
-#   record <- extraction_service_create(test_connection, fake_upload(), me)
-#
-#   expect_true(watch(me))
-#   expect_length(jobs$started, 1)
-#   expect_equal(jobs$started[[1]]$id, record$id)
-#   expect_equal(jobs$started[[1]]$reading_started, record$reading_started)
-#   expect_equal(jobs$started[[1]]$log_path, file.path("logs", paste0(record$id, ".log")))
-#   saved <- extraction_model_get(test_connection, record$id)
-#   expect_equal(saved$reading_pid, 4001L)
-#   expect_false(is.null(saved$reading_claimed_at))
-#   expect_equal(saved$extraction_status, "queued") # the job itself says when it has started
-#   expect_false(is.null(reading_jobs[[record$id]]))
-# })
-#
-# test_that("a draft whose job is running isn't started again", {
-#   me <- local_staff()
-#   local_pdf_cache()
-#   jobs <- local_jobs()
-#   extraction_service_create(test_connection, fake_upload(), me)
-#   expect_true(watch(me))
-#   expect_true(watch(me))
-#   expect_true(watch(me))
-#   expect_length(jobs$started, 1)
-# })
-#
-# test_that("a job that has stopped running marks its draft failed", {
-#   me <- local_staff()
-#   local_pdf_cache()
-#   jobs <- local_jobs()
-#   record <- extraction_service_create(test_connection, fake_upload(), me)
-#   watch(me)
-#   jobs$running <- FALSE
-#   watch(me)
-#   saved <- extraction_model_get(test_connection, record$id)
-#   expect_equal(saved$extraction_status, "failed")
-#   expect_equal(saved$error, "Reading stopped before it finished.")
-# })
-#
-# test_that("the job of a draft that was discarded is stopped, and forgotten", {
-#   me <- local_staff()
-#   local_pdf_cache()
-#   jobs <- local_jobs()
-#   record <- extraction_service_create(test_connection, fake_upload(), me)
-#   watch(me)
-#   extraction_service_withdraw(test_connection, record$id, me)
-#   expect_false(watch(me))
-#   expect_equal(jobs$killed, list(1L))
-#   expect_null(reading_jobs[[record$id]])
-# })
-#
-# test_that("a draft whose reading was started over has its old job stopped and a new one started", {
-#   me <- local_staff()
-#   local_pdf_cache()
-#   jobs <- local_jobs()
-#   record <- extraction_service_create(test_connection, fake_upload(), me, now = Sys.time() - 60)
-#   watch(me)
-#   extraction_service_retry(test_connection, record$id, me)
-#   expect_true(watch(me))
-#   expect_equal(jobs$killed, list(1L))
-#   expect_length(jobs$started, 2)
-#   expect_false(identical(jobs$started[[1]]$reading_started, jobs$started[[2]]$reading_started))
-#   expect_equal(extraction_model_get(test_connection, record$id)$reading_pid, 4002L)
-# })
-#
-# test_that("a draft whose reading has finished is no longer watched", {
-#   me <- local_staff()
-#   local_pdf_cache()
-#   jobs <- local_jobs()
-#   record <- extraction_service_create(test_connection, fake_upload(), me)
-#   watch(me)
-#   extraction_service_reading_update(test_connection, record$id, record$reading_started, list(extraction_status = "ready"))
-#   expect_false(watch(me))
-#   expect_null(reading_jobs[[record$id]])
-#   expect_length(jobs$killed, 0) # it finished by itself
-# })
-#
-# test_that("a job that can't be started is a failed reading with the reason, not a crash", {
-#   me <- local_staff()
-#   local_pdf_cache()
-#   jobs <- local_jobs()
-#   local_stub("reading_model_start", function(...) stop("couldn't find Rscript"))
-#   record <- extraction_service_create(test_connection, fake_upload(), me)
-#   expect_true(watch(me))
-#   saved <- extraction_model_get(test_connection, record$id)
-#   expect_equal(saved$extraction_status, "failed")
-#   expect_equal(saved$error, "couldn't find Rscript")
-#   expect_null(reading_jobs[[record$id]])
-# })
+watch <- function(...) reading_service_watch(my_drafts(...), test_connection)
+
+local_jobs <- function(env = parent.frame()) {
+  jobs <- new.env()
+  jobs$started <- list()
+  jobs$killed <- list()
+  jobs$running <- TRUE
+  local_stub("reading_model_start", function(connection, id, reading_started, log_path) {
+    jobs$started[[length(jobs$started) + 1]] <- list(id = id, reading_started = reading_started, log_path = log_path)
+    list(number = length(jobs$started))
+  }, env = env)
+  local_stub("reading_model_pid", function(process) 4000L + process$number, env = env)
+  local_stub("reading_model_is_running", function(process) jobs$running, env = env)
+  local_stub("reading_model_kill", function(process) jobs$killed[[length(jobs$killed) + 1]] <- process$number, env = env)
+  withr::defer(rm(list = ls(reading_jobs), envir = reading_jobs), envir = env)
+  jobs
+}
+
+test_that("a draft waiting to be read gets a job, and the job's process id is kept with the draft", {
+  me <- local_staff()
+  local_pdf_cache()
+  jobs <- local_jobs()
+  record <- extraction_service_create(test_connection, fake_upload(), me)
+
+  expect_true(watch(me))
+  expect_length(jobs$started, 1)
+  expect_equal(jobs$started[[1]]$id, record$id)
+  expect_equal(jobs$started[[1]]$reading_started, record$reading_started)
+  expect_equal(jobs$started[[1]]$log_path, file.path("logs", paste0(record$id, ".log")))
+  saved <- extraction_model_get(test_connection, record$id)
+  expect_equal(saved$reading_pid, 4001L)
+  expect_false(is.null(saved$reading_claimed_at))
+  expect_equal(saved$extraction_status, "queued") # the job itself says when it has started
+  expect_false(is.null(reading_jobs[[record$id]]))
+})
+
+test_that("a draft whose job is running isn't started again", {
+  me <- local_staff()
+  local_pdf_cache()
+  jobs <- local_jobs()
+  extraction_service_create(test_connection, fake_upload(), me)
+  expect_true(watch(me))
+  expect_true(watch(me))
+  expect_true(watch(me))
+  expect_length(jobs$started, 1)
+})
+
+test_that("a job that has stopped running marks its draft failed", {
+  me <- local_staff()
+  local_pdf_cache()
+  jobs <- local_jobs()
+  record <- extraction_service_create(test_connection, fake_upload(), me)
+  watch(me)
+  jobs$running <- FALSE
+  watch(me)
+  saved <- extraction_model_get(test_connection, record$id)
+  expect_equal(saved$extraction_status, "failed")
+  expect_equal(saved$error, "Reading stopped before it finished.")
+})
+
+test_that("the job of a draft that was discarded is stopped, and forgotten", {
+  me <- local_staff()
+  local_pdf_cache()
+  jobs <- local_jobs()
+  record <- extraction_service_create(test_connection, fake_upload(), me)
+  watch(me)
+  extraction_service_withdraw(test_connection, record$id, me)
+  expect_false(watch(me))
+  expect_equal(jobs$killed, list(1L))
+  expect_null(reading_jobs[[record$id]])
+})
+
+test_that("a draft whose reading was started over has its old job stopped and a new one started", {
+  me <- local_staff()
+  local_pdf_cache()
+  jobs <- local_jobs()
+  record <- extraction_service_create(test_connection, fake_upload(), me, now = Sys.time() - 60)
+  watch(me)
+  extraction_service_retry(test_connection, record$id, me)
+  expect_true(watch(me))
+  expect_equal(jobs$killed, list(1L))
+  expect_length(jobs$started, 2)
+  expect_false(identical(jobs$started[[1]]$reading_started, jobs$started[[2]]$reading_started))
+  expect_equal(extraction_model_get(test_connection, record$id)$reading_pid, 4002L)
+})
+
+test_that("a draft whose reading has finished is no longer watched", {
+  me <- local_staff()
+  local_pdf_cache()
+  jobs <- local_jobs()
+  record <- extraction_service_create(test_connection, fake_upload(), me)
+  watch(me)
+  extraction_service_reading_update(test_connection, record$id, record$reading_started, list(extraction_status = "ready"))
+  expect_false(watch(me))
+  expect_null(reading_jobs[[record$id]])
+  expect_length(jobs$killed, 0) # it finished by itself
+})
+
+test_that("a job that can't be started is a failed reading with the reason, not a crash", {
+  me <- local_staff()
+  local_pdf_cache()
+  jobs <- local_jobs()
+  local_stub("reading_model_start", function(...) stop("couldn't find Rscript"))
+  record <- extraction_service_create(test_connection, fake_upload(), me)
+  expect_true(watch(me))
+  saved <- extraction_model_get(test_connection, record$id)
+  expect_equal(saved$extraction_status, "failed")
+  expect_equal(saved$error, "couldn't find Rscript")
+  expect_null(reading_jobs[[record$id]])
+})

@@ -2,14 +2,17 @@
 # does goes through `state$change()`, which edit_extraction_state() stands in for. The tree is drawn again only when
 # the layout changes; the selected row and the problems are sent to the page script instead.
 
-outline_args <- function(page = edit_extraction_state()) list(state = page$state, lookups = page$lookups)
+# Every test gives the outline the gold questionnaire's first two parts (short_gold_draft()): the outline draws
+# every block it is given, again each time the layout changes, and all of the gold questionnaire's takes seconds.
+short_page <- function(draft = short_gold_draft()) edit_extraction_state(draft)
+outline_args <- function(page = short_page()) list(state = page$state, lookups = page$lookups)
 
 sections_of <- function(draft) draft$components$id[draft$components$component_type == "Section"]
 has_class <- function(html, class, id) grepl(sprintf('class="[^"]*%s[^"]*" [^>]*data-id="%s"', class, id), html)
 tree_html <- function(output) paste(output$tree$html, collapse = "")
 
 test_that("clicking a block selects it, and the selection is drawn the next time the tree is", {
-  page <- edit_extraction_state()
+  page <- short_page()
   shiny::testServer(extraction_outline_server, args = outline_args(page), {
     session$setInputs(action = list(action = "select", id = "c5"))
     expect_equal(page$selected(), "c5")
@@ -22,8 +25,8 @@ test_that("clicking a block selects it, and the selection is drawn the next time
 })
 
 test_that("sections open and close one at a time, or all at once", {
-  page <- edit_extraction_state()
-  sections <- sections_of(gold_draft())
+  page <- short_page()
+  sections <- sections_of(short_gold_draft())
   shiny::testServer(extraction_outline_server, args = outline_args(page), {
     expect_length(collapsed(), 0)
     session$setInputs(action = list(action = "toggle", id = "c1"))
@@ -40,8 +43,8 @@ test_that("sections open and close one at a time, or all at once", {
 })
 
 test_that("selecting a block inside a collapsed section opens the sections around it, and only those", {
-  page <- edit_extraction_state()
-  sections <- sections_of(gold_draft())
+  page <- short_page()
+  sections <- sections_of(short_gold_draft())
   shiny::testServer(extraction_outline_server, args = outline_args(page), {
     session$setInputs(action = list(action = "collapse_all"))
     session$setInputs(action = list(action = "select", id = "c3"))
@@ -51,7 +54,7 @@ test_that("selecting a block inside a collapsed section opens the sections aroun
 })
 
 test_that("every block's words are typed in its row, with the words of its kind offered", {
-  page <- edit_extraction_state()
+  page <- short_page()
   shiny::testServer(extraction_outline_server, args = outline_args(page), {
     html <- tree_html(output)
     expect_match(html, 'class="form-control form-control-sm outline-text"')
@@ -67,14 +70,14 @@ test_that("every block's words are typed in its row, with the words of its kind 
     number_field <- regmatches(html, regexpr('<input[^>]*data-field="printed_number" data-id="c3"[^>]*>', html))
     expect_match(number_field, 'placeholder="No."', fixed = TRUE)
     expect_match(number_field, 'value="1a"', fixed = TRUE) # read off the PDF
-    expect_equal(lengths(regmatches(html, gregexpr('data-field="printed_number"', html))), sum(gold_draft()$components$component_type == "Question"))
-    expect_equal(lengths(regmatches(html, gregexpr('data-action="check"', html))), nrow(gold_draft()$components))
-    expect_equal(lengths(regmatches(html, gregexpr('data-action="delete" data-table="components"', html))), nrow(gold_draft()$components))
+    expect_equal(lengths(regmatches(html, gregexpr('data-field="printed_number"', html))), sum(short_gold_draft()$components$component_type == "Question"))
+    expect_equal(lengths(regmatches(html, gregexpr('data-action="check"', html))), nrow(short_gold_draft()$components))
+    expect_equal(lengths(regmatches(html, gregexpr('data-action="delete" data-table="components"', html))), nrow(short_gold_draft()$components))
   })
 })
 
 test_that("typing in a field changes the draft and says it was typed; a pick or a tick isn't typed", {
-  page <- edit_extraction_state()
+  page <- short_page()
   shiny::testServer(extraction_outline_server, args = outline_args(page), {
     errors <- collect_errors(session)
     before <- tree_html(output)
@@ -89,16 +92,16 @@ test_that("typing in a field changes the draft and says it was typed; a pick or 
 })
 
 test_that("a change the draft refuses is a sentence, and nothing changes", {
-  page <- edit_extraction_state()
+  page <- short_page()
   shiny::testServer(extraction_outline_server, args = outline_args(page), {
     session$setInputs(edit = list(table = "components", id = "gone", field = "text", value = "x"))
     expect_equal(page$log$errors, "That's no longer in the draft.")
-    expect_identical(page$draft(), gold_draft())
+    expect_identical(page$draft(), short_gold_draft())
   })
 })
 
 test_that("a question's arrow opens its panel of variables; the question it follows is beside its words", {
-  page <- edit_extraction_state(draft_service_update(gold_draft(), "variables", "v1", "subject", "")) # who it's about not picked yet
+  page <- edit_extraction_state(draft_service_update(short_gold_draft(), "variables", "v1", "subject", "")) # who it's about not picked yet
   shiny::testServer(extraction_outline_server, args = outline_args(page), {
     html <- tree_html(output)
     expect_false(grepl("question-panel", html))
@@ -135,7 +138,7 @@ test_that("a question's arrow opens its panel of variables; the question it foll
 })
 
 test_that("marking a block as checked moves on to the next one in printed order, and unchecking stays put", {
-  page <- edit_extraction_state()
+  page <- short_page()
   shiny::testServer(extraction_outline_server, args = outline_args(page), {
     page$selected("c3")
     session$setInputs(action = list(action = "check", id = "c3"))
@@ -150,8 +153,8 @@ test_that("marking a block as checked moves on to the next one in printed order,
 })
 
 test_that("checking the last block in printed order has nowhere to move on to", {
-  page <- edit_extraction_state()
-  last <- utils::tail(draft_service_printed_order(gold_draft()), 1)
+  page <- short_page()
+  last <- utils::tail(draft_service_printed_order(short_gold_draft()), 1)
   shiny::testServer(extraction_outline_server, args = outline_args(page), {
     page$selected(last)
     session$setInputs(action = list(action = "check", id = last))
@@ -161,9 +164,9 @@ test_that("checking the last block in printed order has nowhere to move on to", 
 })
 
 test_that("a new block goes after the selected one and is selected, so its words can be typed", {
-  page <- edit_extraction_state()
-  before <- nrow(gold_draft()$components)
-  new_id <- draft_service_next_id(gold_draft(), "components")
+  page <- short_page()
+  before <- nrow(short_gold_draft()$components)
+  new_id <- draft_service_next_id(short_gold_draft(), "components")
   shiny::testServer(extraction_outline_server, args = outline_args(page), {
     session$setInputs(action = list(action = "select", id = "c5"))
     session$setInputs(action = list(action = "add_block", type = "Instruction"))
@@ -178,8 +181,8 @@ test_that("a new block goes after the selected one and is selected, so its words
 })
 
 test_that("with a section selected a new block goes inside it, unless the new block is a section too", {
-  page <- edit_extraction_state()
-  new_id <- draft_service_next_id(gold_draft(), "components")
+  page <- short_page()
+  new_id <- draft_service_next_id(short_gold_draft(), "components")
   shiny::testServer(extraction_outline_server, args = outline_args(page), {
     session$setInputs(action = list(action = "select", id = "c1"))
     session$setInputs(action = list(action = "add_block", type = "Instruction"))
@@ -195,7 +198,7 @@ test_that("with a section selected a new block goes inside it, unless the new bl
 })
 
 test_that("a question gets another variable (and its panel opens), and a variable another choice", {
-  page <- edit_extraction_state()
+  page <- short_page()
   boxes <- function() nrow(draft_service_children(page$draft(), "variables", "c3"))
   choices <- function() nrow(draft_service_children(page$draft(), "response_options", "v1"))
   shiny::testServer(extraction_outline_server, args = outline_args(page), {
@@ -212,7 +215,7 @@ test_that("a question gets another variable (and its panel opens), and a variabl
 })
 
 test_that("Apply to all copies a variable's codes to every variable with the same choices", {
-  page <- edit_extraction_state()
+  page <- short_page()
   shiny::testServer(extraction_outline_server, args = outline_args(page), {
     session$setInputs(edit = list(table = "response_options", id = "o1", field = "code_value", value = "1"))
     session$setInputs(edit = list(table = "response_options", id = "o2", field = "code_value", value = "0"))
@@ -227,7 +230,7 @@ test_that("Apply to all copies a variable's codes to every variable with the sam
 })
 
 test_that("deleting a block takes it out and clears its selection; deleting a variable keeps it", {
-  page <- edit_extraction_state()
+  page <- short_page()
   shiny::testServer(extraction_outline_server, args = outline_args(page), {
     page$selected("c3")
     suppressMessages(session$setInputs(action = list(action = "delete", table = "variables", id = "v1")))
@@ -245,8 +248,8 @@ test_that("deleting a block takes it out and clears its selection; deleting a va
 })
 
 test_that("dragging blocks into a new order is applied, with the top level as an empty section id", {
-  page <- edit_extraction_state()
-  draft <- gold_draft()
+  page <- short_page()
+  draft <- short_gold_draft()
   printed <- draft_service_printed_order(draft)
   parent_of <- function(ids) draft$components$parent_id[match(ids, draft$components$id)]
   swapped <- printed
@@ -268,7 +271,7 @@ test_that("dragging blocks into a new order is applied, with the top level as an
 })
 
 test_that("variables and choices dragged into a new order are reordered, and a stale list is refused", {
-  page <- edit_extraction_state()
+  page <- short_page()
   shiny::testServer(extraction_outline_server, args = outline_args(page), {
     session$setInputs(action = list(action = "add_box", id = "c3"))
     boxes <- draft_service_children(page$draft(), "variables", "c3")$id
@@ -284,7 +287,7 @@ test_that("variables and choices dragged into a new order are reordered, and a s
 })
 
 test_that("the menu for adding a block offers every kind the database has, and the toolbar counts what is to fix", {
-  draft <- draft_service_update(with_matr_ids(), "components", "c4", "text", "")
+  draft <- draft_service_update(with_matr_ids(short_gold_draft()), "components", "c4", "text", "")
   page <- edit_extraction_state(draft)
   shiny::testServer(extraction_outline_server, args = outline_args(page), {
     menu <- text_of(output$add_block_menu)
@@ -299,7 +302,7 @@ test_that("the menu for adding a block offers every kind the database has, and t
 })
 
 test_that("a field the checks find at fault is outlined, says why, and the marks follow the checks", {
-  draft <- draft_service_update(with_matr_ids(), "variables", "v1", "matr_id", "")
+  draft <- draft_service_update(with_matr_ids(short_gold_draft()), "variables", "v1", "matr_id", "")
   page <- edit_extraction_state(draft)
   shiny::testServer(extraction_outline_server, args = outline_args(page), {
     session$setInputs(action = list(action = "details", id = "c3"))
@@ -311,7 +314,7 @@ test_that("a field the checks find at fault is outlined, says why, and the marks
 })
 
 test_that("each MATR ID field offers the uploaded IDs no variable has yet", {
-  page <- edit_extraction_state(with_matr_ids())
+  page <- edit_extraction_state(with_matr_ids(short_gold_draft()))
   page$state$matr_ids <- function() c("x1", "x2")
   shiny::testServer(extraction_outline_server, args = outline_args(page), {
     html <- tree_html(output)
@@ -325,7 +328,7 @@ test_that("each MATR ID field offers the uploaded IDs no variable has yet", {
 })
 
 test_that("the words offered for a kind of block are those the Edit Extraction page shares", {
-  page <- edit_extraction_state()
+  page <- short_page()
   page$state$suggestions <- function() list(Section = c("Part A", "Part B"), Instruction = "Tick one.")
   shiny::testServer(extraction_outline_server, args = outline_args(page), {
     html <- tree_html(output)
@@ -339,7 +342,7 @@ test_that("the words offered for a kind of block are those the Edit Extraction p
 })
 
 test_that("editing a checked block takes its check off, and marking it as checked doesn't", {
-  page <- edit_extraction_state(with_checked(gold_draft(), c("c3", "c4")))
+  page <- edit_extraction_state(with_checked(short_gold_draft(), c("c3", "c4")))
   shiny::testServer(extraction_outline_server, args = outline_args(page), {
     session$setInputs(edit = list(table = "components", id = "c3", field = "text", value = "Do you worry a lot?"))
     expect_equal(checked_blocks(page$draft()), "c4")

@@ -5,10 +5,10 @@
 
 # The live tables as server.R shares them: `get()` reads them (here: the real database's) and
 # `refresh()` reads them again.
-# test_live_catalog <- function(connection = test_connection) {
-#   tables <- shiny::reactiveVal(questionnaire_service_get_catalog(connection))
-#   list(get = tables, refresh = function() tables(questionnaire_service_get_catalog(connection)))
-# }
+test_live_catalog <- function(connection = test_connection) {
+  tables <- shiny::reactiveVal(questionnaire_service_get_catalog(connection))
+  list(get = tables, refresh = function() tables(questionnaire_service_get_catalog(connection)))
+}
 
 # The same for a catalog that is given (the sample tables), for a page that never touches the database.
 fixed_catalog <- function(catalog = test_catalog()) {
@@ -23,16 +23,16 @@ fixed_extractions <- function(records = list()) {
 
 # The extraction drafts as server.R shares them: `all()` reads them from the database
 # again each time `changed()` has been called.
-# test_extractions <- function(connection = test_connection) {
-#   written <- shiny::reactiveVal(0L)
-#   list(
-#     all = shiny::reactive({
-#       written()
-#       extraction_service_get_all(connection)
-#     }),
-#     changed = function() written(written() + 1L)
-#   )
-# }
+test_extractions <- function(connection = test_connection) {
+  written <- shiny::reactiveVal(0L)
+  list(
+    all = shiny::reactive({
+      written()
+      extraction_service_get_all(connection)
+    }),
+    changed = function() written(written() + 1L)
+  )
+}
 
 # The text of a rendered output, a dialog or a notification: tags and extra spaces gone.
 text_of <- function(x) {
@@ -145,13 +145,13 @@ edit_extraction_state <- function(draft = gold_draft(), lookups = test_lookups()
 
 # server.R as a function that talks to `connection`: it is evaluated where R/'s functions
 # are (global.R's objects are in the environment above), with `database` replaced.
-# site_server <- function(connection = test_connection, env = parent.frame()) {
-#   support <- env
-#   while (!exists("staff_service_current", envir = support, inherits = FALSE)) support <- parent.env(support)
-#   scope <- new.env(parent = support)
-#   scope$database <- connection
-#   eval(parse(app_file("server.R"), keep.source = FALSE, encoding = "UTF-8"), scope)
-# }
+site_server <- function(connection = test_connection, env = parent.frame()) {
+  support <- env
+  while (!exists("staff_service_current", envir = support, inherits = FALSE)) support <- parent.env(support)
+  scope <- new.env(parent = support)
+  scope$database <- connection
+  eval(parse(app_file("server.R"), keep.source = FALSE, encoding = "UTF-8"), scope)
+}
 
 # Replaces one of the app's functions until the end of the test. The app's functions are in
 # an ordinary environment, not a package, so testthat's local_mocked_bindings() can't do it.

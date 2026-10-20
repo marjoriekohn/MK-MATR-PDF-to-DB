@@ -6,50 +6,50 @@ picked_info <- function(questionnaire_id = "1", wave_id = "2") {
   info
 }
 
-# test_that("an upload becomes a draft that starts reading straight away", {
-#   local_pdf_cache()
-#   me <- local_staff()
-#   record <- extraction_service_create(test_connection, fake_upload(), me, picked_info())
-#
-#   saved <- extraction_service_get_all(test_connection)[[record$id]]
-#   expect_equal(saved$status, "Draft")
-#   expect_equal(saved$method, extraction_ai)
-#   expect_equal(saved$prepared_by, me$name)
-#   expect_equal(saved$extraction_status, "queued")
-#   expect_equal(saved$pdf$pages, 2)
-#   expect_true(file.exists(saved$pdf$path))
-#   expect_equal(saved$info$wave_id, "2")
-#   expect_null(saved$error)
-#   expect_null(saved$reading_claimed_at)
-# })
+test_that("an upload becomes a draft that starts reading straight away", {
+  local_pdf_cache()
+  me <- local_staff()
+  record <- extraction_service_create(test_connection, fake_upload(), me, picked_info())
 
-# test_that("a file that isn't a PDF is turned away", {
-#   local_pdf_cache()
-#   me <- local_staff()
-#   not_pdf <- fake_upload("notes.pdf", text = "just some words")
-#   before <- names(extraction_service_get_all(test_connection))
-#   expect_error(extraction_service_create(test_connection, not_pdf, me), "notes.pdf isn't a PDF")
-#   expect_equal(names(extraction_service_get_all(test_connection)), before)
-# })
+  saved <- extraction_service_get_all(test_connection)[[record$id]]
+  expect_equal(saved$status, "Draft")
+  expect_equal(saved$method, extraction_ai)
+  expect_equal(saved$prepared_by, me$name)
+  expect_equal(saved$extraction_status, "queued")
+  expect_equal(saved$pdf$pages, 2)
+  expect_true(file.exists(saved$pdf$path))
+  expect_equal(saved$info$wave_id, "2")
+  expect_null(saved$error)
+  expect_null(saved$reading_claimed_at)
+})
 
-# test_that("a draft typed by hand starts empty, with no reading, and can have a PDF or not", {
-#   local_pdf_cache()
-#   me <- local_staff()
-#   without <- extraction_service_create_manual(test_connection, me, picked_info())
-#   expect_equal(without$method, extraction_manual)
-#   expect_equal(without$status, "Draft")
-#   expect_equal(without$prepared_by_id, me$staff_id)
-#   expect_null(without$extraction_status)
-#   expect_null(without$pdf$name)
-#   expect_true(extraction_service_is_read(without)) # nothing to wait for
-#   expect_identical(draft_service_load(test_connection, without$id), draft_service_empty())
-#
-#   with <- extraction_service_create_manual(test_connection, me, picked_info(), fake_upload("typed.pdf"))
-#   expect_equal(with$pdf$name, "typed.pdf")
-#   expect_equal(with$pdf$pages, 2)
-#   expect_true(file.exists(with$pdf$path))
-#   expect_error(extraction_service_create_manual(test_connection, me, picked_info(), fake_upload("notes.pdf", "words")), "isn't a PDF")
-# })
+test_that("a file that isn't a PDF is turned away", {
+  local_pdf_cache()
+  me <- local_staff()
+  not_pdf <- fake_upload("notes.pdf", text = "just some words")
+  before <- names(extraction_service_get_all(test_connection))
+  expect_error(extraction_service_create(test_connection, not_pdf, me), "notes.pdf isn't a PDF")
+  expect_equal(names(extraction_service_get_all(test_connection)), before)
+})
+
+test_that("a draft typed by hand starts empty, with no reading, and can have a PDF or not", {
+  local_pdf_cache()
+  me <- local_staff()
+  without <- extraction_service_create_manual(test_connection, me, picked_info())
+  expect_equal(without$method, extraction_manual)
+  expect_equal(without$status, "Draft")
+  expect_equal(without$prepared_by_id, me$staff_id)
+  expect_null(without$extraction_status)
+  expect_null(without$pdf$name)
+  expect_true(extraction_service_is_read(without)) # nothing to wait for
+  expect_identical(draft_service_load(test_connection, without$id), draft_service_empty())
+
+  with <- extraction_service_create_manual(test_connection, me, picked_info(), fake_upload("typed.pdf"))
+  expect_equal(with$pdf$name, "typed.pdf")
+  expect_equal(with$pdf$pages, 2)
+  expect_true(file.exists(with$pdf$path))
+  expect_error(extraction_service_create_manual(test_connection, me, picked_info(), fake_upload("notes.pdf", "words")), "isn't a PDF")
+})
 
 test_that("a draft is ready to review when it has been read, or was typed by hand", {
   expect_true(extraction_service_is_read(list(method = extraction_manual)))
@@ -58,90 +58,89 @@ test_that("a draft is ready to review when it has been read, or was typed by han
   expect_false(extraction_service_is_read(list(method = extraction_ai, extraction_status = "failed")))
 })
 
-# test_that("giving a draft typed by hand a PDF keeps it with the draft and doesn't start a reading; an AI draft starts again", {
-#   local_pdf_cache()
-#   me <- local_staff()
-#   manual <- extraction_service_create_manual(test_connection, me, picked_info())
-#   added <- extraction_service_replace_pdf(test_connection, manual$id, fake_upload("later.pdf"), me)
-#   expect_equal(added$pdf$name, "later.pdf")
-#   expect_null(added$extraction_status)
-#
-#   ai <- extraction_service_create(test_connection, fake_upload(), me, picked_info())
-#   extraction_service_reading_update(test_connection, ai$id, ai$reading_started, list(extraction_status = "failed", error = "Stopped"))
-#   replaced <- extraction_service_replace_pdf(test_connection, ai$id, fake_upload("again.pdf", "%PDF-1.4\n<< /Type /Page >>\n"), me)
-#   expect_equal(replaced$pdf$name, "again.pdf")
-#   expect_equal(replaced$extraction_status, "queued")
-#   expect_null(replaced$error)
-#   expect_false(identical(replaced$reading_started, ai$reading_started))
-# })
+test_that("giving a draft typed by hand a PDF keeps it with the draft and doesn't start a reading; an AI draft starts again", {
+  local_pdf_cache()
+  me <- local_staff()
+  manual <- extraction_service_create_manual(test_connection, me, picked_info())
+  added <- extraction_service_replace_pdf(test_connection, manual$id, fake_upload("later.pdf"), me)
+  expect_equal(added$pdf$name, "later.pdf")
+  expect_null(added$extraction_status)
 
-# test_that("discarding keeps the draft but takes it off the open list", {
-#   local_pdf_cache()
-#   me <- local_staff()
-#   record <- extraction_service_create(test_connection, fake_upload(), me)
-#   extraction_service_withdraw(test_connection, record$id, me)
-#
-#   records <- extraction_service_get_all(test_connection)
-#   expect_equal(records[[record$id]]$status, "Withdrawn")
-#   expect_false(record$id %in% names(extraction_service_open_drafts(records)))
-# })
+  ai <- extraction_service_create(test_connection, fake_upload(), me, picked_info())
+  extraction_service_reading_update(test_connection, ai$id, ai$reading_started, list(extraction_status = "failed", error = "Stopped"))
+  replaced <- extraction_service_replace_pdf(test_connection, ai$id, fake_upload("again.pdf", "%PDF-1.4\n<< /Type /Page >>\n"), me)
+  expect_equal(replaced$pdf$name, "again.pdf")
+  expect_equal(replaced$extraction_status, "queued")
+  expect_null(replaced$error)
+  expect_false(identical(replaced$reading_started, ai$reading_started))
+})
 
-# test_that("Mine lists only the drafts I started", {
-#   local_pdf_cache()
-#   me <- local_staff()
-#   colleague <- local_staff()
-#   extraction_service_create(test_connection, fake_upload(), me, now = Sys.time() - 60)
-#   extraction_service_create(test_connection, fake_upload(), colleague)
-#   records <- extraction_service_get_all(test_connection)
-#   ours <- Filter(function(record) record$prepared_by_id %in% c(me$staff_id, colleague$staff_id), records)
-#
-#   expect_length(extraction_service_open_drafts(ours), 2)
-#   mine <- extraction_service_open_drafts(ours, prepared_by_id = me$staff_id)
-#   expect_equal(unname(vapply(mine, function(record) record$prepared_by, character(1))), me$name)
-# })
+test_that("discarding keeps the draft but takes it off the open list", {
+  local_pdf_cache()
+  me <- local_staff()
+  record <- extraction_service_create(test_connection, fake_upload(), me)
+  extraction_service_withdraw(test_connection, record$id, me)
 
-# test_that("news from a reading that has since started again is ignored", {
-#   local_pdf_cache()
-#   me <- local_staff()
-#   record <- extraction_service_create(test_connection, fake_upload(), me)
-#   expect_false(extraction_service_reading_update(test_connection, record$id, "2026-01-01T00:00:00Z", list(extraction_status = "ready")))
-#   expect_equal(extraction_model_get(test_connection, record$id)$extraction_status, "queued")
-# })
+  expect_equal(extraction_model_get(test_connection, record$id)$status, "Withdrawn")
+  expect_false(record$id %in% names(extraction_service_get_all(test_connection))) # a list leaves it out
+})
 
-# test_that("a MATR ID CSV is kept with the draft", {
-#   me <- local_staff()
-#   record <- local_manual_extraction(me)
-#   csv <- fake_csv_upload(c("q1a", "q1b"), "ids.csv")
-#   saved <- extraction_service_add_matr_csv(test_connection, record$id, csv, me)
-#   expect_equal(saved$matr_csv, list(name = "ids.csv", text = "q1a\nq1b"))
-#   expect_equal(extraction_model_get(test_connection, record$id)$matr_csv$name, "ids.csv")
-# })
+test_that("Mine lists only the drafts I started", {
+  local_pdf_cache()
+  me <- local_staff()
+  colleague <- local_staff()
+  extraction_service_create(test_connection, fake_upload(), me, now = Sys.time() - 60)
+  extraction_service_create(test_connection, fake_upload(), colleague)
+  records <- extraction_service_get_all(test_connection)
+  ours <- Filter(function(record) record$prepared_by_id %in% c(me$staff_id, colleague$staff_id), records)
 
-# test_that("saving a reviewed copy keeps a record of what the reviewer changed, for an AI draft only", {
-#   me <- local_staff()
-#   ai <- local_read_extraction(me)
-#   base <- draft_service_load(test_connection, ai$id)
-#   edited <- draft_service_update(base, "components", block_numbered(base, "1a")$id, "text", "Would you describe yourself as nervous?")
-#   extraction_service_save_draft(test_connection, ai, edited, base, me, now = as.POSIXct("2026-10-05 09:00:00", tz = "UTC"))
-#   edits <- draft_model_get_record(test_connection, ai$id)$edits
-#   expect_length(edits, 1)
-#   expect_equal(edits[[1]]$before, "Would you call yourself a nervous person?")
-#   expect_equal(edits[[1]]$after, "Would you describe yourself as nervous?")
-#   expect_equal(edits[[1]]$by, me$staff_id)
-#   expect_equal(edits[[1]]$by_name, me$name)
-#   expect_equal(edits[[1]]$at, "2026-10-05T09:00:00Z")
-#   # the next save adds to the list; what the AI returned is still as it was
-#   again <- draft_service_update(edited, "components", block_numbered(base, "1b")$id, "text", "Do you worry?")
-#   extraction_service_save_draft(test_connection, ai, again, edited, me)
-#   expect_length(draft_model_get_record(test_connection, ai$id)$edits, 2)
-#   expect_identical(draft_service_from_json(draft_model_get_record(test_connection, ai$id)$original), gold_draft())
-#
-#   manual <- local_manual_extraction(me)
-#   typed <- draft_service_update(gold_draft(), "components", block_numbered(gold_draft(), "1a")$id, "text", "Typed by hand")
-#   extraction_service_save_draft(test_connection, manual, typed, gold_draft(), me)
-#   expect_equal(draft_model_get_record(test_connection, manual$id)$edits, list())
-#   expect_identical(draft_service_load(test_connection, manual$id), typed)
-# })
+  expect_length(extraction_service_open_drafts(ours), 2)
+  mine <- extraction_service_open_drafts(ours, prepared_by_id = me$staff_id)
+  expect_equal(unname(vapply(mine, function(record) record$prepared_by, character(1))), me$name)
+})
+
+test_that("news from a reading that has since started again is ignored", {
+  local_pdf_cache()
+  me <- local_staff()
+  record <- extraction_service_create(test_connection, fake_upload(), me)
+  expect_false(extraction_service_reading_update(test_connection, record$id, "2026-01-01T00:00:00Z", list(extraction_status = "ready")))
+  expect_equal(extraction_model_get(test_connection, record$id)$extraction_status, "queued")
+})
+
+test_that("a MATR ID CSV is kept with the draft", {
+  me <- local_staff()
+  record <- local_manual_extraction(me)
+  csv <- fake_csv_upload(c("q1a", "q1b"), "ids.csv")
+  saved <- extraction_service_add_matr_csv(test_connection, record$id, csv, me)
+  expect_equal(saved$matr_csv, list(name = "ids.csv", text = "q1a\nq1b"))
+  expect_equal(extraction_model_get(test_connection, record$id)$matr_csv$name, "ids.csv")
+})
+
+test_that("saving a reviewed copy keeps a record of what the reviewer changed, for an AI draft only", {
+  me <- local_staff()
+  ai <- local_read_extraction(me, json = gold_json())
+  base <- draft_service_load(test_connection, ai$id)
+  edited <- draft_service_update(base, "components", block_numbered(base, "1a")$id, "text", "Would you describe yourself as nervous?")
+  extraction_service_save_draft(test_connection, ai, edited, base, me, now = as.POSIXct("2026-10-05 09:00:00", tz = "UTC"))
+  edits <- draft_model_get_record(test_connection, ai$id)$edits
+  expect_length(edits, 1)
+  expect_equal(edits[[1]]$before, "Would you call yourself a nervous person?")
+  expect_equal(edits[[1]]$after, "Would you describe yourself as nervous?")
+  expect_equal(edits[[1]]$by, me$staff_id)
+  expect_equal(edits[[1]]$by_name, me$name)
+  expect_equal(edits[[1]]$at, "2026-10-05T09:00:00Z")
+  # the next save adds to the list; what the AI returned is still as it was
+  again <- draft_service_update(edited, "components", block_numbered(base, "1b")$id, "text", "Do you worry?")
+  extraction_service_save_draft(test_connection, ai, again, edited, me)
+  expect_length(draft_model_get_record(test_connection, ai$id)$edits, 2)
+  expect_identical(draft_service_from_json(draft_model_get_record(test_connection, ai$id)$original), gold_draft())
+
+  manual <- local_manual_extraction(me)
+  typed <- draft_service_update(gold_draft(), "components", block_numbered(gold_draft(), "1a")$id, "text", "Typed by hand")
+  extraction_service_save_draft(test_connection, manual, typed, gold_draft(), me)
+  expect_equal(draft_model_get_record(test_connection, manual$id)$edits, list())
+  expect_identical(draft_service_load(test_connection, manual$id), typed)
+})
 
 test_that("the drafts are read again every few seconds only while one this person started is being read", {
   me <- list(staff_id = 7, name = "Maggie", role = "STAFF")
@@ -274,28 +273,28 @@ test_that("MATR IDs are read from the CSV's ID column, with or without a heading
 })
 
 # ------ What a recorded questionnaire has already ----------------------------------------------------------
-# test_that("a new wave of a recorded questionnaire knows the blocks it prints and its questions' MATR IDs", {
-#   admin <- local_staff("ADMIN")
-#   tree <- local_tree()
-#   pushed <- local_pushed_questionnaire(admin, tree)
-#   record <- list(info = picked_basic_info(tree, pushed$questionnaire_id))
-#   recorded <- extraction_service_recorded(test_connection, record)
-#   expect_named(recorded, c("texts", "matr_ids"))
-#   expect_setequal(recorded$texts$text, pushed$draft$components$text)
-#   expect_setequal(recorded$texts$component_type, c("Section", "Instruction", "Question"))
-#   expect_equal(nrow(recorded$matr_ids), 2)
-#   expect_setequal(recorded$matr_ids$matr_id, pushed$draft$variables$matr_id)
-#   smoke <- recorded$matr_ids[recorded$matr_ids$matr_id == pushed$draft$variables$matr_id[1], ]
-#   expect_equal(smoke$text, paste(test_marker, "Do you smoke?"))
-#   expect_equal(smoke$display_order, 1)
-# })
+test_that("a new wave of a recorded questionnaire knows the blocks it prints and its questions' MATR IDs", {
+  admin <- local_staff("ADMIN")
+  tree <- local_tree()
+  pushed <- local_pushed_questionnaire(admin, tree)
+  record <- list(info = picked_basic_info(tree, pushed$questionnaire_id))
+  recorded <- extraction_service_recorded(test_connection, record)
+  expect_named(recorded, c("texts", "matr_ids"))
+  expect_setequal(recorded$texts$text, pushed$draft$components$text)
+  expect_setequal(recorded$texts$component_type, c("Section", "Instruction", "Question"))
+  expect_equal(nrow(recorded$matr_ids), 2)
+  expect_setequal(recorded$matr_ids$matr_id, pushed$draft$variables$matr_id)
+  smoke <- recorded$matr_ids[recorded$matr_ids$matr_id == pushed$draft$variables$matr_id[1], ]
+  expect_equal(smoke$text, paste(test_marker, "Do you smoke?"))
+  expect_equal(smoke$display_order, 1)
+})
 
-# test_that("a draft with no questionnaire picked has nothing recorded", {
-#   tree <- local_tree()
-#   blank <- extraction_service_recorded(test_connection, list(info = list(questionnaire_id = "")))
-#   expect_equal(nrow(blank$matr_ids), 0)
-#   # a recorded questionnaire with no blocks yet has nothing to offer either
-#   empty <- extraction_service_recorded(test_connection, list(info = picked_basic_info(tree)))
-#   expect_equal(nrow(empty$texts), 0)
-#   expect_equal(nrow(empty$matr_ids), 0)
-# })
+test_that("a draft with no questionnaire picked has nothing recorded", {
+  tree <- local_tree()
+  blank <- extraction_service_recorded(test_connection, list(info = list(questionnaire_id = "")))
+  expect_equal(nrow(blank$matr_ids), 0)
+  # a recorded questionnaire with no blocks yet has nothing to offer either
+  empty <- extraction_service_recorded(test_connection, list(info = picked_basic_info(tree)))
+  expect_equal(nrow(empty$texts), 0)
+  expect_equal(nrow(empty$matr_ids), 0)
+})

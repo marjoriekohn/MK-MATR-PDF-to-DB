@@ -47,47 +47,47 @@ test_that("a follow-up keeps the id of the question it follows, not its number",
   expect_equal(q8a$parent_question, "70")
 })
 
-# test_that("a draft opens as Gemini read it, then as staff last saved it", {
-#   me <- local_staff()
-#   record <- local_extraction(me)
-#   expect_error(draft_service_load(test_connection, record$id), "hasn't been read yet")
-#
-#   expect_true(draft_model_save_reading(test_connection, record$id, gold_json(), record$reading_started))
-#   expect_identical(draft_service_load(test_connection, record$id), gold_draft())
-#
-#   draft <- gold_draft()
-#   draft$components$checked[3] <- TRUE
-#   draft$response_options$code_value[1:2] <- c(1L, 0L)
-#   draft$variables$matr_id[1] <- "q1a"
-#   draft_service_save(test_connection, record$id, draft, me$staff_id)
-#   expect_identical(draft_service_load(test_connection, record$id), draft)
-#   saved <- extraction_model_get(test_connection, record$id)
-#   expect_equal(saved$saved_by_id, me$staff_id)
-#   expect_equal(saved$revision, 2)
-#   # what the AI returned is never touched by saving
-#   expect_identical(draft_service_from_json(draft_model_get_record(test_connection, record$id)$original), gold_draft())
-# })
+test_that("a draft opens as Gemini read it, then as staff last saved it", {
+  me <- local_staff()
+  record <- local_extraction(me)
+  expect_error(draft_service_load(test_connection, record$id), "hasn't been read yet")
 
-# test_that("a draft that isn't in the database is a sentence", {
-#   me <- local_staff()
-#   expect_error(draft_service_load(test_connection, "0"), "no longer in the database")
-#   expect_error(draft_service_save(test_connection, "0", gold_draft(), me$staff_id), "no longer in the database")
-# })
+  expect_true(draft_model_save_reading(test_connection, record$id, gold_json(), record$reading_started))
+  expect_identical(draft_service_load(test_connection, record$id), gold_draft())
 
-# test_that("a draft typed by hand starts empty and can be saved and opened again", {
-#   me <- local_staff()
-#   record <- local_manual_extraction(me)
-#   empty <- draft_service_load(test_connection, record$id)
-#   expect_equal(nrow(empty$components), 0)
-#   expect_equal(nrow(empty$variables), 0)
-#   expect_equal(nrow(empty$response_options), 0)
-#   expect_identical(empty, draft_service_empty())
-#
-#   typed <- gold_draft()
-#   draft_service_save(test_connection, record$id, typed, me$staff_id)
-#   expect_identical(draft_service_load(test_connection, record$id), typed)
-#   expect_equal(draft_model_get_record(test_connection, record$id)$edits, list()) # no record of an AI to compare with
-# })
+  draft <- gold_draft()
+  draft$components$checked[3] <- TRUE
+  draft$response_options$code_value[1:2] <- c(1L, 0L)
+  draft$variables$matr_id[1] <- "q1a"
+  draft_service_save(test_connection, record$id, draft, me$staff_id)
+  expect_identical(draft_service_load(test_connection, record$id), draft)
+  saved <- extraction_model_get(test_connection, record$id)
+  expect_equal(saved$saved_by_id, me$staff_id)
+  expect_equal(saved$revision, 2)
+  # what the AI returned is never touched by saving
+  expect_identical(draft_service_from_json(draft_model_get_record(test_connection, record$id)$original), gold_draft())
+})
+
+test_that("a draft that isn't in the database is a sentence", {
+  me <- local_staff()
+  expect_error(draft_service_load(test_connection, "0"), "no longer in the database")
+  expect_error(draft_service_save(test_connection, "0", gold_draft(), me$staff_id), "no longer in the database")
+})
+
+test_that("a draft typed by hand starts empty and can be saved and opened again", {
+  me <- local_staff()
+  record <- local_manual_extraction(me)
+  empty <- draft_service_load(test_connection, record$id)
+  expect_equal(nrow(empty$components), 0)
+  expect_equal(nrow(empty$variables), 0)
+  expect_equal(nrow(empty$response_options), 0)
+  expect_identical(empty, draft_service_empty())
+
+  typed <- gold_draft()
+  draft_service_save(test_connection, record$id, typed, me$staff_id)
+  expect_identical(draft_service_load(test_connection, record$id), typed)
+  expect_equal(draft_model_get_record(test_connection, record$id)$edits, list()) # no record of an AI to compare with
+})
 
 test_that("choices are coded 1, 2, 3... in each variable", {
   choices <- gold_draft()$response_options

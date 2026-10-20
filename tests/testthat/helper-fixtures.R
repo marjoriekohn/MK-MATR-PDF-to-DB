@@ -24,7 +24,17 @@ app_file <- function(...) test_path("..", "..", ...)
 # A table of the fixtures as the model reads it from the database: ids and numbers as numbers, flags as
 # logical, the rest as text, in the order the model asks for (see `table_model_get()`). One that isn't one
 # of the edit pages' tables is a plain read of the CSV.
-fixture_table <- function(table) {
+# The files don't change while the tests run, so each is read once and kept (R copies a value a test changes,
+# so a test can't change what the next one is given).
+fixture_cache <- new.env()
+cached_fixture <- function(name, read) {
+  if (!exists(name, envir = fixture_cache, inherits = FALSE)) assign(name, read(), envir = fixture_cache)
+  get(name, envir = fixture_cache, inherits = FALSE)
+}
+
+fixture_table <- function(table) cached_fixture(paste0("table:", table), function() read_fixture_table(table))
+
+read_fixture_table <- function(table) {
   rows <- utils::read.csv(fixture_path("tables", paste0(table, ".csv")), stringsAsFactors = FALSE, fileEncoding = "UTF-8")
   spec <- database_tables[[table]]
   if (is.null(spec)) {
@@ -73,11 +83,25 @@ test_lookups <- function() {
 }
 
 gold_json <- function() {
-  jsonlite::read_json(fixture_path("gna_gold.json"), simplifyVector = FALSE)
+  cached_fixture("gold_json", function() jsonlite::read_json(fixture_path("gna_gold.json"), simplifyVector = FALSE))
 }
 
 gold_draft <- function() {
-  draft_service_from_json(gold_json())
+  cached_fixture("gold_draft", function() draft_service_from_json(gold_json()))
+}
+
+# The gold questionnaire's first two parts (blocks c1 to c40, with their variables and choices), for the
+# tests of what is drawn: the page draws every block it is given, and drawing all 1,000 rows of the gold
+# questionnaire takes seconds each time. Its blocks, variables and choices have the same ids as in the gold
+# questionnaire, so a test can use either.
+short_gold_json <- function() {
+  json <- gold_json()
+  json$components <- json$components[1:2]
+  json
+}
+
+short_gold_draft <- function() {
+  cached_fixture("short_gold_draft", function() draft_service_from_json(short_gold_json()))
 }
 
 # The gold questionnaire with a MATR ID on every variable (m001, m002...), since a blank one is a

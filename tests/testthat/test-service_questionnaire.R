@@ -1,28 +1,28 @@
 # What the extraction pages know about the live tables: the catalog is read from the real database, and the
 # drop-down choices are made of it.
 
-# test_that("the catalog joins each study's investigator and each questionnaire's respondents and waves", {
-#   tree <- local_tree()
-#   local_wave(tree$questionnaire)
-#   catalog <- questionnaire_service_get_catalog(test_connection)
-#   expect_named(catalog, c("registries", "studies", "questionnaires", "waves", "respondent_types"))
-#
-#   study <- questionnaire_service_get_study(catalog, tree$study$study_id)
-#   expect_equal(study$principal_investigator, tree$investigator$name)
-#   questionnaire <- questionnaire_service_get(catalog, tree$questionnaire$questionnaire_id)
-#   expect_equal(questionnaire$respondent_type, tree$respondent_type$name)
-#   expect_equal(questionnaire$n_waves, 2)
-#   expect_true(tree$registry$name %in% catalog$registries$name)
-#   expect_true(tree$respondent_type$respondent_type_id %in% catalog$respondent_types$respondent_type_id)
-# })
-#
-# test_that("a catalog can be read again, and then has what was added", {
-#   before <- questionnaire_service_get_catalog(test_connection)
-#   tree <- local_tree()
-#   after <- questionnaire_service_get_catalog(test_connection)
-#   expect_false(tree$study$study_id %in% before$studies$study_id)
-#   expect_true(tree$study$study_id %in% after$studies$study_id)
-# })
+test_that("the catalog joins each study's investigator and each questionnaire's respondents and waves", {
+  tree <- local_tree()
+  local_wave(tree$questionnaire)
+  catalog <- questionnaire_service_get_catalog(test_connection)
+  expect_named(catalog, c("registries", "studies", "questionnaires", "waves", "respondent_types"))
+
+  study <- questionnaire_service_get_study(catalog, tree$study$study_id)
+  expect_equal(study$principal_investigator, tree$investigator$name)
+  questionnaire <- questionnaire_service_get(catalog, tree$questionnaire$questionnaire_id)
+  expect_equal(questionnaire$respondent_type, tree$respondent_type$name)
+  expect_equal(questionnaire$n_waves, 2)
+  expect_true(tree$registry$name %in% catalog$registries$name)
+  expect_true(tree$respondent_type$respondent_type_id %in% catalog$respondent_types$respondent_type_id)
+})
+
+test_that("a catalog can be read again, and then has what was added", {
+  before <- questionnaire_service_get_catalog(test_connection)
+  tree <- local_tree()
+  after <- questionnaire_service_get_catalog(test_connection)
+  expect_false(tree$study$study_id %in% before$studies$study_id)
+  expect_true(tree$study$study_id %in% after$studies$study_id)
+})
 
 test_that("a database with only registries in it still makes a catalog with empty lists", {
   empty <- function(columns) as.data.frame(stats::setNames(rep(list(logical()), length(columns)), columns))
