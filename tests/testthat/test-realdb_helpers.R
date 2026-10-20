@@ -1,24 +1,55 @@
-# # The helpers every test of the database relies on: the check that the database is the dev project (or one
-# # on this computer), and the rows they make and remove.
+test_that("the tests never reach the real database: its address and keys are swapped for the test project's", {
+  withr::defer(use_test_database()) # last, once the variables below are put back
+  withr::local_envvar(
+    SUPABASE_URL = "https://realproject.supabase.co", SUPABASE_SECRET_KEY = "sb_secret_real",
+    SUPABASE_PUBLISHABLE_KEY = "sb_publishable_real",
+    TEST_SUPABASE_URL = "https://testproject.supabase.co", TEST_SUPABASE_SECRET_KEY = "sb_secret_test",
+    TEST_SUPABASE_PUBLISHABLE_KEY = "sb_publishable_test"
+  )
+  had_database <- exists("database", envir = globalenv(), inherits = FALSE)
+  use_test_database()
+  expect_equal(Sys.getenv("SUPABASE_URL"), "https://testproject.supabase.co")
+  expect_equal(Sys.getenv("SUPABASE_SECRET_KEY"), "sb_secret_test")
+  expect_equal(Sys.getenv("SUPABASE_PUBLISHABLE_KEY"), "sb_publishable_test")
+  if (had_database) expect_equal(get("database", envir = globalenv()), list(url = "https://testproject.supabase.co", key = "sb_secret_test"))
+
+  # with no test project in .env, there is no database at all, not the real one
+  withr::local_envvar(TEST_SUPABASE_URL = NA, TEST_SUPABASE_SECRET_KEY = NA, TEST_SUPABASE_PUBLISHABLE_KEY = NA)
+  use_test_database()
+  expect_equal(Sys.getenv(c("SUPABASE_URL", "SUPABASE_SECRET_KEY", "SUPABASE_PUBLISHABLE_KEY"), names = FALSE), c("", "", ""))
+})
+
+test_that("while the tests run, the site's address isn't the real database's", {
+  expect_false(grepl("nvjyiaehomrysoprfuyl", Sys.getenv("SUPABASE_URL"), fixed = TRUE))
+  if (exists("database", envir = globalenv(), inherits = FALSE)) {
+    expect_false(grepl("nvjyiaehomrysoprfuyl", get("database", envir = globalenv())$url, fixed = TRUE))
+  }
+})
+
+# # The helpers every test of the database relies on: the check that the database is the test project (or
+# # one on this computer), and the rows they make and remove.
 #
-# test_that("only the dev project, or a database on this computer, is allowed", {
-#   expect_true(is_test_database(paste0("https://", dev_project_ref, ".supabase.co")))
-#   expect_true(is_test_database(paste0("https://", toupper(dev_project_ref), ".supabase.co/")))
+# test_that("only the test project, or a database on this computer, is allowed, and never the real one", {
+#   expect_true(is_test_database(paste0("https://", test_project_ref, ".supabase.co")))
+#   expect_true(is_test_database(paste0("https://", toupper(test_project_ref), ".supabase.co/")))
 #   expect_true(is_test_database("http://127.0.0.1:3000"))
 #   expect_true(is_test_database("http://localhost:54321/"))
+#   expect_false(is_test_database(paste0("https://", real_project_ref, ".supabase.co")))
 #   expect_false(is_test_database("https://someotherprojectref.supabase.co"))
 #   expect_false(is_test_database("http://localhost.example.com")) # a name that only starts like localhost
-#   expect_false(is_test_database(paste0("https://", dev_project_ref, ".supabase.co.example.com")))
+#   expect_false(is_test_database(paste0("https://", test_project_ref, ".supabase.co.example.com")))
 #   expect_false(is_test_database(""))
 # })
 #
 # test_that("a test refuses to run against another project, and says why", {
-#   withr::local_envvar(SUPABASE_URL = "https://someotherprojectref.supabase.co", SUPABASE_SECRET_KEY = "sb_secret_x")
-#   expect_error(test_database(), "Refusing to run: SUPABASE_URL is https://someotherprojectref.supabase.co")
+#   withr::local_envvar(TEST_SUPABASE_URL = "https://someotherprojectref.supabase.co", TEST_SUPABASE_SECRET_KEY = "sb_secret_x")
+#   expect_error(test_database(), "Refusing to run: TEST_SUPABASE_URL is https://someotherprojectref.supabase.co")
 #   expect_error(test_connection, "Refusing to run")
-#   withr::local_envvar(SUPABASE_URL = "", SUPABASE_SECRET_KEY = "")
-#   expect_error(test_database(), "run against the dev Supabase project")
-#   withr::local_envvar(SUPABASE_URL = "http://127.0.0.1:3000", SUPABASE_SECRET_KEY = "sb_secret_x")
+#   withr::local_envvar(TEST_SUPABASE_URL = paste0("https://", real_project_ref, ".supabase.co"))
+#   expect_error(test_database(), "Refusing to run")
+#   withr::local_envvar(TEST_SUPABASE_URL = "", TEST_SUPABASE_SECRET_KEY = "")
+#   expect_error(test_database(), "run against the test Supabase project")
+#   withr::local_envvar(TEST_SUPABASE_URL = "http://127.0.0.1:3000", TEST_SUPABASE_SECRET_KEY = "sb_secret_x")
 #   expect_equal(test_database(), list(url = "http://127.0.0.1:3000", key = "sb_secret_x"))
 # })
 #

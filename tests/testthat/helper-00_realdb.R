@@ -1,9 +1,38 @@
+# ------ Keeping the real database out of the tests -------------------------------------------------------
+# The tests only ever reach the test Supabase project. Its address and keys are in .env as
+# TEST_SUPABASE_URL, TEST_SUPABASE_SECRET_KEY and TEST_SUPABASE_PUBLISHABLE_KEY (named apart from the real
+# database's SUPABASE_URL and keys, since in .env the last of two same names wins). global.R has already
+# read .env by the time this runs, so SUPABASE_URL and its keys are the real database's, and `database`
+# talks to it. For the rest of the run they are the test project's instead (empty, when .env has none),
+# so nothing a test runs, the site's own code included, can reach the real database.
+test_env_names <- c(
+  SUPABASE_URL = "TEST_SUPABASE_URL",
+  SUPABASE_SECRET_KEY = "TEST_SUPABASE_SECRET_KEY",
+  SUPABASE_PUBLISHABLE_KEY = "TEST_SUPABASE_PUBLISHABLE_KEY"
+)
+
+#' Points SUPABASE_URL, its keys and global.R's `database` at the test project.
+#'
+#' Called once as the tests start, and again after anything that reads .env (sourcing global.R does).
+#'
+#' @return Nothing; called for its effect.
+use_test_database <- function() {
+  values <- Sys.getenv(unname(test_env_names), unset = "")
+  do.call(Sys.setenv, as.list(stats::setNames(values, names(test_env_names))))
+  if (exists("database", envir = globalenv(), inherits = FALSE)) {
+    assign("database", list(url = Sys.getenv("SUPABASE_URL"), key = Sys.getenv("SUPABASE_SECRET_KEY")), envir = globalenv())
+  }
+  invisible()
+}
+use_test_database()
+
 #' # ------ The database the tests use -----------------------------------------------------------------------
-#' # Everything that is about the database is tested against a real one: the dev Supabase project
-#' # (`dev_project_ref` below says which), or a copy on this computer. There is no stand-in. Only the
+#' # Everything that is about the database is tested against a real one: the test Supabase project
+#' # (`test_project_ref` below says which), or a copy on this computer. There is no stand-in. The real
+#' # database (`real_project_ref`) is never used. Only the
 #' # things that cost money or start processes (Gemini, the reading jobs) are replaced, with local_stub().
 #' #
-#' # The tests refuse to run if SUPABASE_URL is anything else, because they add rows and remove them.
+#' # The tests refuse to run if TEST_SUPABASE_URL is anything else, because they add rows and remove them.
 #' # Each test makes the rows it needs and removes them again when it ends, however it ends. Every row
 #' # has the run's marker in its name ("ZZTEST0712ab ..."), so it can't be mistaken for real data, and a
 #' # test never changes or deletes a row it didn't make. test-zz_leftovers.R, the last test to run, checks
@@ -24,27 +53,31 @@
 #'   file.path(folder, ...)
 #' }
 #'
-#' # The dev Supabase project's reference: the part of its address before .supabase.co. Production will be
-#' # another project, and the tests must never run against it.
-#' dev_project_ref <- "nvjyiaehomrysoprfuyl"
+#' # The Supabase projects' references: the part of their addresses before .supabase.co. The tests run
+#' # against the test project, and must never run against the real one, which MATR staff and clients use.
+#' test_project_ref <- "rqygcjgftmtatzrzcwcf"
+#' real_project_ref <- "nvjyiaehomrysoprfuyl"
 #'
-#' #' Whether an address is one the tests may write to: the dev project, or a database on this computer.
+#' #' Whether an address is one the tests may write to: the test project, or a database on this computer.
 #' #'
 #' #' @param url A Supabase address.
 #' #' @return `TRUE` or `FALSE`.
 #' is_test_database <- function(url) {
 #'   url <- tolower(trimws(url %||% ""))
-#'   grepl(sprintf("^https://%s\\.supabase\\.co/?$", dev_project_ref), url) ||
+#'   if (grepl(real_project_ref, url, fixed = TRUE)) {
+#'     return(FALSE)
+#'   }
+#'   grepl(sprintf("^https://%s\\.supabase\\.co/?$", test_project_ref), url) ||
 #'     grepl("^https?://(127\\.0\\.0\\.1|localhost)(:[0-9]+)?/?$", url)
 #' }
 #'
 #' test_database <- function() {
-#'   url <- Sys.getenv("SUPABASE_URL")
-#'   key <- Sys.getenv("SUPABASE_SECRET_KEY")
+#'   url <- Sys.getenv("TEST_SUPABASE_URL")
+#'   key <- Sys.getenv("TEST_SUPABASE_SECRET_KEY")
 #'   if (!nzchar(url) || !nzchar(key)) {
 #'     stop(
-#'       "These tests run against the dev Supabase project. Put its SUPABASE_URL and SUPABASE_SECRET_KEY ",
-#'       "in the .env file (docs/testing.md).",
+#'       "These tests run against the test Supabase project. Put its TEST_SUPABASE_URL and ",
+#'       "TEST_SUPABASE_SECRET_KEY in the .env file.",
 #'       call. = FALSE
 #'     )
 #'   }
@@ -52,10 +85,10 @@
 #'     stop(
 #'       sprintf(
 #'         paste0(
-#'           "Refusing to run: SUPABASE_URL is %s, which is neither the dev project (https://%s.supabase.co) nor a ",
-#'           "database on this computer. The tests add rows to the database and remove them again."
+#'           "Refusing to run: TEST_SUPABASE_URL is %s, which is neither the test project (https://%s.supabase.co) ",
+#'           "nor a database on this computer. The tests add rows to the database and remove them again."
 #'         ),
-#'         url, dev_project_ref
+#'         url, test_project_ref
 #'       ),
 #'       call. = FALSE
 #'     )

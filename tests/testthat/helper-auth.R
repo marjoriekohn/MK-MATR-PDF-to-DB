@@ -1,9 +1,9 @@
 #' # ------ Sign-in accounts for the tests -----------------------------------------------------------------
-#' # Signing in is tested against the dev project's Supabase Auth, with a throwaway account made through the
+#' # Signing in is tested against the test project's Supabase Auth, with a throwaway account made through the
 #' # admin API (the secret key) and removed when the test ends. The site signs people in with an emailed
 #' # link, which no test can open, so the account is given a password and test_sign_in() turns it into the
-#' # tokens a link would bring back. The publishable key has to be in .env; without it these tests are
-#' # skipped.
+#' # tokens a link would bring back. The test project's publishable key (TEST_SUPABASE_PUBLISHABLE_KEY) has
+#' # to be in .env; without it these tests are skipped.
 #'
 #' skip_without_auth <- function() {
 #'   testthat::skip_if(!nzchar(Sys.getenv("SUPABASE_PUBLISHABLE_KEY")), "SUPABASE_PUBLISHABLE_KEY isn't set, so signing in can't be tried")

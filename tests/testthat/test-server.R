@@ -151,6 +151,7 @@
 
 test_that("the site is drawn with the login screen over it, and the menu's place in the top right", {
   withr::local_dir(app_file())
+  withr::defer(use_test_database()) # global.R reads .env, which names the real database
   env <- shiny::loadSupport()
   source("global.R", local = env)
   rendered <- htmltools::renderTags(eval(parse("ui.R", keep.source = FALSE, encoding = "UTF-8"), env))
