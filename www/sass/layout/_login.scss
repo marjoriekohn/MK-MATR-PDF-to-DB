@@ -38,10 +38,11 @@
 .login-button {
   margin-top: 0.25rem;
   .spinner-border { margin-right: 0.35rem; vertical-align: -0.15em; }
+  & + & { margin-top: 0.6rem; }
 }
-// While a link is on its way, or the one it brought back is signing in (www/js/site.js): the button
-// can't be pressed again.
-.login-card.is-busy .login-button:disabled { opacity: 0.85; }
+.login-hint { margin: -0.4rem 0 0.9rem; color: $vcu-gray; font-size: 0.85rem; }
+// While a button's request is on its way (www/js/site.js): none of the buttons can be pressed again.
+.is-busy .login-button:disabled { opacity: 0.85; }
 .login-message:empty { display: none; }
 .login-note {
   margin: 1rem 0 0;

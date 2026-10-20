@@ -1,8 +1,8 @@
 # ------ Sign-in accounts for the tests -----------------------------------------------------------------
 # Signing in is tested against the test project's Supabase Auth, with a throwaway account made through the
-# admin API (the secret key) and removed when the test ends. The site signs people in with an emailed
-# link, which no test can open, so the account is given a password and test_sign_in() turns it into the
-# tokens a link would bring back. The test project's publishable key (TEST_SUPABASE_PUBLISHABLE_KEY) has
+# admin API (the secret key) and removed when the test ends. An emailed sign-in link can't be opened by a
+# test, so the account is given a password and test_sign_in() turns it into the tokens a link would bring
+# back. The test project's publishable key (TEST_SUPABASE_PUBLISHABLE_KEY) has
 # to be in .env; without it these tests are skipped.
 
 # The test project's publishable key. Read from TEST_SUPABASE_PUBLISHABLE_KEY itself, not SUPABASE_PUBLISHABLE_KEY:
@@ -35,14 +35,9 @@ local_auth_user <- function(email = sprintf("%s-auth-%d@example.test", tolower(t
 
 #' The tokens of a throwaway account, as a sign-in link would bring them back.
 #'
-#' Auth's password grant, which only the tests use: the site itself has no passwords.
-#'
 #' @param account From `local_auth_user()`.
 #' @return A list: `access_token` and `refresh_token`.
 test_sign_in <- function(account) {
-  body <- auth_request(test_auth(), "token") |>
-    httr2::req_url_query(grant_type = "password") |>
-    httr2::req_body_json(list(email = account$email, password = account$password), auto_unbox = TRUE) |>
-    auth_perform()
+  body <- auth_model_sign_in(test_auth(), account$email, account$password)
   list(access_token = body$access_token, refresh_token = body$refresh_token)
 }

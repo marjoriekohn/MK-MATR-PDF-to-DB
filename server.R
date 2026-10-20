@@ -1,13 +1,14 @@
 function(input, output, session) {
   # ------ SIGNING IN ---------------------------------------------------------
-  # Nothing is built until a staff member has signed in: they type their email,
-  # Supabase Auth emails them a sign-in link, and the link brings them back with
-  # their tokens (R/model_auth.R and R/service_staff.R). The login screen
-  # (R/helpers_login.R) covers the site until then. While developing,
-  # STAFF_EMAIL in .env signs the site in as that staff member with no link.
+  # Nothing is built until a staff member has signed in: they type their email
+  # and password, or have Supabase Auth email them a sign-in link that brings
+  # them back with their tokens (R/model_auth.R and R/service_staff.R). The
+  # login screen (R/helpers_login.R) covers the site until then. While
+  # developing, STAFF_EMAIL in .env signs the site in as that staff member with
+  # no password or link.
   auth <- auth_model_connection()
   tokens <- NULL
-  # the sign-in's tokens, kept in this session only, for signing out
+  # the sign-in's tokens, kept in this session only, for signing out and changing the password
 
   start_site <- function(me, signed_in_tokens = NULL, development = FALSE) {
     if (!is.null(isolate(signed_in()))) return(invisible()) # already signed in this session
@@ -18,10 +19,18 @@ function(input, output, session) {
     build_site(me)
   }
 
-  # What the login screen says under the button. The box is hidden while it's
-  # empty (helpers_login.R's styles), so it has to render while hidden, or
-  # nothing would ever show. Saying something also ends the "Sending..." the
-  # page script showed when the button was pressed (www/js/site.js).
+  # However they signed in (a password, a link, or a reload): the browser keeps the refresh token, and
+  # the site opens.
+  signed_in_as <- function(result) {
+    session$sendCustomMessage("auth-keep", result$tokens$refresh_token)
+    start_site(result$me, result$tokens)
+  }
+
+  # What the login screen and the password dialog say under their buttons. The
+  # boxes are hidden while they're empty (helpers_login.R's styles), so they
+  # have to render while hidden, or nothing would ever show. Saying something
+  # also ends the "Signing in..." the page script showed when a button was
+  # pressed (www/js/site.js).
   login_said <- reactiveVal(NULL)
   output$login_message <- renderUI({
     said <- login_said()
@@ -32,15 +41,36 @@ function(input, output, session) {
     login_said(list(text = text, kind = kind))
     session$sendCustomMessage("login-ready", TRUE)
   }
+  password_said <- reactiveVal(NULL)
+  output$password_message <- renderUI({
+    said <- password_said()
+    if (!is.null(said)) login_message(said)
+  })
+  outputOptions(output, "password_message", suspendWhenHidden = FALSE)
 
-  # The button: Auth emails a sign-in link to the address typed, if it is a
-  # staff member's.
-  observeEvent(input$login_submit, {
+  # Sign in: the email and password typed, if the email is a staff member's.
+  observeEvent(input$login_sign_in, {
+    result <- tryCatch(
+      staff_service_sign_in(database, auth, input$login_email, input$login_password),
+      error = function(problem) {
+        say(conditionMessage(problem))
+        NULL
+      }
+    )
+    if (!is.null(result)) signed_in_as(result)
+  })
+
+  # Or Auth emails a sign-in link to the address typed, if it is a staff
+  # member's.
+  observeEvent(input$login_send_link, {
     here <- site_address(session)
     tryCatch(
       {
         staff_service_send_link(database, auth, input$login_email, here)
-        say(paste0("A sign-in link is on its way to ", trimws(input$login_email), ". Open it on this computer."), kind = "note")
+        say(paste0(
+          "A sign-in link is on its way to ", trimws(input$login_email),
+          ". Open it on this computer; if it hasn't come in a few minutes, look in your spam folder."
+        ), kind = "note")
       },
       error = function(problem) say(conditionMessage(problem))
     )
@@ -55,10 +85,7 @@ function(input, output, session) {
         NULL
       }
     )
-    if (!is.null(result)) {
-      session$sendCustomMessage("auth-keep", input$auth_tokens$refresh_token)
-      start_site(result$me, result$tokens)
-    }
+    if (!is.null(result)) signed_in_as(result)
   })
 
   # A reload: the browser kept the sign-in's refresh token (www/js/site.js). Auth swaps it for new
@@ -69,14 +96,36 @@ function(input, output, session) {
       session$sendCustomMessage("auth-forget", TRUE)
       say("Your sign-in has ended. Sign in again.", kind = "note")
     } else {
-      session$sendCustomMessage("auth-keep", result$tokens$refresh_token)
-      start_site(result$me, result$tokens)
+      signed_in_as(result)
     }
   })
 
   # A link that Supabase turned down (already used, or expired) says why instead of failing silently.
   observeEvent(input$auth_problem, {
     say(paste0("That sign-in link didn't work (", input$auth_problem, "). Request a new one."))
+  })
+
+  # Setting or changing the password, from the menu.
+  observeEvent(input$change_password, {
+    password_said(NULL)
+    showModal(password_dialog())
+  })
+  observeEvent(input$password_change_submit, {
+    changed <- tryCatch(
+      {
+        staff_service_change_password(auth, tokens, input$new_password, input$new_password_again)
+        TRUE
+      },
+      error = function(problem) {
+        password_said(conditionMessage(problem))
+        session$sendCustomMessage("login-ready", TRUE)
+        FALSE
+      }
+    )
+    if (!changed) return()
+    password_said(NULL)
+    removeModal()
+    showNotification("Your password is saved.", type = "message", duration = 4)
   })
 
   # Logging out ends the sign-in at Auth and starts the session again, at the
@@ -251,8 +300,8 @@ function(input, output, session) {
   }
 
   # ------ START --------------------------------------------------------------
-  # A development sign-in (STAFF_EMAIL) needs no link. Otherwise the login
-  # screen waits.
+  # A development sign-in (STAFF_EMAIL) needs no password or link. Otherwise
+  # the login screen waits.
   development_email <- trimws(Sys.getenv("STAFF_EMAIL"))
   if (nzchar(development_email)) {
     me <- tryCatch(staff_service_current(database, development_email), error = function(problem) problem)

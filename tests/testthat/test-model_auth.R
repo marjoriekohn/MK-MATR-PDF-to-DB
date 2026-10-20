@@ -15,6 +15,22 @@ test_that("a token says who it is, and signing out is quiet", {
   expect_invisible(auth_model_sign_out(test_auth(), signed$access_token))
 })
 
+test_that("a wrong password is a sentence that offers a sign-in link instead", {
+  skip_without_auth()
+  account <- local_auth_user()
+  expect_error(auth_model_sign_in(test_auth(), account$email, "not-the-password"), "don't match.*sign-in link")
+})
+
+test_that("a signed-in person can set their own password, and sign in with it", {
+  skip_without_auth()
+  account <- local_auth_user()
+  signed <- test_sign_in(account)
+  expect_error(auth_model_set_password(test_auth(), signed$access_token, account$password), "different from the one you have now")
+  account$password <- test_password()
+  auth_model_set_password(test_auth(), signed$access_token, account$password)
+  expect_true(nzchar(test_sign_in(account)$access_token))
+})
+
 test_that("a sign-in link is only sent to an email that has an account", {
   skip_without_auth()
   expect_error(
@@ -49,5 +65,14 @@ test_that("what Auth says is turned into a sentence, in either of the ways it sa
   expect_match(auth_problem(reply(422, '{"error":"otp_disabled","error_description":"Signups not allowed for otp"}')), no_account)
   expect_match(auth_problem(reply(429, '{"error_code":"over_email_send_rate_limit","msg":"email rate limit exceeded"}')), "Wait a minute")
   expect_match(auth_problem(reply(401, '{"msg":"invalid JWT"}')), "isn't valid any more \\(invalid JWT\\)")
+  expect_match(auth_problem(reply(400, '{"error_code":"invalid_credentials","msg":"Invalid login credentials"}')), "don't match")
+  expect_match(auth_problem(reply(400, '{"error":"invalid_grant","error_description":"Invalid login credentials"}')), "don't match")
+  expect_match(
+    auth_problem(reply(422, '{"error_code":"weak_password","msg":"Password should be at least 6 characters."}')),
+    "^Choose a stronger password: Password should be at least 6"
+  )
+  expect_match(auth_problem(reply(422, '{"error_code":"same_password","msg":"New password should be different"}')), "different from")
+  expect_match(auth_problem(reply(401, '{"error_code":"reauthentication_needed","msg":"Reauthentication needed"}')), "sign in again")
+  expect_match(auth_problem(reply(429, '{"error_code":"over_request_rate_limit","msg":"Request rate limit reached"}')), "Too many sign-in")
   expect_match(auth_problem(reply(500, "not json")), "^The sign-in service had a problem \\(500\\)")
 })

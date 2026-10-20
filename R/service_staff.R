@@ -1,7 +1,7 @@
 # ------ Who is using the site ------------------------------------------------------
-# Staff sign in with a link emailed to their Supabase Auth account (model_auth.R); the email
-# of that account has to be the email of an active row in the staff table, which says who they
-# are for the site and their role. The rest of the site gets `me`, list(staff_id, name, role,
+# Staff sign in to their Supabase Auth account (model_auth.R) with its password or with an
+# emailed link; the email of that account has to be the email of an active row in the staff
+# table, which says who they are for the site and their role. The rest of the site gets `me`, list(staff_id, name, role,
 # email).
 #
 # While developing, STAFF_EMAIL (in .env) signs the site in as that staff member without a
@@ -61,10 +61,12 @@ staff_service_current <- function(connection, email = Sys.getenv("STAFF_EMAIL"))
 #'
 #' @param connection The MATR database, `list(url, key)`; see `model_database.R`.
 #' @param auth The Auth connection, `list(url, key)`; see `auth_model_connection()`.
-#' @param tokens A list with `access_token` and, if there is one, `refresh_token`: from a sign-in link, or from swapping a kept refresh token on a reload (`auth_model_refresh()`).
+#' @param tokens A list with `access_token` and, if there is one, `refresh_token`: from a sign-in link,
+#'   a password (`staff_service_sign_in()`), or from swapping a kept refresh token on a reload
+#'   (`auth_model_refresh()`).
 #' @return A list: `me` (`list(staff_id, name, role, email)`) and `tokens` (`access_token`,
-#'   `refresh_token`), which the session keeps for signing out. An error with a sentence if the token
-#'   isn't good or the person isn't an active staff member.
+#'   `refresh_token`), which the session keeps for signing out and changing the password. An error
+#'   with a sentence if the token isn't good or the person isn't an active staff member.
 staff_service_from_tokens <- function(connection, auth, tokens) {
   access_token <- tokens$access_token %||% ""
   if (!nzchar(access_token)) stop("The sign-in link didn't bring a sign-in with it. Ask for another.", call. = FALSE)
@@ -106,6 +108,48 @@ staff_service_send_link <- function(connection, auth, email, redirect_to) {
   if (!has_text(email)) stop("Type your email.", call. = FALSE)
   me <- staff_service_for_email(connection, email)
   auth_model_send_link(auth, me$email, redirect_to)
+  invisible()
+}
+
+#' Sign in with an email and password.
+#'
+#' As with a sign-in link, the email has to be a staff member's before Auth is asked.
+#'
+#' @inheritParams staff_service_from_tokens
+#' @param email The email typed.
+#' @param password The password typed.
+#' @return As `staff_service_from_tokens()`. An error with a sentence if either is missing, the email
+#'   isn't an active staff member's, or Auth turned the password down.
+staff_service_sign_in <- function(connection, auth, email, password) {
+  if (!has_text(email)) stop("Type your email.", call. = FALSE)
+  if (!nzchar(password %||% "")) stop("Type your password, or have a sign-in link emailed to you.", call. = FALSE)
+  me <- staff_service_for_email(connection, email)
+  signed <- auth_model_sign_in(auth, me$email, password)
+  staff_service_from_tokens(connection, auth, signed)
+}
+
+# The shortest password the site takes. Auth's own rules (Authentication, Providers, Email) apply too.
+password_min_length <- 8L
+
+#' Set or change the password.
+#'
+#' For the person signed in with `tokens`: someone who has only signed in with a link sets their first
+#' password this way.
+#'
+#' @param auth The Auth connection, `list(url, key)`; see `auth_model_connection()`.
+#' @param tokens The session's tokens, from signing in.
+#' @param password The new password.
+#' @param again The new password typed a second time.
+#' @return Called for its effect. An error with a sentence if the two don't match, the password is too
+#'   short, or Auth turned it down.
+staff_service_change_password <- function(auth, tokens, password, again) {
+  password <- password %||% ""
+  if (is.null(tokens$access_token)) stop("A development sign-in has no password to change.", call. = FALSE)
+  if (nchar(password) < password_min_length) {
+    stop(sprintf("Choose a password at least %d characters long.", password_min_length), call. = FALSE)
+  }
+  if (!identical(password, again %||% "")) stop("The two passwords don't match. Type them again.", call. = FALSE)
+  auth_model_set_password(auth, tokens$access_token, password)
   invisible()
 }
 

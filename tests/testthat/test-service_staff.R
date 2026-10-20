@@ -103,6 +103,46 @@ test_that("a sign-in link is only asked for a staff member's email, so Auth neve
   expect_error(staff_service_send_link(test_connection, unreachable, me$email, here), "Couldn't reach the sign-in service")
 })
 
+test_that("a password is only tried for a staff member's email, so Auth never hears of anyone else", {
+  unreachable <- list(url = "http://127.0.0.1:1", key = "sb_publishable_x")
+  expect_error(staff_service_sign_in(test_connection, unreachable, "", "secret-1"), "Type your email")
+  expect_error(staff_service_sign_in(test_connection, unreachable, "a@b.c", ""), "Type your password, or have a sign-in link")
+  expect_error(staff_service_sign_in(test_connection, unreachable, "zztest-nobody@example.test", "secret-1"), "no staff member")
+  me <- local_staff()
+  expect_error(staff_service_sign_in(test_connection, unreachable, me$email, "secret-1"), "Couldn't reach the sign-in service")
+})
+
+test_that("a staff member signs in with their password, whatever the case of the email they type", {
+  skip_without_auth()
+  me <- local_staff()
+  account <- local_auth_user(email = me$email)
+  signed <- staff_service_sign_in(test_connection, test_auth(), toupper(me$email), account$password)
+  expect_equal(signed$me$staff_id, me$staff_id)
+  expect_error(staff_service_sign_in(test_connection, test_auth(), me$email, "not-the-password"), "don't match")
+})
+
+test_that("a signed-in person sets a password, which has to be long enough, typed twice the same, and new", {
+  skip_without_auth()
+  me <- local_staff()
+  account <- local_auth_user(email = me$email)
+  signed <- staff_service_from_tokens(test_connection, test_auth(), test_sign_in(account))
+  change <- function(password, again = password) {
+    staff_service_change_password(test_auth(), signed$tokens, password, again)
+  }
+  expect_error(change("short"), "at least 8 characters")
+  expect_error(change("long-enough-1", "long-enough-2"), "don't match")
+  expect_error(change(account$password), "different from the one you have now")
+  own <- test_password()
+  expect_invisible(change(own))
+  expect_equal(staff_service_sign_in(test_connection, test_auth(), me$email, own)$me$staff_id, me$staff_id)
+  expect_error(staff_service_sign_in(test_connection, test_auth(), me$email, account$password), "don't match")
+})
+
+test_that("a development sign-in has no password to change", {
+  unreachable <- list(url = "http://127.0.0.1:1", key = "sb_publishable_x")
+  expect_error(staff_service_change_password(unreachable, NULL, "long-enough-1", "long-enough-1"), "development sign-in")
+})
+
 test_that("signing out with no tokens, or with tokens Auth has forgotten, is quiet", {
   expect_invisible(staff_service_sign_out(list(url = "http://127.0.0.1:1", key = "x"), NULL))
   expect_invisible(staff_service_sign_out(list(url = "http://127.0.0.1:1", key = "x"), list(access_token = "gone")))

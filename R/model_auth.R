@@ -1,6 +1,7 @@
 # ------ Signing in: Supabase Auth ---------------------------------------------------------
-# Staff sign in with a link emailed to the address of their Supabase Auth account (the project's
-# Authentication section): there are no passwords. The site talks to Auth's REST API
+# Staff sign in to their Supabase Auth account (the project's Authentication section) with its
+# password, or with a link emailed to its address; once signed in they can set or change the
+# password from the menu. The site talks to Auth's REST API
 # (`{SUPABASE_URL}/auth/v1/...`) with the publishable key, which is meant to be public. Who a
 # signed-in user is for the site (their staff row and role) is decided in service_staff.R; this
 # only talks to Auth. Errors are sentences staff can act on.
@@ -39,6 +40,20 @@ auth_model_send_link <- function(auth, email, redirect_to) {
   invisible()
 }
 
+#' Sign in with an email and password.
+#'
+#' @param auth The Auth connection, `list(url, key)`; see `auth_model_connection()`.
+#' @param email The email.
+#' @param password The password.
+#' @return A list with `access_token` and `refresh_token`, as a sign-in link brings back. An error with
+#'   a sentence if Auth refused.
+auth_model_sign_in <- function(auth, email, password) {
+  auth_request(auth, "token") |>
+    httr2::req_url_query(grant_type = "password") |>
+    httr2::req_body_json(list(email = email, password = password), auto_unbox = TRUE) |>
+    auth_perform()
+}
+
 #' Who a token belongs to.
 #'
 #' Asks Auth, so a token that was made up, has expired or was revoked is turned down.
@@ -51,6 +66,25 @@ auth_model_user <- function(auth, access_token) {
     httr2::req_headers(Authorization = paste("Bearer", access_token), .redact = "Authorization") |>
     auth_perform()
   list(id = user$id, email = user$email)
+}
+
+#' Change the signed-in person's password.
+#'
+#' If the project asks for a recent sign-in before a password is changed (Authentication, Providers,
+#' Email, Secure password change), a sign-in more than a day old is turned down; signing in again fixes it.
+#'
+#' @param auth The Auth connection, `list(url, key)`; see `auth_model_connection()`.
+#' @param access_token The access token.
+#' @param password The new password.
+#' @return Called for its effect. An error with a sentence if Auth refused (a password that is too weak
+#'   or the same as before, for instance).
+auth_model_set_password <- function(auth, access_token, password) {
+  auth_request(auth, "user") |>
+    httr2::req_method("PUT") |>
+    httr2::req_headers(Authorization = paste("Bearer", access_token), .redact = "Authorization") |>
+    httr2::req_body_json(list(password = password), auto_unbox = TRUE) |>
+    auth_perform()
+  invisible()
 }
 
 #' Swap a refresh token for new tokens.
@@ -149,8 +183,23 @@ auth_problem <- function(response) {
   if (identical(code, "otp_disabled") || grepl("signups not allowed|otp_disabled", said, ignore.case = TRUE)) {
     return("There's no sign-in for this email. Ask an administrator to invite you.")
   }
-  if (identical(code, "over_email_send_rate_limit") || grepl("rate limit", said, ignore.case = TRUE)) {
+  if (identical(code, "over_email_send_rate_limit") || grepl("email rate limit", said, ignore.case = TRUE)) {
     return("Too many sign-in emails were asked for. Wait a minute and try again.")
+  }
+  if (identical(code, "over_request_rate_limit") || grepl("rate limit", said, ignore.case = TRUE)) {
+    return("Too many sign-in attempts. Wait a few minutes and try again.")
+  }
+  if (identical(code, "invalid_credentials") || grepl("invalid login credentials", said, ignore.case = TRUE)) {
+    return("That email and password don't match. Try again, or have a sign-in link emailed to you.")
+  }
+  if (identical(code, "weak_password")) {
+    return(if (nzchar(said)) paste0("Choose a stronger password: ", said) else "Choose a stronger password.")
+  }
+  if (identical(code, "same_password")) {
+    return("Choose a password different from the one you have now.")
+  }
+  if (identical(code, "reauthentication_needed")) {
+    return("Your sign-in is too old to change the password. Log out, sign in again, and change it then.")
   }
   if (status %in% c(401, 403)) {
     return(if (nzchar(said)) paste0("The sign-in isn't valid any more (", said, "). Sign in again.") else "The sign-in isn't valid any more. Sign in again.")

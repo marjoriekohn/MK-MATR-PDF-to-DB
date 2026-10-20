@@ -3,9 +3,10 @@
 //   * a sign-in link brings the person back with their tokens after # in the address; they are
 //     handed to the server (input `auth_tokens`) and taken out of the address, so they are never
 //     bookmarked or sent on
-//   * while a link is being sent, or the one that brought the person back is signing them in, the
-//     button says so and can't be pressed again
-//   * Enter in the email box presses the button
+//   * while a button's request is on its way (signing in, sending a link, saving a password), or the
+//     link that brought the person back is signing them in, the button says so (its
+//     data-busy-label) and none of the buttons beside it can be pressed
+//   * Enter moves from the email to the password, and in the last box presses the button
 //   * the sign-in’s refresh token is kept in this tab (sessionStorage), so a reload signs the person back in; logging out forgets it.
 
 (function () {
@@ -25,39 +26,41 @@
     return tokens;
   }
 
-  // While the server sends a link, or signs someone in, the button says so and can't be pressed
-  // again. The server's `login-ready` message ends it when it has something to say (a problem, or that
-  // the link was sent); a sign-in that works takes the whole login screen away instead.
-  function showBusy(label) {
-    const button = document.getElementById('login_submit');
-    const card = document.querySelector('.login-card');
-    if (!button || !card) return;
+  // While a button's request is on its way the button says so, and the buttons beside it (in the same
+  // card or dialog) can't be pressed. The server's `login-ready` message ends it when it has something
+  // to say (a problem, or that the link was sent); a sign-in that works takes the whole screen away
+  // instead.
+  function besideOf(button) { return button.closest('.login-card, .modal-content'); }
+
+  function showBusy(button) {
+    const card = button && besideOf(button);
+    if (!card) return;
     card.classList.add('is-busy');
     card.setAttribute('aria-busy', 'true');
-    const message = document.getElementById('login_message');
-    if (message) message.innerHTML = '';
+    card.querySelectorAll('.login-message').forEach(function (message) { message.innerHTML = ''; });
+    card.querySelectorAll('.login-button').forEach(function (each) { each.disabled = true; });
     if (!button.dataset.label) button.dataset.label = button.innerHTML;
-    button.innerHTML = '<span class="spinner-border spinner-border-sm" aria-hidden="true"></span> ' + label;
-    button.disabled = true;
+    button.innerHTML = '<span class="spinner-border spinner-border-sm" aria-hidden="true"></span> ' + button.dataset.busyLabel;
   }
 
   function showReady() {
-    const button = document.getElementById('login_submit');
-    const card = document.querySelector('.login-card');
-    if (!button || !card) return;
-    card.classList.remove('is-busy');
-    card.removeAttribute('aria-busy');
-    if (button.dataset.label) button.innerHTML = button.dataset.label;
-    button.disabled = false;
+    document.querySelectorAll('.is-busy').forEach(function (card) {
+      card.classList.remove('is-busy');
+      card.removeAttribute('aria-busy');
+      card.querySelectorAll('.login-button').forEach(function (button) {
+        if (button.dataset.label) button.innerHTML = button.dataset.label;
+        button.disabled = false;
+      });
+    });
   }
 
   // Bubbling to the document, so Shiny's own handler on the button has already counted the press.
   document.addEventListener('click', function (event) {
-    const button = event.target.closest && event.target.closest('#login_submit');
+    const button = event.target.closest && event.target.closest('.login-button[data-busy-label]');
     if (!button) return;
-    const card = document.querySelector('.login-card');
+    const card = besideOf(button);
     if (card && card.classList.contains('is-busy')) return;
-    showBusy('Sending a sign-in link…');
+    showBusy(button);
   });
 
    // A link that didn't work comes back with #error=...&error_description=... instead of tokens.
@@ -80,7 +83,7 @@
   function register() {
     const tokens = tokensInAddress();
     if (tokens) {
-      showBusy('Signing in…');
+      showBusy(document.getElementById('login_sign_in'));
       Shiny.setInputValue('auth_tokens', tokens, { priority: 'event' });
       return;
     }
@@ -91,7 +94,7 @@
     }
     const refresh = kept();
     if (refresh) {
-      showBusy('Signing in…');
+      showBusy(document.getElementById('login_sign_in'));
       Shiny.setInputValue('auth_resume', refresh, { priority: 'event' });
     }
   }
@@ -109,14 +112,27 @@
     if (event.target.closest && event.target.closest('#log_out')) forget();
   });
 
-    // Enter in the email box presses the button.
+  // Enter in a box moves to the next one while that is empty, or else presses the button.
+  const nextOf = {
+    login_email: 'login_password',
+    new_password: 'new_password_again'
+  };
+  const buttonOf = {
+    login_email: 'login_sign_in',
+    login_password: 'login_sign_in',
+    new_password: 'password_change_submit',
+    new_password_again: 'password_change_submit'
+  };
   document.addEventListener('keydown', function (event) {
-    if (event.key !== 'Enter' || event.target.id !== 'login_email') return;
+    const id = event.target.id;
+    if (event.key !== 'Enter' || !buttonOf[id]) return;
     event.preventDefault();
+    const next = nextOf[id] && document.getElementById(nextOf[id]);
+    if (next && !next.value) { next.focus(); return; }
     // Shiny waits a moment after typing before sending a box's value; a change sends it now, so the
-    // link doesn't go to a half-typed address.
+    // button doesn't go with a half-typed one.
     event.target.dispatchEvent(new Event('change', { bubbles: true }));
-    const button = document.getElementById('login_submit');
+    const button = document.getElementById(buttonOf[id]);
     if (button) button.click();
   });
 })();

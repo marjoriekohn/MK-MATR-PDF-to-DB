@@ -37,18 +37,47 @@ test_that("a STAFF_EMAIL that names nobody, or someone inactive, leaves the logi
   })
 })
 
-test_that("without a development sign-in the site waits at the login screen, and asking for a link needs a staff member's email", {
+test_that("without a development sign-in the site waits at the login screen, and a password or a link needs a staff member's email", {
   seen <- local_browser()
   withr::local_envvar(STAFF_EMAIL = "")
   shiny::testServer(site_server(), {
     expect_null(signed_in())
     expect_null(session_state()$site)
-    session$setInputs(login_email = "", login_submit = 1)
+    session$setInputs(login_email = "", login_send_link = 1)
     expect_match(text_of(output$login_message), "Type your email")
-    session$setInputs(login_email = "zztest-nobody@example.test", login_submit = 2)
+    session$setInputs(login_email = "zztest-nobody@example.test", login_send_link = 2)
+    expect_match(text_of(output$login_message), "no staff member")
+    session$setInputs(login_email = "zztest-nobody@example.test", login_password = "", login_sign_in = 1)
+    expect_match(text_of(output$login_message), "Type your password")
+    session$setInputs(login_password = "secret-password", login_sign_in = 2)
     expect_match(text_of(output$login_message), "no staff member")
     expect_null(signed_in())
   })
+})
+
+test_that("a staff member's password signs them in, and a wrong one says so", {
+  skip_without_auth()
+  me <- local_staff()
+  account <- local_auth_user(email = me$email)
+  own <- test_password()
+  seen <- local_browser()
+  withr::local_envvar(STAFF_EMAIL = "")
+  shiny::testServer(site_server(), {
+    session$setInputs(login_email = me$email, login_password = "not-the-password", login_sign_in = 1)
+    expect_null(signed_in())
+    expect_match(text_of(output$login_message), "don't match")
+    session$setInputs(login_password = account$password, login_sign_in = 2)
+    expect_equal(signed_in()$staff_id, me$staff_id)
+    expect_true(nzchar(session_state()$tokens$access_token))
+    expect_match(text_of(output$navbar_user), "Set or change password")
+    session$setInputs(change_password = 1)
+    expect_match(seen$modals[[1]], "Set your password")
+    session$setInputs(new_password = own, new_password_again = own, password_change_submit = 1)
+    expect_equal(seen$closed, 1L)
+    expect_match(notice_texts(seen), "password is saved", all = FALSE)
+  })
+  account$password <- own
+  expect_true(nzchar(test_sign_in(account)$access_token))
 })
 
 test_that("the tokens a sign-in link brings back sign the person in, the login screen goes, and logging out ends the sign-in", {
