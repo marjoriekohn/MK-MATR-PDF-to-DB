@@ -15,7 +15,7 @@ knitr::opts_chunk$set(
 
 <!-- badges: start -->
 
-[![R-CMD-check](https://github.com/vcu-cara/MATR-PDF-to-DB/actions/workflows/R-CMD-check.yaml/badge.svg)](https://github.com/vcu-cara/MATR-PDF-to-DB/actions/workflows/R-CMD-check.yaml)
+[![R-CMD-check](https://github.com/vcu-cara/MATR-PDF-to-DB/actions/workflows/tests.yaml/badge.svg)](https://github.com/vcu-cara/MATR-PDF-to-DB/actions/workflows/tests.yaml)
 [![coverage](https://github.com/vcu-cara/MATR-PDF-to-DB/blob/badges/coverage.svg?raw=true)](https://github.com/vcu-cara/MATR-PDF-to-DB/actions/workflows/coverage.yaml)
 
 <!-- badges: end -->
