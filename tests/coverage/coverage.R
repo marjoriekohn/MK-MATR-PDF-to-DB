@@ -1,19 +1,18 @@
 # How much of the site's code the unit tests run. From the project folder:
 #   Rscript tests/coverage/coverage.R
-# GitHub runs it on every push to main (.github/workflows/coverage.yaml) and puts the overall number
-# in the README's coverage badge. It needs the `covr` package, which the site itself doesn't (so it
-# isn't in renv.lock): install.packages("covr"). It is in tests/coverage/ and not tests/ because
-# shiny::runTests() runs every script directly in tests/.
+#
+# GitHub runs this script through .github/workflows/tests.yaml on pushes to main/master and on pull requests.
+# It needs the `covr` package: install.packages("covr").
+# It is in tests/coverage/ and not tests/ because shiny::runTests() runs every script directly in tests/.
 #
 # covr measures a package; this is an app, so the files are given to it directly: global.R
 # and everything in R/ are the code, and the helpers and tests in tests/testthat/ are what
 # runs it. The numbers are for lines of code that were run at least once. They say nothing
 # about whether the tests check the right things; they show what no test has run at all.
 # (server.R and ui.R aren't in the count: they are evaluated by the tests, not sourced.)
-# The tests that need the database are commented out, so the model_ files count as barely run.
 #
-# A test that fails doesn't stop the count: it is listed, and the numbers are still given. (The
-# tests workflow is the one that says whether they pass.)
+# Test failures do not interrupt coverage measurement.
+# After generating the coverage report and badge, the script exits with an error if any tests failed.
 #
 # Set COVERAGE_BADGE to a file name to have the badge drawn there as an SVG, e.g.
 #   COVERAGE_BADGE=coverage.svg Rscript tests/coverage/coverage.R
@@ -41,10 +40,12 @@ code <- c("global.R", sort(list.files("R", pattern = "\\.R$", full.names = TRUE)
 runner <- tempfile("run_tests_", fileext = ".R")
 writeLines(c(
   "assign('.test_results', testthat::test_dir(",
-  "  'tests/testthat', env = environment(), reporter = testthat::SummaryReporter$new(),",
+  "  'tests/testthat', env = environment(),",
+  "  reporter = testthat::SummaryReporter$new(),",
   "  stop_on_failure = FALSE, stop_on_warning = FALSE",
   "), envir = globalenv())"
 ), runner)
+
 coverage <- covr::file_coverage(code, runner)
 
 results <- as.data.frame(.test_results)
@@ -124,4 +125,11 @@ if (nzchar(summary_file)) {
     rows(by_file[c("filename", "lines", "run", "percent")], "File"),
     file = summary_file, sep = "\n", append = TRUE
   )
+}
+
+if (failed > 0) {
+  stop(sprintf(
+    "%d test(s) failed or encountered an error.",
+    failed
+  ), call. = FALSE)
 }

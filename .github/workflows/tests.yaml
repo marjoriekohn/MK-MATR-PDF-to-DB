@@ -1,13 +1,18 @@
-# Workflow derived from https://github.com/r-lib/actions/tree/v2/examples
-# Need help debugging build failures? Start at https://github.com/r-lib/actions#where-to-find-help
+name: tests
+
 on:
   push:
     branches: [main, master]
   pull_request:
+  workflow_dispatch:
 
-name: tests
+permissions:
+  contents: write
 
-permissions: read-all
+# Only one test run at a time across this workflow.
+concurrency:
+  group: supabase-tests
+  cancel-in-progress: false
 
 jobs:
   test:
@@ -17,8 +22,6 @@ jobs:
       GITHUB_PAT: ${{ secrets.GITHUB_TOKEN }}
       MY_API_KEY: ${{ secrets.MY_API_KEY }}
 
-      # The test Supabase project for the tests of the database.
-      # Without these secrets those tests can't reach a database.
       TEST_SUPABASE_URL: ${{ secrets.TEST_SUPABASE_URL }}
       TEST_SUPABASE_SECRET_KEY: ${{ secrets.TEST_SUPABASE_SECRET_KEY }}
       TEST_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.TEST_SUPABASE_PUBLISHABLE_KEY }}
@@ -33,6 +36,43 @@ jobs:
 
       - uses: r-lib/actions/setup-renv@v2
 
-      - name: Run tests
-        run: shiny::runTests(".", filter = "^testthat\\.R$")
+      - name: Install covr
+        run: install.packages("covr")
         shell: Rscript {0}
+
+      # This script runs tests with coverage enabled.
+      - name: Run tests and measure coverage
+        run: Rscript tests/coverage/coverage.R
+        env:
+          COVERAGE_BADGE: ${{ runner.temp }}/coverage.svg
+
+      - name: Put badge on badges branch
+        if: >-
+          github.event_name != 'pull_request' &&
+          (github.ref == 'refs/heads/main' ||
+           github.ref == 'refs/heads/master')
+        env:
+          BADGE: ${{ runner.temp }}/coverage.svg
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          git remote set-url origin \
+            "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
+
+          if git fetch --depth=1 origin badges; then
+            git switch -c badges FETCH_HEAD
+          else
+            git switch --orphan badges
+          fi
+
+          cp "$BADGE" coverage.svg
+          git add coverage.svg
+
+          if git diff --cached --quiet; then
+            echo "The coverage hasn't changed."
+          else
+            git commit -m "Coverage badge for ${GITHUB_SHA::7}"
+            git push origin badges
+          fi
