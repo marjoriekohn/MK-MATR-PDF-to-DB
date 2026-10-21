@@ -281,7 +281,7 @@ test_that("the MATR IDs dialog explains itself, Auto Apply is off until there is
     session$setInputs(matr_csv = fake_csv_upload(c("matr_id", ids), "ahp_ids.csv"))
     expect_equal(matr_ids(), ids)
     expect_equal(extraction_model_get(test_connection, first$id)$matr_csv$name, "ahp_ids.csv")
-    expect_match(text_of(output$matr_csv_status), sprintf("ahp_ids.csv %d MATR IDs · `m001` to `m%03d`", n_boxes, n_boxes))
+    expect_match(text_of(output$matr_csv_status), sprintf("ahp_ids.csv %d MATR IDs · m001 to m%03d", n_boxes, n_boxes))
     expect_match(text_of(output$matr_fill_note), sprintf("One MATR ID for each of the %d variables.", n_boxes))
     expect_false(last_update(seen, "auto_apply")$disabled)
 
