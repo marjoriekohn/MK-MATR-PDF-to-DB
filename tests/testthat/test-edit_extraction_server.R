@@ -281,7 +281,7 @@ test_that("the MATR IDs dialog explains itself, Auto Apply is off until there is
     session$setInputs(matr_csv = fake_csv_upload(c("matr_id", ids), "ahp_ids.csv"))
     expect_equal(matr_ids(), ids)
     expect_equal(extraction_model_get(test_connection, first$id)$matr_csv$name, "ahp_ids.csv")
-    expect_match(text_of(output$matr_csv_status), sprintf("ahp_ids.csv %d MATR IDs · m001 to m%03d", n_boxes, n_boxes))
+    expect_match(text_of(output$matr_csv_status), sprintf("ahp_ids.csv %d MATR IDs · `m001` to `m%03d`", n_boxes, n_boxes))
     expect_match(text_of(output$matr_fill_note), sprintf("One MATR ID for each of the %d variables.", n_boxes))
     expect_false(last_update(seen, "auto_apply")$disabled)
 
@@ -468,6 +468,8 @@ test_that("Continue shows the PDF that was uploaded with the draft, even on a se
   withr::defer(test_delete_pdf(typed$pdf$sha256)) # after the draft, which points at it
   withr::defer(test_delete_draft(typed$id))
   unlink(typed$pdf$path) # as a hosted site that restarted, or a session on another of its servers
+  # a test's stand-in session can't serve files (it has no registerDataObj), so the address is made up
+  local_stub("pdf_address", function(session, name, data) paste0("session/pdf/", data$sha256))
   shiny::testServer(edit_extraction_server, args = edit_page(me), {
     open(extraction_model_get(test_connection, typed$id))
     expect_match(text_of(output$pdf_link), "Open PDF")

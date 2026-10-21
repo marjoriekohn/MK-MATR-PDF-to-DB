@@ -5,7 +5,7 @@
   },
   "components": [
     {
-      "component_type": "Section",
+      "component_type": "Question Group",
       "display_order": 1,
       "children": [
         {
@@ -17,13 +17,12 @@
           "component_type": "Question",
           "display_order": 2,
           "text": "Would you call yourself a nervous person?",
-          "question_number": "1a",
+          "printed_number": "1a",
           "self_contained": true,
           "variables": [
             {
               "variable_type": "closed_ended",
               "display_order": 1,
-              "subject": "Self",
               "response_options": [
                 {
                   "display_order": 1,
@@ -41,13 +40,12 @@
           "component_type": "Question",
           "display_order": 3,
           "text": "Are you a worrier?",
-          "question_number": "1b",
+          "printed_number": "1b",
           "self_contained": true,
           "variables": [
             {
               "variable_type": "closed_ended",
               "display_order": 1,
-              "subject": "Self",
               "response_options": [
                 {
                   "display_order": 1,
@@ -65,13 +63,12 @@
           "component_type": "Question",
           "display_order": 4,
           "text": "Do you often feel \"fed-up\"?",
-          "question_number": "1c",
+          "printed_number": "1c",
           "self_contained": true,
           "variables": [
             {
               "variable_type": "closed_ended",
               "display_order": 1,
-              "subject": "Self",
               "response_options": [
                 {
                   "display_order": 1,
@@ -89,13 +86,12 @@
           "component_type": "Question",
           "display_order": 5,
           "text": "Do you worry too long after an embarrassing experience?",
-          "question_number": "1d",
+          "printed_number": "1d",
           "self_contained": true,
           "variables": [
             {
               "variable_type": "closed_ended",
               "display_order": 1,
-              "subject": "Self",
               "response_options": [
                 {
                   "display_order": 1,
@@ -113,13 +109,12 @@
           "component_type": "Question",
           "display_order": 6,
           "text": "Do you often worry about things you should not have done or said?",
-          "question_number": "1e",
+          "printed_number": "1e",
           "self_contained": true,
           "variables": [
             {
               "variable_type": "closed_ended",
               "display_order": 1,
-              "subject": "Self",
               "response_options": [
                 {
                   "display_order": 1,
@@ -137,13 +132,12 @@
           "component_type": "Question",
           "display_order": 7,
           "text": "Are your feelings easily hurt?",
-          "question_number": "1f",
+          "printed_number": "1f",
           "self_contained": true,
           "variables": [
             {
               "variable_type": "closed_ended",
               "display_order": 1,
-              "subject": "Self",
               "response_options": [
                 {
                   "display_order": 1,
@@ -161,13 +155,12 @@
           "component_type": "Question",
           "display_order": 8,
           "text": "Do you suffer from \"nerves\"?",
-          "question_number": "1g",
+          "printed_number": "1g",
           "self_contained": true,
           "variables": [
             {
               "variable_type": "closed_ended",
               "display_order": 1,
-              "subject": "Self",
               "response_options": [
                 {
                   "display_order": 1,
@@ -185,13 +178,12 @@
           "component_type": "Question",
           "display_order": 9,
           "text": "Would you call yourself tense or highly strung?",
-          "question_number": "1h",
+          "printed_number": "1h",
           "self_contained": true,
           "variables": [
             {
               "variable_type": "closed_ended",
               "display_order": 1,
-              "subject": "Self",
               "response_options": [
                 {
                   "display_order": 1,
@@ -209,13 +201,12 @@
           "component_type": "Question",
           "display_order": 10,
           "text": "Do you have many different hobbies?",
-          "question_number": "1i",
+          "printed_number": "1i",
           "self_contained": true,
           "variables": [
             {
               "variable_type": "closed_ended",
               "display_order": 1,
-              "subject": "Self",
               "response_options": [
                 {
                   "display_order": 1,
@@ -233,13 +224,12 @@
           "component_type": "Question",
           "display_order": 11,
           "text": "Do you suffer from sleeplessness?",
-          "question_number": "1j",
+          "printed_number": "1j",
           "self_contained": true,
           "variables": [
             {
               "variable_type": "closed_ended",
               "display_order": 1,
-              "subject": "Self",
               "response_options": [
                 {
                   "display_order": 1,
@@ -257,13 +247,12 @@
           "component_type": "Question",
           "display_order": 12,
           "text": "Do you like plenty of bustle and excitement around you?",
-          "question_number": "1k",
+          "printed_number": "1k",
           "self_contained": true,
           "variables": [
             {
               "variable_type": "closed_ended",
               "display_order": 1,
-              "subject": "Self",
               "response_options": [
                 {
                   "display_order": 1,
@@ -281,13 +270,12 @@
           "component_type": "Question",
           "display_order": 13,
           "text": "Are you easily hurt when people find fault with you or the work you do?",
-          "question_number": "1l",
+          "printed_number": "1l",
           "self_contained": true,
           "variables": [
             {
               "variable_type": "closed_ended",
               "display_order": 1,
-              "subject": "Self",
               "response_options": [
                 {
                   "display_order": 1,
@@ -305,13 +293,12 @@
           "component_type": "Question",
           "display_order": 14,
           "text": "Are you often troubled about feelings of guilt?",
-          "question_number": "1m",
+          "printed_number": "1m",
           "self_contained": true,
           "variables": [
             {
               "variable_type": "closed_ended",
               "display_order": 1,
-              "subject": "Self",
               "response_options": [
                 {
                   "display_order": 1,
@@ -329,13 +316,12 @@
           "component_type": "Question",
           "display_order": 15,
           "text": "Do you often feel life is very dull?",
-          "question_number": "1n",
+          "printed_number": "1n",
           "self_contained": true,
           "variables": [
             {
               "variable_type": "closed_ended",
               "display_order": 1,
-              "subject": "Self",
               "response_options": [
                 {
                   "display_order": 1,
@@ -353,13 +339,12 @@
           "component_type": "Question",
           "display_order": 16,
           "text": "Do other people think of you as being very lively?",
-          "question_number": "1o",
+          "printed_number": "1o",
           "self_contained": true,
           "variables": [
             {
               "variable_type": "closed_ended",
               "display_order": 1,
-              "subject": "Self",
               "response_options": [
                 {
                   "display_order": 1,
@@ -377,13 +362,12 @@
           "component_type": "Question",
           "display_order": 17,
           "text": "Do you enjoy meeting new people?",
-          "question_number": "1p",
+          "printed_number": "1p",
           "self_contained": true,
           "variables": [
             {
               "variable_type": "closed_ended",
               "display_order": 1,
-              "subject": "Self",
               "response_options": [
                 {
                   "display_order": 1,
@@ -401,13 +385,12 @@
           "component_type": "Question",
           "display_order": 18,
           "text": "Have you often felt listless and tired for no reason?",
-          "question_number": "1q",
+          "printed_number": "1q",
           "self_contained": true,
           "variables": [
             {
               "variable_type": "closed_ended",
               "display_order": 1,
-              "subject": "Self",
               "response_options": [
                 {
                   "display_order": 1,
@@ -425,13 +408,12 @@
           "component_type": "Question",
           "display_order": 19,
           "text": "Are you sometimes bubbling over with energy and sometimes very sluggish?",
-          "question_number": "1r",
+          "printed_number": "1r",
           "self_contained": true,
           "variables": [
             {
               "variable_type": "closed_ended",
               "display_order": 1,
-              "subject": "Self",
               "response_options": [
                 {
                   "display_order": 1,
@@ -449,13 +431,12 @@
           "component_type": "Question",
           "display_order": 20,
           "text": "Do you often take on more activities than you have time to do?",
-          "question_number": "1s",
+          "printed_number": "1s",
           "self_contained": true,
           "variables": [
             {
               "variable_type": "closed_ended",
               "display_order": 1,
-              "subject": "Self",
               "response_options": [
                 {
                   "display_order": 1,
@@ -473,13 +454,12 @@
           "component_type": "Question",
           "display_order": 21,
           "text": "Do you feel like going out a lot?",
-          "question_number": "1t",
+          "printed_number": "1t",
           "self_contained": true,
           "variables": [
             {
               "variable_type": "closed_ended",
               "display_order": 1,
-              "subject": "Self",
               "response_options": [
                 {
                   "display_order": 1,
@@ -497,13 +477,12 @@
           "component_type": "Question",
           "display_order": 22,
           "text": "Do you like mixing with people?",
-          "question_number": "1u",
+          "printed_number": "1u",
           "self_contained": true,
           "variables": [
             {
               "variable_type": "closed_ended",
               "display_order": 1,
-              "subject": "Self",
               "response_options": [
                 {
                   "display_order": 1,
@@ -521,13 +500,12 @@
           "component_type": "Question",
           "display_order": 23,
           "text": "Can you usually put some life into a rather dull party?",
-          "question_number": "1v",
+          "printed_number": "1v",
           "self_contained": true,
           "variables": [
             {
               "variable_type": "closed_ended",
               "display_order": 1,
-              "subject": "Self",
               "response_options": [
                 {
                   "display_order": 1,
@@ -545,13 +523,12 @@
           "component_type": "Question",
           "display_order": 24,
           "text": "Have you ever wished that you were dead?",
-          "question_number": "1w",
+          "printed_number": "1w",
           "self_contained": true,
           "variables": [
             {
               "variable_type": "closed_ended",
               "display_order": 1,
-              "subject": "Self",
               "response_options": [
                 {
                   "display_order": 1,
@@ -569,13 +546,12 @@
           "component_type": "Question",
           "display_order": 25,
           "text": "Do you worry about your health?",
-          "question_number": "1x",
+          "printed_number": "1x",
           "self_contained": true,
           "variables": [
             {
               "variable_type": "closed_ended",
               "display_order": 1,
-              "subject": "Self",
               "response_options": [
                 {
                   "display_order": 1,
@@ -593,13 +569,12 @@
           "component_type": "Question",
           "display_order": 26,
           "text": "Does your mood often go up and down?",
-          "question_number": "1y",
+          "printed_number": "1y",
           "self_contained": true,
           "variables": [
             {
               "variable_type": "closed_ended",
               "display_order": 1,
-              "subject": "Self",
               "response_options": [
                 {
                   "display_order": 1,
@@ -617,13 +592,12 @@
           "component_type": "Question",
           "display_order": 27,
           "text": "Do you ever feel \"just miserable\" for no reason?",
-          "question_number": "1z",
+          "printed_number": "1z",
           "self_contained": true,
           "variables": [
             {
               "variable_type": "closed_ended",
               "display_order": 1,
-              "subject": "Self",
               "response_options": [
                 {
                   "display_order": 1,
@@ -641,13 +615,12 @@
           "component_type": "Question",
           "display_order": 28,
           "text": "Are you an irritable person?",
-          "question_number": "1aa",
+          "printed_number": "1aa",
           "self_contained": true,
           "variables": [
             {
               "variable_type": "closed_ended",
               "display_order": 1,
-              "subject": "Self",
               "response_options": [
                 {
                   "display_order": 1,
@@ -665,13 +638,12 @@
           "component_type": "Question",
           "display_order": 29,
           "text": "Do you worry a lot about your looks?",
-          "question_number": "1ab",
+          "printed_number": "1ab",
           "self_contained": true,
           "variables": [
             {
               "variable_type": "closed_ended",
               "display_order": 1,
-              "subject": "Self",
               "response_options": [
                 {
                   "display_order": 1,
@@ -689,13 +661,12 @@
           "component_type": "Question",
           "display_order": 30,
           "text": "Are you rather lively?",
-          "question_number": "1ac",
+          "printed_number": "1ac",
           "self_contained": true,
           "variables": [
             {
               "variable_type": "closed_ended",
               "display_order": 1,
-              "subject": "Self",
               "response_options": [
                 {
                   "display_order": 1,
@@ -713,13 +684,12 @@
           "component_type": "Question",
           "display_order": 31,
           "text": "Do you worry about awful things that might happen?",
-          "question_number": "1ad",
+          "printed_number": "1ad",
           "self_contained": true,
           "variables": [
             {
               "variable_type": "closed_ended",
               "display_order": 1,
-              "subject": "Self",
               "response_options": [
                 {
                   "display_order": 1,
@@ -737,13 +707,12 @@
           "component_type": "Question",
           "display_order": 32,
           "text": "Are you touchy about some things?",
-          "question_number": "1ae",
+          "printed_number": "1ae",
           "self_contained": true,
           "variables": [
             {
               "variable_type": "closed_ended",
               "display_order": 1,
-              "subject": "Self",
               "response_options": [
                 {
                   "display_order": 1,
@@ -761,13 +730,12 @@
           "component_type": "Question",
           "display_order": 33,
           "text": "Do you often feel lonely?",
-          "question_number": "1af",
+          "printed_number": "1af",
           "self_contained": true,
           "variables": [
             {
               "variable_type": "closed_ended",
               "display_order": 1,
-              "subject": "Self",
               "response_options": [
                 {
                   "display_order": 1,
@@ -785,13 +753,12 @@
           "component_type": "Question",
           "display_order": 34,
           "text": "Can you get a party going?",
-          "question_number": "1ag",
+          "printed_number": "1ag",
           "self_contained": true,
           "variables": [
             {
               "variable_type": "closed_ended",
               "display_order": 1,
-              "subject": "Self",
               "response_options": [
                 {
                   "display_order": 1,
@@ -808,7 +775,7 @@
       ]
     },
     {
-      "component_type": "Section",
+      "component_type": "Question Group",
       "display_order": 2,
       "children": [
         {
@@ -820,7 +787,7 @@
           "component_type": "Question",
           "display_order": 2,
           "text": "Child's Sex",
-          "question_number": "3#3",
+          "printed_number": "3#3",
           "self_contained": true,
           "variables": [
             {
@@ -909,7 +876,7 @@
           "component_type": "Question",
           "display_order": 3,
           "text": "Child's Relationship to You",
-          "question_number": "3#4",
+          "printed_number": "3#4",
           "self_contained": true,
           "variables": [
             {
@@ -1018,7 +985,7 @@
           "component_type": "Question",
           "display_order": 4,
           "text": "Currently Living with You?",
-          "question_number": "3#5",
+          "printed_number": "3#5",
           "self_contained": true,
           "variables": [
             {
@@ -1109,7 +1076,7 @@
       "component_type": "Question",
       "display_order": 3,
       "text": "Do you have more than five (5) children?",
-      "question_number": "4",
+      "printed_number": "4",
       "self_contained": true,
       "variables": [
         {
@@ -1126,7 +1093,7 @@
       ]
     },
     {
-      "component_type": "Section",
+      "component_type": "Question Group",
       "display_order": 4,
       "children": [
         {
@@ -1138,7 +1105,7 @@
           "component_type": "Question",
           "display_order": 2,
           "text": "Sex",
-          "question_number": "5",
+          "printed_number": "5",
           "self_contained": true,
           "variables": [
             {
@@ -1239,7 +1206,7 @@
       "component_type": "Question",
       "display_order": 5,
       "text": "Do you have more than five (5) brothers and sisters?",
-      "question_number": "6",
+      "printed_number": "6",
       "self_contained": true,
       "variables": [
         {
@@ -1259,13 +1226,12 @@
       "component_type": "Question",
       "display_order": 6,
       "text": "Have you smoked cigarettes at any time in your life?",
-      "question_number": "7",
+      "printed_number": "7",
       "self_contained": true,
       "variables": [
         {
           "variable_type": "closed_ended",
           "display_order": 1,
-          "subject": "Self",
           "response_options": [
             {
               "display_order": 1,
@@ -1288,7 +1254,7 @@
       ]
     },
     {
-      "component_type": "Section",
+      "component_type": "Question Group",
       "display_order": 7,
       "children": [
         {
@@ -1300,14 +1266,13 @@
           "component_type": "Question",
           "display_order": 2,
           "text": "How soon after you woke up did you smoke your first cigarette?",
-          "question_number": "8a",
+          "printed_number": "8a",
           "self_contained": true,
           "parent_question": "7",
           "variables": [
             {
               "variable_type": "closed_ended",
               "display_order": 1,
-              "subject": "Self",
               "response_options": [
                 {
                   "display_order": 1,
@@ -1325,14 +1290,13 @@
           "component_type": "Question",
           "display_order": 3,
           "text": "How often did you make sure that you had cigarettes to smoke?",
-          "question_number": "8b",
+          "printed_number": "8b",
           "self_contained": true,
           "parent_question": "7",
           "variables": [
             {
               "variable_type": "closed_ended",
               "display_order": 1,
-              "subject": "Self",
               "response_options": [
                 {
                   "display_order": 1,
@@ -1358,14 +1322,13 @@
           "component_type": "Question",
           "display_order": 4,
           "text": "Was it difficult not to smoke in places where smoking was not allowed, such as at work, in a movie theater, or at church?",
-          "question_number": "8c",
+          "printed_number": "8c",
           "self_contained": true,
           "parent_question": "7",
           "variables": [
             {
               "variable_type": "closed_ended",
               "display_order": 1,
-              "subject": "Self",
               "response_options": [
                 {
                   "display_order": 1,
@@ -1391,14 +1354,13 @@
           "component_type": "Question",
           "display_order": 5,
           "text": "If you could not smoke a cigarette for several hours, how strong would your craving be?",
-          "question_number": "8d",
+          "printed_number": "8d",
           "self_contained": true,
           "parent_question": "7",
           "variables": [
             {
               "variable_type": "closed_ended",
               "display_order": 1,
-              "subject": "Self",
               "response_options": [
                 {
                   "display_order": 1,
@@ -1423,7 +1385,7 @@
       ]
     },
     {
-      "component_type": "Section",
+      "component_type": "Question Group",
       "display_order": 8,
       "children": [
         {
@@ -1435,7 +1397,7 @@
           "component_type": "Question",
           "display_order": 2,
           "text": "How many cigarettes would you typically smoke per day when smoking most heavily?",
-          "question_number": "9",
+          "printed_number": "9",
           "self_contained": true,
           "parent_question": "7",
           "variables": [
@@ -1443,7 +1405,6 @@
               "variable_type": "open_ended",
               "display_order": 1,
               "label": "Cigarettes per day",
-              "subject": "Self",
               "answer_data_type": "NUMBER"
             }
           ]
@@ -1454,13 +1415,12 @@
       "component_type": "Question",
       "display_order": 9,
       "text": "Have you ever had an alcoholic drink, that is beer, wine, or liquor (vodka, whiskey, brandy, etc.)?",
-      "question_number": "10",
+      "printed_number": "10",
       "self_contained": true,
       "variables": [
         {
           "variable_type": "closed_ended",
           "display_order": 1,
-          "subject": "Self",
           "response_options": [
             {
               "display_order": 1,
@@ -1483,7 +1443,7 @@
       ]
     },
     {
-      "component_type": "Section",
+      "component_type": "Question Group",
       "display_order": 10,
       "children": [
         {
@@ -1495,14 +1455,13 @@
           "component_type": "Question",
           "display_order": 2,
           "text": "How often did you have an alcoholic drink?",
-          "question_number": "11a",
+          "printed_number": "11a",
           "self_contained": true,
           "parent_question": "10",
           "variables": [
             {
               "variable_type": "closed_ended",
               "display_order": 1,
-              "subject": "Self",
               "response_options": [
                 {
                   "display_order": 1,
@@ -1528,7 +1487,7 @@
           "component_type": "Question",
           "display_order": 3,
           "text": "How many alcoholic drinks did you have on a typical day when you were drinking?",
-          "question_number": "11b",
+          "printed_number": "11b",
           "self_contained": true,
           "parent_question": "10",
           "variables": [
@@ -1536,7 +1495,6 @@
               "variable_type": "open_ended",
               "display_order": 1,
               "label": "Drinks",
-              "subject": "Self",
               "answer_data_type": "NUMBER"
             }
           ]
@@ -1544,21 +1502,20 @@
       ]
     },
     {
-      "component_type": "Section",
+      "component_type": "Question Group",
       "display_order": 11,
       "children": [
         {
           "component_type": "Question",
           "display_order": 1,
           "text": "During the period that you were drinking the most, how often did you have six or more drinks on one occasion?",
-          "question_number": "12a",
+          "printed_number": "12a",
           "self_contained": true,
           "parent_question": "10",
           "variables": [
             {
               "variable_type": "closed_ended",
               "display_order": 1,
-              "subject": "Self",
               "response_options": [
                 {
                   "display_order": 1,
@@ -1584,14 +1541,13 @@
           "component_type": "Question",
           "display_order": 2,
           "text": "During the period that you were drinking the most, how often did you find that you were unable to stop drinking once you started?",
-          "question_number": "12b",
+          "printed_number": "12b",
           "self_contained": true,
           "parent_question": "10",
           "variables": [
             {
               "variable_type": "closed_ended",
               "display_order": 1,
-              "subject": "Self",
               "response_options": [
                 {
                   "display_order": 1,
@@ -1617,14 +1573,13 @@
           "component_type": "Question",
           "display_order": 3,
           "text": "During the period that you were drinking the most, how often did you fail to do what was normally expected of you because of drinking?",
-          "question_number": "12c",
+          "printed_number": "12c",
           "self_contained": true,
           "parent_question": "10",
           "variables": [
             {
               "variable_type": "closed_ended",
               "display_order": 1,
-              "subject": "Self",
               "response_options": [
                 {
                   "display_order": 1,
@@ -1650,14 +1605,13 @@
           "component_type": "Question",
           "display_order": 4,
           "text": "During the period that you were drinking the most, how often did you have a drink first thing in the morning to get yourself going?",
-          "question_number": "12d",
+          "printed_number": "12d",
           "self_contained": true,
           "parent_question": "10",
           "variables": [
             {
               "variable_type": "closed_ended",
               "display_order": 1,
-              "subject": "Self",
               "response_options": [
                 {
                   "display_order": 1,
@@ -1683,14 +1637,13 @@
           "component_type": "Question",
           "display_order": 5,
           "text": "During the period that you were drinking the most, how often did you feel guilty after drinking?",
-          "question_number": "12e",
+          "printed_number": "12e",
           "self_contained": true,
           "parent_question": "10",
           "variables": [
             {
               "variable_type": "closed_ended",
               "display_order": 1,
-              "subject": "Self",
               "response_options": [
                 {
                   "display_order": 1,
@@ -1716,14 +1669,13 @@
           "component_type": "Question",
           "display_order": 6,
           "text": "During the period that you were drinking the most, how often were you unable to remember what happened because you had been drinking?",
-          "question_number": "12f",
+          "printed_number": "12f",
           "self_contained": true,
           "parent_question": "10",
           "variables": [
             {
               "variable_type": "closed_ended",
               "display_order": 1,
-              "subject": "Self",
               "response_options": [
                 {
                   "display_order": 1,
@@ -1749,14 +1701,13 @@
           "component_type": "Question",
           "display_order": 7,
           "text": "During the period that you were drinking the most, how often were you or someone else injured as the result of your drinking?",
-          "question_number": "12g",
+          "printed_number": "12g",
           "self_contained": true,
           "parent_question": "10",
           "variables": [
             {
               "variable_type": "closed_ended",
               "display_order": 1,
-              "subject": "Self",
               "response_options": [
                 {
                   "display_order": 1,
@@ -1782,14 +1733,13 @@
           "component_type": "Question",
           "display_order": 8,
           "text": "During the period that you were drinking the most, how often was a relative, friend, or a doctor or other health worker concerned about your drinking or did they suggest that you cut down?",
-          "question_number": "12h",
+          "printed_number": "12h",
           "self_contained": true,
           "parent_question": "10",
           "variables": [
             {
               "variable_type": "closed_ended",
               "display_order": 1,
-              "subject": "Self",
               "response_options": [
                 {
                   "display_order": 1,
@@ -1817,13 +1767,12 @@
       "component_type": "Question",
       "display_order": 12,
       "text": "Looking back over your entire life, have you ever had a time when you were feeling depressed, down, or sad most of the time for at least two weeks?",
-      "question_number": "13",
+      "printed_number": "13",
       "self_contained": true,
       "variables": [
         {
           "variable_type": "closed_ended",
           "display_order": 1,
-          "subject": "Self",
           "response_options": [
             {
               "display_order": 1,
@@ -1845,7 +1794,7 @@
       ]
     },
     {
-      "component_type": "Section",
+      "component_type": "Question Group",
       "display_order": 13,
       "children": [
         {
@@ -1857,14 +1806,13 @@
           "component_type": "Question",
           "display_order": 2,
           "text": "Did you lose interest in things you normally do?",
-          "question_number": "14a",
+          "printed_number": "14a",
           "self_contained": false,
           "parent_question": "13",
           "variables": [
             {
               "variable_type": "closed_ended",
               "display_order": 1,
-              "subject": "Self",
               "response_options": [
                 {
                   "display_order": 1,
@@ -1886,14 +1834,13 @@
           "component_type": "Question",
           "display_order": 3,
           "text": "Did your appetite decrease, or did you lose weight?",
-          "question_number": "14b",
+          "printed_number": "14b",
           "self_contained": false,
           "parent_question": "13",
           "variables": [
             {
               "variable_type": "closed_ended",
               "display_order": 1,
-              "subject": "Self",
               "response_options": [
                 {
                   "display_order": 1,
@@ -1915,14 +1862,13 @@
           "component_type": "Question",
           "display_order": 4,
           "text": "Were you unable to enjoy things you normally would enjoy?",
-          "question_number": "14c",
+          "printed_number": "14c",
           "self_contained": false,
           "parent_question": "13",
           "variables": [
             {
               "variable_type": "closed_ended",
               "display_order": 1,
-              "subject": "Self",
               "response_options": [
                 {
                   "display_order": 1,
@@ -1944,14 +1890,13 @@
           "component_type": "Question",
           "display_order": 5,
           "text": "Did your appetite increase or did you gain weight?",
-          "question_number": "14d",
+          "printed_number": "14d",
           "self_contained": false,
           "parent_question": "13",
           "variables": [
             {
               "variable_type": "closed_ended",
               "display_order": 1,
-              "subject": "Self",
               "response_options": [
                 {
                   "display_order": 1,
@@ -1973,14 +1918,13 @@
           "component_type": "Question",
           "display_order": 6,
           "text": "Were you either fidgety and restless or slowed down most of the time?",
-          "question_number": "14e",
+          "printed_number": "14e",
           "self_contained": false,
           "parent_question": "13",
           "variables": [
             {
               "variable_type": "closed_ended",
               "display_order": 1,
-              "subject": "Self",
               "response_options": [
                 {
                   "display_order": 1,
@@ -2002,14 +1946,13 @@
           "component_type": "Question",
           "display_order": 7,
           "text": "Did you feel tired or fatigued most of the time?",
-          "question_number": "14f",
+          "printed_number": "14f",
           "self_contained": false,
           "parent_question": "13",
           "variables": [
             {
               "variable_type": "closed_ended",
               "display_order": 1,
-              "subject": "Self",
               "response_options": [
                 {
                   "display_order": 1,
@@ -2031,14 +1974,13 @@
           "component_type": "Question",
           "display_order": 8,
           "text": "Did you have trouble sleeping?",
-          "question_number": "14g",
+          "printed_number": "14g",
           "self_contained": false,
           "parent_question": "13",
           "variables": [
             {
               "variable_type": "closed_ended",
               "display_order": 1,
-              "subject": "Self",
               "response_options": [
                 {
                   "display_order": 1,
@@ -2060,14 +2002,13 @@
           "component_type": "Question",
           "display_order": 9,
           "text": "Did you sleep much more than usual?",
-          "question_number": "14h",
+          "printed_number": "14h",
           "self_contained": false,
           "parent_question": "13",
           "variables": [
             {
               "variable_type": "closed_ended",
               "display_order": 1,
-              "subject": "Self",
               "response_options": [
                 {
                   "display_order": 1,
@@ -2089,14 +2030,13 @@
           "component_type": "Question",
           "display_order": 10,
           "text": "Did you have trouble thinking or concentrating?",
-          "question_number": "14i",
+          "printed_number": "14i",
           "self_contained": false,
           "parent_question": "13",
           "variables": [
             {
               "variable_type": "closed_ended",
               "display_order": 1,
-              "subject": "Self",
               "response_options": [
                 {
                   "display_order": 1,
@@ -2118,14 +2058,13 @@
           "component_type": "Question",
           "display_order": 11,
           "text": "Did you feel worthless or guilty?",
-          "question_number": "14j",
+          "printed_number": "14j",
           "self_contained": false,
           "parent_question": "13",
           "variables": [
             {
               "variable_type": "closed_ended",
               "display_order": 1,
-              "subject": "Self",
               "response_options": [
                 {
                   "display_order": 1,
@@ -2147,14 +2086,13 @@
           "component_type": "Question",
           "display_order": 12,
           "text": "Did you think a lot about death or about harming yourself?",
-          "question_number": "14k",
+          "printed_number": "14k",
           "self_contained": false,
           "parent_question": "13",
           "variables": [
             {
               "variable_type": "closed_ended",
               "display_order": 1,
-              "subject": "Self",
               "response_options": [
                 {
                   "display_order": 1,
@@ -2175,7 +2113,7 @@
       ]
     },
     {
-      "component_type": "Section",
+      "component_type": "Question Group",
       "display_order": 14,
       "children": [
         {
@@ -2187,14 +2125,13 @@
           "component_type": "Question",
           "display_order": 2,
           "text": "Hay fever or other allergy symptoms",
-          "question_number": "15a",
+          "printed_number": "15a",
           "self_contained": true,
           "variables": [
             {
               "variable_type": "closed_ended",
               "display_order": 1,
               "label": "Have you had",
-              "subject": "Self",
               "response_options": [
                 {
                   "display_order": 1,
@@ -2206,14 +2143,12 @@
               "variable_type": "open_ended",
               "display_order": 2,
               "label": "If yes, age started (years)",
-              "subject": "Self",
               "answer_data_type": "NUMBER"
             },
             {
               "variable_type": "closed_ended",
               "display_order": 3,
               "label": "Being treated now",
-              "subject": "Self",
               "response_options": [
                 {
                   "display_order": 1,
@@ -2239,14 +2174,13 @@
           "component_type": "Question",
           "display_order": 3,
           "text": "Severe headaches or migraines",
-          "question_number": "15b",
+          "printed_number": "15b",
           "self_contained": true,
           "variables": [
             {
               "variable_type": "closed_ended",
               "display_order": 1,
               "label": "Have you had",
-              "subject": "Self",
               "response_options": [
                 {
                   "display_order": 1,
@@ -2258,14 +2192,12 @@
               "variable_type": "open_ended",
               "display_order": 2,
               "label": "If yes, age started (years)",
-              "subject": "Self",
               "answer_data_type": "NUMBER"
             },
             {
               "variable_type": "closed_ended",
               "display_order": 3,
               "label": "Being treated now",
-              "subject": "Self",
               "response_options": [
                 {
                   "display_order": 1,
@@ -2291,14 +2223,13 @@
           "component_type": "Question",
           "display_order": 4,
           "text": "Frequent flu or severe cold",
-          "question_number": "15c",
+          "printed_number": "15c",
           "self_contained": true,
           "variables": [
             {
               "variable_type": "closed_ended",
               "display_order": 1,
               "label": "Have you had",
-              "subject": "Self",
               "response_options": [
                 {
                   "display_order": 1,
@@ -2310,14 +2241,12 @@
               "variable_type": "open_ended",
               "display_order": 2,
               "label": "If yes, age started (years)",
-              "subject": "Self",
               "answer_data_type": "NUMBER"
             },
             {
               "variable_type": "closed_ended",
               "display_order": 3,
               "label": "Being treated now",
-              "subject": "Self",
               "response_options": [
                 {
                   "display_order": 1,
@@ -2343,14 +2272,13 @@
           "component_type": "Question",
           "display_order": 5,
           "text": "Serious sleep problems or insomnia",
-          "question_number": "15d",
+          "printed_number": "15d",
           "self_contained": true,
           "variables": [
             {
               "variable_type": "closed_ended",
               "display_order": 1,
               "label": "Have you had",
-              "subject": "Self",
               "response_options": [
                 {
                   "display_order": 1,
@@ -2362,14 +2290,12 @@
               "variable_type": "open_ended",
               "display_order": 2,
               "label": "If yes, age started (years)",
-              "subject": "Self",
               "answer_data_type": "NUMBER"
             },
             {
               "variable_type": "closed_ended",
               "display_order": 3,
               "label": "Being treated now",
-              "subject": "Self",
               "response_options": [
                 {
                   "display_order": 1,
@@ -2395,14 +2321,13 @@
           "component_type": "Question",
           "display_order": 6,
           "text": "Constant or chronic pain",
-          "question_number": "15e",
+          "printed_number": "15e",
           "self_contained": true,
           "variables": [
             {
               "variable_type": "closed_ended",
               "display_order": 1,
               "label": "Have you had",
-              "subject": "Self",
               "response_options": [
                 {
                   "display_order": 1,
@@ -2414,14 +2339,12 @@
               "variable_type": "open_ended",
               "display_order": 2,
               "label": "If yes, age started (years)",
-              "subject": "Self",
               "answer_data_type": "NUMBER"
             },
             {
               "variable_type": "closed_ended",
               "display_order": 3,
               "label": "Being treated now",
-              "subject": "Self",
               "response_options": [
                 {
                   "display_order": 1,
@@ -2447,14 +2370,13 @@
           "component_type": "Question",
           "display_order": 7,
           "text": "High blood pressure",
-          "question_number": "15f",
+          "printed_number": "15f",
           "self_contained": true,
           "variables": [
             {
               "variable_type": "closed_ended",
               "display_order": 1,
               "label": "Have you had",
-              "subject": "Self",
               "response_options": [
                 {
                   "display_order": 1,
@@ -2466,14 +2388,12 @@
               "variable_type": "open_ended",
               "display_order": 2,
               "label": "If yes, age started (years)",
-              "subject": "Self",
               "answer_data_type": "NUMBER"
             },
             {
               "variable_type": "closed_ended",
               "display_order": 3,
               "label": "Being treated now",
-              "subject": "Self",
               "response_options": [
                 {
                   "display_order": 1,
@@ -2499,14 +2419,13 @@
           "component_type": "Question",
           "display_order": 8,
           "text": "Asthma",
-          "question_number": "15g",
+          "printed_number": "15g",
           "self_contained": true,
           "variables": [
             {
               "variable_type": "closed_ended",
               "display_order": 1,
               "label": "Have you had",
-              "subject": "Self",
               "response_options": [
                 {
                   "display_order": 1,
@@ -2518,14 +2437,12 @@
               "variable_type": "open_ended",
               "display_order": 2,
               "label": "If yes, age started (years)",
-              "subject": "Self",
               "answer_data_type": "NUMBER"
             },
             {
               "variable_type": "closed_ended",
               "display_order": 3,
               "label": "Being treated now",
-              "subject": "Self",
               "response_options": [
                 {
                   "display_order": 1,
@@ -2551,14 +2468,13 @@
           "component_type": "Question",
           "display_order": 9,
           "text": "Arthritis (any type)",
-          "question_number": "15h",
+          "printed_number": "15h",
           "self_contained": true,
           "variables": [
             {
               "variable_type": "closed_ended",
               "display_order": 1,
               "label": "Have you had",
-              "subject": "Self",
               "response_options": [
                 {
                   "display_order": 1,
@@ -2570,14 +2486,12 @@
               "variable_type": "open_ended",
               "display_order": 2,
               "label": "If yes, age started (years)",
-              "subject": "Self",
               "answer_data_type": "NUMBER"
             },
             {
               "variable_type": "closed_ended",
               "display_order": 3,
               "label": "Being treated now",
-              "subject": "Self",
               "response_options": [
                 {
                   "display_order": 1,
@@ -2603,14 +2517,13 @@
           "component_type": "Question",
           "display_order": 10,
           "text": "Parkinson's disease",
-          "question_number": "15i",
+          "printed_number": "15i",
           "self_contained": true,
           "variables": [
             {
               "variable_type": "closed_ended",
               "display_order": 1,
               "label": "Have you had",
-              "subject": "Self",
               "response_options": [
                 {
                   "display_order": 1,
@@ -2622,14 +2535,12 @@
               "variable_type": "open_ended",
               "display_order": 2,
               "label": "If yes, age started (years)",
-              "subject": "Self",
               "answer_data_type": "NUMBER"
             },
             {
               "variable_type": "closed_ended",
               "display_order": 3,
               "label": "Being treated now",
-              "subject": "Self",
               "response_options": [
                 {
                   "display_order": 1,
@@ -2655,14 +2566,13 @@
           "component_type": "Question",
           "display_order": 11,
           "text": "Epilepsy, a seizure, or convulsion",
-          "question_number": "15j",
+          "printed_number": "15j",
           "self_contained": true,
           "variables": [
             {
               "variable_type": "closed_ended",
               "display_order": 1,
               "label": "Have you had",
-              "subject": "Self",
               "response_options": [
                 {
                   "display_order": 1,
@@ -2674,14 +2584,12 @@
               "variable_type": "open_ended",
               "display_order": 2,
               "label": "If yes, age started (years)",
-              "subject": "Self",
               "answer_data_type": "NUMBER"
             },
             {
               "variable_type": "closed_ended",
               "display_order": 3,
               "label": "Being treated now",
-              "subject": "Self",
               "response_options": [
                 {
                   "display_order": 1,
@@ -2707,14 +2615,13 @@
           "component_type": "Question",
           "display_order": 12,
           "text": "Anxiety or extreme nervousness",
-          "question_number": "15k",
+          "printed_number": "15k",
           "self_contained": true,
           "variables": [
             {
               "variable_type": "closed_ended",
               "display_order": 1,
               "label": "Have you had",
-              "subject": "Self",
               "response_options": [
                 {
                   "display_order": 1,
@@ -2726,14 +2633,12 @@
               "variable_type": "open_ended",
               "display_order": 2,
               "label": "If yes, age started (years)",
-              "subject": "Self",
               "answer_data_type": "NUMBER"
             },
             {
               "variable_type": "closed_ended",
               "display_order": 3,
               "label": "Being treated now",
-              "subject": "Self",
               "response_options": [
                 {
                   "display_order": 1,
@@ -2759,14 +2664,13 @@
           "component_type": "Question",
           "display_order": 13,
           "text": "Depression or manic-depression",
-          "question_number": "15l",
+          "printed_number": "15l",
           "self_contained": true,
           "variables": [
             {
               "variable_type": "closed_ended",
               "display_order": 1,
               "label": "Have you had",
-              "subject": "Self",
               "response_options": [
                 {
                   "display_order": 1,
@@ -2778,14 +2682,12 @@
               "variable_type": "open_ended",
               "display_order": 2,
               "label": "If yes, age started (years)",
-              "subject": "Self",
               "answer_data_type": "NUMBER"
             },
             {
               "variable_type": "closed_ended",
               "display_order": 3,
               "label": "Being treated now",
-              "subject": "Self",
               "response_options": [
                 {
                   "display_order": 1,
@@ -2811,14 +2713,13 @@
           "component_type": "Question",
           "display_order": 14,
           "text": "Psychosis or Schizophrenia",
-          "question_number": "15m",
+          "printed_number": "15m",
           "self_contained": true,
           "variables": [
             {
               "variable_type": "closed_ended",
               "display_order": 1,
               "label": "Have you had",
-              "subject": "Self",
               "response_options": [
                 {
                   "display_order": 1,
@@ -2830,14 +2731,12 @@
               "variable_type": "open_ended",
               "display_order": 2,
               "label": "If yes, age started (years)",
-              "subject": "Self",
               "answer_data_type": "NUMBER"
             },
             {
               "variable_type": "closed_ended",
               "display_order": 3,
               "label": "Being treated now",
-              "subject": "Self",
               "response_options": [
                 {
                   "display_order": 1,
@@ -2863,14 +2762,13 @@
           "component_type": "Question",
           "display_order": 15,
           "text": "Dementia or Alzheimer's disease",
-          "question_number": "15n",
+          "printed_number": "15n",
           "self_contained": true,
           "variables": [
             {
               "variable_type": "closed_ended",
               "display_order": 1,
               "label": "Have you had",
-              "subject": "Self",
               "response_options": [
                 {
                   "display_order": 1,
@@ -2882,14 +2780,12 @@
               "variable_type": "open_ended",
               "display_order": 2,
               "label": "If yes, age started (years)",
-              "subject": "Self",
               "answer_data_type": "NUMBER"
             },
             {
               "variable_type": "closed_ended",
               "display_order": 3,
               "label": "Being treated now",
-              "subject": "Self",
               "response_options": [
                 {
                   "display_order": 1,
@@ -2915,14 +2811,13 @@
           "component_type": "Question",
           "display_order": 16,
           "text": "Stroke",
-          "question_number": "15o",
+          "printed_number": "15o",
           "self_contained": true,
           "variables": [
             {
               "variable_type": "closed_ended",
               "display_order": 1,
               "label": "Have you had",
-              "subject": "Self",
               "response_options": [
                 {
                   "display_order": 1,
@@ -2934,14 +2829,12 @@
               "variable_type": "open_ended",
               "display_order": 2,
               "label": "If yes, age started (years)",
-              "subject": "Self",
               "answer_data_type": "NUMBER"
             },
             {
               "variable_type": "closed_ended",
               "display_order": 3,
               "label": "Being treated now",
-              "subject": "Self",
               "response_options": [
                 {
                   "display_order": 1,
@@ -2967,14 +2860,13 @@
           "component_type": "Question",
           "display_order": 17,
           "text": "Angina (chest pain) or ischemia",
-          "question_number": "15p",
+          "printed_number": "15p",
           "self_contained": true,
           "variables": [
             {
               "variable_type": "closed_ended",
               "display_order": 1,
               "label": "Have you had",
-              "subject": "Self",
               "response_options": [
                 {
                   "display_order": 1,
@@ -2986,14 +2878,12 @@
               "variable_type": "open_ended",
               "display_order": 2,
               "label": "If yes, age started (years)",
-              "subject": "Self",
               "answer_data_type": "NUMBER"
             },
             {
               "variable_type": "closed_ended",
               "display_order": 3,
               "label": "Being treated now",
-              "subject": "Self",
               "response_options": [
                 {
                   "display_order": 1,
@@ -3019,14 +2909,13 @@
           "component_type": "Question",
           "display_order": 18,
           "text": "Any blood clots",
-          "question_number": "15q",
+          "printed_number": "15q",
           "self_contained": true,
           "variables": [
             {
               "variable_type": "closed_ended",
               "display_order": 1,
               "label": "Have you had",
-              "subject": "Self",
               "response_options": [
                 {
                   "display_order": 1,
@@ -3038,14 +2927,12 @@
               "variable_type": "open_ended",
               "display_order": 2,
               "label": "If yes, age started (years)",
-              "subject": "Self",
               "answer_data_type": "NUMBER"
             },
             {
               "variable_type": "closed_ended",
               "display_order": 3,
               "label": "Being treated now",
-              "subject": "Self",
               "response_options": [
                 {
                   "display_order": 1,
@@ -3071,14 +2958,13 @@
           "component_type": "Question",
           "display_order": 19,
           "text": "Hardening or narrowing of the arteries (heart or leg)",
-          "question_number": "15r",
+          "printed_number": "15r",
           "self_contained": true,
           "variables": [
             {
               "variable_type": "closed_ended",
               "display_order": 1,
               "label": "Have you had",
-              "subject": "Self",
               "response_options": [
                 {
                   "display_order": 1,
@@ -3090,14 +2976,12 @@
               "variable_type": "open_ended",
               "display_order": 2,
               "label": "If yes, age started (years)",
-              "subject": "Self",
               "answer_data_type": "NUMBER"
             },
             {
               "variable_type": "closed_ended",
               "display_order": 3,
               "label": "Being treated now",
-              "subject": "Self",
               "response_options": [
                 {
                   "display_order": 1,
@@ -3123,14 +3007,13 @@
           "component_type": "Question",
           "display_order": 20,
           "text": "Irregular heart beat or heart attack",
-          "question_number": "15s",
+          "printed_number": "15s",
           "self_contained": true,
           "variables": [
             {
               "variable_type": "closed_ended",
               "display_order": 1,
               "label": "Have you had",
-              "subject": "Self",
               "response_options": [
                 {
                   "display_order": 1,
@@ -3142,14 +3025,12 @@
               "variable_type": "open_ended",
               "display_order": 2,
               "label": "If yes, age started (years)",
-              "subject": "Self",
               "answer_data_type": "NUMBER"
             },
             {
               "variable_type": "closed_ended",
               "display_order": 3,
               "label": "Being treated now",
-              "subject": "Self",
               "response_options": [
                 {
                   "display_order": 1,
@@ -3175,14 +3056,13 @@
           "component_type": "Question",
           "display_order": 21,
           "text": "Congestive heart failure",
-          "question_number": "15t",
+          "printed_number": "15t",
           "self_contained": true,
           "variables": [
             {
               "variable_type": "closed_ended",
               "display_order": 1,
               "label": "Have you had",
-              "subject": "Self",
               "response_options": [
                 {
                   "display_order": 1,
@@ -3194,14 +3074,12 @@
               "variable_type": "open_ended",
               "display_order": 2,
               "label": "If yes, age started (years)",
-              "subject": "Self",
               "answer_data_type": "NUMBER"
             },
             {
               "variable_type": "closed_ended",
               "display_order": 3,
               "label": "Being treated now",
-              "subject": "Self",
               "response_options": [
                 {
                   "display_order": 1,
@@ -3227,14 +3105,13 @@
           "component_type": "Question",
           "display_order": 22,
           "text": "Acne that needs constant treatment or care",
-          "question_number": "15u",
+          "printed_number": "15u",
           "self_contained": true,
           "variables": [
             {
               "variable_type": "closed_ended",
               "display_order": 1,
               "label": "Have you had",
-              "subject": "Self",
               "response_options": [
                 {
                   "display_order": 1,
@@ -3246,14 +3123,12 @@
               "variable_type": "open_ended",
               "display_order": 2,
               "label": "If yes, age started (years)",
-              "subject": "Self",
               "answer_data_type": "NUMBER"
             },
             {
               "variable_type": "closed_ended",
               "display_order": 3,
               "label": "Being treated now",
-              "subject": "Self",
               "response_options": [
                 {
                   "display_order": 1,
@@ -3279,14 +3154,13 @@
           "component_type": "Question",
           "display_order": 23,
           "text": "Red, itchy, or dry skin patches or rashes",
-          "question_number": "15v",
+          "printed_number": "15v",
           "self_contained": true,
           "variables": [
             {
               "variable_type": "closed_ended",
               "display_order": 1,
               "label": "Have you had",
-              "subject": "Self",
               "response_options": [
                 {
                   "display_order": 1,
@@ -3298,14 +3172,12 @@
               "variable_type": "open_ended",
               "display_order": 2,
               "label": "If yes, age started (years)",
-              "subject": "Self",
               "answer_data_type": "NUMBER"
             },
             {
               "variable_type": "closed_ended",
               "display_order": 3,
               "label": "Being treated now",
-              "subject": "Self",
               "response_options": [
                 {
                   "display_order": 1,
@@ -3331,14 +3203,13 @@
           "component_type": "Question",
           "display_order": 24,
           "text": "Hepatitis (any type)",
-          "question_number": "15w",
+          "printed_number": "15w",
           "self_contained": true,
           "variables": [
             {
               "variable_type": "closed_ended",
               "display_order": 1,
               "label": "Have you had",
-              "subject": "Self",
               "response_options": [
                 {
                   "display_order": 1,
@@ -3350,14 +3221,12 @@
               "variable_type": "open_ended",
               "display_order": 2,
               "label": "If yes, age started (years)",
-              "subject": "Self",
               "answer_data_type": "NUMBER"
             },
             {
               "variable_type": "closed_ended",
               "display_order": 3,
               "label": "Being treated now",
-              "subject": "Self",
               "response_options": [
                 {
                   "display_order": 1,
@@ -3383,14 +3252,13 @@
           "component_type": "Question",
           "display_order": 25,
           "text": "Cold sores",
-          "question_number": "15x",
+          "printed_number": "15x",
           "self_contained": true,
           "variables": [
             {
               "variable_type": "closed_ended",
               "display_order": 1,
               "label": "Have you had",
-              "subject": "Self",
               "response_options": [
                 {
                   "display_order": 1,
@@ -3402,14 +3270,12 @@
               "variable_type": "open_ended",
               "display_order": 2,
               "label": "If yes, age started (years)",
-              "subject": "Self",
               "answer_data_type": "NUMBER"
             },
             {
               "variable_type": "closed_ended",
               "display_order": 3,
               "label": "Being treated now",
-              "subject": "Self",
               "response_options": [
                 {
                   "display_order": 1,
@@ -3435,14 +3301,13 @@
           "component_type": "Question",
           "display_order": 26,
           "text": "Repeated bacterial or fungal infection",
-          "question_number": "15y",
+          "printed_number": "15y",
           "self_contained": true,
           "variables": [
             {
               "variable_type": "closed_ended",
               "display_order": 1,
               "label": "Have you had",
-              "subject": "Self",
               "response_options": [
                 {
                   "display_order": 1,
@@ -3454,14 +3319,12 @@
               "variable_type": "open_ended",
               "display_order": 2,
               "label": "If yes, age started (years)",
-              "subject": "Self",
               "answer_data_type": "NUMBER"
             },
             {
               "variable_type": "closed_ended",
               "display_order": 3,
               "label": "Being treated now",
-              "subject": "Self",
               "response_options": [
                 {
                   "display_order": 1,
@@ -3487,14 +3350,13 @@
           "component_type": "Question",
           "display_order": 27,
           "text": "Stomach ulcers, gastritis, or frequent indigestion",
-          "question_number": "15z",
+          "printed_number": "15z",
           "self_contained": true,
           "variables": [
             {
               "variable_type": "closed_ended",
               "display_order": 1,
               "label": "Have you had",
-              "subject": "Self",
               "response_options": [
                 {
                   "display_order": 1,
@@ -3506,14 +3368,12 @@
               "variable_type": "open_ended",
               "display_order": 2,
               "label": "If yes, age started (years)",
-              "subject": "Self",
               "answer_data_type": "NUMBER"
             },
             {
               "variable_type": "closed_ended",
               "display_order": 3,
               "label": "Being treated now",
-              "subject": "Self",
               "response_options": [
                 {
                   "display_order": 1,
@@ -3539,14 +3399,13 @@
           "component_type": "Question",
           "display_order": 28,
           "text": "Irritable or inflammatory bowel",
-          "question_number": "15aa",
+          "printed_number": "15aa",
           "self_contained": true,
           "variables": [
             {
               "variable_type": "closed_ended",
               "display_order": 1,
               "label": "Have you had",
-              "subject": "Self",
               "response_options": [
                 {
                   "display_order": 1,
@@ -3558,14 +3417,12 @@
               "variable_type": "open_ended",
               "display_order": 2,
               "label": "If yes, age started (years)",
-              "subject": "Self",
               "answer_data_type": "NUMBER"
             },
             {
               "variable_type": "closed_ended",
               "display_order": 3,
               "label": "Being treated now",
-              "subject": "Self",
               "response_options": [
                 {
                   "display_order": 1,
@@ -3591,14 +3448,13 @@
           "component_type": "Question",
           "display_order": 29,
           "text": "Enlarged prostate",
-          "question_number": "15ab",
+          "printed_number": "15ab",
           "self_contained": true,
           "variables": [
             {
               "variable_type": "closed_ended",
               "display_order": 1,
               "label": "Have you had",
-              "subject": "Self",
               "response_options": [
                 {
                   "display_order": 1,
@@ -3610,14 +3466,12 @@
               "variable_type": "open_ended",
               "display_order": 2,
               "label": "If yes, age started (years)",
-              "subject": "Self",
               "answer_data_type": "NUMBER"
             },
             {
               "variable_type": "closed_ended",
               "display_order": 3,
               "label": "Being treated now",
-              "subject": "Self",
               "response_options": [
                 {
                   "display_order": 1,
@@ -3643,14 +3497,13 @@
           "component_type": "Question",
           "display_order": 30,
           "text": "Sudden urge to urinate or unexpected urination",
-          "question_number": "15ac",
+          "printed_number": "15ac",
           "self_contained": true,
           "variables": [
             {
               "variable_type": "closed_ended",
               "display_order": 1,
               "label": "Have you had",
-              "subject": "Self",
               "response_options": [
                 {
                   "display_order": 1,
@@ -3662,14 +3515,12 @@
               "variable_type": "open_ended",
               "display_order": 2,
               "label": "If yes, age started (years)",
-              "subject": "Self",
               "answer_data_type": "NUMBER"
             },
             {
               "variable_type": "closed_ended",
               "display_order": 3,
               "label": "Being treated now",
-              "subject": "Self",
               "response_options": [
                 {
                   "display_order": 1,
@@ -3695,14 +3546,13 @@
           "component_type": "Question",
           "display_order": 31,
           "text": "Diabetes",
-          "question_number": "15ad",
+          "printed_number": "15ad",
           "self_contained": true,
           "variables": [
             {
               "variable_type": "closed_ended",
               "display_order": 1,
               "label": "Have you had",
-              "subject": "Self",
               "response_options": [
                 {
                   "display_order": 1,
@@ -3714,14 +3564,12 @@
               "variable_type": "open_ended",
               "display_order": 2,
               "label": "If yes, age started (years)",
-              "subject": "Self",
               "answer_data_type": "NUMBER"
             },
             {
               "variable_type": "closed_ended",
               "display_order": 3,
               "label": "Being treated now",
-              "subject": "Self",
               "response_options": [
                 {
                   "display_order": 1,
@@ -3747,14 +3595,13 @@
           "component_type": "Question",
           "display_order": 32,
           "text": "Excessive hair loss or balding",
-          "question_number": "15ae",
+          "printed_number": "15ae",
           "self_contained": true,
           "variables": [
             {
               "variable_type": "closed_ended",
               "display_order": 1,
               "label": "Have you had",
-              "subject": "Self",
               "response_options": [
                 {
                   "display_order": 1,
@@ -3766,14 +3613,12 @@
               "variable_type": "open_ended",
               "display_order": 2,
               "label": "If yes, age started (years)",
-              "subject": "Self",
               "answer_data_type": "NUMBER"
             },
             {
               "variable_type": "closed_ended",
               "display_order": 3,
               "label": "Being treated now",
-              "subject": "Self",
               "response_options": [
                 {
                   "display_order": 1,
@@ -3799,14 +3644,13 @@
           "component_type": "Question",
           "display_order": 33,
           "text": "Greater than 40 pounds over weight",
-          "question_number": "15af",
+          "printed_number": "15af",
           "self_contained": true,
           "variables": [
             {
               "variable_type": "closed_ended",
               "display_order": 1,
               "label": "Have you had",
-              "subject": "Self",
               "response_options": [
                 {
                   "display_order": 1,
@@ -3818,14 +3662,12 @@
               "variable_type": "open_ended",
               "display_order": 2,
               "label": "If yes, age started (years)",
-              "subject": "Self",
               "answer_data_type": "NUMBER"
             },
             {
               "variable_type": "closed_ended",
               "display_order": 3,
               "label": "Being treated now",
-              "subject": "Self",
               "response_options": [
                 {
                   "display_order": 1,
@@ -3851,14 +3693,13 @@
           "component_type": "Question",
           "display_order": 34,
           "text": "Male erectile disorder",
-          "question_number": "15ag",
+          "printed_number": "15ag",
           "self_contained": true,
           "variables": [
             {
               "variable_type": "closed_ended",
               "display_order": 1,
               "label": "Have you had",
-              "subject": "Self",
               "response_options": [
                 {
                   "display_order": 1,
@@ -3870,14 +3711,12 @@
               "variable_type": "open_ended",
               "display_order": 2,
               "label": "If yes, age started (years)",
-              "subject": "Self",
               "answer_data_type": "NUMBER"
             },
             {
               "variable_type": "closed_ended",
               "display_order": 3,
               "label": "Being treated now",
-              "subject": "Self",
               "response_options": [
                 {
                   "display_order": 1,
@@ -3903,14 +3742,13 @@
           "component_type": "Question",
           "display_order": 35,
           "text": "Multiple Sclerosis (MS)",
-          "question_number": "15ah",
+          "printed_number": "15ah",
           "self_contained": true,
           "variables": [
             {
               "variable_type": "closed_ended",
               "display_order": 1,
               "label": "Have you had",
-              "subject": "Self",
               "response_options": [
                 {
                   "display_order": 1,
@@ -3922,14 +3760,12 @@
               "variable_type": "open_ended",
               "display_order": 2,
               "label": "If yes, age started (years)",
-              "subject": "Self",
               "answer_data_type": "NUMBER"
             },
             {
               "variable_type": "closed_ended",
               "display_order": 3,
               "label": "Being treated now",
-              "subject": "Self",
               "response_options": [
                 {
                   "display_order": 1,
@@ -3955,14 +3791,13 @@
           "component_type": "Question",
           "display_order": 36,
           "text": "Brittle bones or osteoporosis",
-          "question_number": "15ai",
+          "printed_number": "15ai",
           "self_contained": true,
           "variables": [
             {
               "variable_type": "closed_ended",
               "display_order": 1,
               "label": "Have you had",
-              "subject": "Self",
               "response_options": [
                 {
                   "display_order": 1,
@@ -3974,14 +3809,12 @@
               "variable_type": "open_ended",
               "display_order": 2,
               "label": "If yes, age started (years)",
-              "subject": "Self",
               "answer_data_type": "NUMBER"
             },
             {
               "variable_type": "closed_ended",
               "display_order": 3,
               "label": "Being treated now",
-              "subject": "Self",
               "response_options": [
                 {
                   "display_order": 1,
@@ -4007,14 +3840,13 @@
           "component_type": "Question",
           "display_order": 37,
           "text": "Heavy smoking",
-          "question_number": "15aj",
+          "printed_number": "15aj",
           "self_contained": true,
           "variables": [
             {
               "variable_type": "closed_ended",
               "display_order": 1,
               "label": "Have you had",
-              "subject": "Self",
               "response_options": [
                 {
                   "display_order": 1,
@@ -4026,14 +3858,12 @@
               "variable_type": "open_ended",
               "display_order": 2,
               "label": "If yes, age started (years)",
-              "subject": "Self",
               "answer_data_type": "NUMBER"
             },
             {
               "variable_type": "closed_ended",
               "display_order": 3,
               "label": "Being treated now",
-              "subject": "Self",
               "response_options": [
                 {
                   "display_order": 1,
@@ -4059,14 +3889,13 @@
           "component_type": "Question",
           "display_order": 38,
           "text": "Alcohol problems or alcoholism",
-          "question_number": "15ak",
+          "printed_number": "15ak",
           "self_contained": true,
           "variables": [
             {
               "variable_type": "closed_ended",
               "display_order": 1,
               "label": "Have you had",
-              "subject": "Self",
               "response_options": [
                 {
                   "display_order": 1,
@@ -4078,14 +3907,12 @@
               "variable_type": "open_ended",
               "display_order": 2,
               "label": "If yes, age started (years)",
-              "subject": "Self",
               "answer_data_type": "NUMBER"
             },
             {
               "variable_type": "closed_ended",
               "display_order": 3,
               "label": "Being treated now",
-              "subject": "Self",
               "response_options": [
                 {
                   "display_order": 1,
@@ -4111,14 +3938,13 @@
           "component_type": "Question",
           "display_order": 39,
           "text": "Painful or irregular menstrual periods",
-          "question_number": "15al",
+          "printed_number": "15al",
           "self_contained": true,
           "variables": [
             {
               "variable_type": "closed_ended",
               "display_order": 1,
               "label": "Have you had",
-              "subject": "Self",
               "response_options": [
                 {
                   "display_order": 1,
@@ -4130,14 +3956,12 @@
               "variable_type": "open_ended",
               "display_order": 2,
               "label": "If yes, age started (years)",
-              "subject": "Self",
               "answer_data_type": "NUMBER"
             },
             {
               "variable_type": "closed_ended",
               "display_order": 3,
               "label": "Being treated now",
-              "subject": "Self",
               "response_options": [
                 {
                   "display_order": 1,
@@ -4163,14 +3987,13 @@
           "component_type": "Question",
           "display_order": 40,
           "text": "Cysts of the ovaries",
-          "question_number": "15am",
+          "printed_number": "15am",
           "self_contained": true,
           "variables": [
             {
               "variable_type": "closed_ended",
               "display_order": 1,
               "label": "Have you had",
-              "subject": "Self",
               "response_options": [
                 {
                   "display_order": 1,
@@ -4182,14 +4005,12 @@
               "variable_type": "open_ended",
               "display_order": 2,
               "label": "If yes, age started (years)",
-              "subject": "Self",
               "answer_data_type": "NUMBER"
             },
             {
               "variable_type": "closed_ended",
               "display_order": 3,
               "label": "Being treated now",
-              "subject": "Self",
               "response_options": [
                 {
                   "display_order": 1,
@@ -4215,14 +4036,13 @@
           "component_type": "Question",
           "display_order": 41,
           "text": "Any type of cancer or benign tumor",
-          "question_number": "15an",
+          "printed_number": "15an",
           "self_contained": true,
           "variables": [
             {
               "variable_type": "closed_ended",
               "display_order": 1,
               "label": "Have you had",
-              "subject": "Self",
               "response_options": [
                 {
                   "display_order": 1,
@@ -4234,14 +4054,12 @@
               "variable_type": "open_ended",
               "display_order": 2,
               "label": "If yes, age started (years)",
-              "subject": "Self",
               "answer_data_type": "NUMBER"
             },
             {
               "variable_type": "closed_ended",
               "display_order": 3,
               "label": "Being treated now",
-              "subject": "Self",
               "response_options": [
                 {
                   "display_order": 1,
@@ -4267,14 +4085,13 @@
           "component_type": "Question",
           "display_order": 42,
           "text": "Adverse drug reaction",
-          "question_number": "15ao",
+          "printed_number": "15ao",
           "self_contained": true,
           "variables": [
             {
               "variable_type": "closed_ended",
               "display_order": 1,
               "label": "Have you had",
-              "subject": "Self",
               "response_options": [
                 {
                   "display_order": 1,
@@ -4286,14 +4103,12 @@
               "variable_type": "open_ended",
               "display_order": 2,
               "label": "If yes, age started (years)",
-              "subject": "Self",
               "answer_data_type": "NUMBER"
             },
             {
               "variable_type": "closed_ended",
               "display_order": 3,
               "label": "Being treated now",
-              "subject": "Self",
               "response_options": [
                 {
                   "display_order": 1,
@@ -4321,32 +4136,30 @@
       "component_type": "Question",
       "display_order": 15,
       "text": "Please write in the box below any serious medical or health problem you have had that is not listed on this page.",
-      "question_number": "16",
+      "printed_number": "16",
       "self_contained": true,
       "variables": [
         {
           "variable_type": "open_ended",
           "display_order": 1,
-          "subject": "Self",
           "answer_data_type": "TEXT"
         }
       ]
     },
     {
-      "component_type": "Section",
+      "component_type": "Question Group",
       "display_order": 16,
       "children": [
         {
           "component_type": "Question",
           "display_order": 1,
           "text": "Have you ever taken any medications regularly, including over-the-counter medications?",
-          "question_number": "17a",
+          "printed_number": "17a",
           "self_contained": true,
           "variables": [
             {
               "variable_type": "closed_ended",
               "display_order": 1,
-              "subject": "Self",
               "response_options": [
                 {
                   "display_order": 1,
@@ -4364,7 +4177,7 @@
           "component_type": "Question",
           "display_order": 2,
           "text": "If yes, write medications below. Please do not include vitamins or nutritional supplements.",
-          "question_number": "17b",
+          "printed_number": "17b",
           "self_contained": false,
           "condition": "If yes",
           "parent_question": "17a",
@@ -4372,7 +4185,6 @@
             {
               "variable_type": "open_ended",
               "display_order": 1,
-              "subject": "Self",
               "answer_data_type": "TEXT"
             }
           ]

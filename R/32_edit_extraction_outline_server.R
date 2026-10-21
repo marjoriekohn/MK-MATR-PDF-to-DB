@@ -1,9 +1,10 @@
 #' The questionnaire outline of the Edit Extraction page.
 #'
 #' Blocks as a tree, each edited where it is: type a block's words into its row, pick the question it
-#' follows, open and close sections, open a question's panel for its skip condition and variables, mark
-#' a block as checked, add and delete blocks, variables and choices, and drag any of them into a new
-#' order. Every change goes through `state$change()`.
+#' follows and type its condition, open and close sections and question groups, open a question's panel
+#' for its variables, add a variable's optional fields, mark a block as checked, add and delete blocks,
+#' variables and choices, and drag any of them into a new order. Every change goes through
+#' `state$change()`.
 #'
 #' Drawing the whole tree takes seconds for a long questionnaire, for the server and again for the
 #' browser, so it is drawn only when a draft opens or much of it changes. What a click or keystroke
@@ -34,6 +35,8 @@ extraction_outline_server <- function(
     # ------ REACTIVE ----------------------------------------------------------
     collapsed <- reactiveVal(character()) # sections whose contents are hidden
     opened <- reactiveVal(character()) # questions whose panel is open
+    shown <- reactiveVal(character()) # optional fields added to variables, as "v12:label" (see variable_card())
+    focus <- NULL # the optional field just added, which gets the cursor when it is drawn
     redraw <- reactiveVal(0L) # ticks when the whole tree must be drawn again
     drawn <- reactiveVal(NULL) # the draft as the tree on the page shows it
     patched <- reactiveVal(NULL) # the last change put on the tree already drawn (outline_patch())
@@ -49,7 +52,7 @@ extraction_outline_server <- function(
              select = state$selected(event$id),
              toggle = collapsed(flip(collapsed(), event$id)),
              details = toggle_panel(draft, event$id),
-             collapse_all = collapsed(blocks$id[blocks$component_type == "Section"]),
+             collapse_all = collapsed(blocks$id[is_container(blocks$component_type)]),
              expand_all = collapsed(character()),
              add_block = add_block(event$type),
              check = toggle_checked(draft, event$id),
@@ -59,6 +62,7 @@ extraction_outline_server <- function(
              },
              add_choice = state$change(draft_service_add_choice(draft, event$id)),
              copy_codes = state$change(draft_service_copy_codes(draft, event$id)),
+             show_field = show_field(event$id, event$name),
              delete = {
                deleted <- state$change(draft_service_delete(draft, event$table, event$id))
                if (deleted && event$table == "components" && identical(state$selected(), event$id)) state$selected(NULL)
@@ -82,6 +86,19 @@ extraction_outline_server <- function(
       }
       opened(c(opened(), id))
       insertUI(node, "beforeEnd", question_panel(block, draft, current_view(), lookups, ns))
+    }
+
+    # An optional field added to a variable shows, empty, with the cursor in it; the variable's panel is
+    # drawn again for it. It stays until the outline is drawn again from scratch, unless something is
+    # typed into it.
+    show_field <- function(id, name) {
+      if (!name %in% names(optional_variable_fields)) {
+        return()
+      }
+      shown(union(shown(), paste0(id, ":", name)))
+      focus <<- paste0(id, ":", name)
+      put_back("variables", id)
+      focus <<- NULL
     }
 
     # A new block goes next to the selected one, and is selected so its words can be typed.
@@ -177,7 +194,8 @@ extraction_outline_server <- function(
     current_view <- function() {
       list(
         selected = state$selected(), collapsed = collapsed(), opened = opened(),
-        problems = state$problems(), suggestions = suggestions(), matr_ids = matr_ids()
+        problems = state$problems(), suggestions = suggestions(), matr_ids = matr_ids(),
+        shown = shown(), focus = focus
       )
     }
 
@@ -212,6 +230,7 @@ extraction_outline_server <- function(
     output$tree <- renderUI({
       redraw()
       isolate({
+        shown(character()) # fields added and left empty go when the whole outline is drawn again
         draft <- state$draft()
         drawn(draft)
         outline_tree(draft, current_view(), lookups, ns)

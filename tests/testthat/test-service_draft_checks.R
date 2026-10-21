@@ -24,17 +24,9 @@ test_that("each broken rule is reported against the block to fix", {
   edit <- function(table, id, field, value) draft_service_update(draft, table, id, field, value)
 
   expect_true(problem_for(edit("components", q1a, "text", ""), "Add the printed words"))
-  unnumbered <- draft
-  unnumbered$components[unnumbered$components$id == q1a, c("question_number", "printed_number")] <- NA
-  expect_true(problem_for(unnumbered, "Add the question number"))
-  expect_true(problem_for(edit("components", q1a, "printed_number", "1B"), "no other question has"))
-  # a question with no number typed is asked as its place among the questions, which can clash too
-  places <- draft_service_renumber_questions(draft)
-  places <- draft_service_update(places, "components", q1a, "printed_number", "")
-  expect_false(any(draft_service_check(places, test_lookups())$id == q1a))
-  expect_true(any(grepl("no other question has", draft_service_check(
-    draft_service_update(places, "components", q1b, "printed_number", "1"), test_lookups()
-  )$message)))
+  # a printed number can be missing, or repeat (each section can start again at 1)
+  expect_false(any(draft_service_check(edit("components", q1a, "printed_number", ""), test_lookups())$id == q1a))
+  expect_false(any(draft_service_check(edit("components", q1a, "printed_number", "1B"), test_lookups())$id == q1a))
   expect_true(problem_for(edit("components", q1a, "self_contained", "FALSE"), "Pick the question it follows"))
   expect_true(problem_for(edit("components", q1a, "parent_question_id", q1b), "printed before it"))
   expect_true(problem_for(suppressMessages(draft_service_delete(draft, "variables", box)), "Add at least one variable"))
@@ -49,7 +41,9 @@ test_that("each broken rule is reported against the block to fix", {
   same_codes <- draft_service_update(same_codes, "response_options", choices[2], "code_value", "1")
   expect_true(problem_for(same_codes, "its own code"))
 
-  expect_true(problem_for(edit("variables", box, "subject", "Respondents Family"), "who it's about from the list"))
+  # who it's about can be blank (the respondent) or a subject the database doesn't have yet
+  expect_false(problem_for(edit("variables", box, "subject", "Respondents Family"), "Variable"))
+  expect_false(problem_for(edit("variables", box, "subject", ""), "Variable"))
   expect_true(problem_for(edit("variables", box, "variable_type", "open_ended"), "kind of answer"))
   expect_true(problem_for(edit("variables", box, "matr_id", ""), "fill in its MATR ID"))
 
@@ -72,10 +66,6 @@ test_that("a problem with one field says which, so the page can outline it", {
   expect_equal(unlist(field_of(draft_service_update(draft, "variables", box, "matr_id", ""), "MATR ID")), c(table = "variables", row = box, field = "matr_id"))
   expect_equal(unlist(field_of(draft_service_update(draft, "response_options", choices[2], "answer_option", "Yes"), "each choice once")[2, ]), c(table = "response_options", row = choices[2], field = "answer_option"))
   expect_equal(unlist(field_of(draft_service_update(draft, "components", q1a, "text", ""), "printed words")), c(table = "components", row = q1a, field = "text"))
-  expect_equal(
-    unlist(field_of(draft_service_update(draft, "components", q1a, "printed_number", "1b"), "no other question")[1, ]),
-    c(table = "components", row = q1a, field = "printed_number")
-  )
   no_choices <- suppressMessages(draft_service_delete(draft_service_delete(draft, "response_options", choices[2]), "response_options", choices[1]))
   whole_box <- field_of(no_choices, "add its choices")
   expect_equal(whole_box$row, box)
@@ -95,4 +85,29 @@ test_that("problems are listed in printed order, and the next one wraps around",
   expect_equal(draft_service_next_problem(draft, problems, after_id = NULL), q1a)
   expect_equal(draft_service_next_problem(draft, problems, after_id = q1a), q1c)
   expect_equal(draft_service_next_problem(draft, problems, after_id = q1c), q1a)
+})
+
+test_that("a section needs its printed heading, a question group has none, and a section isn't inside a group", {
+  draft <- with_matr_ids()
+  group <- draft$components$parent_id[draft$components$id == block_numbered(draft, "1a")$id]
+  problems_of <- function(broken) draft_service_check(broken, test_lookups())
+  expect_equal(nrow(problems_of(draft)), 0) # the gold questionnaire's groups have no words
+
+  worded <- draft
+  worded$components$text[worded$components$id == group] <- "Part A"
+  expect_true(any(grepl("question group has no words of its own", problems_of(worded)$message)))
+
+  as_section <- draft_service_update(draft, "components", group, "component_type", "Section")
+  heading <- problems_of(as_section)
+  expect_equal(heading$message[heading$id == group], "Add the section's printed heading. A group with no heading is a question group.")
+  expect_equal(heading$field[heading$id == group], "text")
+  expect_equal(nrow(problems_of(draft_service_update(as_section, "components", group, "text", "Part A"))), 0)
+
+  # a section the AI put inside a group is pointed out
+  nested <- draft
+  inner <- draft_service_next_id(nested, "components")
+  nested <- draft_service_add_block(nested, "Question Group", inner, near_id = group)
+  nested$components$component_type[nested$components$id == inner] <- "Section"
+  nested$components$text[nested$components$id == inner] <- "Part B"
+  expect_true(any(problems_of(nested)$id == inner & grepl("can't be inside a question group", problems_of(nested)$message)))
 })

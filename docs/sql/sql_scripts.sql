@@ -240,7 +240,7 @@ create table public.component_type (
 create table public.component (
   component_id      bigint primary key default private.random_id('component', 'component_id'),
   component_type_id bigint not null,                                     -- BR39, BR40
-  text              text                                                 -- empty only for Sections (BR42, site)
+  text              text                                                 -- empty only for Question Groups (BR42, site)
 );
 
 -- QUESTION is a subtype of COMPONENT with no attributes of its own (BR43, BR44).
@@ -279,9 +279,10 @@ create table public.wave_question (
   questionnaire_id bigint not null,
   wave_id          bigint not null,
   component_id     bigint not null,
-  question_number  text   not null,      -- text: printed numbers contain letters (1a, 1d)
+  question_number  text   not null,      -- its place among the wave's questions (1, 2, 3...), worked out by the site
+  printed_number   text,                 -- the number printed beside it (1a, 12, Q7); can repeat, or be empty
   primary key (questionnaire_id, wave_id, component_id),
-  -- BR71: question number unique within a wave (deferrable for renumbering)
+  -- BR71: question number (its place) unique within a wave (deferrable for renumbering)
   constraint wave_question_number_unique unique (wave_id, question_number) deferrable initially immediate
 );
 
@@ -941,6 +942,30 @@ create trigger ai_extracted_draft_guard
   before update or delete on public.ai_extracted_draft
   for each row execute function public.draft_detail_guard();
 
+-- What the AI returned is written by the reading job while it reads, before anyone saves the draft, and
+-- never changed after: what the reviewer changed is measured against it.
+create function public.ai_original_guard()
+returns trigger
+language plpgsql
+set search_path = public, pg_temp
+as $$
+begin
+  -- the first answer can always be written; a later one only while the PDF is read again, before
+  -- anyone has saved a reviewed copy
+  if new.ai_original is distinct from old.ai_original and old.ai_original is not null and (
+    old.reading_status not in ('queued', 'sent', 'received')
+    or exists (select 1 from public.extracted_draft e where e.draft_id = old.draft_id and e.questionnaire is not null)
+  ) then
+    raise exception 'What the AI returned is kept as it was read, so what the reviewer changed can be measured. Read the PDF again only before anyone saves the draft.';
+  end if;
+  return new;
+end;
+$$;
+
+create trigger ai_extracted_draft_original_kept
+  before update of ai_original on public.ai_extracted_draft
+  for each row execute function public.ai_original_guard();
+
 -- Every draft has its details. Checked when the transaction ends, so create_draft() can add the
 -- draft and then its details.
 create function public.draft_has_details()
@@ -1303,7 +1328,7 @@ declare
   loadable constant text[] := array[
     'questionnaire', 'wave', 'component', 'questionnaire_component', 'question', 'questionnaire_question',
     'wave_question', 'variable', 'open_ended', 'closed_ended', 'option_set', 'answer_option',
-    'answer_option_set', 'response_option'
+    'answer_option_set', 'response_option', 'subject'
   ];
   token_pattern constant text := '^new:[a-z_]+:[0-9]+$';
 
@@ -1993,7 +2018,7 @@ comment on table public.component               is 'One piece of printed materia
 comment on table public.question                is 'Subtype of component that requests one or more answers.';
 comment on table public.questionnaire_component is 'Where a questionnaire printed a component: parent and display order.';
 comment on table public.questionnaire_question  is 'A question as printed in one questionnaire; variables attach here.';
-comment on table public.wave_question           is 'That a wave actually asked a question, with its printed number in that wave.';
+comment on table public.wave_question           is 'That a wave actually asked a question: its place among the wave''s questions, and the number printed beside it.';
 comment on table public.subject                 is 'Who a variable can be about. Kept by staff (Make an edit, kind Subject); read by the dashboard.';
 comment on table public.variable                is 'One place an answer is recorded; one column in the response database.';
 comment on table public.open_ended              is 'Variable the respondent writes.';
@@ -2055,9 +2080,14 @@ comment on column public.extracted_draft.pdf_name is 'The PDF''s name as uploade
 
 comment on column public.ai_extracted_draft.method is 'Always AI-Powered: with draft_id, it can only point at an AI-Powered extraction.';
 comment on column public.ai_extracted_draft.ai_original is
-  'The questionnaire exactly as the AI returned it. Written once by the reading job and never changed, so what the reviewer changed can be measured.';
+  'The questionnaire as the AI returned it, tidied by the reading job (spaces, quotes, trailing full stops on numbers). Written by the reading job before anyone saves the draft, and never changed after, so what the reviewer changed can be measured.';
 comment on column public.ai_extracted_draft.review_edits is
-  'The reviewer''s changes to what the AI returned, added to each time they save: [{at, by, by_name, change, item, where, field, before, after}].';
+  'How the reviewed copy differs from ai_original, worked out again (not added to) each time staff save: [{change, item, ref, where, field, before, after}]. A value changed back is no difference.';
+comment on column public.component.text is 'The printed words. Empty only for a Question Group, which has none (BR42, site).';
+comment on column public.wave_question.question_number is
+  'The question''s place among the questions the wave asks (1, 2, 3...), in printed order; sections and question groups aren''t counted. Unique in a wave. Worked out by the site, not typed.';
+comment on column public.wave_question.printed_number is
+  'The number or label printed beside the question ("1a", "12", "Q7"), as text. Can repeat in a wave (each section can start again at 1). Empty when none is printed.';
 comment on column public.ai_extracted_draft.reading_status is 'How far the reading job has got: queued, sent, received, ready or failed.';
 comment on column public.ai_extracted_draft.reading_started is 'When this reading was started. A job started for an earlier one saves nothing.';
 comment on column public.ai_extracted_draft.reading_claimed_at is
@@ -2129,7 +2159,8 @@ insert into public.component_type (name, description) values
   ('Instruction',        'Printed directions telling the respondent how to answer.'),
   ('Definition',         'Printed explanation of a term used in the questionnaire.'),
   ('Interviewer Script', 'Text an interviewer reads aloud or follows.'),
-  ('Note',               'Any other printed remark.');
+  ('Note',               'Any other printed remark.'),
+  ('Question Group',     'Holds blocks that belong together but have no printed heading: a battery, a definition with its question, a question with its follow-up. Has no text.');
 
 -- Who a variable can be about; staff keep this list on Make an edit.
 insert into public.subject (name) values
@@ -2142,8 +2173,10 @@ commit;
 --   BR5  lead PI never changes          BR17 one upvote per session
 --   BR23 staff never deleted            BR38 every write recorded (true of changes made through
 --                                            drafts: an applied draft and its applied_item rows)
---   BR42 only Sections may have no text BR45 Question-type components have a QUESTION row
---   BR53 a parent is a Section          BR64 non-self-contained question names a parent
+--   BR42 only Question Groups have no text, and they have none
+--   BR45 Question-type components have a QUESTION row
+--   BR53 a parent is a Section or Question Group; a Section is never inside a Question Group
+--   BR64 non-self-contained question names a parent
 --   BR65 non-self-contained hidden from standalone search
 --   BR69 questionnaire question asked in >= 1 wave
 --   BR80 scale has >= 1 question        BR87 questionnaire question has >= 1 variable

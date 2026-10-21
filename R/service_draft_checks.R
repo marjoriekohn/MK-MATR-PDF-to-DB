@@ -17,7 +17,7 @@ draft_service_check <- function(draft, lookups, matr_ids = TRUE) {
   problems <- rbind(
     block_problems(draft, lookups),
     question_problems(draft),
-    variable_problems(draft, lookups, matr_ids)
+    variable_problems(draft, matr_ids)
   )
   position <- match(problems$id, draft_service_printed_order(draft))
   problems[order(position), , drop = FALSE]
@@ -38,26 +38,42 @@ draft_service_next_problem <- function(draft, problems, after_id) {
   if (length(later) > 0) later[1] else ids[1]
 }
 
-#' Problems with blocks themselves: their kind, and words a block must have.
+#' Problems with blocks themselves: their kind, the words a block must have (and a question group mustn't),
+#' and where a section can be.
 #'
 #' @param draft A draft: `list(questionnaire, components, variables, response_options)`; see the top of `service_draft.R`.
 #' @param lookups The pick lists, from `lookup_service_get_all()`.
 #' @return A data frame of `id` and `message`.
 block_problems <- function(draft, lookups) {
   blocks <- draft$components
+  is_group <- blocks$component_type == "Question Group"
+  parent_type <- blocks$component_type[match(blocks$parent_id, blocks$id)]
+  text_problem <- function(condition, message) {
+    problems_where(blocks$id, condition, message, table = "components", rows = blocks$id, field = "text")
+  }
   rbind(
     problems_where(
       blocks$id, !blocks$component_type %in% lookups$component_types,
       "Pick a kind of block from the list."
     ),
+    text_problem(
+      is.na(blocks$text) & blocks$component_type == "Section",
+      "Add the section's printed heading. A group with no heading is a question group." # BR42
+    ),
+    text_problem(is.na(blocks$text) & !is_container(blocks$component_type), "Add the printed words."), # BR42
+    text_problem(
+      !is.na(blocks$text) & is_group,
+      "A question group has no words of its own. Put them in an Instruction inside it."
+    ),
     problems_where(
-      blocks$id, is.na(blocks$text) & blocks$component_type != "Section",
-      "Add the printed words. Only a section can be blank.", # BR42
-      table = "components", rows = blocks$id, field = "text"
+      blocks$id, blocks$component_type == "Section" & parent_type %in% "Question Group",
+      "A section can't be inside a question group. Move it out, or make it a question group." # BR53
     )
   )
 }
 
+# A question's number is worked out from its place, and the number printed beside it can repeat (each
+# section can start again at 1) or be missing, so neither is checked.
 question_problems <- function(draft) {
   blocks <- draft$components
   questions <- blocks[blocks$component_type == "Question", ]
@@ -69,17 +85,7 @@ question_problems <- function(draft) {
   parent_field <- function(condition, message) {
     problems_where(questions$id, condition, message, table = "components", rows = questions$id, field = "parent_question_id")
   }
-  numbers <- draft_service_question_number(questions)
   rbind(
-    problems_where(
-      questions$id, is.na(numbers), "Add the question number.",
-      table = "components", rows = questions$id, field = "printed_number"
-    ),
-    problems_where(
-      questions$id, duplicated_within(tolower(numbers), "wave"),
-      "Give it a number no other question has.", # BR71
-      table = "components", rows = questions$id, field = "printed_number"
-    ),
     problems_where(
       questions$id, !questions$id %in% draft$variables$component_id,
       "Add at least one variable." # BR87
@@ -95,7 +101,7 @@ question_problems <- function(draft) {
   )
 }
 
-variable_problems <- function(draft, lookups, matr_ids = TRUE) {
+variable_problems <- function(draft, matr_ids = TRUE) {
   boxes <- draft$variables
   choices <- draft$response_options
   n_choices <- tabulate(match(choices$variable_id, boxes$id), nbins = nrow(boxes))
@@ -126,7 +132,7 @@ variable_problems <- function(draft, lookups, matr_ids = TRUE) {
       "give each choice its own code.", "code_value" # BR103
     ),
     box_problem(!is_choice_box & is.na(boxes$answer_data_type), "pick the kind of answer it takes.", "answer_data_type"), # BR95
-    box_problem(!boxes$subject %in% lookups$subjects, "pick who it's about from the list.", "subject"),
+    # About isn't checked: blank is the respondent, and a new subject is added when the extraction is applied
     if (matr_ids) box_problem(is.na(boxes$matr_id), "fill in its MATR ID.", "matr_id"), # every variable needs one before it is sent
     box_problem(
       duplicated_within(boxes$matr_id, "questionnaire"),

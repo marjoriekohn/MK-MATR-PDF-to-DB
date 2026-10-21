@@ -12,8 +12,8 @@ undo_depth <- 50
 #' previewing writes nothing. Submit Change Request saves anything unsaved and sends it to Change
 #' Requests, where its Basic Info (registry, study, questionnaire, wave) is filled in; then one other
 #' staff member approves it, or an ADMIN adds their own (`service_extraction_push.R`). Each question
-#' shows its place among the questions (kept up to date as blocks move) and the number printed beside
-#' it, which staff type; the wave asks it as the printed number, or as its place if none is typed. A
+#' shows its place among the questions (worked out from the outline, and kept up to date as blocks move)
+#' and the number printed beside it (read off the PDF, and corrected by staff); the wave records both. A
 #' draft going into a recorded questionnaire gets the MATR IDs its questions already have.
 #'
 #' One person at a time works on a draft (see `service_draft_row.R`). Opening one here claims it; while
@@ -57,6 +57,7 @@ edit_extraction_server <- function(
     record <- reactive(extractions$all()[[req(record_id())]]) # as last saved, by anyone
     draft <- reactiveVal(NULL) # its questionnaire as it is on screen
     saved <- reactiveVal(NULL) # its questionnaire as it was last saved
+    original <- reactiveVal(NULL) # what the AI returned for it (NULL for a Manual extraction); see extraction_service_open_draft()
     undo_stack <- reactiveVal(list()) # earlier drafts, newest first
     selected <- reactiveVal(NULL) # id of the selected block
     layout_version <- reactiveVal(0L) # ticks when the outline must rebuild its inputs
@@ -135,10 +136,10 @@ edit_extraction_server <- function(
 
     observeEvent(input$save, save_draft())
 
-    # The page saves what has changed since it opened the draft or last saved it (`saved()`); for an
-    # AI-Powered draft that is also kept as the reviewer's edits (`extraction_service_save_draft()`).
-    # It is refused if someone else saved the draft after this page opened it (`loaded_revision()`):
-    # then staff may open the draft as it was saved instead.
+    # The page saves the questionnaire as it is on screen; for an AI-Powered draft, how it differs from
+    # what the AI returned (`original()`) is kept with it (`extraction_service_save_draft()`). It is
+    # refused if someone else saved the draft after this page opened it (`loaded_revision()`): then staff
+    # may open the draft as it was saved instead.
     save_draft <- function() {
       if (!can_change()) {
         return(FALSE)
@@ -146,7 +147,7 @@ edit_extraction_server <- function(
       tryCatch(
         {
           revision <- extraction_service_save_draft(
-            connection, record(), draft(), saved(), me, expected_revision = loaded_revision()
+            connection, record(), draft(), original(), me, expected_revision = loaded_revision()
           )
           loaded_revision(revision)
           saved(draft())
@@ -226,17 +227,18 @@ edit_extraction_server <- function(
       TRUE
     }
 
-    # Loads `opened`'s questionnaire as it was saved at `revision`, and shows it. Returns whether it could.
+    # Loads `opened`'s questionnaire as it was saved at `revision`, and what the AI returned for it, and
+    # shows it. Returns whether it could.
     put_on_page <- function(opened, revision) {
-      loaded <- tryCatch(extraction_service_load_draft(connection, opened), error = function(problem) {
+      loaded <- tryCatch(extraction_service_open_draft(connection, opened), error = function(problem) {
         show_problem(problem, "Couldn't open this draft")
         NULL
       })
       if (is.null(loaded)) {
         return(FALSE)
       }
-      # The questions are numbered by their place in the outline; the saved copy gets the numbers on the next save.
-      loaded <- draft_service_renumber_questions(loaded)
+      original(loaded$original)
+      loaded <- loaded$draft
       record_id(opened$id)
       loaded_revision(revision)
       claim(NULL)

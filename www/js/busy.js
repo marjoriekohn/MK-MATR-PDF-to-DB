@@ -9,7 +9,7 @@
 
   const pressWindowMs = 1000; // how soon after a press the server's work counts as the press's
   let pressed = null; // { button, at }
-  let working = null; // the button showing the spinner
+  let working = null; // the button held while the server works on its press
 
   function isButton(el) {
     return el && !el.disabled && !el.closest('.dropdown-toggle, .btn-toggle, [data-bs-toggle]');

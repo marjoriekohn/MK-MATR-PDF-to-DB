@@ -260,28 +260,39 @@ extraction_service_load_draft <- function(connection, record) {
   draft_service_load(connection, record$id)
 }
 
+#' A draft's questionnaire, for the Edit Extraction page, with what the AI returned to compare it with.
+#'
+#' Both are read at once. What the AI returned is read only when the draft opens, since it never changes.
+#'
+#' @param connection The MATR database, `list(url, key)`; see `model_database.R`.
+#' @param record An extraction record, as `extraction_model_get_all()` returns it.
+#' @return A list: `draft` (see `extraction_service_load_draft()`) and `original`, what the AI returned
+#'   as a draft (`NULL` for a Manual extraction). An error if reading hasn't finished.
+extraction_service_open_draft <- function(connection, record) {
+  json <- draft_model_get_both(connection, record$id)
+  if (is.null(json$questionnaire %||% json$original)) stop("This draft hasn't been read yet.", call. = FALSE)
+  list(
+    draft = draft_service_from_json(json$questionnaire %||% json$original),
+    original = if (identical(record$method, extraction_ai) && !is.null(json$original)) draft_service_from_json(json$original)
+  )
+}
+
 #' Save staff's reviewed copy of the questionnaire.
 #'
-#' For an AI-Powered extraction it also keeps what the reviewer changed since the last save
-#' (see `draft_service_review_edits()`), next to the AI's answer, which is never touched.
+#' For an AI-Powered extraction it also keeps how the copy differs from what the AI returned (see
+#' `draft_service_review_edits()`), in place of what was kept before; the AI's answer is never touched.
 #'
 #' @param connection The MATR database, `list(url, key)`; see `model_database.R`.
 #' @param record The extraction draft's record.
 #' @param draft A draft, as the Edit Extraction page edits it.
-#' @param base The draft as it was when the page opened it or last saved it; what the
-#'   changes are measured against.
+#' @param original What the AI returned, from `extraction_service_open_draft()`; `NULL` for a Manual
+#'   extraction, which keeps no differences.
 #' @param me Who is saving: `list(staff_id, name, role)`.
-#' @param now The time to record.
 #' @param expected_revision The revision the page opened (or last saved): the save is refused if
 #'   someone else saved the draft since, so nobody's work is overwritten. `NULL` skips the check.
 #' @return The draft's revision after the save, invisibly. An error with a sentence if it was refused.
-extraction_service_save_draft <- function(connection, record, draft, base, me, now = Sys.time(),
-                                          expected_revision = NULL) {
-  edits <- NULL
-  if (identical(record$method, extraction_ai)) {
-    kept <- draft_model_get_record(connection, record$id)$edits
-    edits <- c(kept, draft_service_review_edits(base, draft, me, now))
-  }
+extraction_service_save_draft <- function(connection, record, draft, original, me, expected_revision = NULL) {
+  edits <- if (!is.null(original)) draft_service_review_edits(original, draft)
   draft_service_save(connection, record$id, draft, me$staff_id, edits, expected_revision)
 }
 

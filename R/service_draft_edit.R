@@ -33,6 +33,11 @@ draft_service_update <- function(draft, table, id, field, value) {
     component_type = set_component_type(draft, row, value),
     variable_type = set_variable_type(draft, row, value),
     matr_id = set_matr_id(draft, row, value),
+    parent_question_id = set_parent_question(draft, row, value),
+    subject = {
+      draft$variables$subject[row] <- blank_respondent(value)
+      draft
+    },
     {
       draft[[table]][row, field] <- value
       draft
@@ -47,13 +52,25 @@ as_field_value <- function(value, type) {
   suppressWarnings(as.vector(value, type))
 }
 
-# A block's kind decides what else it holds: only a Section holds blocks (BR53),
-# and only a Question has a number and variables (BR45).
+# A block's kind decides what else it holds: only sections and question groups hold blocks (BR53), a
+# section is never inside a question group, a question group has no words of its own, and only a
+# Question has a number and variables (BR45).
 set_component_type <- function(draft, row, type) {
-  block <- draft$components[row, ]
+  blocks <- draft$components
+  block <- blocks[row, ]
   if (is.na(type)) stop("Pick a kind of block.")
-  if (type != "Section" && any(draft$components$parent_id %in% block$id)) {
-    stop("Move the blocks out of this section first, then change its kind.")
+  inside <- blocks$component_type[blocks$parent_id %in% block$id]
+  if (!is_container(type) && length(inside) > 0) {
+    stop("Move the blocks out of it first, then change its kind.")
+  }
+  if (type == "Question Group" && !is.na(block$text)) {
+    stop("A question group has no words of its own. Move these words into an Instruction first, then make it a question group.")
+  }
+  if (type == "Question Group" && "Section" %in% inside) {
+    stop("A section can't be inside a question group. Move the sections out of it first.")
+  }
+  if (type == "Section" && !is.na(block$parent_id) && !blocks$component_type[match(block$parent_id, blocks$id)] %in% "Section") {
+    stop("A section can't be inside a question group. Move it out of the group first.")
   }
   draft$components$component_type[row] <- type
   if (type == "Question") {
@@ -71,6 +88,29 @@ set_component_type <- function(draft, row, type) {
   }
   draft$variables <- draft$variables[draft$variables$component_id != block$id, ]
   unlink_followers(drop_orphans(draft), block$id)
+}
+
+# The question a question follows, as picked from its list ("7 · Have you smoked…") or typed: by its
+# number (printed, or its place where none is printed), the nearest question before it with that number,
+# or failing that the first one after it (which the checks point out). A block's id is taken as it is.
+set_parent_question <- function(draft, row, value) {
+  blocks <- draft$components
+  if (is.na(value) || value %in% blocks$id) {
+    draft$components$parent_question_id[row] <- value
+    return(draft)
+  }
+  number <- trimws(sub(paste0(outline_number_separator, ".*$"), "", value))
+  printed <- draft_service_printed_order(draft)
+  questions <- printed[blocks$component_type[match(printed, blocks$id)] %in% "Question"]
+  questions <- setdiff(questions, blocks$id[row])
+  numbers <- draft_service_question_number(blocks[match(questions, blocks$id), , drop = FALSE])
+  same <- questions[same_number(numbers, number)]
+  if (length(same) == 0) {
+    stop(sprintf("No question is numbered %s. Pick the question it follows from the list.", number))
+  }
+  earlier <- same[match(same, printed) < match(blocks$id[row], printed)]
+  draft$components$parent_question_id[row] <- if (length(earlier) > 0) earlier[length(earlier)] else same[1]
+  draft
 }
 
 # Write-in boxes have an answer type; choice boxes have choices instead.
@@ -155,17 +195,21 @@ draft_service_uncheck_edited <- function(before, after) {
 #'
 #' @param draft A draft: `list(questionnaire, components, variables, response_options)`; see the top of `service_draft.R`.
 #' @param ids All the block ids in printed order.
-#' @param parent_ids The section each block is in; `NA` for the top level.
-#' @return The changed draft. An error if the outline was out of date or a non-section
-#'   would hold blocks.
+#' @param parent_ids The section or question group each block is in; `NA` for the top level.
+#' @return The changed draft. An error if the outline was out of date, a block that isn't a section or
+#'   question group would hold blocks, or a section would be inside a question group.
 draft_service_apply_order <- function(draft, ids, parent_ids) {
   blocks <- draft$components
   if (length(ids) != nrow(blocks) || !setequal(ids, blocks$id)) {
     stop("The outline was out of date. Try that again.")
   }
   parent_types <- blocks$component_type[match(parent_ids, blocks$id)]
-  if (any(!is.na(parent_ids) & !parent_types %in% "Section")) {
-    stop("Only sections can hold other blocks.")
+  if (any(!is.na(parent_ids) & !is_container(parent_types))) {
+    stop("Only sections and question groups can hold other blocks.")
+  }
+  moved_types <- blocks$component_type[match(ids, blocks$id)]
+  if (any(moved_types == "Section" & !is.na(parent_ids) & !parent_types %in% "Section")) {
+    stop("A section can't go inside a question group.")
   }
   rows <- match(ids, blocks$id)
   blocks$parent_id[rows] <- parent_ids
@@ -194,8 +238,9 @@ draft_service_reorder <- function(draft, table, ids) {
 # ------ Adding and deleting ----------------------------------------------------
 #' Add a block.
 #'
-#' It goes right after the selected one, or inside it if that is a section (unless the
-#' new block is a section too), or at the very end.
+#' It goes right after the selected one, or inside it if that is a section or question group (unless
+#' the new block is a section), or at the very end. A new section never lands inside a question group:
+#' it goes after the group.
 #'
 #' @param draft A draft: `list(questionnaire, components, variables, response_options)`; see the top of `service_draft.R`.
 #' @param component_type The kind of block.
@@ -203,9 +248,16 @@ draft_service_reorder <- function(draft, table, ids) {
 #' @param near_id The selected block's id, or `NULL`.
 #' @return The changed draft.
 draft_service_add_block <- function(draft, component_type, id, near_id = NULL) {
-  near <- draft$components[draft$components$id %in% near_id, ]
+  blocks <- draft$components
+  near <- blocks[blocks$id %in% near_id, ]
   has_near <- nrow(near) == 1
-  goes_inside <- has_near && near$component_type == "Section" && component_type != "Section"
+  if (has_near && component_type == "Section") {
+    # climb out of question groups, so the section lands at the top level or in a section
+    while (!is.na(near$parent_id) && !blocks$component_type[match(near$parent_id, blocks$id)] %in% "Section") {
+      near <- blocks[blocks$id == near$parent_id, ]
+    }
+  }
+  goes_inside <- has_near && is_container(near$component_type) && component_type != "Section"
   add_rows(draft, "components", data.frame(
     id = id,
     parent_id = if (goes_inside) near$id else if (has_near) near$parent_id else NA_character_,
@@ -245,6 +297,7 @@ draft_service_add_box <- function(draft, component_id) {
   }
   choices$id <- draft_service_next_id(draft, "response_options", nrow(choices))
   choices$variable_id <- rep(id, nrow(choices))
+  choices$ref <- NA_character_ # copies, which the AI didn't return
   add_rows(draft, "response_options", choices)
 }
 
@@ -463,8 +516,8 @@ draft_service_text_suggestions <- function(draft, recorded_texts = NULL) {
 #' Number the questions 1, 2, 3... in the order they are printed.
 #'
 #' A question's place follows its place in the questionnaire, so moving, adding or deleting a question
-#' renumbers the ones after it. Blocks that aren't questions have no number. The number printed beside a
-#' question (`printed_number`) is staff's, and is left as it is.
+#' renumbers the ones after it. Blocks that aren't questions (sections and question groups included) have
+#' no number and aren't counted. The number printed beside a question (`printed_number`) is left as it is.
 #'
 #' @param draft A draft: `list(questionnaire, components, variables, response_options)`; see the top of `service_draft.R`.
 #' @return The changed draft.

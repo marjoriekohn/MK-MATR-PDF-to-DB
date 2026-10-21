@@ -110,8 +110,8 @@ count_pages <- function(pdf_path, generate, model) {
 }
 
 # One reading from the readings of each page range. A range that starts by
-# carrying on a section from the pages before it (`continued`) adds its blocks
-# to that section, and to a section inside it that carries on too.
+# carrying on a section or question group from the pages before it (`continued`) adds its blocks
+# to it, and to a section or group inside it that carries on too.
 join_page_ranges <- function(parts) {
   components <- list()
   for (part in parts) components <- carry_on(components, part$components)
@@ -124,7 +124,7 @@ join_page_ranges <- function(parts) {
 carry_on <- function(blocks, more) {
   last <- length(blocks)
   continues_section <- length(more) > 0 && isTRUE(more[[1]]$continued) && last > 0 &&
-    blocks[[last]]$component_type == "Section"
+    is_container(blocks[[last]]$component_type)
   if (continues_section) {
     blocks[[last]]$children <- carry_on(blocks[[last]]$children, more[[1]]$children)
     more <- more[-1]
@@ -168,7 +168,8 @@ reading_service_prompt_version <- function(instructions) {
 # Counts display_order 1, 2, 3... down each list, keeps only the fields each kind
 # of block has (in tests/testthat/fixtures/gna_gold.json's order, leaving out empty ones), and
 # tidies the text: one space between words, straight quotes. A block put inside
-# one that isn't a section moves out to sit straight after it.
+# one that isn't a section or question group moves out to sit straight after it. A variable about the
+# respondent has no subject.
 reading_service_tidy <- function(reading) {
   list(
     questionnaire = without_blanks(list(
@@ -184,7 +185,7 @@ tidy_blocks <- function(blocks) {
   lapply(seq_along(blocks), function(i) {
     block <- blocks[[i]]
     type <- block$component_type
-    if (type == "Section") {
+    if (is_container(type)) {
       return(without_blanks(list(
         component_type = type, display_order = i, text = clean_text(block$text),
         children = tidy_blocks(block$children)
@@ -197,7 +198,7 @@ tidy_blocks <- function(blocks) {
       component_type = type,
       display_order = i,
       text = clean_text(block$text),
-      question_number = clean_number(block$question_number),
+      printed_number = clean_number(block$printed_number),
       self_contained = block$self_contained %||% TRUE,
       condition = clean_text(block$condition),
       parent_question = clean_number(block$parent_question),
@@ -208,7 +209,7 @@ tidy_blocks <- function(blocks) {
 
 lift_misplaced_children <- function(blocks) {
   unlist(lapply(blocks, function(block) {
-    if (block$component_type == "Section" || length(block$children) == 0) {
+    if (is_container(block$component_type) || length(block$children) == 0) {
       return(list(block))
     }
     c(list(block), lift_misplaced_children(block$children))
@@ -221,12 +222,12 @@ tidy_boxes <- function(boxes) {
     if (box$variable_type == "open_ended") {
       return(without_blanks(list(
         variable_type = box$variable_type, display_order = i, label = clean_text(box$label),
-        subject = box$subject, answer_data_type = box$answer_data_type
+        subject = blank_respondent(clean_text(box$subject) %||% NA), answer_data_type = box$answer_data_type
       )))
     }
     without_blanks(list(
       variable_type = box$variable_type, display_order = i, label = clean_text(box$label),
-      subject = box$subject, response_options = tidy_choices(box$response_options)
+      subject = blank_respondent(clean_text(box$subject) %||% NA), response_options = tidy_choices(box$response_options)
     ))
   })
 }
@@ -282,7 +283,7 @@ reading_service_problems <- function(json, lookups) {
   # checks never see it.
   parent_numbers <- pluck(flatten_blocks(json$components), "parent_question")
   lost <- which(!is.na(parent_numbers) & is.na(blocks$parent_question_id))
-  empty <- blocks$component_type == "Section" & !blocks$id %in% blocks$parent_id
+  empty <- is_container(blocks$component_type) & !blocks$id %in% blocks$parent_id
   c(
     if (!"Question" %in% blocks$component_type) "No questions were recorded. Record every page of the questionnaire.",
     sprintf(
@@ -297,7 +298,7 @@ reading_service_problems <- function(json, lookups) {
   )
 }
 
-# "Question 14a", "Instruction "During the worst time:"", or "A section with no heading".
+# "Question 14a", "Instruction "During the worst time:"", "A question group" or "A section with no heading".
 block_name <- function(blocks) {
   numbers <- draft_service_question_number(blocks)
   ifelse(
@@ -305,7 +306,7 @@ block_name <- function(blocks) {
     paste(blocks$component_type, numbers),
     ifelse(
       is.na(blocks$text),
-      paste("A", tolower(blocks$component_type), "with no heading"),
+      ifelse(blocks$component_type == "Question Group", "A question group", paste("A", tolower(blocks$component_type), "with no heading")),
       sprintf('%s "%s"', blocks$component_type, substr(blocks$text, 1, 60))
     )
   )

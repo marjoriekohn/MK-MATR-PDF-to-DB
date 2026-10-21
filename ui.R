@@ -16,11 +16,10 @@ page_navbar(
       page_script("js/busy.js"),
       page_script("js/variables.js")
     ),
-    # While the server is working: a gold bar across the top of the page, a spinner on each output being
-    # redrawn, and (busy.js) a spinner on the button that was pressed.
-    useBusyIndicators(spinners = TRUE, pulse = TRUE, fade = TRUE),
+    # While the server is working: a gold bar across the top of the page, and nothing else (no spinners,
+    # no fading); busy.js holds the button that was pressed so it isn't pressed twice.
+    useBusyIndicators(spinners = FALSE, pulse = TRUE, fade = FALSE),
     busyIndicatorOptions(
-      spinner_type = "ring2", spinner_color = "#FFB300", spinner_size = "2rem", spinner_delay = "300ms",
       pulse_background = "linear-gradient(90deg, #FFB300, #000000, #FFB300)", pulse_height = "5px"
     ),
     # Covers the site until someone signs in (server.R takes it away); see

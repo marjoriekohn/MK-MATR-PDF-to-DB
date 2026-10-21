@@ -14,14 +14,14 @@ small_draft <- function(question = paste(test_marker, "Do you smoke?"), labels =
     components = list(list(component_type = "Section", display_order = 1, text = paste(test_marker, "Part A"), children = list(
       list(component_type = "Instruction", display_order = 1, text = paste(test_marker, "Please answer.")),
       list(
-        component_type = "Question", display_order = 2, text = question, question_number = "1", self_contained = TRUE,
+        component_type = "Question", display_order = 2, text = question, printed_number = "1", self_contained = TRUE,
         variables = list(list(
           variable_type = "closed_ended", display_order = 1, subject = subject,
           response_options = lapply(seq_along(labels), function(i) list(display_order = i, answer_option = labels[i], printed = TRUE))
         ))
       ),
       list(
-        component_type = "Question", display_order = 3, text = paste(test_marker, "How many?"), question_number = "2", self_contained = TRUE,
+        component_type = "Question", display_order = 3, text = paste(test_marker, "How many?"), printed_number = "2", self_contained = TRUE,
         variables = list(list(variable_type = "open_ended", display_order = 1, subject = subject, answer_data_type = "NUMBER"))
       )
     )))
@@ -125,7 +125,7 @@ test_that("a questionnaire with nothing printed yet gets every block, every ques
 
   lines <- item_lines(items)
   expect_equal(sum(items$entity_name == "component" & items$attribute_name == "text"), 4)
-  expect_equal(sum(items$entity_name == "wave_question"), 2)
+  expect_equal(sum(items$entity_name == "wave_question" & items$attribute_name == "question_number"), 2)
   expect_true(all(grepl('"wave_id":41', items$record_identifier[items$entity_name == "wave_question"])))
   expect_equal(sum(items$entity_name == "question"), 2)
   # the answer choices Yes and No make one set, named after them
@@ -284,13 +284,38 @@ test_that("a push is titled for the request that carries it", {
   expect_equal(extraction_service_push_title(record, test_catalog()), "Add Adult Health and Personality (AHP) · Wave 2")
 })
 
-test_that("a question is asked in the wave as the number printed beside it, or as its place if none is typed", {
+test_that("the wave records each question's place among the questions, and the number printed beside it if any", {
   draft <- draft_service_renumber_questions(small_draft())
   first <- draft$components$id[draft$components$component_type == "Question"][1]
   draft <- draft_service_update(draft, "components", first, "printed_number", "1a4")
   second <- draft$components$id[draft$components$component_type == "Question"][2]
   draft <- draft_service_update(draft, "components", second, "printed_number", "")
-  numbers <- build_for(draft)$items
-  numbers <- numbers$new_value[numbers$entity_name == "wave_question"]
-  expect_equal(numbers, c("1a4", "2"))
+  items <- build_for(draft)$items
+  asked <- items[items$entity_name == "wave_question", ]
+  expect_equal(asked$new_value[asked$attribute_name == "question_number"], c("1", "2"))
+  expect_equal(asked$new_value[asked$attribute_name == "printed_number"], "1a4")
+
+  # printed numbers can repeat, as when each section starts again at 1
+  draft <- draft_service_update(draft, "components", second, "printed_number", "1a4")
+  asked <- build_for(draft)$items
+  expect_equal(asked$new_value[asked$entity_name == "wave_question" & asked$attribute_name == "printed_number"], c("1a4", "1a4"))
+})
+
+test_that("who a variable is about: a blank is the respondent, a known subject is used, and a new one is added once", {
+  draft <- small_draft(subject = NA)
+  items <- build_for(draft)$items
+  expect_equal(unique(items$new_value[items$entity_name == "variable" & items$attribute_name == "subject_id"]), "1") # Self
+  expect_false("subject" %in% items$entity_name)
+
+  boxes <- draft$variables$id
+  draft <- draft_service_update(draft, "variables", boxes[1], "subject", "respondent's family ")
+  draft <- draft_service_update(draft, "variables", boxes[2], "subject", "Respondent's Twin")
+  built <- build_for(draft)
+  items <- built$items
+  subject_ids <- items$new_value[items$entity_name == "variable" & items$attribute_name == "subject_id"]
+  expect_equal(subject_ids[1], "2") # the one there, whatever its capitals
+  expect_equal(items$new_value[items$entity_name == "subject"], "Respondent's Twin")
+  expect_equal(subject_ids[2], "new:subject:1")
+  expect_equal(built$summary$subjects, 1L)
+  expect_match(extraction_service_push_summary(built$summary), "1 new subject")
 })

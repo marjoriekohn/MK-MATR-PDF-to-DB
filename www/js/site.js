@@ -40,7 +40,7 @@
     card.querySelectorAll('.login-message').forEach(function (message) { message.innerHTML = ''; });
     card.querySelectorAll('.login-button').forEach(function (each) { each.disabled = true; });
     if (!button.dataset.label) button.dataset.label = button.innerHTML;
-    button.innerHTML = '<span class="spinner-border spinner-border-sm" aria-hidden="true"></span> ' + button.dataset.busyLabel;
+    button.textContent = button.dataset.busyLabel;
   }
 
   function showReady() {

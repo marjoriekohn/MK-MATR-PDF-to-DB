@@ -1,21 +1,58 @@
 # ------ Extraction drafts ------------------------------------------------------
-# The extraction pipeline returns a questionnaire as nested JSON: sections hold
-# blocks, questions hold variables, and variables hold choices
-# (response options). The Edit Extraction page edits three flat tables instead, so
-# moving a block only changes its parent_id and display_order, the same way
-# QUESTIONNAIRE_COMPONENT stores it:
+# The extraction pipeline returns a questionnaire as nested JSON: sections and question groups hold
+# blocks, questions hold variables, and variables hold choices (response options). The Edit
+# Extraction page edits three flat tables instead, so moving a block only changes its parent_id and
+# display_order, the same way QUESTIONNAIRE_COMPONENT stores it:
 #
-#   components        one row per block, pointing at its section (parent_id)
+#   components        one row per block, pointing at its section or question group (parent_id)
 #   variables         one row per variable, pointing at its question
 #   response_options  one row per choice, pointing at its variable
 #
-# Rows get ids when a draft is loaded (c1, v1, o1...). Ids aren't saved.
+# Rows get ids when a draft is loaded (c1, v1, o1...), in printed order. Ids aren't saved, but each
+# row's `ref` is: the id the row had when the draft was loaded from what the AI returned. It stays
+# with the row however the draft is edited, so the reviewed copy can be compared with the AI's answer
+# row by row (service_draft_record.R). A row staff added has none.
 #
-# A question has two numbers. `question_number` is its place among the questions (1, 2, 3...), kept
-# up to date as blocks move (draft_service_renumber_questions()); `printed_number` is the number
-# printed beside it on the questionnaire ("1a4"), typed by staff or read off the PDF. The printed one
-# is the number the wave asks it as; the place stands in for a question that has none
-# (draft_service_question_number()).
+# Two kinds of JSON are loaded. What the reading job returns (the AI's answer, `ai_original`) has no
+# `schema_version`: its questions have the number printed beside them (`printed_number`) and name
+# their parent by its printed number. The reviewed copy the page saves has `schema_version`, and
+# names a question's parent by its place among the questions (`question_number`), which, unlike a
+# printed number, never repeats.
+#
+# A question has two numbers. `question_number` is its place among the questions (1, 2, 3...), worked
+# out by the site and kept up to date as blocks move (draft_service_renumber_questions()); it is the
+# number the wave records (`wave_question.question_number`). `printed_number` is the number printed
+# beside it ("1a", "12"), read off the PDF and corrected by staff; it can repeat (each section can
+# start again at 1) or be missing, and the wave keeps it too (`wave_question.printed_number`).
+# Sections and question groups aren't counted.
+
+# The version of the reviewed copy's JSON. A copy without one is what the reading job returned.
+draft_schema_version <- 2L
+
+# The kinds of block that hold others. A section has a printed heading; a question group is only a
+# container (a battery, a definition with its question, a question with its follow-up) and has no words
+# of its own. A section sits at the top level or inside another section, never inside a question group.
+container_types <- c("Section", "Question Group")
+
+#' Whether blocks of these kinds hold other blocks.
+#'
+#' @param component_types Kinds of block.
+#' @return A logical vector.
+is_container <- function(component_types) component_types %in% container_types
+
+# Who a variable is about when it is about the respondent: the subject the database keeps for them.
+# Staff and the AI leave About blank for the respondent; the blank is saved to the database as this one.
+respondent_subject <- "Self"
+
+#' Who a variable is about, with the respondent as a blank.
+#'
+#' @param subjects Subjects as typed or read; `"Self"` in any capitals, or a blank, is the respondent.
+#' @return The subjects, trimmed, with `NA` for the respondent.
+blank_respondent <- function(subjects) {
+  subjects <- trimws(as.character(subjects))
+  subjects[!is.na(subjects) & (!nzchar(subjects) | tolower(subjects) == tolower(respondent_subject))] <- NA
+  subjects
+}
 
 # The column that says which row each row sits under. display_order counts
 # 1, 2, 3... among the rows that share it.
@@ -33,17 +70,17 @@ new_row_defaults <- list(
     id = NA_character_, parent_id = NA_character_, display_order = Inf,
     component_type = NA_character_, text = NA_character_,
     question_number = NA_character_, printed_number = NA_character_, self_contained = NA,
-    condition = NA_character_, parent_question_id = NA_character_, checked = FALSE
+    condition = NA_character_, parent_question_id = NA_character_, checked = FALSE, ref = NA_character_
   ),
   variables = data.frame(
     id = NA_character_, component_id = NA_character_, display_order = Inf,
     variable_type = "closed_ended", label = NA_character_, subject = NA_character_,
-    answer_data_type = NA_character_, matr_id = NA_character_
+    answer_data_type = NA_character_, matr_id = NA_character_, ref = NA_character_
   ),
   response_options = data.frame(
     id = NA_character_, variable_id = NA_character_, display_order = Inf,
     answer_option = NA_character_, code_value = NA_integer_,
-    printed_label = NA_character_, skip_instruction = NA_character_
+    printed_label = NA_character_, skip_instruction = NA_character_, ref = NA_character_
   )
 )
 
@@ -67,8 +104,8 @@ draft_service_load <- function(connection, id) {
 #' @param id The extraction draft's id.
 #' @param draft A draft: `list(questionnaire, components, variables, response_options)`; see the top of `service_draft.R`.
 #' @param staff_id The staff id of the person saving.
-#' @param review_edits What the reviewer has changed in what the AI returned, so far (see
-#'   `draft_service_review_edits()`), or `NULL` to leave it as it is.
+#' @param review_edits How this copy differs from what the AI returned (see
+#'   `draft_service_review_edits()`), which replaces what was kept, or `NULL` to leave it as it is.
 #' @param expected_revision The revision the person was looking at, or `NULL` not to check.
 #' @return The draft's revision after the save, invisibly. An error with a sentence if someone saved
 #'   it after `expected_revision`.
@@ -110,19 +147,25 @@ draft_service_percent_checked <- function(counts) {
 # ------ JSON to tables ---------------------------------------------------------
 #' Turn the questionnaire JSON into the three tables the Edit Extraction page edits.
 #'
-#' Rows get ids when a draft is loaded (c1, v1, o1...); ids aren't saved. Positions are
-#' numbered 1, 2, 3... within each parent, and choices without a code are coded. A choice marked as
-#' not printed (`printed: false`, from drafts read before only printed choices were kept) is left out:
-#' a respondent can't mark it, so it isn't a response option.
+#' Rows get ids when a draft is loaded (c1, v1, o1...); ids aren't saved, but `ref` is (see the top of
+#' this file). Positions are numbered 1, 2, 3... within each parent, the questions by their place among
+#' the questions, and choices without a code are coded. A variable about the respondent has a blank
+#' subject, however the JSON says it.
 #'
-#' @param json The questionnaire as nested lists: `questionnaire` and `components`.
+#' @param json The questionnaire as nested lists: `questionnaire` and `components`, and `schema_version`
+#'   for a reviewed copy (without it, it is what the reading job returned).
 #' @return A draft: `list(questionnaire, components, variables, response_options)`.
 draft_service_from_json <- function(json) {
+  reviewed <- !is.null(json$schema_version)
   blocks <- flatten_blocks(json$components)
   boxes <- flatten_children(blocks, "variables")
   choices <- Filter(function(choice) !isFALSE(choice[["printed"]]), flatten_children(boxes, "response_options"))
-  question_numbers <- pluck(blocks, "question_number")
   block_ids <- ids_for("c", seq_along(blocks))
+  # The AI's answer names a parent by its printed number; the reviewed copy by its place.
+  parent_by <- if (reviewed) pluck(blocks, "question_number") else pluck(blocks, "printed_number")
+  # What the AI returned is the starting point that every later copy is compared with: its rows' refs
+  # are their ids.
+  refs <- function(rows, ids) if (reviewed) pluck(rows, "ref") else ids
 
   draft <- list(
     questionnaire = json$questionnaire,
@@ -132,14 +175,13 @@ draft_service_from_json <- function(json) {
       display_order = as.numeric(seq_along(blocks)),
       component_type = pluck(blocks, "component_type"),
       text = pluck(blocks, "text"),
-      question_number = question_numbers,
-      printed_number = printed_numbers(blocks),
+      question_number = rep(NA_character_, length(blocks)),
+      printed_number = pluck(blocks, "printed_number"),
       self_contained = pluck(blocks, "self_contained", NA),
       condition = pluck(blocks, "condition"),
-      parent_question_id = find_parent_questions(
-        question_numbers, pluck(blocks, "parent_question"), block_ids
-      ),
-      checked = pluck(blocks, "checked", FALSE)
+      parent_question_id = find_parent_questions(parent_by, pluck(blocks, "parent_question"), block_ids),
+      checked = pluck(blocks, "checked", FALSE),
+      ref = refs(blocks, block_ids)
     ),
     variables = data.frame(
       id = ids_for("v", seq_along(boxes)),
@@ -147,9 +189,10 @@ draft_service_from_json <- function(json) {
       display_order = as.numeric(seq_along(boxes)),
       variable_type = pluck(boxes, "variable_type"),
       label = pluck(boxes, "label"),
-      subject = pluck(boxes, "subject"),
+      subject = blank_respondent(pluck(boxes, "subject")),
       answer_data_type = pluck(boxes, "answer_data_type"),
-      matr_id = pluck(boxes, "matr_id")
+      matr_id = pluck(boxes, "matr_id"),
+      ref = refs(boxes, ids_for("v", seq_along(boxes)))
     ),
     response_options = data.frame(
       id = ids_for("o", seq_along(choices)),
@@ -158,12 +201,13 @@ draft_service_from_json <- function(json) {
       answer_option = pluck(choices, "answer_option"),
       code_value = pluck(choices, "code_value", NA_integer_),
       printed_label = pluck(choices, "printed_label"),
-      skip_instruction = pluck(choices, "skip_instruction")
+      skip_instruction = pluck(choices, "skip_instruction"),
+      ref = refs(choices, ids_for("o", seq_along(choices)))
     )
   )
   # Rows were numbered in printed order; make that 1, 2, 3... within each parent.
   for (table in names(parent_columns)) draft <- renumber(draft, table)
-  default_codes(draft)
+  draft_service_renumber_questions(default_codes(draft))
 }
 
 #' Every block in the order a respondent meets it.
@@ -202,29 +246,16 @@ pluck <- function(rows, field, missing = NA_character_) {
   )
 }
 
-# The number printed beside each question. A block straight from the reading job (it has no `checked`,
-# which a saved copy always has) was given the printed number as its `question_number`; a saved copy
-# keeps it as `printed_number`.
-printed_numbers <- function(blocks) {
-  vapply(blocks, function(block) {
-    if (!identical(block$component_type, "Question")) {
-      return(NA_character_)
-    }
-    number <- block$printed_number %||% if (is.null(block$checked)) block$question_number
-    as.character(number %||% NA_character_)
-  }, NA_character_)
-}
-
 ids_for <- function(prefix, positions) {
   ids <- paste0(prefix, positions, recycle0 = TRUE) # no positions, no ids
   ids[is.na(positions)] <- NA
   ids
 }
 
-# The JSON names the question a follow-up hangs off by its printed number. The
-# draft keeps that question's id instead, so renumbering never breaks the link.
-# A number means the nearest question before it with that number, or failing
-# that the first one after it (which the checks then point out).
+# The JSON names the question a follow-up hangs off by its number (printed, in the AI's answer, which
+# can repeat from section to section; its place, in a reviewed copy). The draft keeps that question's
+# id instead, so renumbering never breaks the link. A number means the nearest question before it with
+# that number, or failing that the first one after it (which the checks then point out).
 find_parent_questions <- function(numbers, parent_numbers, ids) {
   vapply(seq_along(parent_numbers), function(i) {
     matches <- setdiff(which(same_number(numbers, parent_numbers[i])), i)
@@ -239,11 +270,13 @@ same_number <- function(numbers, number) {
 }
 
 # ------ Tables to JSON ---------------------------------------------------------
-# The same shape the pipeline returns, plus what review adds: `checked` on each
-# block, `matr_id` on each variable and `code_value` on each choice. Fields
-# with nothing in them are left out, as in tests/testthat/fixtures/gna_gold.json.
+# The reviewed copy: the same shape the pipeline returns, plus `schema_version`, and what review adds:
+# `question_number` (its place) and `checked` on each block, `matr_id` on each variable, `code_value` on
+# each choice, and `ref` on each row the AI returned. A question names its parent by the parent's place.
+# Fields with nothing in them are left out, as in tests/testthat/fixtures/gna_gold.json.
 draft_service_to_json <- function(draft) {
   list(
+    schema_version = draft_schema_version,
     questionnaire = draft$questionnaire,
     components = blocks_json(draft, parent_id = NA)
   )
@@ -256,7 +289,7 @@ blocks_json <- function(draft, parent_id) {
       display_order = as.integer(block$display_order),
       text = block$text
     )
-    if (block$component_type == "Section") {
+    if (is_container(block$component_type)) {
       json$children <- blocks_json(draft, block$id)
     }
     if (block$component_type == "Question") {
@@ -268,6 +301,7 @@ blocks_json <- function(draft, parent_id) {
       json$variables <- boxes_json(draft, block$id)
     }
     json$checked <- block$checked
+    json$ref <- block$ref
     without_blanks(json)
   })
 }
@@ -286,6 +320,7 @@ boxes_json <- function(draft, component_id) {
     } else {
       json$answer_data_type <- box$answer_data_type
     }
+    json$ref <- box$ref
     without_blanks(json)
   })
 }
@@ -297,7 +332,8 @@ choices_json <- function(draft, variable_id) {
       answer_option = choice$answer_option,
       code_value = choice$code_value,
       printed_label = choice$printed_label,
-      skip_instruction = choice$skip_instruction
+      skip_instruction = choice$skip_instruction,
+      ref = choice$ref
     ))
   })
 }
@@ -388,11 +424,11 @@ question_number_of <- function(draft, id) {
   draft$components$question_number[match(id, draft$components$id)]
 }
 
-#' The number questions are asked as: the one printed beside them, or, where none was typed, their
+#' The number a question is called by: the one printed beside it, or, where none is printed, its
 #' place among the questions.
 #'
-#' What the wave records (`wave_question.question_number`), and what the preview and the messages call
-#' a question.
+#' What the outline, the preview and the messages call a question. (The wave records both numbers:
+#' see the top of this file.)
 #'
 #' @param blocks Rows of a draft's `components`.
 #' @return A character vector, one number for each row; `NA` for a block that isn't a question.
@@ -400,6 +436,9 @@ draft_service_question_number <- function(blocks) {
   printed <- trimws(blocks$printed_number %||% rep(NA_character_, nrow(blocks)))
   ifelse(!is.na(printed) & nzchar(printed), printed, blocks$question_number)
 }
+
+# What goes between a question's number and its words where a list names it: "7 · Have you smoked…".
+outline_number_separator <- " · "
 
 #' What a question is called in sentences: "question 1a4".
 #'

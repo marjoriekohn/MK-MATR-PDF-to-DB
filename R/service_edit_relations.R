@@ -491,7 +491,7 @@ edit_labels <- list(
   wave_question = function(snap, rows) {
     waves <- edit_lookup(snap, "wave", "wave_id", rows$wave_id, "name")
     paste0(
-      edit_questionnaire_short(snap, rows$questionnaire_id), " ", waves, " · question ", rows$question_number,
+      edit_questionnaire_short(snap, rows$questionnaire_id), " ", waves, " · question ", edit_called_number(rows),
       " · ", edit_component_text(snap, rows$component_id, 40)
     )
   },

@@ -8,7 +8,7 @@ as_gemini_wrote_it <- function(json) {
     lapply(blocks, function(block) {
       list(
         component_type = block$component_type, text = block$text,
-        question_number = block$question_number, self_contained = block$self_contained,
+        printed_number = block$printed_number, self_contained = block$self_contained,
         condition = block$condition, parent_question = block$parent_question,
         variables = lapply(block$variables, function(box) {
           list(
@@ -30,7 +30,7 @@ as_gemini_wrote_it <- function(json) {
 
 question <- function(number, boxes = list(yes_no_box())) {
   list(
-    component_type = "Question", text = paste("Question", number), question_number = number,
+    component_type = "Question", text = paste("Question", number), printed_number = number,
     self_contained = TRUE, condition = NULL, parent_question = NULL, variables = boxes, children = list()
   )
 }
@@ -38,7 +38,7 @@ question <- function(number, boxes = list(yes_no_box())) {
 yes_no_box <- function() {
   choice <- function(answer) list(answer_option = answer, printed = TRUE, printed_label = NULL, skip_instruction = NULL)
   list(
-    variable_type = "closed_ended", label = NULL, subject = "Self", answer_data_type = NULL,
+    variable_type = "closed_ended", label = NULL, subject = NULL, answer_data_type = NULL,
     response_options = list(choice("Yes"), choice("No"))
   )
 }
@@ -50,8 +50,12 @@ answer_with <- function(...) {
   )), model = "gemini-test", input_tokens = 100L, output_tokens = 50L, thinking_tokens = 20L)
 }
 
-section_of <- function(..., continued = NULL) {
-  list(component_type = "Section", continued = continued, text = NULL, children = list(...))
+group_of <- function(..., continued = NULL) {
+  list(component_type = "Question Group", continued = continued, text = NULL, children = list(...))
+}
+
+section_of <- function(..., text = "Part A", continued = NULL) {
+  list(component_type = "Section", continued = continued, text = text, children = list(...))
 }
 
 # Answers each call with the next of `calls`: an answer for every page range,
@@ -94,7 +98,7 @@ test_that("what Gemini writes is tidied into exactly the Edit Extraction page's 
 test_that("tidying numbers each list, cleans the text and keeps only each block's fields", {
   reading <- list(questionnaire = list(name = "  Twin  Diet Survey ", abbreviation = ""), components = list(
     list(
-      component_type = "Instruction", text = "Mark “Yes” or “No”…", question_number = NULL,
+      component_type = "Instruction", text = "Mark “Yes” or “No”…", printed_number = NULL,
       variables = list(), children = list()
     ),
     question("12 b.", boxes = list(list(
@@ -113,7 +117,8 @@ test_that("tidying numbers each list, cleans the text and keeps only each block'
   expect_equal(instruction$text, "Mark \"Yes\" or \"No\"...")
   asked <- tidied$components[[2]]
   expect_equal(asked$display_order, 2)
-  expect_equal(asked$question_number, "12b")
+  expect_equal(asked$printed_number, "12b")
+  expect_null(asked$variables[[1]]$subject) # about the respondent: no subject
   choices <- asked$variables[[1]]$response_options
   expect_equal(vapply(choices, function(choice) choice$display_order, integer(1)), 1:2)
   expect_equal(choices[[1]]$printed_label, "M")
@@ -141,7 +146,7 @@ test_that("a block put inside one that isn't a section moves out to follow it", 
   misplaced <- question("1")
   misplaced$children <- list(question("2"))
   tidied <- reading_service_tidy(list(components = list(misplaced, question("3"))))
-  numbers <- vapply(tidied$components, function(block) block$question_number, "")
+  numbers <- vapply(tidied$components, function(block) block$printed_number, "")
   expect_equal(numbers, c("1", "2", "3"))
   expect_null(tidied$components[[1]]$children)
 })
@@ -191,42 +196,68 @@ test_that("the reading with fewer problems is kept, and a good first reading is 
 })
 
 test_that("a section heading with its blocks after it, not inside it, is a problem", {
-  heading <- section_of()
-  heading$text <- "Part A. Your Sleep"
+  heading <- section_of(text = "Part A. Your Sleep")
   problems <- reading_service_problems(reading_service_tidy(list(components = list(heading, question("1")))), test_lookups())
   expect_equal(problems, 'Section "Part A. Your Sleep": has nothing in it. Put the blocks printed under it inside it, as its children.')
 })
 
 test_that("a reading with no questions is a problem", {
-  empty <- list(component_type = "Section", text = NULL, variables = list(), children = list())
+  empty <- list(component_type = "Question Group", text = NULL, variables = list(), children = list())
   problems <- reading_service_problems(reading_service_tidy(list(components = list(empty))), test_lookups())
   expect_equal(problems[1], "No questions were recorded. Record every page of the questionnaire.")
-  expect_match(problems[2], "^A section with no heading: has nothing in it.")
+  expect_match(problems[2], "^A question group: has nothing in it.")
+})
+
+test_that("a section without its heading, a question group with words, and a section inside a group are problems", {
+  untitled <- section_of(question("1"), text = NULL)
+  worded <- group_of(question("2"))
+  worded$text <- "Lead-in"
+  nested <- group_of(section_of(question("3"), text = "Part B"))
+  problems <- reading_service_problems(reading_service_tidy(list(components = list(untitled, worded, nested))), test_lookups())
+  expect_true(any(grepl("^A section with no heading: Add the section's printed heading", problems)))
+  expect_true(any(grepl("question group has no words of its own", problems)))
+  expect_true(any(grepl("can't be inside a question group", problems)))
+})
+
+test_that("printed numbers can repeat or be missing, and a parent is the nearest earlier question with its number", {
+  first <- question("1")
+  again <- question("1")
+  follow_up <- question("2")
+  follow_up$parent_question <- "1"
+  unnumbered <- question("1")
+  unnumbered$printed_number <- NULL
+  json <- reading_service_tidy(list(components = list(section_of(first, text = "Part A"), section_of(again, follow_up, unnumbered, text = "Part B"))))
+  expect_length(reading_service_problems(json, test_lookups()), 0)
+  draft <- draft_service_from_json(json)
+  questions <- draft$components[draft$components$component_type == "Question", ]
+  expect_equal(questions$question_number, c("1", "2", "3", "4")) # their places, worked out
+  expect_equal(questions$printed_number, c("1", "1", "2", NA))
+  expect_equal(questions$parent_question_id[3], questions$id[2]) # the "1" in its own section, not the first
 })
 
 test_that("a questionnaire is read two pages at a time, and the pieces joined", {
-  pages_1_2 <- answer_with(question("1"), section_of(question("2a")))
-  page_3 <- answer_with(section_of(question("2b"), continued = TRUE), question("3"))
+  pages_1_2 <- answer_with(question("1"), group_of(question("2a")))
+  page_3 <- answer_with(group_of(question("2b"), continued = TRUE), question("3"))
   gemini <- stand_in_gemini(list(pages_1_2, page_3))
   reading <- read_with(gemini, pages = 3)
 
   expect_equal(gemini$asked(), "This PDF has 3 pages. Record pages 1-2.\nThis PDF has 3 pages. Record page 3.")
   blocks <- reading$json$components
-  expect_equal(vapply(blocks, function(block) block$component_type, ""), c("Question", "Section", "Question"))
-  expect_equal(vapply(blocks[[2]]$children, function(block) block$question_number, ""), c("2a", "2b"))
+  expect_equal(vapply(blocks, function(block) block$component_type, ""), c("Question", "Question Group", "Question"))
+  expect_equal(vapply(blocks[[2]]$children, function(block) block$printed_number, ""), c("2a", "2b"))
   expect_null(blocks[[2]]$continued)
   expect_equal(reading$tokens$output, 100)
   expect_equal(reading$tokens$most_in_one_answer, 70)
 })
 
 test_that("a section carried on inside a carried-on section joins its first part", {
-  earlier <- list(section_of(question("1"), section_of(question("2a"))))
-  later <- list(section_of(section_of(question("2b"), continued = TRUE), question("3"), continued = TRUE))
+  earlier <- list(section_of(question("1"), group_of(question("2a"))))
+  later <- list(section_of(group_of(question("2b"), continued = TRUE), question("3"), continued = TRUE))
   joined <- join_page_ranges(list(list(components = earlier), list(components = later)))$components
   outer <- joined[[1]]$children
   expect_length(joined, 1)
-  expect_equal(vapply(outer, function(block) block$component_type, ""), c("Question", "Section", "Question"))
-  expect_equal(vapply(outer[[2]]$children, function(block) block$question_number, ""), c("2a", "2b"))
+  expect_equal(vapply(outer, function(block) block$component_type, ""), c("Question", "Question Group", "Question"))
+  expect_equal(vapply(outer[[2]]$children, function(block) block$printed_number, ""), c("2a", "2b"))
 })
 
 test_that("Gemini counts the pages of a PDF that doesn't say how many it has", {
@@ -327,7 +358,7 @@ test_that("the job saves what Gemini read and marks the draft ready", {
   expect_equal(saved$extraction_status, "ready")
   expect_equal(saved$prompt_version, "abc123")
   expect_equal(saved$model, "gemini-3.8-flash")
-  expect_identical(draft_service_from_json(draft_model_get_record(test_connection, record$id)$original), gold_draft())
+  expect_identical(draft_service_from_json(draft_model_get_both(test_connection, record$id)$original), gold_draft())
   expect_equal(nrow(extraction_service_load_draft(test_connection, saved)$components), nrow(gold_draft()$components))
 })
 
@@ -400,7 +431,7 @@ test_that("a job whose reading was restarted saves nothing", {
 
   saved <- extraction_model_get(test_connection, record$id)
   expect_equal(saved$extraction_status, "queued")
-  expect_null(draft_model_get_record(test_connection, record$id)$original)
+  expect_null(draft_model_get_both(test_connection, record$id)$original)
 })
 
 test_that("a reading whose job has died is marked failed", {

@@ -518,7 +518,7 @@ component_type_entity <- list(
 )
 
 # Kinds of block the site treats specially (BR42, BR45, BR53).
-edit_core_types <- c("Section", "Question")
+edit_core_types <- c("Section", "Question", "Question Group")
 
 category_entity <- list(
   label = "MeSH category", noun = "MeSH category", plural = "MeSH categories", article = "a",
@@ -692,15 +692,19 @@ edit_shared_warning <- function(snap, component_ids) {
   ifelse(n >= 2, paste("Shared: changes show in", n, "questionnaires"), NA_character_)
 }
 
-# A component's text field. Only a section may have no words (BR42).
+# A component's text field. Every kind has words but a question group, which has none of its own (BR42).
 edit_text_field <- function(snap, mode, row, label = "Printed words", type_field = TRUE) {
-  section <- edit_type_id(snap, "Section")
+  group <- edit_type_id(snap, "Question Group")
   edit_field(
     "text", label, "textarea",
     required = !type_field, rows = 3, short = if (type_field) "words" else "wording",
     problem = function(value, values) {
-      if (type_field && !has_text(value) && !identical(as.numeric(values$component_type_id %||% NA), section)) {
-        "Only a section can be left without words."
+      is_group <- identical(as.numeric(values$component_type_id %||% NA), group)
+      if (type_field && !has_text(value) && !is_group) {
+        return("Add the printed words. Only a question group has none.")
+      }
+      if (type_field && has_text(value) && is_group) {
+        "A question group has no words of its own. Put them in an Instruction inside it."
       }
     },
     warn = function(value, values) {
@@ -726,7 +730,10 @@ component_entity <- list(
     "once, and every questionnaire that prints it uses that one copy."
   ),
   update_about = "A component is shared. Changing its words changes them in every questionnaire that prints it.",
-  delete_about = "Deleting a component takes it out of every questionnaire that prints it, and everything inside it if it's a section.",
+  delete_about = paste(
+    "Deleting a component takes it out of every questionnaire that prints it, and everything inside it if it's a",
+    "section or question group."
+  ),
   cards = function(snap, scope) {
     rows <- snap$component[!edit_is_question(snap, snap$component$component_id), , drop = FALSE]
     type <- edit_lookup(snap, "component_type", "component_type_id", rows$component_type_id, "name")
@@ -923,7 +930,7 @@ questionnaire_question_entity <- list(
           return("not asked in any wave")
         }
         paste0("asked as ", paste0(
-          "question ", mine$question_number, " in ", edit_lookup(snap, "wave", "wave_id", mine$wave_id, "name"),
+          "question ", edit_called_number(mine), " in ", edit_lookup(snap, "wave", "wave_id", mine$wave_id, "name"),
           collapse = ", "
         ))
       }, character(1)),
@@ -966,9 +973,18 @@ edit_placement_fields <- function(snap, mode, row, scope) {
   parent_choices <- edit_service_parent_choices(snap, placed, if (updating) row$component_id)
 
   where <- list(
-    edit_field("parent_component_id", "Inside which section?", "select",
-      choices = parent_choices, short = "section it's in",
-      hint = "Only sections can hold other blocks."
+    edit_field("parent_component_id", "Inside which section or question group?", "select",
+      choices = parent_choices, short = "section or group it's in",
+      hint = "Only sections and question groups can hold other blocks.",
+      problem = function(value, values) {
+        # a section is never inside a question group (BR53)
+        type <- values$component_type_id %||%
+          if (updating) edit_lookup(snap, "component", "component_id", row$component_id, "component_type_id") else NA
+        into <- placed$type[match(as.numeric(value), placed$component_id)]
+        if (identical(as.numeric(type), section) && has_text(value) && identical(into, "Question Group")) {
+          "A section can't be inside a question group. Pick a section, or the top level."
+        }
+      }
     ),
     edit_field(
       "display_order", "Position", "number",
@@ -995,7 +1011,7 @@ edit_placement_fields <- function(snap, mode, row, scope) {
         locked = if (is_question) {
           "A question stays a question. Its settings are under Questionnaire question."
         } else if (has_inside) {
-          "A section with blocks inside can't change kind. Move them out first."
+          "A section or question group with blocks inside can't change kind. Move them out first."
         },
         hint = if (!is_question && !has_inside) {
           "Changing the kind, like changing the words, gives this questionnaire its own new component."
@@ -1046,20 +1062,13 @@ edit_question_fields <- function(snap, row, scope) {
     wave <- asked$wave_id[i]
     wave_name <- edit_lookup(snap, "wave", "wave_id", wave, "name")
     edit_field(
-      paste0("qn_", key_text(wave)), paste("Question number in", wave_name),
-      required = TRUE,
-      hint = if (i == 1) "As printed, so it can have letters: 1, 2a, 14.",
-      problem = function(value, values) {
-        value <- trimws(value)
-        wave_questions <- snap$wave_question
-        others <- wave_questions[wave_questions$wave_id == wave & wave_questions$component_id != row$component_id, , drop = FALSE]
-        same <- others[tolower(trimws(others$question_number)) == tolower(value), , drop = FALSE]
-        if (nzchar(value) && nrow(same) > 0) {
-          sprintf(
-            "Question %s in %s is already “%s”. Pick another number, or change that question's number first.",
-            value, edit_label(snap, "wave", snap$wave[snap$wave$wave_id == wave, ]), edit_component_text(snap, same$component_id[1], 50)
-          )
-        }
+      paste0("qn_", key_text(wave)), paste("Number printed in", wave_name),
+      placeholder = "None printed", short = paste("number printed in", wave_name),
+      hint = if (i == 1) {
+        paste(
+          "As printed, so it can have letters, and repeat from section to section: 1, 2a, 14. Leave it empty if",
+          "none is printed. Its place among the questions is worked out from the outline."
+        )
       }
     )
   })

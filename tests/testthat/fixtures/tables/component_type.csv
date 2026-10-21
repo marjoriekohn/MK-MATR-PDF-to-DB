@@ -6,3 +6,4 @@ component_type_id,name,description
 5,Definition,Printed explanation of a term used in the questionnaire.
 6,Interviewer Script,Text an interviewer reads aloud or follows.
 7,Note,Any other printed remark.
+8,Question Group,"Holds blocks that belong together but have no printed heading: a battery, a definition with its question, a question with its follow-up. Has no text."

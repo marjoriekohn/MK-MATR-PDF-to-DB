@@ -6,6 +6,8 @@
 //   data-action   a click sends the element's data-* values to that module's `action`
 //   data-field    a change sends {table, id, field, value} to that module's `edit`
 //   data-suggest  a text field that offers the words in the <datalist> this names, as they are typed
+//   data-pick     a text field that is sent only once it is done (Enter, leaving it, or a suggestion
+//                 picked), not as it is typed: what it holds is looked up, like a drop-down's pick
 // Drag and drop is SortableJS (from the sortable package). The callbacks named in
 // sortable_options() in R are at the bottom.
 (function () {
@@ -52,8 +54,9 @@
 
   // ------ Fields -------------------------------------------------------------------
   // Words are sent once typing pauses, and again when the field loses focus.
-  // Drop-downs, toggles and checkboxes are sent straight away.
+  // Drop-downs, toggles, checkboxes and data-pick fields are sent once they are picked.
   function isTyped(field) {
+    if (field.hasAttribute('data-pick')) return false;
     return field.tagName === 'TEXTAREA' || field.type === 'text' || field.type === 'number';
   }
 
@@ -83,15 +86,17 @@
   });
 
   // ------ A block's words, typed in its row ----------------------------------------------
-  // The box grows with its words. Enter commits (Shift+Enter starts a new line).
+  // The box grows with its words. Enter commits (Shift+Enter starts a new line in a block's words).
+  // The same keys work in every field that offers suggestions.
   function autogrow(field) {
+    if (field.tagName !== 'TEXTAREA') return;
     field.style.height = 'auto';
     field.style.height = field.scrollHeight + 'px';
   }
 
   document.addEventListener('keydown', function (event) {
     const field = event.target;
-    if (!field.matches || !field.matches('textarea.outline-text')) return;
+    if (!field.matches || !field.matches('textarea.outline-text, input[data-suggest]')) return;
     if (event.key === 'Enter' && !event.shiftKey) {
       // a highlighted suggestion is taken; otherwise the words are done
       if (suggest.pick()) { event.preventDefault(); return; }
@@ -117,9 +122,13 @@
       const list = document.getElementById(field.dataset.suggest);
       if (!list) return this.hide();
       const typed = field.value.trim().toLowerCase();
+      // what starts with the words typed comes first ("3" offers question 3 before question 13)
       const options = Array.from(list.options)
         .map(function (option) { return option.value; })
         .filter(function (value) { return value.toLowerCase() !== typed && (typed === '' || value.toLowerCase().indexOf(typed) !== -1); })
+        .sort(function (a, b) {
+          return (b.toLowerCase().indexOf(typed) === 0) - (a.toLowerCase().indexOf(typed) === 0);
+        })
         .slice(0, 8);
       if (options.length === 0) return this.hide();
       if (!this.box) {
@@ -246,24 +255,28 @@
     });
   }
 
-  // Every MATR ID field offers the uploaded IDs no variable has yet. The list is only replaced when
-  // what it offers has changed, and all at once: a browser works out the suggestions of the field
-  // being typed in again for every change to its list, which took seconds an option at a time.
-  const shownMatrIds = new WeakMap();
-  function applyMatrIds() {
-    if (!marks.matr_list || !marks.matr_ids) return;
-    const list = document.getElementById(marks.matr_list);
+  // Every MATR ID field offers the uploaded IDs no variable has yet, and every parent-question field the
+  // questions. A list is only replaced when what it offers has changed, and all at once: a browser works
+  // out the suggestions of the field being typed in again for every change to its list, which took
+  // seconds an option at a time.
+  const shownLists = new WeakMap();
+  function fillList(id, values) {
+    const list = id && values ? document.getElementById(id) : null;
     if (!list) return;
-    const offered = marks.matr_ids.join('\n');
-    if (shownMatrIds.get(list) === offered) return;
+    const offered = values.join('\n');
+    if (shownLists.get(list) === offered) return;
     const options = document.createDocumentFragment();
-    marks.matr_ids.forEach(function (id) {
+    values.forEach(function (value) {
       const option = document.createElement('option');
-      option.value = id;
+      option.value = value;
       options.appendChild(option);
     });
     list.replaceChildren(options);
-    shownMatrIds.set(list, offered);
+    shownLists.set(list, offered);
+  }
+
+  function applyMatrIds() {
+    fillList(marks.matr_list, marks.matr_ids);
   }
 
   function applyMarks() {
@@ -333,32 +346,6 @@
     });
   }
 
-  // Each question's parent-question list offers the questions printed before it, and keeps its pick.
-  function updateParentLists(patch) {
-    const order = patch.questions.map(function (question) { return question.id; });
-    document.querySelectorAll('.outline-tree select[data-field="parent_question_id"]').forEach(function (select) {
-      if (select === document.activeElement) return;
-      const mine = order.indexOf(select.dataset.id);
-      const picked = select.value;
-      const offered = [['', patch.no_parent]];
-      patch.questions.forEach(function (question, i) {
-        if (question.id === select.dataset.id) return;
-        if (i < mine) offered.push([question.id, question.label]);
-        else if (question.id === picked) offered.push([question.id, question.label + patch.printed_after]);
-      });
-      const now = Array.from(select.options).map(function (option) { return [option.value, option.text]; });
-      if (JSON.stringify(now) === JSON.stringify(offered)) return;
-      const options = document.createDocumentFragment();
-      offered.forEach(function (pair) {
-        const option = document.createElement('option');
-        option.value = pair[0];
-        option.textContent = pair[1];
-        option.selected = pair[0] === picked;
-        options.appendChild(option);
-      });
-      select.replaceChildren(options);
-    });
-  }
 
   function applyPatch(patch) {
     patch.insert.forEach(function (block) { drawInPlace(null, listOf(block.parent), block.html); });
@@ -388,9 +375,15 @@
       const number = row && row.querySelector(':scope > .outline-numbers > .outline-number');
       if (number && patch.numbers[id] !== undefined) number.textContent = patch.numbers[id];
     });
-    updateParentLists(patch);
+    fillList(patch.parent_list, patch.questions);
     marks.selected = patch.selected || null;
     afterDrawing();
+    // an optional field just added to a variable gets the cursor
+    const added = document.querySelector('.outline-tree [data-focus-now]');
+    if (added) {
+      added.removeAttribute('data-focus-now');
+      added.focus();
+    }
   }
 
   // Put the marks back, size the text boxes just drawn, and give a block that has no words yet the cursor.

@@ -51,9 +51,9 @@ edit_question_add_fields <- function(snap, scope) {
         choices = c("Choose a question" = "", candidate_choices),
         hint = "Questions this questionnaire already asks aren't listed."
       ),
-      edit_field("parent_component_id", "Inside which section?", "select",
-        choices = edit_service_parent_choices(snap, placed), short = "section it's in",
-        hint = "Only sections can hold other blocks."
+      edit_field("parent_component_id", "Inside which section or question group?", "select",
+        choices = edit_service_parent_choices(snap, placed), short = "section or group it's in",
+        hint = "Only sections and question groups can hold other blocks."
       ),
       edit_field(
         "display_order", "Position", "number",
@@ -88,7 +88,7 @@ edit_question_add_fields <- function(snap, scope) {
       "variables", "Variables", "variables",
       required = TRUE, default = edit_variables_default(snap),
       options = list(
-        subjects = sort(snap$subject$name),
+        subjects = sort(snap$subject$name[!is.na(blank_respondent(snap$subject$name))]),
         answer_data_types = c("NUMBER", "TEXT", "DATE", "TIME"),
         answer_options = sort(snap$answer_option$standardized_label)
       ),
@@ -101,8 +101,10 @@ edit_question_add_fields <- function(snap, scope) {
   )
 }
 
-# One field for each of the questionnaire's waves: the question's number in it. A question is asked in at
-# least one wave (BR69), so a questionnaire with none can't have a question added yet.
+# Two fields for each of the questionnaire's waves: whether it asks the question, and the number printed
+# beside it there (which can be empty, or repeat from section to section). A question is asked in at least
+# one wave (BR69), so a questionnaire with none can't have a question added yet. Its place among the wave's
+# questions is worked out from where it goes in the outline.
 edit_question_add_wave_fields <- function(snap, q) {
   waves <- snap$wave[snap$wave$questionnaire_id == q, , drop = FALSE]
   waves <- waves[order(waves$wave_id), , drop = FALSE]
@@ -114,29 +116,28 @@ edit_question_add_wave_fields <- function(snap, q) {
       }
     )))
   }
-  names <- paste0("qn_", key_text(waves$wave_id))
-  lapply(seq_len(nrow(waves)), function(i) {
-    wave <- waves$wave_id[i]
-    edit_field(
-      names[i], paste("Question number in", waves$name[i]),
-      placeholder = "e.g. 14a", short = paste("number in", waves$name[i]),
-      hint = if (i == 1) "As printed, so it can have letters: 1, 2a, 1a4. Leave a wave empty if it didn't ask the question.",
-      problem = function(value, values) {
-        if (i == 1 && !any(vapply(names, function(name) has_text(values[[name]]), logical(1)))) {
-          return("Give it its number in at least one wave: a question is asked in a wave.")
+  asked <- paste0("asked_", key_text(waves$wave_id))
+  unlist(lapply(seq_len(nrow(waves)), function(i) {
+    list(
+      edit_field(
+        asked[i], paste("Asked in", waves$name[i]), "choice",
+        choices = c("Yes" = "yes", "No" = "no"), default = "no", short = paste("whether", waves$name[i], "asks it"),
+        problem = if (i == 1) {
+          function(value, values) {
+            if (!any(vapply(asked, function(name) identical(values[[name]], "yes"), logical(1)))) {
+              "Pick at least one wave that asks it: a question is asked in a wave."
+            }
+          }
         }
-        value <- trimws(value)
-        asked <- snap$wave_question[snap$wave_question$wave_id == wave, , drop = FALSE]
-        same <- asked[tolower(trimws(asked$question_number)) == tolower(value), , drop = FALSE]
-        if (nzchar(value) && nrow(same) > 0) {
-          sprintf(
-            "Question %s in %s is already “%s”. Pick another number.",
-            value, waves$name[i], edit_component_text(snap, same$component_id[1], 50)
-          )
-        }
-      }
+      ),
+      edit_field(
+        paste0("qn_", key_text(waves$wave_id[i])), paste("Number printed in", waves$name[i]),
+        placeholder = "e.g. 14a", short = paste("number printed in", waves$name[i]),
+        show_when = list(field = asked[i], value = "yes"),
+        hint = if (i == 1) "As printed, so it can have letters: 1, 2a, 1a4. Leave it empty if none is printed."
+      )
     )
-  })
+  }), recursive = FALSE)
 }
 
 # ------ The variables, typed as JSON ----------------------------------------------------------------------
@@ -145,10 +146,9 @@ edit_question_add_wave_fields <- function(snap, q) {
 #' @param snap The tables the kind needs, as `edit_service_load()` reads them.
 #' @return A JSON string.
 edit_variables_default <- function(snap) {
-  subject <- if ("Self" %in% snap$subject$name) "Self" else ""
   as.character(jsonlite::toJSON(
     list(list(
-      variable_type = "closed_ended", matr_id = "", subject = subject, label = "",
+      variable_type = "closed_ended", matr_id = "", subject = "", label = "",
       response_options = list(list(code_value = "1", answer_option = "", printed_label = "", skip_instruction = ""))
     )),
     auto_unbox = TRUE
@@ -207,9 +207,6 @@ edit_variables_problem <- function(snap, q) {
       }
       if (ids[i] %in% taken) {
         return(say(sprintf("%s is already a MATR ID in this questionnaire. Give it one of its own.", ids[i])))
-      }
-      if (!edit_variable_text(box$subject) %in% snap$subject$name) {
-        return(say("pick who it's about."))
       }
       if (identical(box$variable_type, "open_ended")) {
         if (!edit_variable_text(box$answer_data_type) %in% c("NUMBER", "TEXT", "DATE", "TIME")) {
@@ -273,8 +270,9 @@ edit_variables_draft <- function(variables) {
 #' The items for a question added to one questionnaire.
 #'
 #' In the order the database needs them: the question (if its wording is new), its place in the outline
-#' (the blocks after it moving over to make room), its settings, its number in each wave that asks it, and
-#' its variables with their choices.
+#' (the blocks after it moving over to make room), its settings, its place among the questions of each wave
+#' that asks it (the questions after it numbered again) and the number printed beside it there, and its
+#' variables with their choices.
 #'
 #' @param snap The tables the kind needs, as `edit_service_load()` reads them.
 #' @param scope The questionnaire's key.
@@ -323,15 +321,23 @@ edit_question_add_items_in <- function(snap, scope, fields, values) {
   condition <- edit_service_normalize(field("condition"), value_of("condition"))
   if (!is.na(condition)) add(edit_item("questionnaire_question", here, "Insert", "condition", NA, condition))
 
-  # its number in each wave that asks it
-  for (name in grep("^qn_[0-9]+$", names(edit_part_values(fields, values, prefix)), value = TRUE)) {
-    number <- trimws(value_of(name))
-    if (!nzchar(number)) next
-    wave <- as.numeric(sub("^qn_", "", name))
-    add(edit_item(
-      "wave_question", edit_identifier(list(questionnaire_id = q, wave_id = wave, component_id = component)),
-      "Insert", "question_number", NA, number
-    ))
+  # each wave that asks it: its place among the wave's questions, once the outline has it, and the number
+  # printed beside it
+  keys <- function(ids) ifelse(is.na(ids), NA_character_, key_text(ids))
+  outline <- placed[c("component_id", "parent_component_id", "display_order")]
+  outline$display_order[match(later$component_id, outline$component_id)] <- later$display_order + 1
+  outline$component_id <- keys(outline$component_id)
+  outline$parent_component_id <- keys(outline$parent_component_id)
+  outline <- rbind(outline, data.frame(component_id = key_text(component), parent_component_id = keys(parent), display_order = position))
+  for (name in grep("^asked_[0-9]+$", names(edit_part_values(fields, values, prefix)), value = TRUE)) {
+    if (!identical(value_of(name), "yes")) next
+    wave <- as.numeric(sub("^asked_", "", name))
+    numbers <- edit_wave_numbers(snap, q, wave, edit_wave_order(snap, q, wave, outline, also = component))
+    add(numbers$items)
+    asked <- edit_identifier(list(questionnaire_id = q, wave_id = wave, component_id = component))
+    add(edit_item("wave_question", asked, "Insert", "question_number", NA, numbers$numbers[[key_text(component)]]))
+    printed <- trimws(value_of(paste0("qn_", key_text(wave))))
+    if (nzchar(printed)) add(edit_item("wave_question", asked, "Insert", "printed_number", NA, printed))
   }
 
   # its variables, added the way an extraction adds them

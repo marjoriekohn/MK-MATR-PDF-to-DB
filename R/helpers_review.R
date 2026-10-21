@@ -8,20 +8,23 @@
 
 #' The colored label for a kind of block.
 #'
-#' Used in outline rows and the details. Blocks that aren't sections or questions all
-#' look like Instruction, at its width, so the longer names are shortened.
+#' Used in outline rows and the details. A question group is the section's gold, outlined so it can
+#' be told from one. Blocks that aren't sections, groups or questions all look like Instruction, at its
+#' width, so the longer names are shortened.
 #'
 #' @param component_type The kind of block.
 #' @return A UI element.
 type_chip <- function(component_type) {
   kind <- switch(component_type,
     Section = "section",
+    `Question Group` = "section is-group",
     Question = "question",
     "instruction"
   )
   label <- switch(component_type,
     Introduction = "Intro",
     `Interviewer Script` = "Script",
+    `Question Group` = "Group",
     component_type
   )
   span(
@@ -67,6 +70,7 @@ review_button <- function(label, action, ..., class = "btn btn-sm btn-outline-da
 block_label <- function(block) {
   switch(block$component_type,
     Section = if (is.na(block$text)) "the untitled section" else paste("section", shorten(block$text, 40)),
+    `Question Group` = "the question group",
     Question = {
       number <- draft_service_question_number(block)
       if (is.na(number)) "the unnumbered question" else paste("question", number)

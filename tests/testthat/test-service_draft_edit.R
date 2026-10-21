@@ -517,3 +517,95 @@ test_that("the words of the draft's own blocks and the recorded questionnaire's 
   blank <- draft_service_add_block(blank, "Section", "c1")
   expect_equal(draft_service_text_suggestions(blank), list()) # a block with no words offers none
 })
+
+# ------ Question groups --------------------------------------------------------
+test_that("question groups hold blocks like sections, nest, and aren't counted among the questions", {
+  draft <- gold_draft()
+  group <- draft$components$parent_id[draft$components$id == block_numbered(draft, "1a")$id]
+  expect_equal(draft$components$component_type[draft$components$id == group], "Question Group")
+
+  # a group inside a group
+  inner <- draft_service_next_id(draft, "components")
+  nested <- draft_service_add_block(draft, "Question Group", inner, near_id = group)
+  expect_equal(nested$components$parent_id[nested$components$id == inner], group)
+  q1a <- block_numbered(nested, "1a")$id
+  printed <- draft_service_printed_order(nested)
+  parents <- nested$components$parent_id[match(printed, nested$components$id)]
+  parents[printed == q1a] <- inner
+  moved <- draft_service_renumber_questions(draft_service_apply_order(nested, printed, parents))
+  expect_equal(moved$components$parent_id[moved$components$id == q1a], inner)
+  # the questions are numbered 1, 2, 3... in printed order; groups aren't counted
+  in_order <- moved$components[match(draft_service_printed_order(moved), moved$components$id), ]
+  in_order <- in_order[in_order$component_type == "Question", ]
+  expect_equal(in_order$question_number, as.character(seq_len(nrow(in_order))))
+  expect_false(any(!is.na(moved$components$question_number[is_container(moved$components$component_type)])))
+
+  # a group can't go inside itself
+  into_itself <- parents
+  into_itself[printed == group] <- inner
+  expect_error(draft_service_apply_order(nested, printed, into_itself), "inside itself")
+})
+
+test_that("a section is never inside a question group", {
+  draft <- gold_draft()
+  q1a <- block_numbered(draft, "1a")$id
+  group <- draft$components$parent_id[draft$components$id == q1a]
+  section <- draft_service_next_id(draft, "components")
+  # added next to a question inside a group, a new section goes after the group instead
+  added <- draft_service_add_block(draft, "Section", section, near_id = q1a)
+  expect_true(is.na(added$components$parent_id[added$components$id == section]))
+  expect_equal(draft_service_printed_order(added)[match(group, draft_service_printed_order(added)) + length(draft_service_printed_order(added, group)) + 1], section)
+
+  # dragged into a group, it is refused
+  printed <- draft_service_printed_order(added)
+  parents <- added$components$parent_id[match(printed, added$components$id)]
+  parents[printed == section] <- group
+  expect_error(draft_service_apply_order(added, printed, parents), "A section can't go inside a question group")
+
+  # a block inside a group can't become a section, and a group holding a section can't stay one
+  expect_error(draft_service_update(draft, "components", q1a, "component_type", "Section"), "Move the blocks out|can't be inside a question group")
+  instruction <- draft_service_children(draft, "components", group)$id[1]
+  expect_error(draft_service_update(draft, "components", instruction, "component_type", "Section"), "can't be inside a question group")
+})
+
+test_that("a question group has no words: one with words can't become a group, and a group can become a section", {
+  draft <- gold_draft()
+  group <- draft$components$parent_id[draft$components$id == block_numbered(draft, "1a")$id]
+  as_section <- draft_service_update(draft, "components", group, "component_type", "Section")
+  expect_equal(as_section$components$component_type[as_section$components$id == group], "Section")
+  headed <- draft_service_update(as_section, "components", group, "text", "Part A")
+  expect_error(draft_service_update(headed, "components", group, "component_type", "Question Group"), "has no words of its own")
+  expect_equal(
+    draft_service_update(as_section, "components", group, "component_type", "Question Group")$components$component_type[as_section$components$id == group],
+    "Question Group"
+  )
+  # a group holding blocks can't become a kind that holds none
+  expect_error(draft_service_update(draft, "components", group, "component_type", "Question"), "Move the blocks out")
+})
+
+test_that("the question a question follows is picked from its list or typed as a number: the nearest one before it", {
+  draft <- gold_draft()
+  q8a <- block_numbered(draft, "8a")$id
+  q7 <- block_numbered(draft, "7")$id
+  picked <- draft_service_update(draft, "components", q8a, "parent_question_id", "7 · Have you smoked cigarettes at any time in your life?")
+  expect_equal(picked$components$parent_question_id[picked$components$id == q8a], q7)
+  typed <- draft_service_update(draft, "components", q8a, "parent_question_id", " 1a ")
+  expect_equal(typed$components$parent_question_id[typed$components$id == q8a], block_numbered(draft, "1a")$id)
+  expect_true(is.na(draft_service_update(draft, "components", q8a, "parent_question_id", "")$components$parent_question_id[draft$components$id == q8a]))
+  expect_error(draft_service_update(draft, "components", q8a, "parent_question_id", "99z"), "No question is numbered 99z")
+
+  # with a printed number used twice, the nearest one before it
+  q9 <- block_numbered(draft, "9")$id
+  twice <- draft_service_update(draft, "components", q9, "printed_number", "7")
+  q10 <- block_numbered(twice, "10")$id
+  followed <- draft_service_update(twice, "components", q10, "parent_question_id", "7")
+  expect_equal(followed$components$parent_question_id[followed$components$id == q10], q9)
+})
+
+test_that("who a variable is about is blank for the respondent, however it is typed", {
+  draft <- gold_draft()
+  box <- draft$variables$id[1]
+  expect_true(is.na(draft_service_update(draft, "variables", box, "subject", "self")$variables$subject[1]))
+  expect_true(is.na(draft_service_update(draft, "variables", box, "subject", " ")$variables$subject[1]))
+  expect_equal(draft_service_update(draft, "variables", box, "subject", " Respondent's Twin ")$variables$subject[1], "Respondent's Twin")
+})

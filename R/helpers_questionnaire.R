@@ -41,13 +41,14 @@ preview_rows <- function(draft, parent_id, depth) {
 }
 
 preview_block_rows <- function(block, draft, depth) {
-  switch(block$component_type,
-    Section = tagList(
+  if (is_container(block$component_type)) {
+    return(tagList(
       tags$tr(
-        class = "qt-section", `data-depth` = depth,
+        class = c("qt-section", if (block$component_type == "Question Group") "is-group"), `data-depth` = depth,
         tags$th(
           colspan = preview_columns, scope = "rowgroup",
-          type_chip(block$component_type), " ", if (is.na(block$text)) span(class = "preview-note", "(no heading)") else block$text
+          type_chip(block$component_type), " ",
+          if (!is.na(block$text)) block$text else if (block$component_type == "Section") span(class = "preview-note", "(no heading)")
         )
       ),
       preview_rows(draft, block$id, depth + 1L),
@@ -56,7 +57,9 @@ preview_block_rows <- function(block, draft, depth) {
         class = "qt-section-end", `data-depth` = depth, `aria-hidden` = "true",
         tags$td(colspan = preview_columns, span(class = "qt-section-end-label", paste("End of", preview_section_name(block))))
       )
-    ),
+    ))
+  }
+  switch(block$component_type,
     Question = preview_question_rows(block, draft, depth),
     tags$tr(
       class = "qt-block", `data-depth` = depth,
@@ -68,8 +71,11 @@ preview_block_rows <- function(block, draft, depth) {
   )
 }
 
-# "PART B. YOUR HABITS", or "the section" for one without a heading.
+# "PART B. YOUR HABITS", or "the section" for one without a heading, or "the question group".
 preview_section_name <- function(block) {
+  if (block$component_type == "Question Group") {
+    return("the question group")
+  }
   if (is.na(block$text)) "the section" else shorten(block$text, 60)
 }
 
@@ -120,7 +126,8 @@ preview_question_words <- function(block) {
   if (nzchar(trimmed)) trimmed else block$text
 }
 
-# " [Lifetime] [Self]": the variable's label and who it is about, each when it has one.
+# " [Lifetime] [Siblings]": the variable's label and who it is about, each when it has one (a variable
+# about the respondent has no subject).
 preview_variable_tags <- function(box) {
   tags <- c(box$label, box$subject)
   tags <- trimws(tags[!is.na(tags)])

@@ -8,13 +8,18 @@ test_that("the questionnaire is a table: a row for each variable with its MATR I
   expect_match(html, "<th scope=\"col\" class=\"qt-id\">Variable ID</th>", fixed = TRUE)
   expect_match(html, "Question Text")
   expect_match(html, "Variable Coding")
-  sections <- draft$components[draft$components$component_type == "Section", ]
-  expect_equal(lengths(regmatches(html, gregexpr('class="qt-section"', html))), nrow(sections))
+  groups <- draft$components[draft$components$component_type == "Question Group", ]
+  expect_equal(lengths(regmatches(html, gregexpr('class="qt-section is-group"', html))), nrow(groups))
   expect_equal(lengths(regmatches(html, gregexpr('class="qt-question"', html))), nrow(draft$variables))
-  # the question's words, without its number, then who the variable is about in square brackets
+  # the question's words, without its number, then who the variable is about in square brackets (nothing
+  # for the respondent)
   questions <- draft$components[draft$components$component_type == "Question", ]
   first <- draft$variables[draft$variables$component_id == questions$id[1], ][1, ]
-  expect_match(text, paste0(first$matr_id, " ", questions$text[1], " [", first$subject, "]"), fixed = TRUE)
+  expect_true(is.na(first$subject))
+  expect_match(text, paste0(first$matr_id, " ", questions$text[1], " 1 = Yes"), fixed = TRUE)
+  children <- draft$variables[draft$variables$subject %in% "Respondent's Children", ][1, ]
+  expect_match(text, paste0(children$matr_id, " "), fixed = TRUE)
+  expect_match(text, "[Respondent's Children]", fixed = TRUE)
   expect_false(grepl(paste0("Q", questions$question_number[1], " "), text, fixed = TRUE))
   # each choice on its own line, code first
   choices <- draft_service_children(draft, "response_options", first$id)
@@ -31,9 +36,9 @@ test_that("a variable's label and subject go in square brackets, and a number re
   draft$components$text[draft$components$id == question] <- paste0(number, ". ", words)
   box <- draft$variables$id[draft$variables$component_id == question][1]
   draft$variables$label[draft$variables$id == box] <- "Lifetime"
-  draft$variables$subject[draft$variables$id == box] <- "Self"
+  draft$variables$subject[draft$variables$id == box] <- "Respondent's Siblings"
   text <- text_of(questionnaire_preview_ui(draft))
-  expect_match(text, paste0(" ", words, " [Lifetime] [Self]"), fixed = TRUE)
+  expect_match(text, paste0(" ", words, " [Lifetime] [Respondent's Siblings]"), fixed = TRUE)
   expect_false(grepl(paste0(number, ". ", words), text, fixed = TRUE))
 
   draft$variables$subject[draft$variables$id == box] <- NA

@@ -2,10 +2,11 @@
 # Three big jsonb columns of the draft's details (model_draft_row.R), kept apart from the rest
 # of the record (model_extraction.R) because they are big:
 #   questionnaire the reviewed copy staff save; empty until they first save (EXTRACTED_DRAFT)
-#   ai_original   the questionnaire JSON the AI returned, written once by the reading job and
-#                 never changed afterwards (AI_EXTRACTED_DRAFT: AI-Powered extractions only)
-#   review_edits  what the reviewer changed in what the AI returned, a list that grows each
-#                 time they save (AI_EXTRACTED_DRAFT; see service_draft_record.R)
+#   ai_original   the questionnaire JSON the AI returned (after reading_service_tidy()), written once
+#                 by the reading job and never changed afterwards (AI_EXTRACTED_DRAFT: AI-Powered
+#                 extractions only)
+#   review_edits  how the reviewed copy differs from what the AI returned, worked out again and
+#                 replaced each time staff save (AI_EXTRACTED_DRAFT; see service_draft_record.R)
 
 #' A draft's questionnaire.
 #'
@@ -17,19 +18,19 @@
 #' @return The questionnaire JSON as nested lists, or `NULL` if reading hasn't finished.
 #'   An error if there is no such draft.
 draft_model_get <- function(connection, id) {
-  rows <- draft_model_detail(connection, id, "questionnaire", "ai_original")
-  rows$questionnaire %||% rows$ai$ai_original
+  json <- draft_model_get_both(connection, id)
+  json$questionnaire %||% json$original
 }
 
-#' What the AI returned, and what the reviewer has changed in it.
+#' A draft's reviewed copy and what the AI returned, read at once.
 #'
 #' @param connection The MATR database, `list(url, key)`; see `model_database.R`.
 #' @param id The draft's id.
-#' @return A list: `original` (the questionnaire JSON the AI returned, or `NULL`) and `edits`
-#'   (a list of the reviewer's changes, empty if none).
-draft_model_get_record <- function(connection, id) {
-  rows <- draft_model_detail(connection, id, character(), c("ai_original", "review_edits"))
-  list(original = rows$ai$ai_original, edits = rows$ai$review_edits %||% list())
+#' @return A list: `questionnaire` (the copy staff last saved, or `NULL`) and `original` (the
+#'   questionnaire JSON the AI returned, or `NULL`). An error if there is no such draft.
+draft_model_get_both <- function(connection, id) {
+  rows <- draft_model_detail(connection, id, "questionnaire", "ai_original")
+  list(questionnaire = rows$questionnaire, original = rows$ai$ai_original)
 }
 
 # `columns` of the draft's EXTRACTED_DRAFT row, and `ai_columns` of its AI_EXTRACTED_DRAFT row as
@@ -48,8 +49,8 @@ draft_model_detail <- function(connection, id, columns, ai_columns) {
 #' @param id The draft's id.
 #' @param draft_json The questionnaire JSON, as nested lists.
 #' @param staff_id The staff id of the person saving.
-#' @param review_edits The reviewer's changes so far (an AI-Powered extraction), as a list, or
-#'   `NULL` to leave them as they are.
+#' @param review_edits How the copy differs from what the AI returned (an AI-Powered extraction), as a
+#'   list that replaces what was kept, or `NULL` to leave it as it is.
 #' @param expected_revision The revision the person was looking at; the save is refused if someone
 #'   saved the draft since. `NULL` skips the check.
 #' @return The draft's revision after the save, invisibly. An error if there is no such draft, or

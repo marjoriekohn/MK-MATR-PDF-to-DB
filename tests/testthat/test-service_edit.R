@@ -201,12 +201,17 @@ test_that("a MeSH ID has the right shape and isn't already listed", {
   expect_length(edit_service_check(form$fields, form$values)$problems, 0)
 })
 
-test_that("only a section may have no words", {
+test_that("only a question group has no words, and it has none", {
+  group <- edit_type_id(test_snapshot("component_type"), "Question Group")
   section <- edit_type_id(test_snapshot("component_type"), "Section")
   form <- form_for("component", "add", component__component_type_id = "4", component__text = "")
-  expect_equal(edit_service_check(form$fields, form$values)$problems$component__text, "Only a section can be left without words.")
+  expect_equal(edit_service_check(form$fields, form$values)$problems$component__text, "Add the printed words. Only a question group has none.")
   form <- form_for("component", "add", component__component_type_id = as.character(section), component__text = "")
+  expect_equal(edit_service_check(form$fields, form$values)$problems$component__text, "Add the printed words. Only a question group has none.")
+  form <- form_for("component", "add", component__component_type_id = as.character(group), component__text = "")
   expect_length(edit_service_check(form$fields, form$values)$problems, 0)
+  form <- form_for("component", "add", component__component_type_id = as.character(group), component__text = "Part A")
+  expect_match(edit_service_check(form$fields, form$values)$problems$component__text, "has no words of its own")
   form <- form_for("question", "add", question__text = "")
   expect_equal(edit_service_check(form$fields, form$values)$missing, "question wording")
 })

@@ -1,6 +1,6 @@
 // Edit Extraction page (edit_extraction and outline modules)
 $review-line: rgba($vcu-gray, 0.35);
-$code-width: 5.5rem; // wide enough for the Apply to all button under the codes
+$code-width: 4.25rem; // a choice's code: a few digits
 
 // ------ Header ---------------------------------------------------------------
 .review-header {
@@ -149,6 +149,7 @@ button.review-pill:hover { background: rgba($vcu-gold, 0.2); }
 
 .outline-row {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: 0.5rem;
   padding: 0.35rem 0.6rem;
@@ -192,7 +193,7 @@ button.review-pill:hover { background: rgba($vcu-gold, 0.2); }
   text-align: right;
 }
 .outline-printed-number.form-control {
-  width: 4.5rem;
+  width: 4rem;
   padding: 0.15rem 0.35rem;
   font-weight: 700;
   &::placeholder { color: rgba($vcu-gray, 0.8); font-weight: 400; font-style: italic; }
@@ -215,11 +216,19 @@ button.review-pill:hover { background: rgba($vcu-gold, 0.2); }
   &::placeholder { color: rgba($vcu-gray, 0.8); font-style: italic; }
 }
 
-// The question it follows, beside its words
+// A question group has no words: the space they would take
+.outline-group-note { flex: 1; min-width: 8rem; }
+
+// The question it follows, beside its words, then the condition printed for it
 .outline-parent {
-  flex: 0 1 14rem;
-  min-width: 9rem;
-  .form-select { width: 100%; }
+  flex: 0 1 13rem;
+  min-width: 8rem;
+  .form-control { width: 100%; }
+}
+.outline-condition {
+  flex: 0 1 9rem;
+  min-width: 7rem;
+  .form-control { width: 100%; }
 }
 
 .outline-badges { display: flex; flex-shrink: 0; align-items: center; gap: 0.35rem; }
@@ -276,11 +285,6 @@ button.review-pill:hover { background: rgba($vcu-gold, 0.2); }
 }
 .details-problems { margin: 0 0 0.75rem; ul { margin: 0; padding-left: 1.1rem; } }
 
-.details-field {
-  display: block;
-  margin-bottom: 0.9rem;
-}
-
 // A field the checks found at fault (review.js keeps the marks up to date as they run)
 .form-control.has-problem, .form-select.has-problem {
   border-color: $field-problem-red;
@@ -288,18 +292,6 @@ button.review-pill:hover { background: rgba($vcu-gold, 0.2); }
   &:focus { box-shadow: 0 0 0 0.2rem rgba($field-problem-red, 0.35); }
 }
 .variable-card.has-problem { border-color: $field-problem-red; box-shadow: 0 0 0 1px $field-problem-red; }
-
-// Fields side by side: short ones keep their size, the rest share the width
-.details-row {
-  display: flex;
-  flex-wrap: wrap;
-  column-gap: 0.75rem;
-  > .details-field { flex: 1 1 10rem; min-width: 0; }
-  > .is-short { flex: 0 0 auto; }
-}
-
-// The size of the Code column in the choices table
-.is-short .form-control { width: $code-width; }
 
 // ------ Variables and choices -----------------------------------------------
 .variable-cards {
@@ -317,44 +309,81 @@ button.review-pill:hover { background: rgba($vcu-gold, 0.2); }
   h3 { margin: 0; font-size: 1rem; }
 }
 
-.box-list { display: flex; flex-direction: column; gap: 0.6rem; margin-top: 0.5rem; }
+// A question's variables side by side, as many as fit; each card as tall as what it holds
+.box-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(#{"min(100%, 22rem)"}, 1fr));
+  align-items: start;
+  gap: 0.6rem;
+  margin-top: 0.5rem;
+}
 
 .variable-card {
-  padding: 0.6rem;
+  container-type: inline-size;
+  min-width: 0;
+  padding: 0.6rem 0.7rem 0.7rem;
   border: 1px solid $review-line;
   border-radius: $border-radius;
   background: $vcu-white;
-  .details-field { margin-bottom: 0; }
 }
 
-// One row per variable: its kind, MATR ID, who it's about, its label (and a write-in's answer type), and delete
-.variable-card-row {
+// Its number, kind, the "+ Field" menu and delete
+.variable-card-head {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 0.5rem 0.75rem;
-  > .details-field { flex: 1 1 8rem; min-width: 0; }
-  .btn-icon { margin-left: auto; }
+  gap: 0.4rem 0.6rem;
+  margin-bottom: 0.5rem;
+  .variable-add-field { margin-left: auto; }
+  > .btn-icon:only-of-type { margin-left: auto; }
 }
 .variable-card-number { font-weight: 700; }
 
-.choice-table { margin-top: 0.6rem; }
+// What every variable needs, then what it shows of the rest: short fields side by side, the label across
+.variable-card-fields {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(9rem, 1fr));
+  gap: 0.5rem 0.6rem;
+  .is-wide { grid-column: 1 / -1; }
+  .is-id .form-control { max-width: 10ch; }
+}
+.card-field { display: flex; flex-direction: column; gap: 0.15rem; min-width: 0; margin: 0; }
+.card-field-label { color: $vcu-gray; font-size: 0.75rem; font-weight: 500; }
+
+.choice-table { margin-top: 0.6rem; padding-top: 0.5rem; border-top: 1px solid $review-line; }
 .choice-list { display: flex; flex-direction: column; gap: 0.3rem; }
 
-// Code, then the response option it codes, how it is printed, and where it skips to
+// Code, then the response option it codes, then how it is printed and where it skips to when shown
 .choice-row {
   display: grid;
-  grid-template-columns: 1.25rem $code-width minmax(0, 2fr) minmax(0, 1.4fr) minmax(0, 1.4fr) 2rem;
+  grid-template-columns: 1rem $code-width minmax(0, 1fr) 1.75rem;
   align-items: center;
-  gap: 0.35rem;
+  gap: 0.3rem;
+  .choice-code { width: $code-width; }
+}
+.has-1-optional .choice-row { grid-template-columns: 1rem $code-width minmax(0, 1.4fr) minmax(0, 1fr) 1.75rem; }
+.has-2-optional .choice-row { grid-template-columns: 1rem $code-width minmax(0, 1.4fr) minmax(0, 1fr) minmax(0, 1fr) 1.75rem; }
+
+// In a narrow card, a choice's printed words and skip instruction go on a line of their own under it
+@container (max-width: 26rem) {
+  .has-1-optional .choice-row,
+  .has-2-optional .choice-row {
+    grid-template-columns: 1rem $code-width minmax(0, 1fr) minmax(0, 1fr) 1.75rem;
+    > :nth-child(3) { grid-column: 3 / 5; }
+    > :nth-child(n + 4):not(:last-child) { grid-row: 2; }
+    > :nth-child(4) { grid-column: 3; }
+    > :nth-child(5):not(:last-child) { grid-column: 4; }
+    > :last-child { grid-column: 5; grid-row: 1; }
+  }
 }
 
-// Lined up with the choice rows: Apply to all under the codes, + Choice under the choices
 .choice-actions {
-  margin: 1rem 0 0.4rem;
-  align-items: start;
-  .choice-apply { grid-column: 2; .btn { width: 100%; padding-inline: 0.25rem; } }
-  .choice-add { grid-column: 3; justify-self: start; }
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.25rem 0.75rem;
+  margin-top: 0.5rem;
+  .choice-apply { padding-inline: 0; }
 }
 
 .btn-icon { color: $vcu-gray; &:hover { color: $vcu-black; } }
@@ -371,4 +400,16 @@ button.review-pill:hover { background: rgba($vcu-gold, 0.2); }
   border: 1px solid $review-line;
   border-radius: $border-radius;
   h3 { margin: 0 0 0.35rem; font-size: 1rem; }
+}
+
+// ------ Narrow screens ---------------------------------------------------------------
+// A row's words take a line of their own, under its kind and numbers, and its parent question and
+// condition the next; the question's panel uses the whole width.
+@media (max-width: 767.98px) {
+  .outline-text, .outline-group-note { flex-basis: 100%; order: 1; }
+  .outline-parent, .outline-condition { flex: 1 1 10rem; order: 2; }
+  .outline-badges, .outline-actions { order: 0; }
+  .outline-actions { margin-left: auto; }
+  .question-panel { margin-left: 0.5rem; padding: 0.6rem; }
+  .btn-sm, .btn-icon { min-height: 2.25rem; min-width: 2.25rem; }
 }

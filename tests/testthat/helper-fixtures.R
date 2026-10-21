@@ -111,12 +111,14 @@ with_matr_ids <- function(draft = gold_draft()) {
   draft
 }
 
-block_numbered <- function(draft, question_number) {
-  draft$components[draft$components$question_number %in% question_number, ]
+# The question printed with this number (the gold questionnaire's printed numbers are all different).
+block_numbered <- function(draft, number) {
+  draft$components[draft_service_question_number(draft$components) %in% number, ]
 }
 
+# The numbers of the questions inside a section or question group, as they are called (printed, or their place).
 numbers_in <- function(draft, section_id) {
-  numbers <- draft_service_children(draft, "components", section_id)$question_number
+  numbers <- draft_service_question_number(draft_service_children(draft, "components", section_id))
   numbers[!is.na(numbers)]
 }
 

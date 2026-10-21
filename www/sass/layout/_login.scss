@@ -37,7 +37,6 @@
 .login-field.shiny-input-container { width: 100% !important; margin-bottom: 0.9rem; }
 .login-button {
   margin-top: 0.25rem;
-  .spinner-border { margin-right: 0.35rem; vertical-align: -0.15em; }
   & + & { margin-top: 0.6rem; }
 }
 .login-hint { margin: -0.4rem 0 0.9rem; color: $vcu-gray; font-size: 0.85rem; }

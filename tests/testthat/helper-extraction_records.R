@@ -55,7 +55,7 @@ test_questionnaire_draft <- function(matr = c("zz1", "zz2")) {
       children = list(
         list(component_type = "Instruction", display_order = 1, text = paste(test_marker, "Please answer.")),
         list(
-          component_type = "Question", display_order = 2, text = paste(test_marker, "Do you smoke?"), question_number = "1",
+          component_type = "Question", display_order = 2, text = paste(test_marker, "Do you smoke?"), printed_number = "1",
           self_contained = TRUE,
           variables = list(list(
             variable_type = "closed_ended", display_order = 1,
@@ -66,7 +66,7 @@ test_questionnaire_draft <- function(matr = c("zz1", "zz2")) {
           ))
         ),
         list(
-          component_type = "Question", display_order = 3, text = paste(test_marker, "How many?"), question_number = "2",
+          component_type = "Question", display_order = 3, text = paste(test_marker, "How many?"), printed_number = "2",
           self_contained = TRUE,
           variables = list(list(variable_type = "open_ended", display_order = 1, answer_data_type = "NUMBER"))
         )
@@ -103,4 +103,10 @@ local_pushed_questionnaire <- function(admin, tree, draft = test_questionnaire_d
   outcome <- extraction_service_push(test_connection, record, admin, questionnaire_service_get_catalog(test_connection))
   local_applied(change_request_service_add(test_connection, outcome$record, admin), env = env)
   list(questionnaire_id = typed$questionnaire_id, draft = draft, typed = typed)
+}
+
+# The differences from what the AI returned that a draft keeps (ai_extracted_draft.review_edits); empty for a
+# Manual extraction, which keeps none.
+review_edits_of <- function(connection, id) {
+  draft_model_detail(connection, id, character(), "review_edits")$ai$review_edits %||% list()
 }

@@ -26,6 +26,11 @@
 #   * Each variable's choices are its RESPONSE_OPTION rows: one per variable and answer choice, with
 #     its code. They are always new, since the variable is, even where the words repeat; the answer
 #     choices and the sets of choices they point at are the ones reused.
+#   * Who a variable is about is a SUBJECT row: the respondent's ("Self") for a blank, the one with the
+#     same name (ignoring capitals and spaces at the ends) when there is one, or a new one staff typed.
+#   * The wave records each question's place among the questions (question_number, 1, 2, 3...,
+#     sections and question groups not counted) and the number printed beside it (printed_number),
+#     which can repeat or be missing.
 
 # ------ Before pushing -----------------------------------------------------------------
 #' What stops an extraction being added: its Basic Info, then its questionnaire.
@@ -211,7 +216,7 @@ extraction_service_build_items <- function(draft, info, ids, existing, options) 
     if (block$component_type != "Question") next
     push$summary$questions <- push$summary$questions + 1L
     push$insert("wave_question", list(component_id = component_of[[id]], questionnaire_id = questionnaire, wave_id = wave), list(
-      question_number = draft_service_question_number(block)
+      question_number = block$question_number, printed_number = block$printed_number
     ))
     push_variables(push, draft, block, component_of[[id]], questionnaire)
   }
@@ -227,7 +232,7 @@ push_start <- function(ids, existing, options) {
   push <- new.env()
   push$summary <- list(
     blocks = 0L, blocks_found = 0L, questions = 0L, variables = 0L, variables_found = 0L, choices = 0L,
-    answer_options = 0L, answer_options_found = 0L, option_sets = 0L, option_sets_found = 0L
+    answer_options = 0L, answer_options_found = 0L, option_sets = 0L, option_sets_found = 0L, subjects = 0L
   )
   push$existing <- existing
   push$options <- options
@@ -252,7 +257,21 @@ push_start <- function(ids, existing, options) {
   }
   push$items <- function() items
   push$type_id <- function(name) ids$component_types$component_type_id[match(name, ids$component_types$name)]
-  push$subject_id <- function(name) ids$subjects$subject_id[match(name, ids$subjects$name)]
+  # Who a variable is about: a blank is the respondent; a name the database doesn't have yet is added once.
+  push$subject_id <- function(name) {
+    name <- trimws(if (is.na(name)) respondent_subject else name)
+    there <- ids$subjects$subject_id[tolower(trimws(ids$subjects$name)) == tolower(name)]
+    if (length(there) > 0) {
+      return(there[1])
+    }
+    key <- paste0("subject:", tolower(name))
+    if (is.null(made[[key]])) {
+      made[[key]] <- push$token("subject")
+      push$insert("subject", list(subject_id = made[[key]]), list(name = name))
+      push$summary$subjects <- push$summary$subjects + 1L
+    }
+    made[[key]]
+  }
   push
 }
 
@@ -458,7 +477,8 @@ extraction_service_push_summary <- function(summary) {
     if (summary$variables_found > 0) paste0(plural(summary$variables_found, "variable"), " already there"),
     if (summary$choices > 0) plural(summary$choices, "response option"),
     if (summary$answer_options > 0) plural(summary$answer_options, "new answer choice"),
-    if (summary$option_sets > 0) plural(summary$option_sets, "new set of choices", plural_form = "new sets of choices")
+    if (summary$option_sets > 0) plural(summary$option_sets, "new set of choices", plural_form = "new sets of choices"),
+    if (summary$subjects > 0) plural(summary$subjects, "new subject")
   )
   paste0("Adds ", word_list(parts), ".")
 }

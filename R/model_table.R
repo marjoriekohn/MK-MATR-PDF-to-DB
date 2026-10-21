@@ -89,7 +89,7 @@ database_tables <- list(
     order_by = c("questionnaire_id", "wave_id", "component_id"),
     columns = c(
       questionnaire_id = "id", wave_id = "id", component_id = "id",
-      question_number = "text"
+      question_number = "text", printed_number = "text"
     )
   ),
   category = list(

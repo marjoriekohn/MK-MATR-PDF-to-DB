@@ -101,9 +101,15 @@ test_that("a delete writes every field of every row that goes, children before p
     tables,
     c("open_ended", "variable", "wave_question", "questionnaire_question", "questionnaire_component", "question", "component")
   )
-  expect_true(all(built$items$action == "Delete"))
-  expect_true(all(is.na(built$items$new_value)))
+  deleted <- built$items[built$items$action == "Delete", ]
+  expect_true(all(is.na(deleted$new_value)))
   expect_equal(built$items$item_number, seq_len(nrow(built$items)))
+  # the questions left in each wave are numbered 1, 2, 3... again, after the deletes
+  renumbered <- built$items[built$items$action != "Delete", ]
+  expect_true(all(renumbered$entity_name == "wave_question" & renumbered$attribute_name == "question_number"))
+  expect_gt(min(renumbered$item_number), max(deleted$item_number))
+  expect_true('Update wave_question {"component_id":4,"questionnaire_id":1,"wave_id":1} question_number: 2 -> 1' %in% item_lines(built$items))
+  expect_true('Update wave_question {"component_id":7,"questionnaire_id":1,"wave_id":2} question_number: 4 -> 3' %in% item_lines(built$items))
 
   variable <- built$items[built$items$entity_name == "variable", ]
   expect_equal(
@@ -241,7 +247,16 @@ test_that("moving a block is Update items for it and for the ones that move over
     'Update questionnaire_component {"component_id":7,"questionnaire_id":1} display_order: 1 -> 2',
     'Update questionnaire_component {"component_id":3,"questionnaire_id":1} display_order: 2 -> 3',
     'Update questionnaire_component {"component_id":4,"questionnaire_id":1} display_order: 3 -> 4',
-    'Update questionnaire_component {"component_id":5,"questionnaire_id":1} display_order: 4 -> 5'
+    'Update questionnaire_component {"component_id":5,"questionnaire_id":1} display_order: 4 -> 5',
+    # question 7 now comes first, so each wave numbers its questions again
+    'Update wave_question {"component_id":3,"questionnaire_id":1,"wave_id":1} question_number: 1 -> 2',
+    'Update wave_question {"component_id":4,"questionnaire_id":1,"wave_id":1} question_number: 2 -> 3',
+    'Update wave_question {"component_id":5,"questionnaire_id":1,"wave_id":1} question_number: 3 -> 4',
+    'Update wave_question {"component_id":7,"questionnaire_id":1,"wave_id":1} question_number: 4 -> 1',
+    'Update wave_question {"component_id":3,"questionnaire_id":1,"wave_id":2} question_number: 1 -> 2',
+    'Update wave_question {"component_id":4,"questionnaire_id":1,"wave_id":2} question_number: 2 -> 3',
+    'Update wave_question {"component_id":5,"questionnaire_id":1,"wave_id":2} question_number: 3 -> 4',
+    'Update wave_question {"component_id":7,"questionnaire_id":1,"wave_id":2} question_number: 4 -> 1'
   ))
 })
 
@@ -405,28 +420,24 @@ test_that("a question's condition and its number in a wave are changed one by on
       'Update questionnaire_question {"component_id":5,"questionnaire_id":1} condition: If you ',
       "answered Yes to the previous question -> If yes"
     ),
-    'Update wave_question {"component_id":5,"questionnaire_id":1,"wave_id":2} question_number: 3 -> 2b'
+    'Update wave_question {"component_id":5,"questionnaire_id":1,"wave_id":2} printed_number: 3 -> 2b'
   ))
 })
 
-test_that("each wave that asked a question has its own number to change", {
+test_that("each wave that asked a question has its own printed number to change", {
   form <- form_for("questionnaire_question", "update", "1|4", scope = "1")
   ids <- vapply(form$fields, function(field) field$id, character(1))
   expect_true(all(c("questionnaire_question__qn_1", "questionnaire_question__qn_2") %in% ids))
   labels <- vapply(Filter(function(field) startsWith(field$name, "qn_"), form$fields), function(field) field$label, character(1))
-  expect_equal(labels, c("Question number in Wave 1", "Question number in Wave 2"))
+  expect_equal(labels, c("Number printed in Wave 1", "Number printed in Wave 2"))
 })
 
-test_that("a question number that another question in the wave has is a problem", {
+test_that("a printed number can repeat in a wave, or be left empty", {
   form <- form_for("questionnaire_question", "update", "1|5", scope = "1", questionnaire_question__qn_2 = "2")
-  problem <- edit_service_check(form$fields, form$values)$problems$questionnaire_question__qn_2
-  expect_match(problem, "Question 2 in AHP Wave 2 is already “Do you now smoke cigarettes\\?”")
-  # its own number isn't a clash
-  form <- form_for("questionnaire_question", "update", "1|5", scope = "1")
   expect_length(edit_service_check(form$fields, form$values)$problems, 0)
-  # nor is the same number in another questionnaire's wave
-  form <- form_for("questionnaire_question", "update", "2|9", scope = "2", questionnaire_question__qn_3 = "2")
+  form <- form_for("questionnaire_question", "update", "1|5", scope = "1", questionnaire_question__qn_2 = "")
   expect_length(edit_service_check(form$fields, form$values)$problems, 0)
+  expect_true('Update wave_question {"component_id":5,"questionnaire_id":1,"wave_id":2} printed_number: 3 -> -' %in% item_lines(form_items(form)$items))
 })
 
 test_that("changing a question's wording and its number together changes the new question's number", {
@@ -442,7 +453,7 @@ test_that("changing a question's wording and its number together changes the new
   ))
   expect_true(paste0(
     'Update wave_question {"component_id":"new:component:1","questionnaire_id":4,"wave_id":5} ',
-    "question_number: 1 -> 1a"
+    "printed_number: 1 -> 1a"
   ) %in% lines)
 })
 
@@ -526,14 +537,14 @@ test_that("the changes to a swapped-in question come before the old rows are rem
     c(
       'Update questionnaire_question {"component_id":"new:component:1","questionnaire_id":1} self_contained: false -> true',
       'Update questionnaire_question {"component_id":"new:component:1","questionnaire_id":1} parent_question_id: 4 -> -',
-      'Update wave_question {"component_id":"new:component:1","questionnaire_id":1,"wave_id":2} question_number: 3 -> 3b'
+      'Update wave_question {"component_id":"new:component:1","questionnaire_id":1,"wave_id":2} printed_number: 3 -> 3b'
     )
   )
   expect_equal(
     built$summary,
     paste0(
-      "Changed the wording, whether it stands on its own, the question it follows up on and question ",
-      "number in Wave 2 of the questionnaire question “AHP · How many cigarettes do you smoke on a ",
+      "Changed the wording, whether it stands on its own, the question it follows up on and number ",
+      "printed in Wave 2 of the questionnaire question “AHP · How many cigarettes do you smoke on a ",
       "typical day?”"
     )
   )
@@ -555,19 +566,19 @@ test_that("a question can be added to a questionnaire, whole: no sentence says t
   form <- form_for("questionnaire_question", "add", scope = "1")
   names <- vapply(form$fields, function(field) field$name, character(1))
   expect_true(all(c("source", "text", "component_id", "parent_component_id", "display_order", "self_contained",
-                    "parent_question_id", "condition", "qn_1", "qn_2", "variables") %in% names))
+                    "parent_question_id", "condition", "asked_1", "qn_1", "asked_2", "qn_2", "variables") %in% names))
   # an existing question can be picked, but not one the questionnaire asks already
   existing <- Filter(function(field) field$name == "component_id", form$fields)[[1]]
   expect_true("11" %in% existing$choices) # Mother Questionnaire's pregnancy question
   expect_false(any(c("3", "4", "5", "7") %in% existing$choices))
 })
 
-test_that("a new question is added with its place, its number in each wave that asks it, and its variables", {
+test_that("a new question is added with its place, its numbers in each wave that asks it, and its variables", {
   form <- form_for(
     "questionnaire_question", "add", scope = "1",
     questionnaire_question__text = "Do you exercise?",
     questionnaire_question__parent_component_id = "6", questionnaire_question__display_order = "1",
-    questionnaire_question__qn_2 = "1a4",
+    questionnaire_question__asked_2 = "yes", questionnaire_question__qn_2 = "1a4",
     questionnaire_question__variables = variables_json(
       yes_no_variable(),
       list(variable_type = "open_ended", matr_id = "AH05HR", subject = "Self", label = "Hours a week", answer_data_type = "NUMBER")
@@ -585,11 +596,15 @@ test_that("a new question is added with its place, its number in each wave that 
   expect_true('Update questionnaire_component {"component_id":7,"questionnaire_id":1} display_order: 1 -> 2' %in% lines)
   expect_true('Insert questionnaire_component {"component_id":"new:component:1","questionnaire_id":1} parent_component_id: - -> 6' %in% lines)
   expect_true('Insert questionnaire_question {"component_id":"new:component:1","questionnaire_id":1} self_contained: - -> true' %in% lines)
-  # asked only in the wave it has a number in
+  # asked only in the wave that asks it: its place among the wave's questions (question 7 after it moves
+  # down one), and the number printed beside it
   waves <- built$items[built$items$entity_name == "wave_question", ]
-  expect_equal(nrow(waves), 1)
-  expect_match(waves$record_identifier, '"wave_id":2')
-  expect_equal(waves$new_value, "1a4")
+  expect_true(all(grepl('"wave_id":2', waves$record_identifier)))
+  expect_equal(item_lines(waves), c(
+    'Update wave_question {"component_id":7,"questionnaire_id":1,"wave_id":2} question_number: 4 -> 5',
+    'Insert wave_question {"component_id":"new:component:1","questionnaire_id":1,"wave_id":2} question_number: - -> 4',
+    'Insert wave_question {"component_id":"new:component:1","questionnaire_id":1,"wave_id":2} printed_number: - -> 1a4'
+  ))
   # its variables, as an extraction adds them: Yes and No are used again, and so is the set they make
   expect_true('Insert variable {"variable_key":"new:variable:1"} matr_id: - -> AH05EX' %in% lines)
   expect_true('Insert closed_ended {"variable_key":"new:variable:1"} option_set_id: - -> 1' %in% lines)
@@ -606,7 +621,7 @@ test_that("a new question is added with its place, its number in each wave that 
 test_that("a lone check box is a variable with one choice, and a new answer choice makes a new set", {
   form <- form_for(
     "questionnaire_question", "add", scope = "1",
-    questionnaire_question__text = "All of my life", questionnaire_question__qn_1 = "9",
+    questionnaire_question__text = "All of my life", questionnaire_question__asked_1 = "yes", questionnaire_question__qn_1 = "9",
     questionnaire_question__variables = variables_json(yes_no_variable(choices = list(list(code_value = "1", answer_option = "Always"))))
   )
   expect_length(edit_service_check(form$fields, form$values)$problems, 0)
@@ -620,7 +635,7 @@ test_that("a question already in the database can be added, keeping its wording 
     "questionnaire_question", "add", scope = "1",
     questionnaire_question__source = "existing", questionnaire_question__component_id = "11",
     questionnaire_question__self_contained = "FALSE", questionnaire_question__parent_question_id = "4",
-    questionnaire_question__condition = "Women only", questionnaire_question__qn_1 = "2b",
+    questionnaire_question__condition = "Women only", questionnaire_question__asked_1 = "yes", questionnaire_question__qn_1 = "2b",
     questionnaire_question__variables = variables_json(yes_no_variable())
   )
   expect_length(edit_service_check(form$fields, form$values)$problems, 0)
@@ -639,11 +654,12 @@ test_that("what stops a question being added is said under the field at fault", 
     edit_service_check(form$fields, form$values)
   }
   problems <- function(...) check(...)$problems
-  # no wave number: a question is asked in at least one wave
-  expect_match(problems(questionnaire_question__variables = variables_json(yes_no_variable()))$questionnaire_question__qn_1, "at least one wave")
-  # a number the wave has already
-  expect_match(problems(questionnaire_question__qn_1 = "2", questionnaire_question__variables = variables_json(yes_no_variable()))$questionnaire_question__qn_1, "already “Do you now smoke cigarettes")
-  variables_problem <- function(...) problems(questionnaire_question__qn_1 = "9", questionnaire_question__variables = variables_json(...))$questionnaire_question__variables
+  # no wave that asks it: a question is asked in at least one wave
+  expect_match(problems(questionnaire_question__variables = variables_json(yes_no_variable()))$questionnaire_question__asked_1, "at least one wave")
+  # a printed number the wave has already is fine (each section can start again at 1), and so is none
+  expect_length(problems(questionnaire_question__asked_1 = "yes", questionnaire_question__qn_1 = "2", questionnaire_question__variables = variables_json(yes_no_variable())), 0)
+  expect_length(problems(questionnaire_question__asked_1 = "yes", questionnaire_question__variables = variables_json(yes_no_variable())), 0)
+  variables_problem <- function(...) problems(questionnaire_question__asked_1 = "yes", questionnaire_question__qn_1 = "9", questionnaire_question__variables = variables_json(...))$questionnaire_question__variables
   expect_match(variables_problem(yes_no_variable(matr_id = "")), "Variable 1: fill in its MATR ID")
   expect_match(variables_problem(yes_no_variable(matr_id = "AH01DB")), "AH01DB is already a MATR ID in this questionnaire")
   expect_match(variables_problem(yes_no_variable(), yes_no_variable()), "Variable 2: give it a MATR ID no other variable has")
@@ -651,9 +667,11 @@ test_that("what stops a question being added is said under the field at fault", 
   expect_match(variables_problem(yes_no_variable(choices = list(list(code_value = "1", answer_option = "")))), "blank choice")
   expect_match(variables_problem(yes_no_variable(choices = list(list(code_value = "1", answer_option = "Yes"), list(code_value = "1", answer_option = "No")))), "its own code")
   expect_match(variables_problem(list(variable_type = "open_ended", matr_id = "X1", subject = "Self")), "kind of answer")
-  expect_match(variables_problem(list(variable_type = "open_ended", matr_id = "X1", subject = "Nobody", answer_data_type = "TEXT")), "who it's about")
-  expect_match(problems(questionnaire_question__qn_1 = "9", questionnaire_question__variables = "[]")$questionnaire_question__variables, "at least one variable")
-  expect_match(problems(questionnaire_question__qn_1 = "9", questionnaire_question__variables = "not json")$questionnaire_question__variables, "couldn't be read")
+  # who it's about can be blank (the respondent), or a subject the database doesn't have yet
+  expect_null(variables_problem(list(variable_type = "open_ended", matr_id = "X1", subject = "Nobody", answer_data_type = "TEXT")))
+  expect_null(variables_problem(list(variable_type = "open_ended", matr_id = "X1", subject = "", answer_data_type = "TEXT")))
+  expect_match(problems(questionnaire_question__asked_1 = "yes", questionnaire_question__variables = "[]")$questionnaire_question__variables, "at least one variable")
+  expect_match(problems(questionnaire_question__asked_1 = "yes", questionnaire_question__variables = "not json")$questionnaire_question__variables, "couldn't be read")
   expect_null(variables_problem(yes_no_variable()))
   # a questionnaire with no waves can't have a question yet
   no_waves <- form_for("questionnaire_question", "add", scope = "1", snap = test_snapshot(
@@ -670,7 +688,7 @@ test_that("the variables start as one, about the respondent, with one blank choi
   snap <- test_snapshot(c("subject"))
   variables <- edit_variables_parse(edit_variables_default(snap))
   expect_length(variables, 1)
-  expect_equal(variables[[1]]$subject, "Self")
+  expect_equal(variables[[1]]$subject, "") # blank: the respondent
   expect_length(variables[[1]]$response_options, 1)
   html <- htmltools::renderTags(edit_field_ui(
     shiny::NS("change"), Filter(function(field) field$name == "variables", form_for("questionnaire_question", "add", scope = "1")$fields)[[1]] |>
@@ -681,4 +699,23 @@ test_that("the variables start as one, about the respondent, with one blank choi
   expect_match(html, 'data-input="change-questionnaire_question__variables"')
   expect_match(html, 'data-subjects="\\[&quot;Respondent')
   expect_match(html, "edit-variables-add")
+})
+
+test_that("a block goes in a section or question group, but a section never goes inside a group", {
+  # section A (component 1) of AHP as a question group: no words of its own
+  as_group <- function(snap) {
+    snap$component$component_type_id[snap$component$component_id == 1] <- 8
+    snap$component$text[snap$component$component_id == 1] <- NA
+    snap
+  }
+  entity <- edit_entities$questionnaire_component
+  snap <- test_snapshot(edit_service_tables(entity), change = as_group)
+  choices <- edit_service_parent_choices(snap, edit_service_placements(snap, 1))
+  expect_equal(unname(choices), c("", "1", "6"))
+  expect_match(names(choices)[2], "^\\(question group\\) ")
+
+  section_b <- form_for("questionnaire_component", "update", "1|6", scope = "1", snap = snap, questionnaire_component__parent_component_id = "1")
+  expect_match(edit_service_check(section_b$fields, section_b$values)$problems$questionnaire_component__parent_component_id, "can't be inside a question group")
+  question <- form_for("questionnaire_component", "update", "1|7", scope = "1", snap = snap, questionnaire_component__parent_component_id = "1")
+  expect_null(edit_service_check(question$fields, question$values)$problems$questionnaire_component__parent_component_id)
 })

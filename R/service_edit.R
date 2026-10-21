@@ -603,7 +603,8 @@ edit_service_delete_plan <- function(entity, snap, row) {
 }
 
 # Every field of every row that goes, children before parents, and first any
-# reference to a row that's going (a study's contact) emptied.
+# reference to a row that's going (a study's contact) emptied. A wave that asks
+# fewer questions numbers the rest again (edit_wave_numbers()).
 edit_delete_items <- function(snap, cascade) {
   items <- list()
   for (clear in cascade$cleared) {
@@ -627,7 +628,29 @@ edit_delete_items <- function(snap, cascade) {
       }
     }
   }
+  items <- c(items, list(edit_renumber_after_delete(snap, cascade)))
+  items <- Filter(Negate(is.null), items)
   if (length(items) == 0) NULL else do.call(rbind, items)
+}
+
+# The questions left in each wave that loses some, numbered 1, 2, 3... again in the order they had.
+edit_renumber_after_delete <- function(snap, cascade) {
+  gone <- cascade$removed$wave_question
+  if (length(gone) == 0 || is.null(snap$wave_question)) {
+    return(NULL)
+  }
+  asked <- snap$wave_question
+  is_gone <- edit_key(asked, edit_table_key("wave_question")) %in% gone
+  touched <- unique(asked[is_gone, c("questionnaire_id", "wave_id"), drop = FALSE])
+  items <- lapply(seq_len(nrow(touched)), function(i) {
+    q <- touched$questionnaire_id[i]
+    wave <- touched$wave_id[i]
+    left <- asked[!is_gone & asked$questionnaire_id == q & asked$wave_id == wave, , drop = FALSE]
+    left <- left[order(suppressWarnings(as.numeric(left$question_number))), , drop = FALSE]
+    edit_wave_numbers(snap, q, wave, key_text(left$component_id))$items
+  })
+  items <- Filter(Negate(is.null), items)
+  if (length(items) > 0) do.call(rbind, items)
 }
 
 # Rows that hold others (a section's contents, a question's follow-ups) are

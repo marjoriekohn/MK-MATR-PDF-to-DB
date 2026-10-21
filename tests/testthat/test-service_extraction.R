@@ -116,29 +116,37 @@ test_that("a MATR ID CSV is kept with the draft", {
   expect_equal(extraction_model_get(test_connection, record$id)$matr_csv$name, "ids.csv")
 })
 
-test_that("saving a reviewed copy keeps a record of what the reviewer changed, for an AI draft only", {
+test_that("saving a reviewed copy keeps how it differs from what the AI returned, for an AI draft only", {
   me <- local_staff()
   ai <- local_read_extraction(me, json = gold_json())
-  base <- draft_service_load(test_connection, ai$id)
-  edited <- draft_service_update(base, "components", block_numbered(base, "1a")$id, "text", "Would you describe yourself as nervous?")
-  extraction_service_save_draft(test_connection, ai, edited, base, me, now = as.POSIXct("2026-10-05 09:00:00", tz = "UTC"))
-  edits <- draft_model_get_record(test_connection, ai$id)$edits
+  opened <- extraction_service_open_draft(test_connection, ai)
+  expect_identical(opened$original, gold_draft())
+  q1a <- block_numbered(opened$draft, "1a")$id
+  edited <- draft_service_update(opened$draft, "components", q1a, "text", "Would you describe yourself as nervous?")
+  extraction_service_save_draft(test_connection, ai, edited, opened$original, me)
+  edits <- review_edits_of(test_connection, ai$id)
   expect_length(edits, 1)
   expect_equal(edits[[1]]$before, "Would you call yourself a nervous person?")
   expect_equal(edits[[1]]$after, "Would you describe yourself as nervous?")
-  expect_equal(edits[[1]]$by, me$staff_id)
-  expect_equal(edits[[1]]$by_name, me$name)
-  expect_equal(edits[[1]]$at, "2026-10-05T09:00:00Z")
-  # the next save adds to the list; what the AI returned is still as it was
-  again <- draft_service_update(edited, "components", block_numbered(base, "1b")$id, "text", "Do you worry?")
-  extraction_service_save_draft(test_connection, ai, again, edited, me)
-  expect_length(draft_model_get_record(test_connection, ai$id)$edits, 2)
-  expect_identical(draft_service_from_json(draft_model_get_record(test_connection, ai$id)$original), gold_draft())
+  expect_equal(edits[[1]]$ref, q1a)
+
+  # saving again, and opening the saved copy again, measure against what the AI returned: nothing piles up
+  reopened <- extraction_service_open_draft(test_connection, ai)
+  again <- draft_service_update(reopened$draft, "components", block_numbered(reopened$draft, "1b")$id, "text", "Do you worry?")
+  extraction_service_save_draft(test_connection, ai, again, reopened$original, me)
+  extraction_service_save_draft(test_connection, ai, again, reopened$original, me)
+  expect_length(review_edits_of(test_connection, ai$id), 2)
+  # a value put back is no difference
+  restored <- draft_service_update(again, "components", block_numbered(again, "1a")$id, "text", "Would you call yourself a nervous person?")
+  extraction_service_save_draft(test_connection, ai, restored, reopened$original, me)
+  expect_equal(vapply(review_edits_of(test_connection, ai$id), function(edit) edit$after, character(1)), "Do you worry?")
+  expect_identical(draft_service_from_json(draft_model_get_both(test_connection, ai$id)$original), gold_draft())
 
   manual <- local_manual_extraction(me)
   typed <- draft_service_update(gold_draft(), "components", block_numbered(gold_draft(), "1a")$id, "text", "Typed by hand")
-  extraction_service_save_draft(test_connection, manual, typed, gold_draft(), me)
-  expect_equal(draft_model_get_record(test_connection, manual$id)$edits, list())
+  expect_null(extraction_service_open_draft(test_connection, manual)$original)
+  extraction_service_save_draft(test_connection, manual, typed, NULL, me)
+  expect_equal(review_edits_of(test_connection, manual$id), list())
   expect_identical(draft_service_load(test_connection, manual$id), typed)
 })
 

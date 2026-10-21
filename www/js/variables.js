@@ -6,8 +6,9 @@
 //     response_options: [{code_value, answer_option, printed_label, skip_instruction}]}]
 // This draws an editor from it, like the Edit Extraction page's variable cards, and writes the JSON back
 // into the text box as it is changed, so Shiny reads it like any other field. Who a variable can be about
-// and the kinds of answer come from the editor's data-subjects and data-answer-types; the answer choices
-// it offers as they are typed are in the <datalist> data-answers names.
+// is typed (blank is the respondent), with the subjects in the editor's data-subjects offered; the kinds of
+// answer come from data-answer-types; the answer choices it offers as they are typed are in the <datalist>
+// data-answers names.
 (function () {
   'use strict';
 
@@ -66,6 +67,10 @@
 
     const subjects = parse(editor.dataset.subjects);
     const answerTypes = parse(editor.dataset.answerTypes);
+    const subjectList = editor.dataset.input + '-subjects';
+    editor.appendChild(make('datalist', { id: subjectList }, subjects.map(function (subject) {
+      return make('option', { value: subject });
+    })));
     let variables = parse(input.value);
     let timer = null;
 
@@ -137,7 +142,7 @@
         make('span', { class: 'edit-variable-number' }, [String(i + 1)]),
         selectField(variable, 'variable_type', [['Choices', 'closed_ended'], ['Write-in', 'open_ended']], 'Kind', 'Kind', true),
         textField(variable, 'matr_id', 'MATR ID'),
-        selectField(variable, 'subject', subjects, 'Select who it is about', 'Who it is about', false),
+        textField(variable, 'subject', 'About: the respondent', { list: subjectList }),
         textField(variable, 'label', 'Label (optional)'),
         closed ? null : selectField(variable, 'answer_data_type', answerTypes, 'Select an answer type', 'Answer type', false),
         removeButton('Delete this variable', function () {
@@ -171,7 +176,7 @@
     // A new variable is like the last one (its kind, who it's about and its choices), without a MATR ID.
     addButton.addEventListener('click', function () {
       const last = variables[variables.length - 1];
-      const copy = last ? JSON.parse(JSON.stringify(last)) : { variable_type: 'closed_ended', subject: subjects.indexOf('Self') >= 0 ? 'Self' : '' };
+      const copy = last ? JSON.parse(JSON.stringify(last)) : { variable_type: 'closed_ended', subject: '' };
       copy.matr_id = '';
       copy.label = '';
       if (copy.variable_type !== 'open_ended' && (!copy.response_options || copy.response_options.length === 0)) {
