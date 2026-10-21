@@ -26,7 +26,7 @@ test_that("clicking a block selects it, and the selection is drawn the next time
     session$setInputs(action = list(action = "select", id = "c9"))
     expect_equal(page$selected(), "c9")
     expect_equal(marks_now(page, collapsed, opened, ns)$selected, "c9")
-    page$state$layout_version(page$state$layout_version() + 1L) # the tree is drawn again
+    redraw(redraw() + 1L) # the tree is drawn again
     session$flushReact()
     expect_true(has_class(tree_html(output), "is-selected", "c9"))
     expect_false(has_class(tree_html(output), "is-selected", "c5"))
@@ -43,7 +43,7 @@ test_that("sections open and close one at a time, or all at once, without the tr
     expect_equal(collapsed(), "c1")
     expect_equal(marks_now(page, collapsed, opened, ns)$collapsed, list("c1"))
     expect_identical(tree_html(output), before) # the page script closes it
-    page$state$layout_version(page$state$layout_version() + 1L)
+    redraw(redraw() + 1L)
     session$flushReact()
     expect_true(has_class(tree_html(output), "is-collapsed", "c1")) # and a tree drawn again keeps it closed
     session$setInputs(action = list(action = "toggle", id = "c1"))
@@ -152,7 +152,7 @@ test_that("a question's arrow opens its panel of variables; the question it foll
     session$setInputs(action = list(action = "details", id = "c3"))
     expect_length(opened(), 0)
     expect_equal(seen$removed, '.outline-tree .outline-node[data-id="c3"] > .question-panel')
-    page$state$layout_version(page$state$layout_version() + 1L)
+    redraw(redraw() + 1L)
     session$flushReact()
     expect_false(grepl("question-panel", tree_html(output))) # a tree drawn again keeps it closed
     expect_false(grepl("question-panel", tree_html(output)))
@@ -169,7 +169,7 @@ test_that("marking a block as checked moves on to the next one in printed order,
     expect_equal(page$selected(), "c4")
     expect_identical(tree_html(output), before) # the page script marks it
     expect_equal(marks_now(page, collapsed, opened, ns)$checked, list("c3"))
-    page$state$layout_version(page$state$layout_version() + 1L)
+    redraw(redraw() + 1L)
     session$flushReact()
     expect_true(grepl('is-checked[^>]*data-action="check" data-id="c3"', tree_html(output)))
 
@@ -195,6 +195,7 @@ test_that("a new block goes after the selected one and is selected, so its words
   before <- nrow(short_gold_draft()$components)
   new_id <- draft_service_next_id(short_gold_draft(), "components")
   shiny::testServer(extraction_outline_server, args = outline_args(page), {
+    tree <- tree_html(output)
     session$setInputs(action = list(action = "select", id = "c5"))
     session$setInputs(action = list(action = "add_block", type = "Instruction"))
     expect_equal(nrow(page$draft()$components), before + 1)
@@ -202,8 +203,14 @@ test_that("a new block goes after the selected one and is selected, so its words
     printed <- draft_service_printed_order(page$draft())
     expect_equal(printed[match("c5", printed) + 1], new_id)
     expect_equal(page$draft()$components$component_type[page$draft()$components$id == new_id], "Instruction")
-    # drawn selected, with its empty words ready for the cursor
-    expect_match(tree_html(output), sprintf('data-autofocus[^>]*data-id="%s"', new_id))
+    # only the new block is drawn, selected, with its empty words ready for the cursor
+    expect_identical(tree_html(output), tree)
+    expect_equal(patched()$insert[[1]]$id, new_id)
+    expect_match(patched()$insert[[1]]$html, sprintf('data-autofocus[^>]*data-id="%s"', new_id))
+    expect_equal(patched()$selected, new_id)
+    parent <- page$draft()$components$parent_id[page$draft()$components$id == new_id]
+    section <- Filter(function(list) identical(list$parent, parent), patched()$lists)
+    expect_equal(unlist(section[[1]]$ids), draft_service_children(page$draft(), "components", section[[1]]$parent)$id)
   })
 })
 
@@ -230,10 +237,13 @@ test_that("a question gets another variable (and its panel opens), and a variabl
   choices <- function() nrow(draft_service_children(page$draft(), "response_options", "v1"))
   shiny::testServer(extraction_outline_server, args = outline_args(page), {
     expect_equal(boxes(), 1)
+    tree <- tree_html(output)
     session$setInputs(action = list(action = "add_box", id = "c3"))
     expect_equal(boxes(), 2)
     expect_equal(opened(), "c3")
-    expect_equal(lengths(regmatches(tree_html(output), gregexpr("variable-card-row", tree_html(output)))), 2)
+    expect_identical(tree_html(output), tree) # only the question's panel is drawn
+    expect_equal(patched()$panels[[1]]$id, "c3")
+    expect_equal(lengths(regmatches(patched()$panels[[1]]$html, gregexpr("variable-card-row", patched()$panels[[1]]$html))), 2)
 
     expect_equal(choices(), 2)
     session$setInputs(action = list(action = "add_choice", id = "v1"))
@@ -398,4 +408,66 @@ test_that("the marks say which blocks are checked, and a section only counts as 
     everything, draft_service_check(everything, test_lookups()), NULL, character(), character(), character(), shiny::NS("x")
   )
   expect_true("c1" %in% unlist(all_marks$all_checked))
+})
+
+test_that("deleting, moving and picking put only what changed on the tree already drawn", {
+  page <- short_page()
+  shiny::testServer(extraction_outline_server, args = outline_args(page), {
+    tree <- tree_html(output)
+    blocks <- function() page$draft()$components
+
+    # a section is taken out with everything in it: only the section is named
+    inside <- draft_service_printed_order(page$draft(), "c1")
+    suppressMessages(session$setInputs(action = list(action = "delete", table = "components", id = "c1")))
+    expect_equal(patched()$remove, list("c1"))
+    expect_false(any(inside %in% blocks()$id))
+
+    # a block dragged out of its section: the lists say where every block is, and the counts are drawn again
+    order <- draft_service_printed_order(page$draft())
+    parents <- blocks()$parent_id[match(order, blocks()$id)]
+    section <- parents[!is.na(parents)][1]
+    moved <- order[which(parents == section)[1]]
+    parents[order == moved] <- ""
+    parents[is.na(parents)] <- ""
+    session$setInputs(order = list(ids = as.list(order), parents = as.list(parents)))
+    expect_true(is.na(blocks()$parent_id[blocks()$id == moved]))
+    top <- Filter(function(list) list$parent == "", patched()$lists)[[1]]
+    expect_true(moved %in% unlist(top$ids))
+    expect_true(section %in% vapply(patched()$rows, function(row) row$id, character(1))) # "N items" changed
+    expect_length(patched()$insert, 0)
+
+    # a pick from a list draws its row again; the numbers, orders and parent lists come with every patch
+    questions <- blocks()$id[blocks()$component_type == "Question"]
+    session$setInputs(edit = list(table = "components", id = questions[2], field = "parent_question_id", value = questions[1]))
+    expect_equal(vapply(patched()$rows, function(row) row$id, character(1)), questions[2])
+    expect_match(patched()$rows[[1]]$html, sprintf('<option value="%s" selected>', questions[1]))
+    expect_setequal(names(patched()$numbers), questions)
+    in_order <- intersect(draft_service_printed_order(page$draft()), questions)
+    expect_equal(vapply(patched()$questions, function(question) question$id, character(1)), in_order)
+
+    expect_identical(tree_html(output), tree) # never drawn again
+  })
+})
+
+test_that("a field the draft refuses is drawn again as the draft has it", {
+  page <- short_page()
+  shiny::testServer(extraction_outline_server, args = outline_args(page), {
+    tree_html(output)
+    # a section with blocks in it can't become another kind
+    session$setInputs(edit = list(table = "components", id = "c1", field = "component_type", value = "Instruction"))
+    expect_match(page$log$errors, "Move the blocks out of this section first")
+    expect_equal(vapply(patched()$rows, function(row) row$id, character(1)), "c1")
+    expect_match(patched()$rows[[1]]$html, "Section")
+  })
+})
+
+test_that("when much has changed, the outline is drawn again instead", {
+  draft <- short_gold_draft()
+  view <- list(selected = NULL, collapsed = character(), opened = character(), problems = draft_service_check(draft, test_lookups()))
+  expect_null(outline_patch(NULL, draft, view, test_lookups(), shiny::NS("x")))
+  reworded <- draft
+  reworded$components$text <- paste(reworded$components$text, "again")
+  expect_null(outline_patch(draft, reworded, view, test_lookups(), shiny::NS("x"), most = 5))
+  same <- outline_patch(draft, draft, view, test_lookups(), shiny::NS("x"))
+  expect_length(c(same$insert, same$remove, same$rows, same$panels), 0)
 })

@@ -388,11 +388,12 @@ reading_service_run <- function(connection, id, reading_started, read = reading_
   }
   tryCatch(
     {
-      if (!file.exists(record$pdf$path)) {
+      pdf <- extraction_service_pdf(connection, record)
+      if (is.null(pdf)) {
         stop("The PDF isn't on this site any more. Choose Replace PDF and upload it again.", call. = FALSE)
       }
       reading <- read(
-        record$pdf$path, lookup_service_get_all(connection),
+        pdf$path, lookup_service_get_all(connection),
         progress = function(status) update(extraction_status = status)
       )
       if (draft_model_save_reading(connection, id, reading$json, reading_started)) {

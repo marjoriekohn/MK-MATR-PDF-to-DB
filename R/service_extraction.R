@@ -132,7 +132,7 @@ extraction_service_create <- function(connection, upload, staff,
     prepared_by_id = staff$staff_id,
     started = format_time(now),
     saved = format_time(now),
-    pdf = store_pdf(upload),
+    pdf = store_pdf(connection, upload),
     extraction_status = "queued",
     reading_started = format_time(now),
     reading_claimed_at = NULL,
@@ -164,7 +164,7 @@ extraction_service_create_manual <- function(connection, staff, info = extractio
     prepared_by_id = staff$staff_id,
     started = format_time(now),
     saved = format_time(now),
-    pdf = if (!is.null(upload)) store_pdf(upload) else list(),
+    pdf = if (!is.null(upload)) store_pdf(connection, upload) else list(),
     info = info,
     matr_csv = NULL,
     questionnaire = draft_service_to_json(draft_service_empty())
@@ -198,7 +198,7 @@ extraction_service_add_matr_csv <- function(connection, id, upload, me, expected
 #' @param me Who is saving: `list(staff_id, name, role)`.
 #' @return The record as saved.
 extraction_service_replace_pdf <- function(connection, id, upload, me) {
-  pdf <- store_pdf(upload)
+  pdf <- store_pdf(connection, upload)
   change_record(connection, id, me, function(record) {
     record$pdf <- pdf
     if (identical(record$method, extraction_manual)) record else restart_reading(record)
@@ -602,6 +602,20 @@ extraction_service_printed <- function(existing, component_types = NULL) {
   list(texts = texts, matr_ids = matr_ids[!is.na(matr_ids$text), , drop = FALSE])
 }
 
+#' A draft's PDF, on this server, to show or read.
+#'
+#' Fetched from Storage first if this server hasn't got it (a hosted site loses its disk when it
+#' restarts, and its servers don't share one).
+#'
+#' @param connection The MATR database, `list(url, key)`; see `model_database.R`.
+#' @param record An extraction record.
+#' @return The record's `pdf` with `path` where the file is on this server, or `NULL` if the draft has
+#'   no PDF or it can't be had (Storage can't be reached, or never had it). Never an error.
+extraction_service_pdf <- function(connection, record) {
+  path <- tryCatch(extraction_model_local_pdf(connection, record$pdf$sha256), error = function(problem) NULL)
+  if (!is.null(path)) utils::modifyList(record$pdf, list(path = path))
+}
+
 # ------ Helpers ----------------------------------------------------------------------
 
 # Every change re-reads the record first, and saves only the fields it
@@ -627,14 +641,14 @@ restart_reading <- function(record) {
   record
 }
 
-store_pdf <- function(upload) {
+store_pdf <- function(connection, upload) {
   if (!extraction_model_is_pdf(upload$datapath)) {
     stop(upload$name, " isn't a PDF. Choose the questionnaire's PDF file.", call. = FALSE)
   }
   sha256 <- extraction_model_sha256(upload$datapath)
   list(
     name = upload$name,
-    path = extraction_model_save_pdf(upload$datapath, sha256),
+    path = extraction_model_save_pdf(connection, upload$datapath, sha256),
     pages = extraction_model_page_count(upload$datapath),
     bytes = upload$size,
     sha256 = sha256

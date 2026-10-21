@@ -246,17 +246,24 @@
     });
   }
 
-  // Every MATR ID field offers the uploaded IDs no variable has yet.
+  // Every MATR ID field offers the uploaded IDs no variable has yet. The list is only replaced when
+  // what it offers has changed, and all at once: a browser works out the suggestions of the field
+  // being typed in again for every change to its list, which took seconds an option at a time.
+  const shownMatrIds = new WeakMap();
   function applyMatrIds() {
     if (!marks.matr_list || !marks.matr_ids) return;
     const list = document.getElementById(marks.matr_list);
     if (!list) return;
-    list.innerHTML = '';
+    const offered = marks.matr_ids.join('\n');
+    if (shownMatrIds.get(list) === offered) return;
+    const options = document.createDocumentFragment();
     marks.matr_ids.forEach(function (id) {
       const option = document.createElement('option');
       option.value = id;
-      list.appendChild(option);
+      options.appendChild(option);
     });
+    list.replaceChildren(options);
+    shownMatrIds.set(list, offered);
   }
 
   function applyMarks() {
@@ -287,7 +294,120 @@
     applyMatrIds();
   }
 
+  // ------ Changes to the layout, put in place -------------------------------------------
+  // When blocks are added, deleted, moved or picked from a list, only what is different is drawn
+  // (outline_patch() in R): blocks to take out and to add, rows and open question panels drawn again,
+  // every list's blocks in order, and the numbers, display orders and labels that follow from the order.
+  function nodeOf(id) {
+    return document.querySelector('.outline-tree .outline-node[data-id="' + CSS.escape(id) + '"]');
+  }
+
+  function listOf(parent) {
+    if (!parent) return document.querySelector('.outline-tree > .outline-list');
+    const node = nodeOf(parent);
+    return node ? node.querySelector(':scope > .outline-list') : null;
+  }
+
+  // Draws `html` in place of `old` (or at the end of `parent`, if there is no `old`).
+  function drawInPlace(old, parent, html) {
+    if (old) {
+      Shiny.renderContent(old, { html: html, deps: [] }, 'beforeBegin');
+      old.remove();
+    } else if (parent) {
+      Shiny.renderContent(parent, { html: html, deps: [] }, 'beforeEnd');
+    }
+  }
+
+  // Each list holds its blocks in the draft's order; a block that is elsewhere is moved, not drawn again.
+  function putInOrder(lists) {
+    lists.forEach(function (list) {
+      const el = listOf(list.parent);
+      if (!el) return;
+      const now = Array.from(el.children).filter(function (child) { return child.matches('.outline-node'); })
+        .map(function (child) { return child.dataset.id; });
+      if (now.join('\n') === list.ids.join('\n')) return;
+      list.ids.forEach(function (id) {
+        const node = nodeOf(id);
+        if (node) el.appendChild(node);
+      });
+    });
+  }
+
+  // Each question's parent-question list offers the questions printed before it, and keeps its pick.
+  function updateParentLists(patch) {
+    const order = patch.questions.map(function (question) { return question.id; });
+    document.querySelectorAll('.outline-tree select[data-field="parent_question_id"]').forEach(function (select) {
+      if (select === document.activeElement) return;
+      const mine = order.indexOf(select.dataset.id);
+      const picked = select.value;
+      const offered = [['', patch.no_parent]];
+      patch.questions.forEach(function (question, i) {
+        if (question.id === select.dataset.id) return;
+        if (i < mine) offered.push([question.id, question.label]);
+        else if (question.id === picked) offered.push([question.id, question.label + patch.printed_after]);
+      });
+      const now = Array.from(select.options).map(function (option) { return [option.value, option.text]; });
+      if (JSON.stringify(now) === JSON.stringify(offered)) return;
+      const options = document.createDocumentFragment();
+      offered.forEach(function (pair) {
+        const option = document.createElement('option');
+        option.value = pair[0];
+        option.textContent = pair[1];
+        option.selected = pair[0] === picked;
+        options.appendChild(option);
+      });
+      select.replaceChildren(options);
+    });
+  }
+
+  function applyPatch(patch) {
+    patch.insert.forEach(function (block) { drawInPlace(null, listOf(block.parent), block.html); });
+    putInOrder(patch.lists);
+    patch.remove.forEach(function (id) {
+      const node = nodeOf(id);
+      if (node) node.remove();
+    });
+    patch.rows.forEach(function (row) {
+      const node = nodeOf(row.id);
+      if (node) drawInPlace(node.querySelector(':scope > .outline-row'), null, row.html);
+    });
+    patch.panels.forEach(function (panel) {
+      const node = nodeOf(panel.id);
+      if (node) drawInPlace(node.querySelector(':scope > .question-panel'), node, panel.html);
+    });
+    document.querySelectorAll('.outline-tree .outline-node').forEach(function (node) {
+      const id = node.dataset.id;
+      const row = node.querySelector(':scope > .outline-row');
+      if (patch.labels[id] !== undefined) {
+        node.dataset.label = patch.labels[id];
+        const list = node.querySelector(':scope > .outline-list');
+        if (list) list.dataset.label = patch.labels[id];
+      }
+      const order = row && row.querySelector(':scope > .outline-order');
+      if (order && patch.orders[id] !== undefined) order.textContent = patch.orders[id];
+      const number = row && row.querySelector(':scope > .outline-numbers > .outline-number');
+      if (number && patch.numbers[id] !== undefined) number.textContent = patch.numbers[id];
+    });
+    updateParentLists(patch);
+    marks.selected = patch.selected || null;
+    afterDrawing();
+  }
+
+  // Put the marks back, size the text boxes just drawn, and give a block that has no words yet the cursor.
+  // The boxes are sized all at once (every height reset, then every height read, then set): one box at a
+  // time made the browser lay the page out again for each.
+  function afterDrawing() {
+    applyMarks();
+    const fresh = Array.from(document.querySelectorAll('textarea.outline-text:not([style*="height"])'));
+    fresh.forEach(function (field) { field.style.height = 'auto'; });
+    const heights = fresh.map(function (field) { return field.scrollHeight; });
+    fresh.forEach(function (field, i) { field.style.height = heights[i] + 'px'; });
+    const emptyWords = document.querySelector('.outline-row.is-selected [data-autofocus]');
+    if (emptyWords && !emptyWords.value && document.activeElement !== emptyWords) emptyWords.focus();
+  }
+
   function register() {
+    Shiny.addCustomMessageHandler('edit-extraction-patch', applyPatch);
     Shiny.addCustomMessageHandler('edit-extraction-marks', function (sent) {
       const set = function (ids) { return ids ? new Set(ids) : null; };
       marks = {
@@ -302,15 +422,12 @@
   if (window.Shiny && Shiny.addCustomMessageHandler) register();
   else if (window.jQuery) jQuery(document).one('shiny:connected', register);
 
-  // ------ After Shiny redraws ------------------------------------------------------
-  // Put the marks back, size the text boxes, and give a block that has no words yet the cursor.
-  $(document).on('shiny:value', function () {
-    setTimeout(function () {
-      applyMarks();
-      document.querySelectorAll('textarea.outline-text').forEach(autogrow);
-      const emptyWords = document.querySelector('.outline-row.is-selected [data-autofocus]');
-      if (emptyWords && document.activeElement !== emptyWords) emptyWords.focus();
-    });
+  // ------ After Shiny redraws the outline -----------------------------------------------
+  // Only the outline's own redraw: the page's other outputs (the progress bar, the count to fix) change as
+  // words are typed, and sizing every text box again each time made typing stutter.
+  $(document).on('shiny:value', function (event) {
+    if (event.name && !/outline-tree$/.test(event.name)) return;
+    setTimeout(afterDrawing);
   });
 
   // ------ Leaving the page -----------------------------------------------------------

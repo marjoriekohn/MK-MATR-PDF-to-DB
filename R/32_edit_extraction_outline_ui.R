@@ -145,6 +145,94 @@ outline_marks <- function(draft, problems, selected, collapsed, opened, matr_ids
   )
 }
 
+#' What to change on the outline already drawn, instead of drawing it again.
+#'
+#' The outline was drawn from `drawn`, and changed since only as the page script changes it (words
+#' typed, blocks dragged, marks). This compares it with `draft` and says what is different: the blocks
+#' to take out and to add (only the outermost: a section comes with what is in it), the rows whose
+#' fields or counts changed, the open question panels whose variables or choices changed, every
+#' list's blocks in order (so a block that moved is moved, and a drag the draft refused is put back),
+#' each block's display order and label, each question's number, and the questions in printed order
+#' (each question's parent-question list offers those before it). When much has changed (another
+#' draft, say), drawing the outline again is quicker, and this says so.
+#'
+#' @param drawn The draft as the outline on the page shows it, or `NULL` if it isn't drawn yet.
+#' @param draft The draft as it is now.
+#' @param view What the outline shows; see `outline_tree()`.
+#' @param lookups The pick lists, from `lookup_service_get_all()`.
+#' @param ns The module's namespace function.
+#' @param most How many blocks, rows and panels may be drawn before drawing it all is quicker.
+#' @param rows,panels Rows and open question panels (by block id) to draw again even if their draft
+#'   hasn't changed: a field there shows what the draft refused.
+#' @return A list, sent as the "edit-extraction-patch" message (www/js/review.js), or `NULL` to draw
+#'   the outline again.
+outline_patch <- function(drawn, draft, view, lookups, ns, most = 30, rows = NULL, panels = NULL) {
+  if (is.null(drawn)) {
+    return(NULL)
+  }
+  questions <- outline_questions(draft)
+  attr(draft, "outline_questions") <- questions
+  old <- drawn$components
+  new <- draft$components
+  outermost <- function(ids, blocks) ids[!blocks$parent_id[match(ids, blocks$id)] %in% ids]
+  removed <- outermost(setdiff(old$id, new$id), old)
+  added <- outermost(setdiff(new$id, old$id), new)
+  kept <- intersect(new$id, old$id)
+  rows <- union(intersect(rows, kept), kept[outline_row_signature(drawn)[kept] != outline_row_signature(draft)[kept]])
+  open <- intersect(view$opened, kept)
+  panels <- union(intersect(panels, open), open[vapply(open, function(id) {
+    !identical(outline_panel_signature(drawn, id), outline_panel_signature(draft, id))
+  }, logical(1))])
+  if (length(added) + length(rows) + length(panels) > most) {
+    return(NULL)
+  }
+  block <- function(id) new[new$id == id, , drop = FALSE]
+  html <- function(ui) htmltools::renderTags(ui)$html
+  is_question <- new$component_type == "Question"
+  sections <- new$id[new$component_type == "Section"]
+  list(
+    remove = as.list(removed),
+    insert = lapply(added, function(id) {
+      list(id = id, parent = blank_if_na(block(id)$parent_id), html = html(outline_node(block(id), draft, view, lookups, ns)))
+    }),
+    rows = lapply(rows, function(id) list(id = id, html = html(outline_row(block(id), draft, view, ns)))),
+    panels = lapply(panels, function(id) list(id = id, html = html(question_panel(block(id), draft, view, lookups, ns)))),
+    lists = lapply(c("", sections), function(parent) {
+      list(parent = parent, ids = as.list(draft_service_children(draft, "components", if (nzchar(parent)) parent else NA)$id))
+    }),
+    orders = as.list(stats::setNames(as.integer(new$display_order), new$id)),
+    numbers = as.list(stats::setNames(
+      ifelse(is.na(new$question_number[is_question]), "?", new$question_number[is_question]), new$id[is_question]
+    )),
+    labels = stats::setNames(map_rows(new, block_label), new$id),
+    questions = map_rows(questions$questions, function(question) list(id = question$id, label = question$label)),
+    no_parent = outline_no_parent,
+    printed_after = outline_printed_after,
+    selected = view$selected
+  )
+}
+
+# What a block's row is drawn from, as one string per block (named by id): its kind, words, printed
+# number and parent question, and how many blocks or variables it has. What the page script keeps up to
+# date on its own (selected, checked, problems, numbers, display order) is left out.
+outline_row_signature <- function(draft) {
+  blocks <- draft$components
+  n_inside <- vapply(blocks$id, function(id) sum(blocks$parent_id %in% id), integer(1))
+  n_boxes <- vapply(blocks$id, function(id) sum(draft$variables$component_id %in% id), integer(1))
+  stats::setNames(
+    paste(blocks$component_type, blocks$text, blocks$printed_number, blocks$parent_question_id, n_inside, n_boxes, sep = "\r"),
+    blocks$id
+  )
+}
+
+# What a question's panel is drawn from: its skip condition, and its variables and their choices.
+outline_panel_signature <- function(draft, id) {
+  block <- draft$components[draft$components$id == id, c("condition", "parent_question_id"), drop = FALSE]
+  boxes <- draft$variables[draft$variables$component_id %in% id, , drop = FALSE]
+  choices <- draft$response_options[draft$response_options$variable_id %in% boxes$id, , drop = FALSE]
+  paste(jsonlite::toJSON(block), jsonlite::toJSON(boxes), jsonlite::toJSON(choices))
+}
+
 outline_list <- function(draft, section, view, lookups, ns) {
   blocks <- draft_service_children(draft, "components", section$id %||% NA)
   list_id <- ns(paste0("list-", section$id %||% "top"))
@@ -254,7 +342,7 @@ parent_question_field <- function(block, draft, problems) {
     class = "outline-parent",
     field_select(
       "components", block, "parent_question_id", parent_question_choices(block, draft),
-      blank = "No Parent Question", optional = TRUE, label = "Parent question", problems = problems
+      blank = outline_no_parent, optional = TRUE, label = "Parent question", problems = problems
     )
   )
 }
@@ -344,6 +432,11 @@ question_fields <- function(block, ns) {
   )
 }
 
+# What a question's parent-question list says for "none", and after a pick printed later than the question.
+# The page script says them too, when it brings the lists up to date (outline_patch()).
+outline_no_parent <- "No Parent Question"
+outline_printed_after <- " (printed after it)"
+
 # Questions printed before this one, as "7 · Have you smoked…" (the number it is asked as). The current
 # pick stays listed even if a move put it after this question.
 parent_question_choices <- function(block, draft) {
@@ -352,7 +445,7 @@ parent_question_choices <- function(block, draft) {
   questions <- all$questions[all$questions$id != block$id, , drop = FALSE]
   is_earlier <- questions$position < mine
   keep <- is_earlier | questions$id %in% block$parent_question_id
-  labels <- paste0(questions$label, ifelse(is_earlier, "", " (printed after it)"))
+  labels <- paste0(questions$label, ifelse(is_earlier, "", outline_printed_after))
   setNames(questions$id[keep], labels[keep])
 }
 

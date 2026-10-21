@@ -5,13 +5,15 @@
 #' a block as checked, add and delete blocks, variables and choices, and drag any of them into a new
 #' order. Every change goes through `state$change()`.
 #'
-#' The tree is drawn again only when the layout changes (a block or variable added, deleted, moved or
-#' picked from a list), never as words are typed, so the field being typed in is left alone. Drawing it
-#' takes seconds for a long questionnaire, so what a click or keystroke changes without changing the
-#' layout (which block is selected, which sections are closed and question panels open, which blocks
-#' are checked, which blocks and fields have problems, and which uploaded MATR IDs are still free) is
-#' sent to the page script, which marks the rows and fields (`outline_marks()`); a question's panel is
-#' added to the tree, or taken out, on its own.
+#' Drawing the whole tree takes seconds for a long questionnaire, for the server and again for the
+#' browser, so it is drawn only when a draft opens or much of it changes. What a click or keystroke
+#' changes without changing the layout (which block is selected, which sections are closed and question
+#' panels open, which blocks are checked, which blocks and fields have problems, and which uploaded MATR
+#' IDs are still free) is sent to the page script, which marks the rows and fields (`outline_marks()`).
+#' When the layout changes (a block or variable added, deleted, moved or picked from a list) only what
+#' is different is drawn and put in place (`outline_patch()`). Words being typed are never drawn again,
+#' so the field being typed in is left alone; a question's panel is added to the tree, or taken out, on
+#' its own.
 #'
 #' @param id The module's id.
 #' @param state What the Edit Extraction page shares: `list(draft, change, selected, problems,
@@ -32,7 +34,10 @@ extraction_outline_server <- function(
     # ------ REACTIVE ----------------------------------------------------------
     collapsed <- reactiveVal(character()) # sections whose contents are hidden
     opened <- reactiveVal(character()) # questions whose panel is open
-    redraw <- reactiveVal(0L) # ticks when the tree must be drawn again although the layout hasn't changed
+    redraw <- reactiveVal(0L) # ticks when the whole tree must be drawn again
+    drawn <- reactiveVal(NULL) # the draft as the tree on the page shows it
+    patched <- reactiveVal(NULL) # the last change put on the tree already drawn (outline_patch())
+    shown_version <- isolate(state$layout_version()) # the layout_version the tree on the page is up to date with
     suggestions <- state$suggestions %||% function() list()
     matr_ids <- state$matr_ids %||% function() character()
 
@@ -100,13 +105,15 @@ extraction_outline_server <- function(
       }
     }
 
-    # Typing, picking and ticking in the fields.
+    # Typing, picking and ticking in the fields. A change the draft refuses puts the field back as the
+    # draft has it.
     observeEvent(input$edit, {
       edit <- input$edit
-      state$change(
+      changed <- state$change(
         draft_service_update(state$draft(), edit$table, edit$id, edit$field, edit$value),
         typed = isTRUE(edit$typed)
       )
+      if (!changed) put_back(edit$table, edit$id)
     })
 
     # Drag and drop: the page script sends every block id in printed order, with
@@ -117,10 +124,32 @@ extraction_outline_server <- function(
       state$change(draft_service_apply_order(state$draft(), unlist(input$order$ids), parent_ids))
     })
 
-    # Variables or choices dragged into a new order.
+    # Variables or choices dragged into a new order; a new order the draft refuses is put back.
     observeEvent(input$reorder, {
-      state$change(draft_service_reorder(state$draft(), input$reorder$table, unlist(input$reorder$ids)))
+      ids <- unlist(input$reorder$ids)
+      changed <- state$change(draft_service_reorder(state$draft(), input$reorder$table, ids))
+      if (!changed) put_back(input$reorder$table, ids[1])
     })
+
+    # Draws again the row or panel that holds a field of `table`'s row `id`, as the draft has it.
+    put_back <- function(table, id) {
+      draft <- state$draft()
+      variable <- switch(table,
+        variables = id,
+        response_options = draft$response_options$variable_id[draft$response_options$id %in% id]
+      )
+      question <- draft$variables$component_id[draft$variables$id %in% variable]
+      patch <- outline_patch(
+        drawn(), draft, current_view(), lookups, ns,
+        rows = if (table == "components") id, panels = intersect(question, opened())
+      )
+      if (!is.null(patch)) send_patch(patch)
+    }
+
+    send_patch <- function(patch) {
+      patched(patch)
+      session$sendCustomMessage("edit-extraction-patch", patch)
+    }
 
     # Giving out MATR IDs by hand: every question's panel opens, so each variable's MATR ID can be picked.
     if (!is.null(state$show_variables)) {
@@ -157,10 +186,36 @@ extraction_outline_server <- function(
 
     output$to_fix <- renderUI(to_fix_note(state$problems()))
 
+    # A change to the layout (layout_version ticks) puts only what is different on the tree already drawn,
+    # unless so much changed that drawing it all again is quicker. A change that didn't tick it (words
+    # typed, a block marked as checked) is on the page already.
+    observe({
+      draft <- state$draft()
+      version <- state$layout_version()
+      isolate({
+        if (identical(version, shown_version)) {
+          drawn(draft)
+          return()
+        }
+        shown_version <<- version
+        opened(intersect(opened(), draft$components$id))
+        patch <- outline_patch(drawn(), draft, current_view(), lookups, ns)
+        if (is.null(patch)) {
+          redraw(redraw() + 1L)
+          return()
+        }
+        send_patch(patch)
+        drawn(draft)
+      })
+    })
+
     output$tree <- renderUI({
-      state$layout_version()
       redraw()
-      isolate(outline_tree(state$draft(), current_view(), lookups, ns))
+      isolate({
+        draft <- state$draft()
+        drawn(draft)
+        outline_tree(draft, current_view(), lookups, ns)
+      })
     })
   })
 }

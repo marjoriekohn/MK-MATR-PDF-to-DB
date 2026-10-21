@@ -1,9 +1,9 @@
 // ------ Showing that the site is working ----------------------------------------------------------
-// Shiny's own busy indicators (useBusyIndicators() in ui.R) put a gold bar across the top of the page
-// while the server is working, and a spinner on any output being redrawn. That says nothing when a
-// button only starts work on the server, so the button pressed last also shows a spinner, and can't be
-// pressed again, until the server is done. A press that sets off no work (opening a menu) shows nothing:
-// the button is only marked if the server gets busy soon after it was pressed.
+// Shiny's own busy indicator (useBusyIndicators() in ui.R) puts a gold bar across the top of the page
+// while the server is working; it is the only sign of it. The button pressed last can't be pressed again
+// until the server is done, so a slow save or submit isn't sent twice. A press that sets off no work
+// (opening a menu) changes nothing: the button is only held if the server gets busy soon after it was
+// pressed.
 (function () {
   'use strict';
 

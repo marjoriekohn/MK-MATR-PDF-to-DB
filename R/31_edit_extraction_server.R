@@ -156,18 +156,24 @@ edit_extraction_server <- function(
         },
         error = function(problem) {
           if (grepl("changed after you opened it", conditionMessage(problem), fixed = TRUE)) {
-            showModal(confirm_dialog(
-              "Someone saved this draft after you opened it",
-              p("Saving now would overwrite their changes, so yours weren't saved."),
-              p("Open the draft as it was saved? Your changes that weren't saved are lost."),
-              confirm_id = ns("reopen"), confirm_label = "Open the saved version", keep_label = "Not now"
-            ))
+            offer_saved_version("Saving now would overwrite their changes, so yours weren't saved.")
           } else {
             show_problem(problem, "Couldn't save")
           }
           FALSE
         }
       )
+    }
+
+    # Someone else saved the draft after this page opened it, and there are changes here that aren't
+    # saved: they can't be saved over theirs, so staff may open the draft as it was saved instead.
+    offer_saved_version <- function(why) {
+      showModal(confirm_dialog(
+        "Someone saved this draft after you opened it",
+        p(why),
+        p("Open the draft as it was saved? Your changes that weren't saved are lost."),
+        confirm_id = ns("reopen"), confirm_label = "Open the saved version", keep_label = "Not now"
+      ))
     }
 
     observeEvent(input$reopen, {
@@ -364,17 +370,27 @@ edit_extraction_server <- function(
         return(FALSE)
       }
       last_active(Sys.time())
-      if (identical(as.integer(got$revision), as.integer(loaded_revision()))) {
-        claim(NULL)
+      catch_up(got$revision)
+    }
+
+    # This page has the draft, which the database has at `revision`. If someone saved it since this page
+    # opened it or last saved it, the page shows what they saved; unless there are changes here that
+    # aren't saved, which staff are asked about rather than lose. Returns whether this page has it.
+    catch_up <- function(revision) {
+      claim(NULL)
+      if (identical(as.integer(revision), as.integer(loaded_revision()))) {
         return(TRUE)
       }
-      lost <- has_unsaved_changes()
-      reloaded <- reload(got$revision)
+      if (has_unsaved_changes()) {
+        offer_saved_version("Your changes here can't be saved over theirs.")
+        return(TRUE)
+      }
+      reloaded <- reload(revision)
       if (reloaded) {
-        showNotification(paste0(
-          staff_name(record()$saved_by), " saved this draft while you didn't have it, so it shows what they saved.",
-          if (lost) " Your changes that weren't saved couldn't be kept."
-        ), type = "warning", duration = 20)
+        showNotification(
+          paste(staff_name(record()$saved_by), "saved this draft since you opened it, so it shows what they saved."),
+          type = "warning", duration = 20
+        )
       }
       reloaded
     }
@@ -409,8 +425,11 @@ edit_extraction_server <- function(
         let_go("idle")
         return()
       }
-      # One that can't be renewed now (the database can't be reached) is tried again next time.
+      # One that can't be renewed now (the database can't be reached) is tried again next time. One that
+      # is renewed may have been saved by someone else meanwhile (who took it over and let it go again
+      # within the minute, or saved its Basic Info on Change Requests).
       got <- tryCatch(draft_row_service_claim(connection, record_id(), me), error = function(problem) NULL)
+      if (isTRUE(got$claimed)) catch_up(got$revision)
       if (!is.null(got) && !got$claimed) {
         claim(list(why = "taken", by = got$by, at = got$at))
         showNotification(
@@ -630,11 +649,12 @@ edit_extraction_server <- function(
     output$title <- renderText(paste("Edit Extraction:", heading()$title))
     output$subtitle <- renderText(heading()$subtitle)
 
-    # The PDF, if the file is on this server, opens in its own window. The address changes with the
-    # file, so a different PDF is not served from the browser's cache.
+    # The PDF opens in its own window: the one uploaded with the draft, fetched from Storage if this
+    # server hasn't got it (`extraction_service_pdf()`). The address changes with the file, so a
+    # different PDF is not served from the browser's cache.
     record_pdf_url <- reactive({
-      pdf <- req(record())$pdf
-      if (length(pdf$path) == 0 || !file.exists(pdf$path)) {
+      pdf <- extraction_service_pdf(connection, req(record()))
+      if (is.null(pdf)) {
         return(NULL)
       }
       pdf_address(session, ns("file"), list(path = pdf$path, name = pdf$name, sha256 = pdf$sha256))

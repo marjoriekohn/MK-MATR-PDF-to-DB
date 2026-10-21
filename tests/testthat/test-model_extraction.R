@@ -127,15 +127,26 @@ test_that("only one site can claim a draft for reading", {
   expect_equal(extraction_model_get(test_connection, record$id)$reading_claimed_at, "2026-10-02T10:00:05Z")
 })
 
-test_that("an upload is kept once, named by its hash, in the PDF cache", {
+test_that("an upload is kept in Storage and on this server, named by its hash, and fetched by a server without it", {
   dir <- local_pdf_cache()
   upload <- fake_upload()
-  path <- extraction_model_save_pdf(upload$datapath, "feed")
-  expect_equal(path, file.path(dir, "feed.pdf"))
+  sha256 <- paste0("zztest", tolower(test_marker), test_counter())
+  withr::defer(test_delete_stored_pdf(sha256))
+  path <- extraction_model_save_pdf(test_connection, upload$datapath, sha256)
+  expect_equal(path, file.path(dir, paste0(sha256, ".pdf")))
   expect_true(file.exists(path))
   writeLines("changed", path)
-  extraction_model_save_pdf(upload$datapath, "feed") # the same file isn't stored twice
+  extraction_model_save_pdf(test_connection, upload$datapath, sha256) # the copy here isn't made twice
   expect_equal(readLines(path), "changed")
+  expect_equal(extraction_model_local_pdf(test_connection, sha256), path) # here already: not fetched
+
+  # a server that hasn't got it (a hosted site that restarted) fetches it from Storage
+  unlink(path)
+  expect_equal(extraction_model_local_pdf(test_connection, sha256), path)
+  expect_identical(readBin(path, "raw", 1e4), readBin(upload$datapath, "raw", 1e4))
+  # one Storage never had, and a draft without one
+  expect_null(extraction_model_local_pdf(test_connection, paste0(sha256, "-never")))
+  expect_null(extraction_model_local_pdf(test_connection, NULL))
   expect_true(extraction_model_is_pdf(upload$datapath))
   expect_equal(extraction_model_page_count(upload$datapath), 2)
   expect_equal(extraction_model_sha256(upload$datapath), digest::digest(file = upload$datapath, algo = "sha256"))
@@ -146,4 +157,17 @@ test_that("a file that isn't a PDF is recognised, and a CSV is read as text", {
   expect_false(extraction_model_is_pdf(csv$datapath))
   expect_equal(extraction_model_read_csv(csv$datapath), "AH01\nAH02")
   expect_null(extraction_model_page_count(csv$datapath))
+})
+
+test_that("Storage's answers are read as found, missing, or a sentence that says what to do", {
+  answer <- function(status, body) {
+    httr2::response(status_code = status, headers = list(`Content-Type` = "application/json"), body = charToRaw(body))
+  }
+  missing <- answer(400, '{"statusCode":"404","error":"not_found","message":"Object not found"}')
+  no_bucket <- answer(400, '{"statusCode":"404","error":"Bucket not found","message":"Bucket not found","code":"NoSuchBucket"}')
+  expect_true(storage_is_missing(missing))
+  expect_true(storage_is_missing(answer(404, "{}")))
+  expect_false(storage_is_missing(no_bucket)) # the bucket is missing, not the file: that is a problem to report
+  expect_match(storage_problem(no_bucket, "extraction-pdfs"), "Run docs/migrations/20261021_pdf_storage.sql")
+  expect_match(storage_problem(answer(403, '{"message":"denied"}'), "extraction-pdfs"), "\\(403\\): denied")
 })

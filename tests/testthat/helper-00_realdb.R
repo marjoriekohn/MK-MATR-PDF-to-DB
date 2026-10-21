@@ -163,17 +163,26 @@ test_delete_draft <- function(id) {
 }
 
 # Removes a PDF's row (pdf_file) a test made, unless a draft still points at it: an applied one, which the
-# database keeps (see the top of this file).
+# database keeps (see the top of this file). Its file in Storage goes too.
 test_delete_pdf <- function(sha256) {
   if (is.null(sha256)) {
     return(invisible())
   }
+  test_delete_stored_pdf(sha256)
   tryCatch(
     test_delete("pdf_file", list(pdf_sha256 = database_eq(sha256))),
     error = function(problem) {
       if (!grepl("foreign key", conditionMessage(problem))) stop(problem)
     }
   )
+  invisible()
+}
+
+# Removes a PDF from Storage, if it is there.
+test_delete_stored_pdf <- function(sha256) {
+  storage_request(test_connection, storage_pdf_bucket, paste0(sha256, ".pdf")) |>
+    httr2::req_method("DELETE") |>
+    storage_perform()
   invisible()
 }
 

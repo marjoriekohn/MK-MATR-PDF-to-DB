@@ -25,10 +25,12 @@
 # The questionnaire itself, what the AI returned and what the reviewer changed aren't in the
 # record; they are big. See model_draft.R.
 #
-# The PDFs aren't in the database. Each upload is kept in `uploads/pdfs/` (the
-# option matr.pdf_dir changes it) under its SHA-256, only so the reading job can
-# open it and the Edit Extraction page can show it; the record keeps its name, size and hash.
-# (Supabase Storage is on the to-do list.)
+# The PDFs aren't in the database: the record keeps their name, size and hash. Each upload is kept
+# in the project's Storage (the bucket `storage_pdf_bucket`, model_storage.R) under its SHA-256, so
+# every copy of the site can reach it, and on this server's disk in `uploads/pdfs/` (the option
+# matr.pdf_dir changes it), where the reading job opens it and the pages show it from. A server that
+# hasn't got it (a hosted site loses its disk when it restarts) fetches it from Storage first
+# (extraction_model_local_pdf()).
 
 extraction_kind <- "Extraction"
 extraction_ai <- "AI-Powered"
@@ -233,19 +235,40 @@ extraction_model_pdf_path <- function(sha256) {
   file.path(extraction_model_pdf_dir(), paste0(sha256, ".pdf"))
 }
 
-#' Keep a copy of an uploaded PDF.
+#' Keep an uploaded PDF: in Storage, and a copy on this server.
 #'
-#' The same file is only ever stored once, named by its hash, in `uploads/pdfs/` (the
-#' option `matr.pdf_dir` changes the folder).
+#' Named by its hash, so the same file is only ever kept once: in Storage (`storage_pdf_bucket`), and
+#' in `uploads/pdfs/` (the option `matr.pdf_dir` changes the folder).
 #'
+#' @param connection The MATR database, `list(url, key)`; see `model_database.R`.
 #' @param upload_path Where the upload is now.
 #' @param sha256 Its SHA-256, from `extraction_model_sha256()`.
-#' @return Where the copy is.
-extraction_model_save_pdf <- function(upload_path, sha256) {
+#' @return Where the copy on this server is. An error with a sentence if Storage refused it.
+extraction_model_save_pdf <- function(connection, upload_path, sha256) {
+  storage_model_upload(connection, storage_pdf_bucket, paste0(sha256, ".pdf"), upload_path)
   dir.create(extraction_model_pdf_dir(), recursive = TRUE, showWarnings = FALSE)
   path <- extraction_model_pdf_path(sha256)
   if (!file.exists(path)) file.copy(upload_path, path)
   path
+}
+
+#' A draft's PDF on this server, fetched from Storage first if this server hasn't got it.
+#'
+#' @param connection The MATR database, `list(url, key)`; see `model_database.R`.
+#' @param sha256 The PDF's SHA-256, as the record keeps it.
+#' @return Where it is on this server, or `NULL` if Storage hasn't got it either (it was uploaded
+#'   before PDFs were kept there, and the server that had it has lost it). An error with a sentence
+#'   if Storage couldn't be asked.
+extraction_model_local_pdf <- function(connection, sha256) {
+  if (length(sha256) != 1 || is.na(sha256) || !nzchar(sha256)) {
+    return(NULL)
+  }
+  path <- extraction_model_pdf_path(sha256)
+  if (file.exists(path)) {
+    return(path)
+  }
+  dir.create(extraction_model_pdf_dir(), recursive = TRUE, showWarnings = FALSE)
+  if (storage_model_download(connection, storage_pdf_bucket, paste0(sha256, ".pdf"), path)) path
 }
 
 #' The SHA-256 of a file.

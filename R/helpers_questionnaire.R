@@ -4,7 +4,8 @@
 # the words of its question with the variable's label and who it is about in square brackets (Question
 # Text), and its codes and choices, or a write-in's kind of answer (Variable Coding). A section heads the
 # rows printed under it, which are indented under it, and a gold line closes it where it ends; blocks
-# that aren't questions are rows across the table, in printed order. A change request shows this before
+# that aren't questions are rows across the whole table, in printed order, so they start just under
+# their section's heading rather than in the Question Text column. A change request shows this before
 # it is submitted and while it waits for a reviewer to approve it.
 
 #' A draft's questionnaire, laid out to read as a table.
@@ -59,9 +60,10 @@ preview_block_rows <- function(block, draft, depth) {
     Question = preview_question_rows(block, draft, depth),
     tags$tr(
       class = "qt-block", `data-depth` = depth,
-      tags$td(class = "qt-number"),
-      tags$td(class = "qt-id"),
-      tags$td(colspan = preview_columns - 2, class = "qt-text", type_chip(block$component_type), " ", span(class = "preview-text", preview_words(block)))
+      tags$td(
+        colspan = preview_columns, class = "qt-text",
+        type_chip(block$component_type), " ", span(class = "preview-text", preview_words(block))
+      )
     )
   )
 }

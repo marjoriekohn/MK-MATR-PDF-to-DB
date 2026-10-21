@@ -449,7 +449,7 @@ test_that("the PDF opens in its own window when the file is here, and the page i
   first <- read_draft(me, tree)
   shiny::testServer(edit_extraction_server, args = edit_page(me), {
     open(first)
-    expect_equal(text_of(output$pdf_link), "") # the test draft's PDF was never stored here
+    expect_equal(text_of(output$pdf_link), "") # the test draft's PDF was never uploaded
   })
   html <- htmltools::renderTags(edit_extraction_ui("edit_extraction"))$html
   expect_match(html, 'id="edit_extraction-pdf_link"')
@@ -458,6 +458,21 @@ test_that("the PDF opens in its own window when the file is here, and the page i
   expect_equal(lengths(regmatches(html, gregexpr('class="card ', html))), 1)
   expect_match(as.character(pdf_open_button("http://x/pdf")), 'href="http://x/pdf"')
   expect_null(pdf_open_button(NULL))
+})
+
+test_that("Continue shows the PDF that was uploaded with the draft, even on a server that hasn't got it", {
+  me <- local_staff()
+  seen <- local_browser()
+  local_pdf_cache()
+  typed <- extraction_service_create_manual(test_connection, me, upload = fake_upload("typed.pdf"))
+  withr::defer(test_delete_pdf(typed$pdf$sha256)) # after the draft, which points at it
+  withr::defer(test_delete_draft(typed$id))
+  unlink(typed$pdf$path) # as a hosted site that restarted, or a session on another of its servers
+  shiny::testServer(edit_extraction_server, args = edit_page(me), {
+    open(extraction_model_get(test_connection, typed$id))
+    expect_match(text_of(output$pdf_link), "Open PDF")
+    expect_true(file.exists(typed$pdf$path)) # fetched from Storage
+  })
 })
 
 # ------ One person at a time -------------------------------------------------------------------------
@@ -478,6 +493,7 @@ test_that("opening a draft claims it, leaving the page with nothing unsaved lets
   shiny::testServer(edit_extraction_server, args = claim_page(me, seen, showing), {
     errors <- collect_errors(session)
     expect_true(open(first))
+    session$flushReact() # as the site starts: whether the page is showing is known before it changes
     expect_true(has_draft())
     expect_equal(editing_now(first), me$staff_id)
     expect_equal(loaded_revision(), first$revision)
@@ -577,25 +593,37 @@ test_that("doing nothing for a while lets the draft go, and doing something has 
   })
 })
 
-test_that("a draft saved by someone else while this page didn't have it is opened again as they saved it", {
+test_that("a draft someone else saved within the minute is shown as they saved it, unless changes here would be lost", {
   me <- local_staff()
   colleague <- local_staff()
   tree <- shared_tree()
   seen <- local_browser()
   first <- read_draft(me, tree)
+  # the colleague takes it over, saves and lets it go again, all before the page renews its claim
+  saved_by_colleague <- function(words) {
+    draft_row_service_claim(test_connection, first$id, colleague, take_over = TRUE)
+    draft_service_save(test_connection, first$id, reworded(numbered_gold(), words), colleague$staff_id)
+    draft_row_service_release(test_connection, first$id, colleague)
+  }
   shiny::testServer(edit_extraction_server, args = claim_page(me, seen), {
     open(first)
-    change_draft(reworded(draft()))
-    draft_row_service_claim(test_connection, first$id, colleague, take_over = TRUE)
-    draft_service_save(test_connection, first$id, reworded(numbered_gold(), "Theirs"), colleague$staff_id)
-    draft_row_service_release(test_connection, first$id, colleague)
+    saved_by_colleague("Theirs")
     session$elapse(draft_claim_renew_seconds * 1000) # nobody has it now, so the page has it again
-
     expect_true(has_draft())
-    expect_false(has_unsaved_changes())
-    expect_equal(draft()$components$text[draft()$components$id == "c3"], "Theirs")
+    expect_equal(draft()$components$text[draft()$components$id == "c3"], "Theirs") # nothing here was lost
     expect_equal(loaded_revision(), first$revision + 1)
-    expect_match(notice_texts(seen), "couldn't be kept", all = FALSE, fixed = TRUE)
+    expect_match(notice_texts(seen), "saved this draft since you opened it", all = FALSE, fixed = TRUE)
+
+    change_draft(reworded(draft(), "Mine"))
+    saved_by_colleague("Theirs again")
+    session$elapse(draft_claim_renew_seconds * 1000)
+    expect_true(has_draft())
+    expect_true(has_unsaved_changes()) # kept, and asked about
+    expect_match(seen$modals[[length(seen$modals)]], "Someone saved this draft after you opened it", fixed = TRUE)
+    session$setInputs(reopen = 1)
+    expect_false(has_unsaved_changes())
+    expect_equal(draft()$components$text[draft()$components$id == "c3"], "Theirs again")
+    expect_equal(loaded_revision(), first$revision + 2)
   })
 })
 

@@ -114,11 +114,11 @@ change_requests_server <- function(
       list(preview = preview, draft = draft, pdf_url = request_pdf_url(record))
     }
 
-    # The address the browser gets the request's PDF from, for this session only; NULL if the file
-    # isn't on this server (see `pdf_address()`).
+    # The address the browser gets the request's PDF from, for this session only (see `pdf_address()`);
+    # NULL if there is none to be had (`extraction_service_pdf()`).
     request_pdf_url <- function(record) {
-      pdf <- record$pdf
-      if (length(pdf$path) == 0 || !file.exists(pdf$path)) {
+      pdf <- extraction_service_pdf(connection, record)
+      if (is.null(pdf)) {
         return(NULL)
       }
       pdf_address(session, ns(paste0("file-", record$id)), list(path = pdf$path, name = pdf$name, sha256 = pdf$sha256))

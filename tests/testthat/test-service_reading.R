@@ -358,11 +358,29 @@ test_that("a reading that fails says why", {
   expect_equal(saved$error, "Gemini is busy right now. Try reading again in a few minutes.")
 })
 
-test_that("a PDF that is no longer on this site fails the reading with a way forward", {
+test_that("a PDF this server hasn't got is fetched from Storage to read", {
+  me <- local_staff()
+  local_pdf_cache()
+  upload <- fake_upload()
+  record <- extraction_service_create(test_connection, upload, me)
+  withr::defer(test_delete_pdf(record$pdf$sha256))
+  unlink(record$pdf$path) # as a hosted site that restarted
+  read_from <- NULL
+  read <- function(pdf_path, lookups, progress) {
+    read_from <<- pdf_path
+    list(json = gold_json(), model = "gemini-3.8-flash", prompt_version = "abc123")
+  }
+  reading_service_run(test_connection, record$id, record$reading_started, read = read)
+  expect_equal(extraction_model_get(test_connection, record$id)$extraction_status, "ready")
+  expect_identical(readBin(read_from, "raw", 1e4), readBin(upload$datapath, "raw", 1e4))
+})
+
+test_that("a PDF that is no longer anywhere fails the reading with a way forward", {
   me <- local_staff()
   local_pdf_cache()
   record <- extraction_service_create(test_connection, fake_upload(), me)
   unlink(record$pdf$path)
+  test_delete_stored_pdf(record$pdf$sha256) # uploaded before PDFs were kept in Storage
   reading_service_run(test_connection, record$id, record$reading_started, read = function(...) stop("not reached"))
 
   saved <- extraction_model_get(test_connection, record$id)
