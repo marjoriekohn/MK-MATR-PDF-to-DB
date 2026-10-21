@@ -44,9 +44,10 @@ text_of <- function(x) {
 
 # Records what modules ask the browser to do, for the rest of the test. Returns an
 # environment with `notifications` (text and type), `modals` (their text), `closed`
-# (how many times a dialog was closed), `pages` (the pages the menu was told to show)
-# and `updates` (the update*Input and updateActionButton calls, each a list of `fn`,
-# `id` and the arguments given).
+# (how many times a dialog was closed), `pages` (the pages the menu was told to show),
+# `updates` (the update*Input and updateActionButton calls, each a list of `fn`,
+# `id` and the arguments given), `inserted` (what insertUI() added: `selector`, `where` and
+# the `html`) and `removed` (the selectors removeUI() was given).
 local_browser <- function(env = parent.frame()) {
   seen <- new.env()
   seen$notifications <- list()
@@ -54,6 +55,8 @@ local_browser <- function(env = parent.frame()) {
   seen$closed <- 0L
   seen$updates <- list()
   seen$pages <- character()
+  seen$inserted <- list()
+  seen$removed <- character()
   record_update <- function(fn) {
     force(fn)
     function(session, inputId, ...) { # nolint: object_name_linter. (the name shiny's update functions give it)
@@ -79,6 +82,14 @@ local_browser <- function(env = parent.frame()) {
     updateTextInput = record_update("text"),
     updateTextAreaInput = record_update("textarea"),
     updateActionButton = record_update("button"),
+    insertUI = function(selector, where = "beforeEnd", ui, ...) {
+      seen$inserted[[length(seen$inserted) + 1]] <- list(selector = selector, where = where, html = as.character(ui))
+      invisible()
+    },
+    removeUI = function(selector, ...) {
+      seen$removed <- c(seen$removed, selector)
+      invisible()
+    },
     .package = "shiny",
     .env = env
   )
@@ -123,7 +134,7 @@ edit_extraction_state <- function(draft = gold_draft(), lookups = test_lookups()
   layout <- shiny::reactiveVal(0L)
   state <- list(
     draft = shiny::reactive(current()),
-    change = function(new_draft, typed = FALSE) {
+    change = function(new_draft, typed = FALSE, redraw = !typed) {
       result <- tryCatch(new_draft, error = function(problem) {
         log$errors <- c(log$errors, conditionMessage(problem))
         NULL
@@ -133,7 +144,7 @@ edit_extraction_state <- function(draft = gold_draft(), lookups = test_lookups()
       }
       log$typed <- c(log$typed, typed)
       current(draft_service_uncheck_edited(current(), result))
-      if (!typed) layout(layout() + 1L) # as the page does: a pick or a button redraws, typing doesn't
+      if (redraw) layout(layout() + 1L) # as the page does: a pick or a button redraws, typing doesn't
       TRUE
     },
     selected = selected,

@@ -86,6 +86,14 @@ button.review-pill:hover { background: rgba($vcu-gold, 0.2); }
 }
 .review-header .subhead .row-badge { margin-left: 0.5rem; }
 
+// ------ While someone else has the draft, or it was let go: it is only shown ---------------
+// Its fields and buttons can't be pressed (the server refuses changes too); the outline still scrolls.
+.edit-extraction-page:has(.claim-lost) .structure-card {
+  opacity: 0.7;
+  :is(input, textarea, select, button) { pointer-events: none; }
+}
+.claim-lost .edit-callout .btn { margin-top: 0.25rem; }
+
 // ------ The one panel: the outline, edited in place -----------------------------------
 .edit-extraction-page .structure-card > .structure-body {
   display: flex;

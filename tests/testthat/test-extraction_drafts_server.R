@@ -6,11 +6,15 @@ drafts_page <- function(me, extractions = test_extractions()) {
   did$reviews <- list()
   did$details <- list()
   did$modes <- character()
+  did$take_over <- logical()
   list(
     did = did,
     args = list(
       extractions = extractions, catalog = test_live_catalog(), connection = test_connection, me = me,
-      open_edit_extraction = function(record) did$reviews[[length(did$reviews) + 1]] <- record,
+      open_edit_extraction = function(record, take_over = FALSE) {
+        did$reviews[[length(did$reviews) + 1]] <- record
+        did$take_over <- c(did$take_over, take_over)
+      },
       open_details = function(record) did$details[[length(did$details) + 1]] <- record,
       switch_mode = function(mode) did$modes <- c(did$modes, mode)
     )
@@ -126,5 +130,65 @@ test_that("with no drafts the page says so, in either list", {
     session$setInputs(whose = "mine")
     expect_match(text_of(output$drafts), "You have no drafts in progress.")
     expect_match(text_of(output$drafts), "Start a new extraction")
+  })
+})
+
+# The buttons on the card of one draft, as HTML.
+card_buttons <- function(html, id) {
+  buttons <- regmatches(html, gregexpr("<button[^>]*>", html))[[1]]
+  buttons[grepl(sprintf('data-id="%s"', id), buttons, fixed = TRUE)]
+}
+
+test_that("a draft someone else is working on says so, and Continue gives way to Take over, which asks first", {
+  me <- local_staff()
+  colleague <- local_staff()
+  tree <- shared_tree()
+  seen <- local_browser()
+  theirs <- local_read_extraction(colleague, info = picked_basic_info(tree))
+  mine <- local_read_extraction(me, info = picked_basic_info(tree))
+  draft_row_service_claim(test_connection, theirs$id, colleague)
+  draft_row_service_claim(test_connection, mine$id, me) # this person's own claim isn't someone else's
+  page <- drafts_page(me)
+  shiny::testServer(extraction_drafts_server, args = page$args, {
+    errors <- collect_errors(session)
+    html <- as.character(output$drafts$html)
+    expect_match(text_of(output$drafts), paste(colleague$name, "is actively working on this"), fixed = TRUE)
+    expect_false(grepl(paste(me$name, "is actively working"), text_of(output$drafts), fixed = TRUE))
+
+    buttons <- card_buttons(html, theirs$id)
+    continue <- buttons[grepl('data-action="continue"', buttons)]
+    expect_match(continue, "disabled")
+    expect_true(any(grepl('data-action="take_over"', buttons)))
+    expect_false(any(grepl("disabled", card_buttons(html, mine$id)[grepl('data-action="continue"', card_buttons(html, mine$id))])))
+
+    session$setInputs(action = list(action = "take_over", id = theirs$id))
+    expect_match(seen$modals[[length(seen$modals)]], paste0("Take this draft over from ", colleague$name, "?"), fixed = TRUE)
+    expect_length(page$did$reviews, 0) # nothing opens until it is confirmed
+    session$setInputs(confirm_take_over = 1)
+    expect_equal(page$did$reviews[[1]]$id, theirs$id)
+    expect_true(page$did$take_over[1])
+    expect_length(errors(), 0)
+  })
+})
+
+test_that("a claim that has lapsed isn't shown, and Take over then just opens the draft", {
+  me <- local_staff()
+  colleague <- local_staff()
+  tree <- shared_tree()
+  theirs <- local_read_extraction(colleague, info = picked_basic_info(tree))
+  draft_row_service_claim(test_connection, theirs$id, colleague)
+  lapsed <- function(records) {
+    lapply(records, function(record) {
+      if (!is.null(record$editing)) record$editing$at <- format_time(Sys.time() - draft_claim_stale_seconds - 5)
+      record
+    })
+  }
+  extractions <- test_extractions()
+  page <- drafts_page(me, list(all = shiny::reactive(lapsed(extractions$all())), changed = extractions$changed))
+  shiny::testServer(extraction_drafts_server, args = page$args, {
+    expect_false(grepl("is actively working", text_of(output$drafts), fixed = TRUE))
+    session$setInputs(action = list(action = "take_over", id = theirs$id))
+    expect_equal(page$did$reviews[[1]]$id, theirs$id)
+    expect_false(page$did$take_over[1])
   })
 })

@@ -50,12 +50,14 @@ draft_model_detail <- function(connection, id, columns, ai_columns) {
 #' @param staff_id The staff id of the person saving.
 #' @param review_edits The reviewer's changes so far (an AI-Powered extraction), as a list, or
 #'   `NULL` to leave them as they are.
-#' @return `draft_json`, invisibly. An error if there is no such draft.
-draft_model_save_reviewed <- function(connection, id, draft_json, staff_id, review_edits = NULL) {
+#' @param expected_revision The revision the person was looking at; the save is refused if someone
+#'   saved the draft since. `NULL` skips the check.
+#' @return The draft's revision after the save, invisibly. An error if there is no such draft, or
+#'   it has moved on from `expected_revision`.
+draft_model_save_reviewed <- function(connection, id, draft_json, staff_id, review_edits = NULL, expected_revision = NULL) {
   detail <- list(questionnaire = draft_json)
   if (!is.null(review_edits)) detail$review_edits <- review_edits
-  draft_row_model_save(connection, id, staff_id, detail = detail)
-  invisible(draft_json)
+  invisible(draft_row_model_save(connection, id, staff_id, detail = detail, expected_revision = expected_revision))
 }
 
 #' Save what the reading job returned.

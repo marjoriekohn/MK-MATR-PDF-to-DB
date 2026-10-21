@@ -6,9 +6,12 @@
 #' order. Every change goes through `state$change()`.
 #'
 #' The tree is drawn again only when the layout changes (a block or variable added, deleted, moved or
-#' picked from a list), never as words are typed, so the field being typed in is left alone. What changes
-#' as words are typed (which block is selected, which blocks and fields have problems, and which uploaded
-#' MATR IDs are still free) is sent to the page script, which marks the rows and fields.
+#' picked from a list), never as words are typed, so the field being typed in is left alone. Drawing it
+#' takes seconds for a long questionnaire, so what a click or keystroke changes without changing the
+#' layout (which block is selected, which sections are closed and question panels open, which blocks
+#' are checked, which blocks and fields have problems, and which uploaded MATR IDs are still free) is
+#' sent to the page script, which marks the rows and fields (`outline_marks()`); a question's panel is
+#' added to the tree, or taken out, on its own.
 #'
 #' @param id The module's id.
 #' @param state What the Edit Extraction page shares: `list(draft, change, selected, problems,
@@ -29,6 +32,7 @@ extraction_outline_server <- function(
     # ------ REACTIVE ----------------------------------------------------------
     collapsed <- reactiveVal(character()) # sections whose contents are hidden
     opened <- reactiveVal(character()) # questions whose panel is open
+    redraw <- reactiveVal(0L) # ticks when the tree must be drawn again although the layout hasn't changed
     suggestions <- state$suggestions %||% function() list()
     matr_ids <- state$matr_ids %||% function() character()
 
@@ -39,7 +43,7 @@ extraction_outline_server <- function(
       switch(event$action,
              select = state$selected(event$id),
              toggle = collapsed(flip(collapsed(), event$id)),
-             details = opened(flip(opened(), event$id)),
+             details = toggle_panel(draft, event$id),
              collapse_all = collapsed(blocks$id[blocks$component_type == "Section"]),
              expand_all = collapsed(character()),
              add_block = add_block(event$type),
@@ -59,6 +63,22 @@ extraction_outline_server <- function(
 
     flip <- function(ids, id) if (id %in% ids) setdiff(ids, id) else c(ids, id)
 
+    # A question's panel is added to the tree already drawn, or taken out of it.
+    toggle_panel <- function(draft, id) {
+      node <- sprintf('.outline-tree .outline-node[data-id="%s"]', id)
+      if (id %in% opened()) {
+        opened(setdiff(opened(), id))
+        removeUI(paste(node, "> .question-panel"))
+        return()
+      }
+      block <- draft$components[draft$components$id == id, , drop = FALSE]
+      if (nrow(block) != 1 || block$component_type != "Question") {
+        return()
+      }
+      opened(c(opened(), id))
+      insertUI(node, "beforeEnd", question_panel(block, draft, current_view(), lookups, ns))
+    }
+
     # A new block goes next to the selected one, and is selected so its words can be typed.
     add_block <- function(component_type) {
       draft <- state$draft()
@@ -71,7 +91,8 @@ extraction_outline_server <- function(
     # work down the outline.
     toggle_checked <- function(draft, id) {
       checked <- !draft$components$checked[draft$components$id == id]
-      marked <- state$change(draft_service_update(draft, "components", id, "checked", checked))
+      # The page script marks it: nothing in the tree's layout changes.
+      marked <- state$change(draft_service_update(draft, "components", id, "checked", checked), redraw = FALSE)
       if (marked && checked) {
         printed <- draft_service_printed_order(draft)
         next_id <- printed[match(id, printed) + 1]
@@ -107,6 +128,7 @@ extraction_outline_server <- function(
         blocks <- state$draft()$components
         opened(blocks$id[blocks$component_type == "Question"])
         collapsed(character())
+        redraw(redraw() + 1L) # every panel at once: drawn with the tree
       }, ignoreInit = TRUE)
     }
 
@@ -115,23 +137,20 @@ extraction_outline_server <- function(
       collapsed(setdiff(collapsed(), draft_service_ancestors(state$draft(), state$selected())))
     })
 
-    # What changes as words are typed: the selected row, each block's count of problems, the fields at
-    # fault, and the uploaded MATR IDs no variable has yet.
+    # What changes without the layout changing, marked on the tree already drawn (outline_marks()).
     observe({
-      problems <- state$problems()
-      counts <- as.list(table(problems$id))
-      messages <- lapply(split(problems$message, problems$id), paste, collapse = "\n")
-      at_fault <- problems[!is.na(problems$table), , drop = FALSE]
-      session$sendCustomMessage("edit-extraction-marks", list(
-        selected = state$selected(),
-        problems = lapply(names(counts), function(id) list(id = id, n = counts[[id]], title = messages[[id]])),
-        fields = map_rows(at_fault, function(problem) {
-          list(table = problem$table, id = problem$row, field = if (is.na(problem$field)) "" else problem$field, title = problem$message)
-        }),
-        matr_ids = as.list(matr_ids()),
-        matr_list = matr_id_list_id(ns)
+      session$sendCustomMessage("edit-extraction-marks", outline_marks(
+        state$draft(), state$problems(), state$selected(), collapsed(), opened(), matr_ids(), ns
       ))
     })
+
+    # What the tree is drawn with: what is selected, closed, open and at fault now.
+    current_view <- function() {
+      list(
+        selected = state$selected(), collapsed = collapsed(), opened = opened(),
+        problems = state$problems(), suggestions = suggestions(), matr_ids = matr_ids()
+      )
+    }
 
     # ------ OUTPUT ------------------------------------------------------------
     output$add_block_menu <- renderUI(add_block_menu(lookups$component_types))
@@ -140,15 +159,8 @@ extraction_outline_server <- function(
 
     output$tree <- renderUI({
       state$layout_version()
-      collapsed()
-      opened()
-      isolate({
-        view <- list(
-          selected = state$selected(), collapsed = collapsed(), opened = opened(),
-          problems = state$problems(), suggestions = suggestions(), matr_ids = matr_ids()
-        )
-        outline_tree(state$draft(), view, lookups, ns)
-      })
+      redraw()
+      isolate(outline_tree(state$draft(), current_view(), lookups, ns))
     })
   })
 }

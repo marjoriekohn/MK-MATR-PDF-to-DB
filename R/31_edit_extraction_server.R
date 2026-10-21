@@ -16,6 +16,13 @@ undo_depth <- 50
 #' it, which staff type; the wave asks it as the printed number, or as its place if none is typed. A
 #' draft going into a recorded questionnaire gets the MATR IDs its questions already have.
 #'
+#' One person at a time works on a draft (see `service_draft_row.R`). Opening one here claims it; while
+#' someone else has it, opening it asks whether to take it over instead. The page renews the claim while
+#' staff are active on the site, and lets it go when they leave the page with nothing unsaved, close it,
+#' or do nothing for a while; then it only shows the draft until it has it again, which it tries as soon
+#' as they come back. Save is refused if someone else saved the draft after this page opened it, so
+#' nobody's work is overwritten.
+#'
 #' @param id The module's id.
 #' @param extractions The extraction drafts as `server.R` shares them: `all()` is a reactive list
 #'   of records, and `changed()` tells it this session changed one.
@@ -24,15 +31,18 @@ undo_depth <- 50
 #' @param connection The MATR database, `list(url, key)`; see `model_database.R`.
 #' @param me Who is using the site: `list(staff_id, name, role)`.
 #' @param show_page A function taking a page's name and showing it.
-#' @return A list with `open`, a function taking a record that opens it, unless the draft on
-#'   screen has unsaved changes and staff choose to stay; it returns whether it opened.
+#' @param active A reactive: whether this page is the one showing.
+#' @return A list with `open`, a function taking a record (and `take_over`, whether to take it from
+#'   whoever is working on it) that opens it, unless the draft on screen has unsaved changes and staff
+#'   choose to stay, or someone else is working on it; it returns whether it opened.
 edit_extraction_server <- function(
   id,
   extractions,
   catalog,
   connection,
   me,
-  show_page
+  show_page,
+  active = reactive(TRUE)
 ) {
   moduleServer(id, function(input, output, session) {
     ns <- session$ns
@@ -51,22 +61,33 @@ edit_extraction_server <- function(
     selected <- reactiveVal(NULL) # id of the selected block
     layout_version <- reactiveVal(0L) # ticks when the outline must rebuild its inputs
     waiting <- reactiveVal(NULL) # a draft to open once unsaved changes are dealt with
+    waiting_take_over <- reactiveVal(FALSE) # whether to take that draft over when it opens
+    loaded_revision <- reactiveVal(NULL) # the draft's revision as this page opened it or last saved it
+    claim <- reactiveVal(NULL) # NULL while this page has the draft to work on; otherwise why not (see below)
+    claiming <- reactiveVal(NULL) # a draft someone else has, while staff are asked whether to take it over
+    last_active <- reactiveVal(Sys.time()) # when staff last did something on the site
     recorded <- reactiveVal(NULL) # what the recorded questionnaire prints already; see extraction_service_recorded()
     show_variables <- reactiveVal(0L) # ticks when every question's variables should be shown
     problems <- reactive(draft_service_check(req(draft()), lookups))
     matr_ids <- reactive(extraction_service_matr_ids(record()$matr_csv$text %||% "")) # from the CSV
     available_matr_ids <- reactive(draft_service_available_matr_ids(req(draft()), matr_ids()))
     has_unsaved_changes <- reactive(!identical(draft(), saved()))
+    has_draft <- reactive(!is.null(record_id()) && is.null(claim())) # to work on: no one else can change it
     heading <- reactive(extraction_service_heading(record(), catalog$get(), req(draft())$questionnaire))
     suggestions <- reactive(draft_service_text_suggestions(req(draft()), recorded()$texts))
 
     # Every change to the draft comes through here so it can be undone. Service
     # functions explain themselves: their stop() and message() texts are shown
     # to staff. `typed` is for words typed into a field, which the field already
-    # shows; rebuilding it would move the cursor. A block that was marked as checked and has
+    # shows; rebuilding it would move the cursor. `redraw` is FALSE for any other change the outline
+    # marks without drawing it again (marking a block as checked). A block that was marked as checked and has
     # been edited is no longer checked, unless `keep_checked`. The questions are numbered again by
     # their place in the outline. Returns TRUE if it worked.
-    change_draft <- function(new_draft, typed = FALSE, keep_checked = FALSE) {
+    change_draft <- function(new_draft, typed = FALSE, keep_checked = FALSE, redraw = !typed) {
+      if (!can_change()) {
+        layout_version(layout_version() + 1L) # put the inputs back as the draft has them
+        return(FALSE)
+      }
       new_draft <- tryCatch(
         withCallingHandlers(new_draft, message = function(note) {
           showNotification(conditionMessage(note), type = "message")
@@ -87,7 +108,7 @@ edit_extraction_server <- function(
       if (!identical(new_draft, draft())) {
         undo_stack(c(list(draft()), head(undo_stack(), undo_depth - 1)))
         draft(new_draft)
-        if (!typed) layout_version(layout_version() + 1L)
+        if (redraw) layout_version(layout_version() + 1L)
       }
       TRUE
     }
@@ -105,7 +126,7 @@ edit_extraction_server <- function(
     )
 
     observeEvent(input$undo, {
-      req(length(undo_stack()) > 0)
+      req(length(undo_stack()) > 0, can_change())
       draft(undo_stack()[[1]])
       undo_stack(undo_stack()[-1])
       layout_version(layout_version() + 1L)
@@ -116,34 +137,58 @@ edit_extraction_server <- function(
 
     # The page saves what has changed since it opened the draft or last saved it (`saved()`); for an
     # AI-Powered draft that is also kept as the reviewer's edits (`extraction_service_save_draft()`).
+    # It is refused if someone else saved the draft after this page opened it (`loaded_revision()`):
+    # then staff may open the draft as it was saved instead.
     save_draft <- function() {
+      if (!can_change()) {
+        return(FALSE)
+      }
       tryCatch(
         {
-          extraction_service_save_draft(connection, record(), draft(), saved(), me)
+          revision <- extraction_service_save_draft(
+            connection, record(), draft(), saved(), me, expected_revision = loaded_revision()
+          )
+          loaded_revision(revision)
           saved(draft())
           extractions$changed()
           showNotification("Saved. Nothing is added to the MATR metadata database until its change request is approved.", type = "message")
           TRUE
         },
         error = function(problem) {
-          show_problem(problem, "Couldn't save")
+          if (grepl("changed after you opened it", conditionMessage(problem), fixed = TRUE)) {
+            showModal(confirm_dialog(
+              "Someone saved this draft after you opened it",
+              p("Saving now would overwrite their changes, so yours weren't saved."),
+              p("Open the draft as it was saved? Your changes that weren't saved are lost."),
+              confirm_id = ns("reopen"), confirm_label = "Open the saved version", keep_label = "Not now"
+            ))
+          } else {
+            show_problem(problem, "Couldn't save")
+          }
           FALSE
         }
       )
     }
 
+    observeEvent(input$reopen, {
+      removeModal()
+      reload()
+    })
+
     # ------ Opening a draft ---------------------------------------------------
     # Opens `opened` (an extraction record), unless the draft on screen has
     # unsaved changes: then staff choose whether to save them first. Returns
     # FALSE if the draft couldn't be opened.
-    open <- function(opened) {
+    open <- function(opened, take_over = FALSE) {
       if (identical(opened$id, isolate(record_id()))) {
+        if (!isolate(has_draft())) isolate(resume(take_over))
         return(TRUE)
       }
       if (!isolate(has_unsaved_changes())) {
-        return(show_draft(opened))
+        return(show_draft(opened, take_over))
       }
       waiting(opened)
+      waiting_take_over(take_over)
       showModal(modalDialog(
         title = sprintf("Save your changes to %s?", isolate(heading()$title)),
         "They aren't saved yet. Save them before opening the next draft?",
@@ -156,7 +201,27 @@ edit_extraction_server <- function(
       TRUE
     }
 
-    show_draft <- function(opened) {
+    # It is claimed first: if someone else is working on it, staff are asked whether to take it over.
+    show_draft <- function(opened, take_over = FALSE) {
+      got <- claim_draft(opened$id, take_over)
+      if (is.null(got)) {
+        return(FALSE)
+      }
+      if (!got$claimed) {
+        ask_take_over(opened, got)
+        return(FALSE)
+      }
+      previous <- isolate(record_id())
+      if (!put_on_page(opened, got$revision)) {
+        if (!identical(previous, opened$id)) release_draft(opened$id)
+        return(FALSE)
+      }
+      if (!is.null(previous) && !identical(previous, opened$id)) release_draft(previous)
+      TRUE
+    }
+
+    # Loads `opened`'s questionnaire as it was saved at `revision`, and shows it. Returns whether it could.
+    put_on_page <- function(opened, revision) {
       loaded <- tryCatch(extraction_service_load_draft(connection, opened), error = function(problem) {
         show_problem(problem, "Couldn't open this draft")
         NULL
@@ -167,6 +232,9 @@ edit_extraction_server <- function(
       # The questions are numbered by their place in the outline; the saved copy gets the numbers on the next save.
       loaded <- draft_service_renumber_questions(loaded)
       record_id(opened$id)
+      loaded_revision(revision)
+      claim(NULL)
+      last_active(Sys.time())
       draft(loaded)
       saved(loaded)
       undo_stack(list())
@@ -203,12 +271,175 @@ edit_extraction_server <- function(
 
     observeEvent(input$save_and_open, {
       removeModal()
-      if (save_draft()) show_draft(waiting())
+      if (save_draft()) show_draft(waiting(), waiting_take_over())
     })
 
     observeEvent(input$discard_and_open, {
       removeModal()
-      show_draft(waiting())
+      show_draft(waiting(), waiting_take_over())
+    })
+
+    # ------ One person at a time ----------------------------------------------
+    # `claim()` is NULL while this page has the draft to work on. Otherwise it says why not, and the
+    # page only shows the draft: `why` is "taken" (someone else has it: `by`, since `at`), "idle"
+    # (staff did nothing for a while) or "left" (they went to another page with nothing unsaved).
+    # The claim is renewed every minute while staff are active anywhere on the site (www/js/review.js
+    # sends `active`), so a page left open overnight doesn't keep the draft from anyone.
+    claim_draft <- function(id, take_over = FALSE) {
+      tryCatch(draft_row_service_claim(connection, id, me, take_over), error = function(problem) {
+        show_problem(problem, "Couldn't open this draft")
+        NULL
+      })
+    }
+
+    release_draft <- function(id) {
+      if (!is.null(id)) tryCatch(draft_row_service_release(connection, id, me), error = function(problem) FALSE)
+    }
+
+    let_go <- function(why) {
+      release_draft(record_id())
+      claim(list(why = why))
+    }
+
+    # Whether the draft can be changed here now; if not, says why.
+    can_change <- function() {
+      if (has_draft()) {
+        return(TRUE)
+      }
+      held <- claim()
+      showNotification(
+        if (identical(held$why, "taken")) {
+          sprintf("%s is working on this draft, so it can't be changed here. Take it over to work on it.", held$by)
+        } else {
+          "This draft was let go while you were away. Choose Keep working to change it again."
+        },
+        type = "warning"
+      )
+      FALSE
+    }
+
+    # Someone else is working on `opened`: take it over?
+    ask_take_over <- function(opened, held) {
+      claiming(opened)
+      extractions$changed() # the list of drafts shows who has it
+      showModal(confirm_dialog(
+        sprintf("%s is working on this draft", held$by),
+        p(sprintf(
+          "They were active on it %s. Only one person at a time can work on a draft, so nobody's changes are overwritten.",
+          time_ago(parse_time(held$at))
+        )),
+        p(sprintf(
+          "If you take it over, %s can still see it but not change it, and anything they haven't saved can't be saved.",
+          held$by
+        )),
+        confirm_id = ns("take_over"), confirm_label = "Take over", keep_label = "Cancel"
+      ))
+    }
+
+    observeEvent(input$take_over, {
+      removeModal()
+      opened <- claiming()
+      claiming(NULL)
+      req(opened)
+      if (identical(opened$id, record_id())) {
+        resume(take_over = TRUE)
+      } else if (show_draft(opened, take_over = TRUE)) {
+        show_page("edit_extraction")
+      }
+    })
+
+    # The banner's Take over asks first, as opening it would have.
+    observeEvent(input$take_over_banner, ask_take_over(record(), claim()))
+    observeEvent(input$keep_working, resume())
+
+    # Has the draft on screen to work on again, if nobody else has it (or `take_over`). If it was saved
+    # meanwhile, it is opened again as it was saved. Returns whether this page has it now.
+    resume <- function(take_over = FALSE) {
+      got <- claim_draft(record_id(), take_over)
+      if (is.null(got)) {
+        return(FALSE)
+      }
+      if (!got$claimed) {
+        claim(list(why = "taken", by = got$by, at = got$at))
+        return(FALSE)
+      }
+      last_active(Sys.time())
+      if (identical(as.integer(got$revision), as.integer(loaded_revision()))) {
+        claim(NULL)
+        return(TRUE)
+      }
+      lost <- has_unsaved_changes()
+      reloaded <- reload(got$revision)
+      if (reloaded) {
+        showNotification(paste0(
+          staff_name(record()$saved_by), " saved this draft while you didn't have it, so it shows what they saved.",
+          if (lost) " Your changes that weren't saved couldn't be kept."
+        ), type = "warning", duration = 20)
+      }
+      reloaded
+    }
+
+    # Opens the draft on screen again, as it was last saved. Returns whether it could.
+    reload <- function(revision = NULL) {
+      extractions$changed()
+      current <- record()
+      if (is.null(revision)) {
+        got <- claim_draft(current$id)
+        if (is.null(got) || !got$claimed) {
+          if (!is.null(got)) claim(list(why = "taken", by = got$by, at = got$at))
+          return(FALSE)
+        }
+        revision <- got$revision
+      }
+      put_on_page(current, revision)
+    }
+
+    # Every minute: renewed while staff are active, let go once they have done nothing for a while.
+    # A claim someone else took means this page now only shows the draft.
+    observe({
+      invalidateLater(draft_claim_renew_seconds * 1000)
+      isolate(keep_claim())
+    })
+
+    keep_claim <- function() {
+      if (!has_draft()) {
+        return()
+      }
+      if (as.numeric(difftime(Sys.time(), last_active(), units = "secs")) > draft_claim_idle_seconds) {
+        let_go("idle")
+        return()
+      }
+      # One that can't be renewed now (the database can't be reached) is tried again next time.
+      got <- tryCatch(draft_row_service_claim(connection, record_id(), me), error = function(problem) NULL)
+      if (!is.null(got) && !got$claimed) {
+        claim(list(why = "taken", by = got$by, at = got$at))
+        showNotification(
+          sprintf("%s took over this draft. You can still see it, but not change it.", got$by),
+          type = "warning", duration = NULL
+        )
+      }
+    }
+
+    observeEvent(input$active, {
+      last_active(Sys.time())
+      if (identical(claim()$why, "idle")) resume()
+    })
+
+    # Going to another page lets the draft go, unless something is unsaved; coming back has it again.
+    observeEvent(active(),
+      {
+        req(record_id())
+        if (!active()) {
+          if (has_draft() && !has_unsaved_changes()) let_go("left")
+        } else if (!has_draft()) {
+          resume()
+        }
+      },
+      ignoreInit = TRUE
+    )
+
+    session$onSessionEnded(function() {
+      if (isolate(has_draft())) release_draft(isolate(record_id()))
     })
 
     # ------ MATR IDs ----------------------------------------------------------
@@ -228,10 +459,12 @@ edit_extraction_server <- function(
     }
 
     observeEvent(input$matr_csv, {
+      req(can_change())
       upload <- input$matr_csv
       tryCatch(
         {
-          extraction_service_add_matr_csv(connection, record_id(), upload, me)
+          saved_record <- extraction_service_add_matr_csv(connection, record_id(), upload, me, expected_revision = loaded_revision())
+          loaded_revision(saved_record$revision)
           extractions$changed()
         },
         error = function(problem) {
@@ -302,8 +535,8 @@ edit_extraction_server <- function(
     })
 
     observe({
-      updateActionButton(session, "undo", disabled = length(undo_stack()) == 0)
-      updateActionButton(session, "save", disabled = !has_unsaved_changes())
+      updateActionButton(session, "undo", disabled = length(undo_stack()) == 0 || !has_draft())
+      updateActionButton(session, "save", disabled = !has_unsaved_changes() || !has_draft())
     })
 
     # ------ Previewing and submitting the change request ---------------------------------------
@@ -362,12 +595,14 @@ edit_extraction_server <- function(
     observeEvent(input$back_to_preview, show_preview())
 
     observeEvent(input$confirm_request, {
-      req(record_id(), draft())
+      req(record_id(), draft(), can_change())
       if (has_unsaved_changes() && !save_draft()) {
         return()
       }
+      # As this page has it: refused if someone else saved it since.
+      sent <- utils::modifyList(record(), list(revision = loaded_revision()))
       outcome <- tryCatch(
-        extraction_service_push(connection, record(), me, catalog$get(), reviewer = input$request_reviewer),
+        extraction_service_push(connection, sent, me, catalog$get(), reviewer = input$request_reviewer),
         error = function(problem) {
           show_problem(problem, "Couldn't send it")
           NULL
@@ -414,7 +649,10 @@ edit_extraction_server <- function(
       )
     })
 
-    output$banner <- renderUI(edit_extraction_banner(req(record())))
+    output$banner <- renderUI(tagList(
+      edit_extraction_claim_banner(ns, claim(), isolate(has_unsaved_changes())),
+      edit_extraction_banner(req(record()))
+    ))
 
     # Not for a request already waiting for approval: it is edited and saved, not submitted again.
     output$request_button <- renderUI({

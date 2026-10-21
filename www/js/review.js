@@ -34,6 +34,22 @@
     }
   });
 
+  // ------ Being active -------------------------------------------------------------
+  // The draft open on the Edit Extraction page is kept for this person only while they are doing
+  // something on the site (R/31_edit_extraction_server.R). Any key, click, scroll or move of the
+  // pointer, on any page, counts; it is sent to that page's `active` at most every 20 seconds.
+  let lastActive = 0;
+  function sendActive() {
+    const now = Date.now();
+    const page = document.querySelector('.edit-extraction-page[data-ns]');
+    if (now - lastActive < 20000 || !page || !window.Shiny || !Shiny.setInputValue) return;
+    lastActive = now;
+    Shiny.setInputValue(page.dataset.ns + 'active', now);
+  }
+  ['keydown', 'pointerdown', 'pointermove', 'wheel', 'scroll'].forEach(function (name) {
+    document.addEventListener(name, sendActive, { capture: true, passive: true });
+  });
+
   // ------ Fields -------------------------------------------------------------------
   // Words are sent once typing pauses, and again when the field loses focus.
   // Drop-downs, toggles and checkboxes are sent straight away.
@@ -180,10 +196,28 @@
   });
 
   // ------ Marks the server sends as words are typed ---------------------------------------
-  // The outline is only redrawn when its layout changes, so the selected row, each block's problems, the
-  // fields at fault (outlined in red) and the uploaded MATR IDs still free come separately, and are put on
-  // again whenever Shiny redraws something.
-  let marks = { selected: null, problems: [], fields: [], matr_ids: null, matr_list: null };
+  // The outline is only redrawn when its layout changes (drawing it takes seconds), so the selected row,
+  // the closed sections and open question panels, the checked blocks, each block's problems, the fields
+  // at fault (outlined in red) and the uploaded MATR IDs still free come separately (outline_marks() in
+  // R), and are put on again whenever Shiny redraws something. Until the first marks come, the classes
+  // the outline was drawn with stay as they are.
+  let marks = {
+    selected: null, problems: [], fields: [], matr_ids: null, matr_list: null,
+    collapsed: null, opened: null, checked: null, all_checked: null, check_titles: null
+  };
+
+  // Closed sections, open question panels and checked blocks.
+  function applyStateMarks(node, row) {
+    const id = row.dataset.id;
+    if (marks.collapsed) node.classList.toggle('is-collapsed', marks.collapsed.has(id));
+    if (marks.opened && row.querySelector(':scope > .is-details')) node.classList.toggle('is-open', marks.opened.has(id));
+    const check = row.querySelector(':scope > .outline-actions > .outline-check');
+    if (!check || !marks.checked) return;
+    const checked = marks.checked.has(id);
+    check.classList.toggle('is-checked', checked);
+    check.classList.toggle('is-all-checked', marks.all_checked.has(id));
+    if (marks.check_titles) check.title = checked ? marks.check_titles.checked : marks.check_titles.unchecked;
+  }
 
   // A field at fault: {table, id, field, title}; an empty field means its whole row (a variable card).
   function fieldSelector(mark) {
@@ -236,6 +270,7 @@
     tree.querySelectorAll('.outline-node').forEach(function (node) {
       const row = node.querySelector(':scope > .outline-row');
       if (!row) return;
+      applyStateMarks(node, row);
       if (row.dataset.id === marks.selected && !row.classList.contains('is-selected')) {
         row.classList.add('is-selected');
         row.scrollIntoView({ block: 'nearest' });
@@ -254,9 +289,12 @@
 
   function register() {
     Shiny.addCustomMessageHandler('edit-extraction-marks', function (sent) {
+      const set = function (ids) { return ids ? new Set(ids) : null; };
       marks = {
         selected: sent.selected || null, problems: sent.problems || [], fields: sent.fields || [],
-        matr_ids: sent.matr_ids || [], matr_list: sent.matr_list || null
+        matr_ids: sent.matr_ids || [], matr_list: sent.matr_list || null,
+        collapsed: set(sent.collapsed), opened: set(sent.opened), checked: set(sent.checked),
+        all_checked: set(sent.all_checked) || new Set(), check_titles: sent.check_titles || null
       };
       applyMarks();
     });

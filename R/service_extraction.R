@@ -178,13 +178,14 @@ extraction_service_create_manual <- function(connection, staff, info = extractio
 #' @param id The draft's id.
 #' @param upload One row of a `fileInput`'s value.
 #' @param me Who is saving: `list(staff_id, name, role)`.
+#' @param expected_revision The revision the person was looking at, or `NULL` not to check.
 #' @return The record as saved.
-extraction_service_add_matr_csv <- function(connection, id, upload, me) {
+extraction_service_add_matr_csv <- function(connection, id, upload, me, expected_revision = NULL) {
   matr_csv <- list(name = upload$name, text = extraction_model_read_csv(upload$datapath))
   change_record(connection, id, me, function(record) {
     record["matr_csv"] <- list(matr_csv)
     record
-  })
+  }, expected_revision = expected_revision)
 }
 
 #' Give a draft a different PDF.
@@ -271,14 +272,17 @@ extraction_service_load_draft <- function(connection, record) {
 #'   changes are measured against.
 #' @param me Who is saving: `list(staff_id, name, role)`.
 #' @param now The time to record.
-#' @return Called for its effect.
-extraction_service_save_draft <- function(connection, record, draft, base, me, now = Sys.time()) {
+#' @param expected_revision The revision the page opened (or last saved): the save is refused if
+#'   someone else saved the draft since, so nobody's work is overwritten. `NULL` skips the check.
+#' @return The draft's revision after the save, invisibly. An error with a sentence if it was refused.
+extraction_service_save_draft <- function(connection, record, draft, base, me, now = Sys.time(),
+                                          expected_revision = NULL) {
   edits <- NULL
   if (identical(record$method, extraction_ai)) {
     kept <- draft_model_get_record(connection, record$id)$edits
     edits <- c(kept, draft_service_review_edits(base, draft, me, now))
   }
-  draft_service_save(connection, record$id, draft, me$staff_id, edits)
+  draft_service_save(connection, record$id, draft, me$staff_id, edits, expected_revision)
 }
 
 # ------ Progress -------------------------------------------------------------------
@@ -603,13 +607,15 @@ extraction_service_printed <- function(existing, component_types = NULL) {
 # Every change re-reads the record first, and saves only the fields it
 # changed, so it never undoes what someone else saved since this page read it.
 # `me` is who saves it. `new_revision` is FALSE for a change that isn't to what a
-# reviewer would read (restarting a reading, discarding). Returns the record as saved.
-change_record <- function(connection, id, me, change, new_revision = TRUE) {
+# reviewer would read (restarting a reading, discarding). `expected_revision`, if given, is the
+# revision the person was looking at: the save is refused if the draft has moved on. Returns the
+# record as saved.
+change_record <- function(connection, id, me, change, new_revision = TRUE, expected_revision = NULL) {
   before <- extraction_model_get(connection, id)
   after <- change(before)
   fields <- union(names(before), names(after))
   changed <- fields[!vapply(fields, function(field) identical(before[[field]], after[[field]]), logical(1))]
-  extraction_model_save(connection, after, changed, me$staff_id, new_revision = new_revision)
+  extraction_model_save(connection, after, changed, me$staff_id, expected_revision = expected_revision, new_revision = new_revision)
 }
 
 restart_reading <- function(record) {

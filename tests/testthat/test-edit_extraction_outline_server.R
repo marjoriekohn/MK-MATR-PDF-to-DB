@@ -1,6 +1,7 @@
 # The Edit Extraction page's outline: blocks as a tree, each edited where it is. What a click, a keystroke or a drag
 # does goes through `state$change()`, which edit_extraction_state() stands in for. The tree is drawn again only when
-# the layout changes; the selected row and the problems are sent to the page script instead.
+# the layout changes; the selected row, the closed sections and open panels, the checked blocks and the problems
+# are sent to the page script instead (outline_marks()), and a question's panel is added on its own.
 
 # Every test gives the outline the gold questionnaire's first two parts (short_gold_draft()): the outline draws
 # every block it is given, again each time the layout changes, and all of the gold questionnaire's takes seconds.
@@ -10,6 +11,12 @@ outline_args <- function(page = short_page()) list(state = page$state, lookups =
 sections_of <- function(draft) draft$components$id[draft$components$component_type == "Section"]
 has_class <- function(html, class, id) grepl(sprintf('class="[^"]*%s[^"]*" [^>]*data-id="%s"', class, id), html)
 tree_html <- function(output) paste(output$tree$html, collapse = "")
+# The marks the page script is sent now. Called inside testServer(), where `collapsed` and `opened` are the outline's.
+marks_now <- function(page, collapsed, opened, ns) {
+  outline_marks(page$draft(), page$state$problems(), page$selected(), collapsed(), opened(), character(), ns)
+}
+# The last question panel added to the tree.
+panel_html <- function(seen) seen$inserted[[length(seen$inserted)]]$html
 
 test_that("clicking a block selects it, and the selection is drawn the next time the tree is", {
   page <- short_page()
@@ -18,20 +25,27 @@ test_that("clicking a block selects it, and the selection is drawn the next time
     expect_equal(page$selected(), "c5")
     session$setInputs(action = list(action = "select", id = "c9"))
     expect_equal(page$selected(), "c9")
-    session$setInputs(action = list(action = "collapse_all")) # the tree is drawn again
+    expect_equal(marks_now(page, collapsed, opened, ns)$selected, "c9")
+    page$state$layout_version(page$state$layout_version() + 1L) # the tree is drawn again
+    session$flushReact()
     expect_true(has_class(tree_html(output), "is-selected", "c9"))
     expect_false(has_class(tree_html(output), "is-selected", "c5"))
   })
 })
 
-test_that("sections open and close one at a time, or all at once", {
+test_that("sections open and close one at a time, or all at once, without the tree being drawn again", {
   page <- short_page()
   sections <- sections_of(short_gold_draft())
   shiny::testServer(extraction_outline_server, args = outline_args(page), {
+    before <- tree_html(output)
     expect_length(collapsed(), 0)
     session$setInputs(action = list(action = "toggle", id = "c1"))
     expect_equal(collapsed(), "c1")
-    expect_true(has_class(tree_html(output), "is-collapsed", "c1"))
+    expect_equal(marks_now(page, collapsed, opened, ns)$collapsed, list("c1"))
+    expect_identical(tree_html(output), before) # the page script closes it
+    page$state$layout_version(page$state$layout_version() + 1L)
+    session$flushReact()
+    expect_true(has_class(tree_html(output), "is-collapsed", "c1")) # and a tree drawn again keeps it closed
     session$setInputs(action = list(action = "toggle", id = "c1"))
     expect_length(collapsed(), 0)
 
@@ -49,7 +63,7 @@ test_that("selecting a block inside a collapsed section opens the sections aroun
     session$setInputs(action = list(action = "collapse_all"))
     session$setInputs(action = list(action = "select", id = "c3"))
     expect_setequal(collapsed(), setdiff(sections, "c1"))
-    expect_false(has_class(tree_html(output), "is-collapsed", "c1"))
+    expect_false("c1" %in% unlist(marks_now(page, collapsed, opened, ns)$collapsed))
   })
 })
 
@@ -102,6 +116,7 @@ test_that("a change the draft refuses is a sentence, and nothing changes", {
 
 test_that("a question's arrow opens its panel of variables; the question it follows is beside its words", {
   page <- edit_extraction_state(draft_service_update(short_gold_draft(), "variables", "v1", "subject", "")) # who it's about not picked yet
+  seen <- local_browser()
   shiny::testServer(extraction_outline_server, args = outline_args(page), {
     html <- tree_html(output)
     expect_false(grepl("question-panel", html))
@@ -111,10 +126,13 @@ test_that("a question's arrow opens its panel of variables; the question it foll
     expect_false(grepl("field-hint", html))
     session$setInputs(action = list(action = "details", id = "c3"))
     expect_equal(opened(), "c3")
-    html <- tree_html(output)
-    expect_true(has_class(html, "is-open", "c3"))
+    expect_equal(marks_now(page, collapsed, opened, ns)$opened, list("c3"))
+    expect_identical(tree_html(output), html) # the panel is added to the tree on its own
+    expect_equal(seen$inserted[[1]]$selector, '.outline-tree .outline-node[data-id="c3"]')
+    expect_equal(seen$inserted[[1]]$where, "beforeEnd")
+    html <- panel_html(seen)
     expect_match(html, "question-panel")
-    panel <- text_of(output$tree)
+    panel <- text_of(html)
     expect_match(panel, "Variables")
     expect_false(grepl("Variables ·", panel))
     # what a field holds is said in it, and its label is kept for screen readers
@@ -133,6 +151,10 @@ test_that("a question's arrow opens its panel of variables; the question it foll
     expect_match(html, "variable-card-row") # kind, MATR ID, subject and label on one row, with delete
     session$setInputs(action = list(action = "details", id = "c3"))
     expect_length(opened(), 0)
+    expect_equal(seen$removed, '.outline-tree .outline-node[data-id="c3"] > .question-panel')
+    page$state$layout_version(page$state$layout_version() + 1L)
+    session$flushReact()
+    expect_false(grepl("question-panel", tree_html(output))) # a tree drawn again keeps it closed
     expect_false(grepl("question-panel", tree_html(output)))
   })
 })
@@ -140,10 +162,15 @@ test_that("a question's arrow opens its panel of variables; the question it foll
 test_that("marking a block as checked moves on to the next one in printed order, and unchecking stays put", {
   page <- short_page()
   shiny::testServer(extraction_outline_server, args = outline_args(page), {
+    before <- tree_html(output)
     page$selected("c3")
     session$setInputs(action = list(action = "check", id = "c3"))
     expect_true(component(page$draft(), "c3")$checked)
     expect_equal(page$selected(), "c4")
+    expect_identical(tree_html(output), before) # the page script marks it
+    expect_equal(marks_now(page, collapsed, opened, ns)$checked, list("c3"))
+    page$state$layout_version(page$state$layout_version() + 1L)
+    session$flushReact()
     expect_true(grepl('is-checked[^>]*data-action="check" data-id="c3"', tree_html(output)))
 
     session$setInputs(action = list(action = "check", id = "c3"))
@@ -304,9 +331,10 @@ test_that("the menu for adding a block offers every kind the database has, and t
 test_that("a field the checks find at fault is outlined, says why, and the marks follow the checks", {
   draft <- draft_service_update(with_matr_ids(short_gold_draft()), "variables", "v1", "matr_id", "")
   page <- edit_extraction_state(draft)
+  seen <- local_browser()
   shiny::testServer(extraction_outline_server, args = outline_args(page), {
     session$setInputs(action = list(action = "details", id = "c3"))
-    html <- tree_html(output)
+    html <- panel_html(seen)
     expect_match(html, 'class="form-control form-control-sm has-problem"[^>]*aria-invalid="true" title="Variable 1: fill in its MATR ID."[^>]*data-id="v1" data-field="matr_id"')
     # the panel no longer lists what one field is outlined for
     expect_false(grepl("details-problems", html))
@@ -316,14 +344,15 @@ test_that("a field the checks find at fault is outlined, says why, and the marks
 test_that("each MATR ID field offers the uploaded IDs no variable has yet", {
   page <- edit_extraction_state(with_matr_ids(short_gold_draft()))
   page$state$matr_ids <- function() c("x1", "x2")
+  seen <- local_browser()
   shiny::testServer(extraction_outline_server, args = outline_args(page), {
     html <- tree_html(output)
     ids_list <- regmatches(html, regexpr('<datalist id="[^"]*matr-ids">.*?</datalist>', html))
     expect_length(ids_list, 1)
     expect_match(ids_list, '<option value="x1">')
     session$setInputs(action = list(action = "details", id = "c3"))
-    expect_match(tree_html(output), 'data-field="matr_id"')
-    expect_match(tree_html(output), 'list="[^"]*matr-ids"')
+    expect_match(panel_html(seen), 'data-field="matr_id"')
+    expect_match(panel_html(seen), 'list="[^"]*matr-ids"')
   })
 })
 
@@ -351,4 +380,22 @@ test_that("editing a checked block takes its check off, and marking it as checke
     session$setInputs(edit = list(table = "variables", id = "v2", field = "label", value = "Worrier"))
     expect_equal(checked_blocks(page$draft()), "c3")
   })
+})
+
+test_that("the marks say which blocks are checked, and a section only counts as all checked once everything in it is", {
+  draft <- with_checked(short_gold_draft(), c("c1", "c3"))
+  inside <- draft_service_printed_order(draft, "c1")
+  marks <- outline_marks(draft, draft_service_check(draft, test_lookups()), "c3", "c1", character(), character(), shiny::NS("x"))
+  expect_setequal(unlist(marks$checked), c("c1", "c3"))
+  expect_equal(unlist(marks$all_checked), "c3") # c1 has blocks inside that aren't checked
+  expect_equal(marks$collapsed, list("c1"))
+  expect_equal(marks$opened, list())
+  expect_equal(marks$selected, "c3")
+  expect_equal(marks$check_titles$checked, outline_check_titles[["checked"]])
+
+  everything <- with_checked(short_gold_draft(), c("c1", inside))
+  all_marks <- outline_marks(
+    everything, draft_service_check(everything, test_lookups()), NULL, character(), character(), character(), shiny::NS("x")
+  )
+  expect_true("c1" %in% unlist(all_marks$all_checked))
 })

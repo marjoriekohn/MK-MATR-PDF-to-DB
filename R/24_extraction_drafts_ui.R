@@ -39,17 +39,20 @@ whose_buttons <- function(input_id, whose, n_mine, n_everyone) {
 
 # ------ One card per draft ---------------------------------------------------------
 #' One card for a draft.
-#' Whose it is is said the same way on every card, from who started it: "Yours", or their name.
 #'
-#' Whose it is is said the same way on every card, from who started it: "Yours", or their name.
+#' Whose it is is said the same way on every card, from who started it: "Yours", or their name. While
+#' someone else is working on it (`draft_row_service_editor()`), it says so, and Continue gives way to
+#' Take over: only one person at a time works on a draft.
 #'
 #' @param record An extraction record.
 #' @param draft The questionnaire it read, or `NULL` until reading has finished.
 #' @param catalog The live tables the pages pick from, from `questionnaire_service_get_catalog()`.
 #' @param me Who is using the site: `list(staff_id, name)`.
+#' @param now The time now, which says whether someone's claim on it has lapsed.
 #' @return A UI element.
-draft_card <- function(record, draft, catalog, me) {
+draft_card <- function(record, draft, catalog, me, now = Sys.time()) {
   mine <- draft_row_service_is_mine(record, me)
+  editor <- draft_row_service_editor(record, me, now)
   failed <- identical(record$extraction_status, "failed")
   sent_back <- record$sent_back
   steps <- extraction_service_progress(record, draft)
@@ -64,7 +67,8 @@ draft_card <- function(record, draft, catalog, me) {
         row_badge(if (mine) "Yours" else draft_row_service_preparer(record), class = if (mine) "is-mine"),
         if (!is.null(sent_back)) row_badge("Sent back", class = "is-warning"),
         if (identical(record$method, extraction_manual)) row_badge("Typed by hand"),
-        if (failed) row_badge("Reading stopped", class = "is-warning")
+        if (failed) row_badge("Reading stopped", class = "is-warning"),
+        if (!is.null(editor)) row_badge(icon("pen"), sprintf(" %s is actively working on this", editor$by), class = "is-editing")
       ),
       p(class = "draft-meta", draft_meta(record, me)),
       if (!is.null(sent_back)) {
@@ -79,6 +83,15 @@ draft_card <- function(record, draft, catalog, me) {
       if (mine) review_button("Discard", "discard", `data-id` = record$id, class = "btn btn-link"),
       if (failed) {
         review_button("Try reading again", "retry", `data-id` = record$id, class = "btn btn-outline-dark")
+      } else if (!is.null(editor)) {
+        tagList(
+          review_button("Take over", "take_over", `data-id` = record$id, class = "btn btn-outline-dark"),
+          review_button(
+            "Continue", "continue",
+            `data-id` = record$id, class = "btn btn-primary", disabled = TRUE,
+            title = sprintf("%s is working on it. Only one person at a time can.", editor$by)
+          )
+        )
       } else {
         review_button(
           "Continue", "continue",

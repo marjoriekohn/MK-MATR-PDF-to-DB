@@ -2,6 +2,7 @@
 #'
 #' Every extraction draft still being prepared, newest first. Continue opens a draft that
 #' has been read (or typed by hand) on the Edit Extraction page, and one still being read in AI-Powered mode.
+#' While someone else is working on a draft its card says so, and offers Take over instead (asking first).
 #'
 #' @param id The module's id.
 #' @param extractions The extraction drafts as `server.R` shares them: `all()` is a reactive list
@@ -10,7 +11,8 @@
 #'   (`questionnaire_service_get_catalog()`) and `refresh()` reads them again.
 #' @param connection The MATR database, `list(url, key)`; see `model_database.R`.
 #' @param me Who is using the site: `list(staff_id, name, role)`.
-#' @param open_edit_extraction A function taking a record and opening it on the Edit Extraction page.
+#' @param open_edit_extraction A function taking a record (and `take_over`, whether to take it from
+#'   whoever is working on it) and opening it on the Edit Extraction page.
 #' @param open_details A function taking a record and opening it in AI-Powered mode.
 #' @param switch_mode A function taking a mode of the Extraction page and showing it.
 #' @return Called for its effect.
@@ -30,6 +32,7 @@ extraction_drafts_server <- function(
     # ------ REACTIVE ----------------------------------------------------------
     whose <- reactiveVal("everyone") # "mine" or "everyone"
     discarding <- reactiveVal(NULL) # the draft the Discard dialog is asking about
+    taking <- reactiveVal(NULL) # the draft the Take over dialog is asking about
 
     open_drafts <- reactive(extraction_service_open_drafts(extractions$all()))
     shown <- reactive({
@@ -48,8 +51,34 @@ extraction_drafts_server <- function(
           extraction_service_retry(connection, record$id, me)
           extractions$changed()
         },
-        discard = confirm_discard(record)
+        discard = confirm_discard(record),
+        take_over = confirm_take_over(record)
       )
+    })
+
+    confirm_take_over <- function(record) {
+      editor <- draft_row_service_editor(record, me)
+      if (is.null(editor)) { # their claim lapsed since the card was drawn
+        return(open_edit_extraction(record))
+      }
+      taking(record$id)
+      showModal(confirm_dialog(
+        sprintf("Take this draft over from %s?", editor$by),
+        p(strong(extraction_service_title(record, catalog$get()))),
+        p(sprintf(
+          "%s was active on it %s. Only one person at a time can work on a draft, so nobody's changes are overwritten.",
+          editor$by, time_ago(parse_time(editor$at))
+        )),
+        p(sprintf("Once you have it, %s can still see it but not change it, and anything they haven't saved can't be saved.", editor$by)),
+        confirm_id = ns("confirm_take_over"), confirm_label = "Take over", keep_label = "Cancel"
+      ))
+    }
+
+    observeEvent(input$confirm_take_over, {
+      removeModal()
+      record <- extractions$all()[[taking() %||% ""]]
+      req(record)
+      open_edit_extraction(record, take_over = TRUE)
     })
 
     confirm_discard <- function(record) {
@@ -92,13 +121,21 @@ extraction_drafts_server <- function(
       draft
     }
 
+    # A card says someone is working on a draft only until their claim lapses, so the cards are drawn
+    # again then (what they read isn't: that is only when the drafts are read again).
     output$drafts <- renderUI({
       if (length(shown()) == 0) {
         return(no_drafts(whose()))
       }
+      now <- Sys.time()
+      lapses <- unlist(lapply(shown(), function(record) {
+        editor <- draft_row_service_editor(record, me, now)
+        if (!is.null(editor)) draft_claim_stale_seconds - as.numeric(difftime(now, parse_time(editor$at), units = "secs"))
+      }))
+      if (length(lapses) > 0) invalidateLater(ceiling(max(1, min(lapses))) * 1000)
       lapply(shown(), function(record) {
         draft <- if (extraction_service_is_read(record)) load_draft(record)
-        draft_card(record, draft, catalog$get(), me)
+        draft_card(record, draft, catalog$get(), me, now)
       })
     })
   })

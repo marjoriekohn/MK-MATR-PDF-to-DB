@@ -13,6 +13,7 @@
 #   submitted                                      draft_review_event (the latest Submitted)
 #   requested_reviewer = list(id, name)            draft (requested_reviewer)
 #   sent_back = list(by, by_id, date, note)        draft_review_event (the latest Sent Back), only while Sent Back
+#   editing = list(by_id, by, at)                  draft (editing_by, editing_at), while someone has claimed it
 #   method ("AI-Powered" or "Manual")              extracted_draft
 #   pdf = list(name, path, pages, bytes, sha256)   extracted_draft (pdf_name, pdf_sha256), pdf_file (pdf_pages, pdf_bytes)
 #   extraction_status, reading_started, reading_claimed_at, reading_pid, error,
@@ -110,6 +111,7 @@ extraction_model_record <- function(parent, detail) {
     submitted = draft_row_submitted(parent),
     requested_reviewer = draft_row_person(parent$requested_reviewer, parent$reviewer),
     sent_back = draft_row_sent_back(parent),
+    editing = draft_row_editing(parent),
     method = detail$method,
     pdf = list(
       name = detail$pdf_name,

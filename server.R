@@ -266,13 +266,16 @@ function(input, output, session) {
     # ------ * Extraction ------------------------------------------------------
     # Every way of starting an extraction opens its draft on the Edit Extraction
     # page (set up below).
-    open_edit_extraction <- function(record) {
-      if (edit_extraction$open(record)) show_page("edit_extraction")
+    open_edit_extraction <- function(record, take_over = FALSE) {
+      if (edit_extraction$open(record, take_over)) show_page("edit_extraction")
     }
     extraction_server("extraction", extractions, catalog, database, me, open_edit_extraction)
 
     # ------ * Edit Extraction -------------------------------------------------
-    edit_extraction <- edit_extraction_server("edit_extraction", extractions, catalog, database, me, show_page)
+    edit_extraction <- edit_extraction_server(
+      "edit_extraction", extractions, catalog, database, me, show_page,
+      active = on_page("edit_extraction")
+    )
 
     # ------ * Make an edit ----------------------------------------------------
     make_edit <- make_edit_server("make_edit", database, me, show_page, active = on_page("make_edit"), refresh = refreshed)

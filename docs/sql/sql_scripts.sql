@@ -426,11 +426,15 @@ create table public.draft (
   created_at         timestamptz not null default now(),
   saved_at           timestamptz not null default now(),
   applied_at         timestamptz,
+  editing_by         bigint,
+  editing_at         timestamptz,
   -- the target of the subtype tables' foreign keys, so a subtype row can only join a draft of its kind
   constraint draft_id_kind_unique unique (draft_id, kind),
   constraint draft_reviewer_is_someone_else check (requested_reviewer is null or requested_reviewer <> prepared_by),
   -- an applied draft says when, and only an applied one does
-  constraint draft_applied_says_when check ((status = 'Applied') = (applied_at is not null))
+  constraint draft_applied_says_when check ((status = 'Applied') = (applied_at is not null)),
+  -- someone working on it says since when (claim_draft())
+  constraint draft_editing_says_when check ((editing_by is null) = (editing_at is null))
 );
 
 -- A subtype holds kind as well, fixed to its one value, so its foreign key (draft_id, kind) can only
@@ -638,7 +642,8 @@ alter table public.question_scale
 alter table public.draft
   add constraint draft_prepared_by_fkey        foreign key (prepared_by)        references public.staff (staff_id),
   add constraint draft_saved_by_fkey           foreign key (saved_by)           references public.staff (staff_id),
-  add constraint draft_requested_reviewer_fkey foreign key (requested_reviewer) references public.staff (staff_id);
+  add constraint draft_requested_reviewer_fkey foreign key (requested_reviewer) references public.staff (staff_id),
+  add constraint draft_editing_by_fkey         foreign key (editing_by)         references public.staff (staff_id);
 
 alter table public.edit_draft
   add constraint edit_draft_draft_fkey
@@ -698,6 +703,7 @@ create index question_scale_expected_set_idx       on public.question_scale (exp
 create index draft_prepared_by_idx                 on public.draft (prepared_by);
 create index draft_saved_by_idx                    on public.draft (saved_by);
 create index draft_requested_reviewer_idx          on public.draft (requested_reviewer);
+create index draft_editing_by_idx                  on public.draft (editing_by);
 create index extracted_draft_pdf_sha256_idx        on public.extracted_draft (pdf_sha256);
 create index draft_review_event_staff_idx          on public.draft_review_event (staff_id);
 
@@ -1805,6 +1811,67 @@ begin
 end;
 $$;
 
+-- One person at a time works on a draft on the Edit Extraction page. Opening it there claims it; the page
+-- renews the claim every minute while they are active, and lets it go when they leave, close the page or
+-- have done nothing for a while. A claim not renewed for p_stale_seconds has lapsed (a closed laptop, a
+-- lost connection), so nobody is kept out by a page that is gone; p_take_over takes it from whoever has
+-- it. Claiming never raises the revision or moves saved_at: it isn't a change to the content.
+create function public.claim_draft(
+  p_draft_id      bigint,
+  p_staff_id      bigint,
+  p_take_over     boolean default false,
+  p_stale_seconds integer default 180
+)
+returns jsonb
+language plpgsql
+set search_path = public, pg_temp
+as $$
+declare
+  d public.draft%rowtype;
+begin
+  -- the lock makes two claims of the same draft take turns, so only one of them gets it
+  select * into d from public.draft where draft_id = p_draft_id for update;
+  if not found then
+    raise exception 'That is no longer in the database.';
+  end if;
+  perform 1 from public.staff where staff_id = p_staff_id and active;
+  if not found then
+    raise exception 'Only active staff can change a draft.';
+  end if;
+  if d.status in ('Applied', 'Withdrawn') then
+    raise exception 'That is no longer being prepared, so it can''t be worked on.';
+  end if;
+
+  if p_take_over or d.editing_by is null or d.editing_by = p_staff_id
+     or d.editing_at < now() - make_interval(secs => p_stale_seconds) then
+    update public.draft set editing_by = p_staff_id, editing_at = now()
+    where draft_id = p_draft_id
+    returning editing_by, editing_at into d.editing_by, d.editing_at;
+    return jsonb_build_object(
+      'claimed', true, 'editing_by', d.editing_by, 'editing_at', d.editing_at, 'revision', d.revision,
+      'editing_name', (select name from public.staff where staff_id = d.editing_by)
+    );
+  end if;
+  return jsonb_build_object(
+    'claimed', false, 'editing_by', d.editing_by, 'editing_at', d.editing_at, 'revision', d.revision,
+    'editing_name', (select name from public.staff where staff_id = d.editing_by)
+  );
+end;
+$$;
+
+create function public.release_draft(p_draft_id bigint, p_staff_id bigint)
+returns boolean
+language plpgsql
+set search_path = public, pg_temp
+as $$
+begin
+  -- an applied draft can't be changed (draft_guard), and nobody can claim one, so there is nothing to let go
+  update public.draft set editing_by = null, editing_at = null
+  where draft_id = p_draft_id and editing_by = p_staff_id and status <> 'Applied';
+  return found;
+end;
+$$;
+
 -- BR16: the one write the public dashboard may make. Anonymous: nothing about the voter is stored.
 -- Once-per-session limiting (BR17) is up to the dashboard. Runs with its owner's rights, because the
 -- dashboard can't update questionnaire itself.
@@ -1893,6 +1960,10 @@ grant execute on function public.save_draft(bigint, bigint, jsonb, jsonb, intege
 grant execute on function public.apply_draft(bigint, bigint, jsonb)                          to service_role;
 grant execute on function public.approve_draft(bigint, integer, bigint, jsonb)              to service_role;
 grant execute on function public.send_back_draft(bigint, integer, bigint, text)              to service_role;
+grant execute on function public.claim_draft(bigint, bigint, boolean, integer)               to service_role;
+grant execute on function public.release_draft(bigint, bigint)                               to service_role;
+revoke all on function public.claim_draft(bigint, bigint, boolean, integer) from public;
+revoke all on function public.release_draft(bigint, bigint)                 from public;
 grant execute on function public.upvote_questionnaire(bigint)                                to service_role;
 
 -- The public functions above run as the caller, so the caller needs the helpers too. "private" isn't
@@ -2006,6 +2077,10 @@ comment on column public.draft_review_event.revision is
 comment on column public.draft_review_event.note is 'Sent Back only: what the reviewer asks to be changed.';
 
 comment on column public.draft.applied_at is 'When it was applied to the MATR data. Empty until then.';
+comment on column public.draft.editing_by is
+  'Who has it open on the Edit Extraction page, if anyone (claim_draft()). Empty when nobody does.';
+comment on column public.draft.editing_at is
+  'When their page last renewed the claim. One not renewed for a few minutes has lapsed, and anyone may claim the draft.';
 comment on column public.applied_item.record_identifier is 'The row''s key as JSON, with the numbers the database gave rows the draft added.';
 comment on column public.applied_item.action is 'What happened to this one row: Insert, Update or Delete.';
 
@@ -2022,6 +2097,10 @@ comment on function public.approve_draft(bigint, integer, bigint, jsonb) is
   'Another staff member approves a change request and it is applied, in one transaction; the approval is an Approved event. Returns the draft_id.';
 comment on function public.send_back_draft(bigint, integer, bigint, text) is
   'A reviewer sends a change request back to its preparer, with a note: records a Sent Back event and sets the status. Refused if the revision the reviewer read has moved on. Returns the revision.';
+comment on function public.claim_draft(bigint, bigint, boolean, integer) is
+  'Claims a draft for one staff member to work on, or renews their claim. Refused (claimed false) while someone else''s claim was renewed within p_stale_seconds, unless p_take_over. Never raises the revision or moves saved_at. Returns {claimed, editing_by, editing_name, editing_at, revision}.';
+comment on function public.release_draft(bigint, bigint) is
+  'Lets go of a staff member''s claim on a draft, if they still have it. Returns whether they did.';
 comment on function public.upvote_questionnaire(bigint) is
   'Adds one to a questionnaire''s upvote count (BR16). The only write the public dashboard can make.';
 comment on function private.random_id(text, text) is
@@ -2079,8 +2158,8 @@ commit;
 
 -- =====================================================================================================
 -- CHECKS OF THE DATABASE BUILD: the permissions, the draft tables and their functions create_draft(),
--- save_draft(), send_back_draft(), apply_draft(), approve_draft(), the review events they record, and
--- what applying does to the MATR tables, the applied draft and applied_item.
+-- save_draft(), send_back_draft(), apply_draft(), approve_draft(), claim_draft(), release_draft(), the
+-- review events they record, and what applying does to the MATR tables, the applied draft and applied_item.
 -- =====================================================================================================
 --
 -- Everything runs in one transaction that is rolled back at the end, and it makes up its own rows
@@ -2228,6 +2307,10 @@ begin
   assert has_function_privilege('service_role', 'public.apply_draft(bigint, bigint, jsonb)', 'execute'), 'apply';
   assert has_function_privilege('service_role', 'public.approve_draft(bigint, integer, bigint, jsonb)', 'execute'), 'approve';
   assert has_function_privilege('service_role', 'public.send_back_draft(bigint, integer, bigint, text)', 'execute'), 'and send back';
+  assert has_function_privilege('service_role', 'public.claim_draft(bigint, bigint, boolean, integer)', 'execute')
+     and has_function_privilege('service_role', 'public.release_draft(bigint, bigint)', 'execute'), 'claim and let go';
+  assert not has_function_privilege('anon', 'public.claim_draft(bigint, bigint, boolean, integer)', 'execute')
+     and not has_function_privilege('authenticated', 'public.release_draft(bigint, bigint)', 'execute'), 'the dashboard can''t claim';
   assert not has_function_privilege('anon', 'public.send_back_draft(bigint, integer, bigint, text)', 'execute')
      and not has_function_privilege('authenticated', 'public.send_back_draft(bigint, integer, bigint, text)', 'execute'), 'the dashboard can''t send back';
   -- the dashboard reads every MATR table, with one policy each, and writes none
@@ -2794,6 +2877,37 @@ begin
   perform pg_temp.expect_error('insert into public.applied_item (draft_id, item_number, entity_name, record_identifier, action) values (0, 1, ''wave'', ''{}'', ''Update'')', 'applied_item_draft_id_fkey');
   perform pg_temp.expect_error(format('insert into public.applied_item (draft_id, item_number, entity_name, record_identifier, action) values (%s, 1, ''wave'', ''{}'', ''Update'')', e), 'applied_item_pkey');
   perform pg_temp.expect_error(format('insert into public.applied_item (draft_id, item_number, entity_name, record_identifier, action) values (%s, 2, ''wave'', ''{}'', ''Add'')', e), 'applied_item_action_check');
+end;
+$$;
+
+-- ------ One person at a time works on a draft --------------------------------------------------
+do $$
+declare
+  d     bigint;
+  claim jsonb;
+begin
+  d := pg_temp.edit(pg_temp.id('ana'), 'add', '[]'::jsonb, 'Draft');
+  claim := public.claim_draft(d, pg_temp.id('ana'));
+  assert (claim ->> 'claimed')::boolean and (claim ->> 'editing_by')::bigint = pg_temp.id('ana'), 'the first claim gets it';
+  assert claim ->> 'editing_name' = 'Test Ana' and (claim ->> 'revision')::int = 1, 'and says who has it, and its revision';
+  claim := public.claim_draft(d, pg_temp.id('ben'));
+  assert not (claim ->> 'claimed')::boolean and (claim ->> 'editing_by')::bigint = pg_temp.id('ana'), 'a second person is refused, and told who has it';
+  assert (public.claim_draft(d, pg_temp.id('ana')) ->> 'claimed')::boolean, 'who has it renews it';
+  update public.draft set editing_at = now() - interval '10 minutes' where draft_id = d;
+  assert not (public.claim_draft(d, pg_temp.id('ben'), false, 3600) ->> 'claimed')::boolean, 'a claim lasts as long as the caller says';
+  assert (public.claim_draft(d, pg_temp.id('ben')) ->> 'claimed')::boolean, 'a lapsed claim can be taken';
+  assert not (public.claim_draft(d, pg_temp.id('ana')) ->> 'claimed')::boolean, 'and is then the new person''s';
+  assert (public.claim_draft(d, pg_temp.id('ana'), true) ->> 'claimed')::boolean, 'anyone can take over';
+  perform pg_temp.expect_error(format('select public.claim_draft(%s, %s)', d, pg_temp.id('dee')), 'Only active staff');
+  perform pg_temp.expect_error('select public.claim_draft(0, ' || pg_temp.id('ana') || ')', 'no longer in the database');
+  perform pg_temp.expect_error(format('update public.draft set editing_at = null where draft_id = %s', d), 'draft_editing_says_when');
+  assert not public.release_draft(d, pg_temp.id('ben')), 'only who has it lets it go';
+  assert public.release_draft(d, pg_temp.id('ana')), 'who has it lets it go';
+  assert (select editing_by is null and editing_at is null and revision = 1 and saved_by = pg_temp.id('ana')
+          from public.draft where draft_id = d), 'nobody has it, and claiming changed nothing else';
+  -- a draft set aside can't be worked on
+  perform public.save_draft(d, pg_temp.id('ana'), '{"status": "Withdrawn"}'::jsonb, '{}'::jsonb, null, false);
+  perform pg_temp.expect_error(format('select public.claim_draft(%s, %s)', d, pg_temp.id('ana')), 'no longer being prepared');
 end;
 $$;
 

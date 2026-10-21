@@ -252,6 +252,9 @@ $extraction-line: $vcu-gray;
   background: rgba($vcu-gold, 0.15);
 }
 
+// Someone else is working on it now
+.draft-title-row .row-badge.is-editing { background: rgba($vcu-gold, 0.35); font-weight: 600; }
+
 .draft-progress { display: flex; flex-wrap: wrap; gap: 0.35rem 1.25rem; font-size: 0.85rem; }
 .draft-actions { display: flex; flex-shrink: 0; align-items: center; gap: 0.75rem; }
 

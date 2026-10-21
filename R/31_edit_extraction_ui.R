@@ -98,6 +98,36 @@ edit_extraction_banner <- function(record) {
   }
 }
 
+#' What is said above the panel while this page doesn't have the draft to work on: who does, or that it
+#' was let go while staff were away. The page only shows the draft then (`.claim-lost`).
+#'
+#' @param ns The module's namespace function.
+#' @param claim Why the page doesn't have it, as `edit_extraction_server()` keeps it: `NULL` while it does.
+#' @param unsaved Whether there are changes on screen that aren't saved.
+#' @return A UI element or `NULL`.
+edit_extraction_claim_banner <- function(ns, claim, unsaved = FALSE) {
+  if (is.null(claim)) {
+    return(NULL)
+  }
+  if (identical(claim$why, "taken")) {
+    return(div(class = "claim-lost", edit_callout(
+      "warning",
+      title = sprintf("%s is working on this draft", claim$by),
+      p(
+        "You can look at it, but not change it, so neither of you overwrites the other.",
+        if (unsaved) "Your changes that aren't saved can't be saved while they have it."
+      ),
+      actionButton(ns("take_over_banner"), "Take over", class = "btn-outline-dark")
+    )))
+  }
+  div(class = "claim-lost", edit_callout(
+    "info",
+    title = "You were away, so others can open this draft",
+    p("Nobody else has it yet. Keep working to change it again."),
+    actionButton(ns("keep_working"), "Keep working", class = "btn-primary")
+  ))
+}
+
 #' The MATR IDs dialog: three ways to give the variables their MATR IDs.
 #'
 #' From a CSV, uploaded here: Auto Apply gives them out in the order the variables appear; Manual

@@ -2,7 +2,7 @@
 # What staff are still working on before it reaches the live tables is a DRAFT: one row
 # of the columns both kinds share,
 #   status, prepared_by, saved_by, requested_reviewer (STAFF rows), revision, summary,
-#   created_at, saved_at
+#   created_at, saved_at, editing_by (a STAFF row), editing_at
 # and one row of a table for its kind:
 #   EXTRACTED_DRAFT     an extraction of a questionnaire (kind "Extraction"); an AI-Powered one
 #                       also has an AI_EXTRACTED_DRAFT row, and its PDF is a PDF_FILE row
@@ -14,6 +14,9 @@
 # through /rpc/ (create_draft, save_draft, send_back_draft, apply_draft, approve_draft;
 # docs/migrations/20261020_split_draft_details.sql), because separate requests can't
 # share a transaction. Changes to one table (the reading job's progress) are plain requests.
+# Who is working on a draft (editing_by, since editing_at) is claimed and let go through
+# claim_draft and release_draft (docs/migrations/20261020_draft_editing_claim.sql), so two
+# people asking at once can't both get it.
 
 draft_table <- "draft"
 extracted_draft_table <- "extracted_draft"
@@ -23,8 +26,8 @@ edit_draft_table <- "edit_draft"
 # The shared columns, the names of the people they point at, and the draft's reviews.
 draft_columns <- c(
   "draft_id", "kind", "status", "prepared_by", "saved_by", "requested_reviewer", "revision", "summary",
-  "created_at", "saved_at",
-  "preparer:staff!prepared_by(name)", "saver:staff!saved_by(name)",
+  "created_at", "saved_at", "editing_by", "editing_at",
+  "preparer:staff!prepared_by(name)", "saver:staff!saved_by(name)", "editor:staff!editing_by(name)",
   "reviewer:staff!requested_reviewer(name)",
   "reviews:draft_review_event(event,staff_id,revision,note,occurred_at,person:staff(name))"
 )
@@ -119,6 +122,43 @@ draft_row_model_save <- function(connection, id, staff_id, parent = list(), deta
   as.integer(database_model_call(connection, "save_draft", arguments))
 }
 
+#' Claim a draft for one person to work on, or renew their claim.
+#'
+#' The database gives it to them if nobody has it, they have it already, or whoever has it hasn't
+#' renewed their claim for `stale_seconds` (their page is gone). `take_over` takes it whoever has it.
+#' Nothing here raises the revision.
+#'
+#' @param connection The MATR database, `list(url, key)`; see `model_database.R`.
+#' @param id The draft's id.
+#' @param staff_id The staff id of the person claiming it.
+#' @param take_over Whether to take it from whoever has it.
+#' @param stale_seconds How long a claim lasts without being renewed.
+#' @return A list: `claimed` (whether this person has it now), and who does have it: `by_id`, `by`
+#'   (their name) and `at` (when they last renewed it); and the draft's `revision`. An error with the
+#'   database's sentence if it refused (no such draft, or one finished with).
+draft_row_model_claim <- function(connection, id, staff_id, take_over = FALSE, stale_seconds = 180) {
+  claim <- database_model_call(connection, "claim_draft", list(
+    p_draft_id = draft_row_number(id), p_staff_id = as.numeric(staff_id),
+    p_take_over = isTRUE(take_over), p_stale_seconds = as.integer(stale_seconds)
+  ))
+  list(
+    claimed = isTRUE(claim$claimed), by_id = claim$editing_by, by = claim$editing_name,
+    at = database_time(claim$editing_at), revision = claim$revision
+  )
+}
+
+#' Let go of a person's claim on a draft, if they still have it.
+#'
+#' @param connection The MATR database, `list(url, key)`; see `model_database.R`.
+#' @param id The draft's id.
+#' @param staff_id The staff id of the person letting it go.
+#' @return Whether they had it.
+draft_row_model_release <- function(connection, id, staff_id) {
+  isTRUE(database_model_call(connection, "release_draft", list(
+    p_draft_id = draft_row_number(id), p_staff_id = as.numeric(staff_id)
+  )))
+}
+
 #' Change columns of a detail row, only where it still matches.
 #'
 #' For the reading job, which changes its own columns while staff change others. Nothing here
@@ -164,6 +204,12 @@ database_time <- function(text) {
 # The person a draft's preparer asked to review it: id and name, or NULL.
 draft_row_person <- function(id, person) {
   if (!is.null(id)) list(id = id, name = person$name)
+}
+
+# Who has the draft open to work on, and when their page last renewed the claim: or NULL. The claim
+# may have lapsed since; see draft_row_service_editor().
+draft_row_editing <- function(row) {
+  if (!is.null(row$editing_by)) list(by_id = row$editing_by, by = row$editor$name, at = database_time(row$editing_at))
 }
 
 # A one-to-one row embedded in another: the row, or NULL. PostgREST sends it as an object, or as a

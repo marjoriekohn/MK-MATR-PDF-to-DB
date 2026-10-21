@@ -135,3 +135,14 @@ test_that("a draft counts how far its review has got", {
   expect_equal(changed$checked, counts$checked + 3 - sum(gold_draft()$components$checked[1:3]))
   expect_equal(changed$matr_ids, sum(!is.na(gold_draft()$variables$matr_id)) + 2 - sum(!is.na(gold_draft()$variables$matr_id[1:2])))
 })
+
+test_that("a save is refused if someone saved the draft after the person opened it", {
+  me <- local_staff()
+  record <- local_read_extraction(me)
+  opened <- record$revision
+  expect_equal(draft_service_save(test_connection, record$id, short_gold_draft(), me$staff_id, expected_revision = opened), opened + 1)
+  expect_error(
+    draft_service_save(test_connection, record$id, short_gold_draft(), me$staff_id, expected_revision = opened),
+    "changed after you opened it"
+  )
+})

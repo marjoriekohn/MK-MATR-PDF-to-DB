@@ -1,6 +1,20 @@
 # ------ Page building blocks ----------------------------------------------------
 # Pieces every page uses: its title, toggles, and the dialogs and notices that report what happened.
 
+#' A page script from `www/`, at an address that changes whenever the file does.
+#'
+#' Browsers keep scripts, so after a new version of the site goes up they could go on running the old
+#' one against the new server. The file's size and modification time in the address make them fetch it
+#' again once it has changed.
+#'
+#' @param path The script's path under `www/`, e.g. `"js/review.js"`.
+#' @return A `<script>` tag.
+page_script <- function(path) {
+  info <- file.info(file.path("www", path))
+  version <- if (is.na(info$size)) "" else paste0("?v=", info$size, "-", as.integer(info$mtime))
+  tags$script(src = paste0(path, version))
+}
+
 #' A page's title and the sentence under it.
 #'
 #' @param title The title.

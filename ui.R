@@ -9,12 +9,12 @@ page_navbar(
   header = tagList(
     tags$head(
       merriweather_link,
-      tags$script(src = "js/site.js"),
-      tags$script(src = "js/review.js"),
-      tags$script(src = "js/extraction.js"),
-      tags$script(src = "js/edit.js"),
-      tags$script(src = "js/busy.js"),
-      tags$script(src = "js/variables.js")
+      page_script("js/site.js"),
+      page_script("js/review.js"),
+      page_script("js/extraction.js"),
+      page_script("js/edit.js"),
+      page_script("js/busy.js"),
+      page_script("js/variables.js")
     ),
     # While the server is working: a gold bar across the top of the page, a spinner on each output being
     # redrawn, and (busy.js) a spinner on the button that was pressed.

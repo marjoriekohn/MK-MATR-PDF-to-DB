@@ -103,6 +103,48 @@ outline_tree <- function(draft, view, lookups, ns) {
   )
 }
 
+#' What the page script marks on the outline, so it isn't drawn again for it.
+#'
+#' Drawing the outline takes a second or more (every block's fields and drop-downs), and the browser
+#' takes as long again to rebuild it. So what a click changes without changing the layout is marked on
+#' the outline already there instead: which row is selected, which sections are closed, which questions
+#' have their panel open, which blocks are checked (a section counts as checked for the eye only once
+#' everything inside it is), each block's problems and the fields at fault, and the uploaded MATR IDs no
+#' variable has yet.
+#'
+#' @param draft A draft.
+#' @param problems From `draft_service_check()`.
+#' @param selected The selected block's id, or `NULL`.
+#' @param collapsed,opened The ids of the closed sections, and of the questions with their panel open.
+#' @param matr_ids The uploaded MATR IDs no variable has yet.
+#' @param ns The module's namespace function.
+#' @return A list, sent as the "edit-extraction-marks" message (www/js/review.js).
+outline_marks <- function(draft, problems, selected, collapsed, opened, matr_ids, ns) {
+  counts <- as.list(table(problems$id))
+  messages <- lapply(split(problems$message, problems$id), paste, collapse = "\n")
+  at_fault <- problems[!is.na(problems$table), , drop = FALSE]
+  blocks <- draft$components
+  checked <- blocks$id[blocks$checked %in% TRUE]
+  sections <- intersect(checked, blocks$id[blocks$component_type == "Section"])
+  not_all <- sections[!vapply(sections, function(id) {
+    all(blocks$checked[blocks$id %in% draft_service_printed_order(draft, id)] %in% TRUE)
+  }, logical(1))]
+  list(
+    selected = selected,
+    problems = lapply(names(counts), function(id) list(id = id, n = counts[[id]], title = messages[[id]])),
+    fields = map_rows(at_fault, function(problem) {
+      list(table = problem$table, id = problem$row, field = if (is.na(problem$field)) "" else problem$field, title = problem$message)
+    }),
+    matr_ids = as.list(matr_ids),
+    matr_list = matr_id_list_id(ns),
+    collapsed = as.list(collapsed),
+    opened = as.list(opened),
+    checked = as.list(checked),
+    all_checked = as.list(setdiff(checked, not_all)),
+    check_titles = as.list(outline_check_titles)
+  )
+}
+
 outline_list <- function(draft, section, view, lookups, ns) {
   blocks <- draft_service_children(draft, "components", section$id %||% NA)
   list_id <- ns(paste0("list-", section$id %||% "top"))
@@ -246,6 +288,13 @@ problem_badge <- function(messages) {
   )
 }
 
+# What the check button says, checked or not. The page script says it too, when it marks a block
+# as checked without the outline being drawn again (outline_marks()).
+outline_check_titles <- c(
+  checked = "Checked. Click to mark as not checked.",
+  unchecked = "Mark as checked and go to the next block. If you change it afterwards, it needs checking again."
+)
+
 # Mark as checked, and delete. A section counts as checked for the eye only once everything inside it is.
 outline_actions <- function(block, draft) {
   inside <- draft_service_printed_order(draft, block$id)
@@ -256,11 +305,7 @@ outline_actions <- function(block, draft) {
       icon("user-check"), "check",
       `data-id` = block$id,
       class = c("btn btn-sm btn-icon outline-check", if (block$checked) "is-checked", if (all_checked) "is-all-checked"),
-      title = if (block$checked) {
-        "Checked. Click to mark as not checked."
-      } else {
-        "Mark as checked and go to the next block. If you change it afterwards, it needs checking again."
-      }
+      title = outline_check_titles[[if (block$checked) "checked" else "unchecked"]]
     ),
     review_button(
       icon("trash-can"), "delete",

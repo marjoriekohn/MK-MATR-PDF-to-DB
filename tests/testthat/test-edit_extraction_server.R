@@ -459,3 +459,170 @@ test_that("the PDF opens in its own window when the file is here, and the page i
   expect_match(as.character(pdf_open_button("http://x/pdf")), 'href="http://x/pdf"')
   expect_null(pdf_open_button(NULL))
 })
+
+# ------ One person at a time -------------------------------------------------------------------------
+# Who has the draft in the database now: their staff id, or NULL.
+editing_now <- function(record) extraction_model_get(test_connection, record$id)$editing$by_id
+
+# The page's arguments, with where it records the pages it shows and whether it is the one showing.
+claim_page <- function(me, seen, showing = shiny::reactiveVal(TRUE)) {
+  c(edit_page(me), list(show_page = function(page) seen$pages <- c(seen$pages, page), active = showing))
+}
+
+test_that("opening a draft claims it, leaving the page with nothing unsaved lets it go, and coming back has it again", {
+  me <- local_staff()
+  tree <- shared_tree()
+  seen <- local_browser()
+  first <- read_draft(me, tree)
+  showing <- shiny::reactiveVal(TRUE)
+  shiny::testServer(edit_extraction_server, args = claim_page(me, seen, showing), {
+    errors <- collect_errors(session)
+    expect_true(open(first))
+    expect_true(has_draft())
+    expect_equal(editing_now(first), me$staff_id)
+    expect_equal(loaded_revision(), first$revision)
+
+    showing(FALSE)
+    session$flushReact()
+    expect_null(editing_now(first))
+    expect_equal(claim()$why, "left")
+
+    showing(TRUE)
+    session$flushReact()
+    expect_true(has_draft())
+    expect_equal(editing_now(first), me$staff_id)
+
+    # with something unsaved, leaving keeps it: they are still at work on it
+    change_draft(reworded(draft()))
+    showing(FALSE)
+    session$flushReact()
+    expect_true(has_draft())
+    expect_equal(editing_now(first), me$staff_id)
+    expect_length(errors(), 0)
+  })
+  expect_null(editing_now(first)) # the session ended: let go
+})
+
+test_that("a draft someone else is working on asks whether to take it over, and taking it over leaves them only looking", {
+  me <- local_staff()
+  colleague <- local_staff()
+  tree <- shared_tree()
+  seen <- local_browser()
+  first <- read_draft(colleague, tree)
+  draft_row_service_claim(test_connection, first$id, colleague)
+  shiny::testServer(edit_extraction_server, args = claim_page(me, seen), {
+    expect_false(open(first))
+    expect_null(record_id())
+    expect_match(seen$modals[[length(seen$modals)]], paste(colleague$name, "is working on this draft"), fixed = TRUE)
+
+    session$setInputs(take_over = 1)
+    expect_equal(record_id(), first$id)
+    expect_true(has_draft())
+    expect_equal(seen$pages, "edit_extraction")
+    expect_equal(editing_now(first), me$staff_id)
+    expect_false(draft_row_service_claim(test_connection, first$id, colleague)$claimed)
+  })
+})
+
+test_that("once someone else takes the draft over, the page only shows it: nothing can be changed or saved", {
+  me <- local_staff()
+  colleague <- local_staff()
+  tree <- shared_tree()
+  seen <- local_browser()
+  first <- read_draft(me, tree)
+  shiny::testServer(edit_extraction_server, args = claim_page(me, seen), {
+    open(first)
+    expect_true(change_draft(reworded(draft())))
+    draft_row_service_claim(test_connection, first$id, colleague, take_over = TRUE)
+    session$elapse(draft_claim_renew_seconds * 1000) # the page renews its claim, and finds it gone
+    expect_equal(claim()$why, "taken")
+    expect_equal(claim()$by, colleague$name)
+    expect_false(has_draft())
+    expect_match(notice_texts(seen), paste(colleague$name, "took over this draft"), all = FALSE, fixed = TRUE)
+    expect_match(text_of(output$banner), paste(colleague$name, "is working on this draft"), fixed = TRUE)
+    expect_true(last_update(seen, "save")$disabled)
+
+    before <- draft()
+    expect_false(change_draft(reworded(draft(), "Changed anyway?")))
+    expect_identical(draft(), before)
+    expect_false(save_draft())
+    expect_equal(editing_now(first), colleague$staff_id)
+
+    # the banner's Take over asks, then has it again
+    session$setInputs(take_over_banner = 1)
+    expect_match(seen$modals[[length(seen$modals)]], paste(colleague$name, "is working on this draft"), fixed = TRUE)
+    session$setInputs(take_over = 1)
+    expect_true(has_draft())
+    expect_true(has_unsaved_changes()) # nobody saved meanwhile, so the changes on screen are kept
+    expect_equal(editing_now(first), me$staff_id)
+  })
+})
+
+test_that("doing nothing for a while lets the draft go, and doing something has it again", {
+  me <- local_staff()
+  tree <- shared_tree()
+  seen <- local_browser()
+  first <- read_draft(me, tree)
+  shiny::testServer(edit_extraction_server, args = claim_page(me, seen), {
+    open(first)
+    last_active(Sys.time() - draft_claim_idle_seconds - 1)
+    session$elapse(draft_claim_renew_seconds * 1000)
+    expect_equal(claim()$why, "idle")
+    expect_null(editing_now(first))
+    expect_match(text_of(output$banner), "You were away")
+
+    session$setInputs(active = 1) # www/js/review.js: they moved the mouse
+    expect_true(has_draft())
+    expect_equal(editing_now(first), me$staff_id)
+  })
+})
+
+test_that("a draft saved by someone else while this page didn't have it is opened again as they saved it", {
+  me <- local_staff()
+  colleague <- local_staff()
+  tree <- shared_tree()
+  seen <- local_browser()
+  first <- read_draft(me, tree)
+  shiny::testServer(edit_extraction_server, args = claim_page(me, seen), {
+    open(first)
+    change_draft(reworded(draft()))
+    draft_row_service_claim(test_connection, first$id, colleague, take_over = TRUE)
+    draft_service_save(test_connection, first$id, reworded(numbered_gold(), "Theirs"), colleague$staff_id)
+    draft_row_service_release(test_connection, first$id, colleague)
+    session$elapse(draft_claim_renew_seconds * 1000) # nobody has it now, so the page has it again
+
+    expect_true(has_draft())
+    expect_false(has_unsaved_changes())
+    expect_equal(draft()$components$text[draft()$components$id == "c3"], "Theirs")
+    expect_equal(loaded_revision(), first$revision + 1)
+    expect_match(notice_texts(seen), "couldn't be kept", all = FALSE, fixed = TRUE)
+  })
+})
+
+test_that("Save is refused if someone saved the draft after the page opened it, and the saved version can be opened instead", {
+  me <- local_staff()
+  colleague <- local_staff()
+  tree <- shared_tree()
+  seen <- local_browser()
+  first <- read_draft(me, tree)
+  shiny::testServer(edit_extraction_server, args = claim_page(me, seen), {
+    open(first)
+    change_draft(reworded(draft()))
+    # a save that didn't go through this page (Change Requests' Basic Info, say)
+    draft_service_save(test_connection, first$id, reworded(numbered_gold(), "Theirs"), colleague$staff_id)
+
+    session$setInputs(save = 1)
+    expect_true(has_unsaved_changes())
+    expect_match(seen$modals[[length(seen$modals)]], "Someone saved this draft after you opened it", fixed = TRUE)
+
+    session$setInputs(reopen = 1)
+    expect_false(has_unsaved_changes())
+    expect_equal(draft()$components$text[draft()$components$id == "c3"], "Theirs")
+    expect_equal(loaded_revision(), first$revision + 1)
+
+    expect_true(change_draft(reworded(draft(), "Mine after all")))
+    session$setInputs(save = 2)
+    expect_false(has_unsaved_changes())
+    expect_equal(loaded_revision(), first$revision + 2)
+  })
+})

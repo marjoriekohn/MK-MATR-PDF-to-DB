@@ -288,3 +288,36 @@ test_that("removing a draft removes its details, and a draft needs its details",
     "needs its details"
   )
 })
+
+test_that("one person at a time has a draft: whoever claims it first, until they let go, their claim lapses or someone takes over", {
+  me <- local_staff()
+  colleague <- local_staff()
+  id <- new_edit(me)
+
+  mine <- draft_row_model_claim(test_connection, id, me$staff_id)
+  expect_true(mine$claimed)
+  expect_equal(mine$by_id, me$staff_id)
+  expect_equal(mine$by, me$name)
+  expect_equal(mine$revision, 1)
+  expect_match(mine$at, "Z$") # as the app writes times
+
+  theirs <- draft_row_model_claim(test_connection, id, colleague$staff_id)
+  expect_false(theirs$claimed)
+  expect_equal(theirs$by, me$name) # told who has it
+  expect_true(draft_row_model_claim(test_connection, id, me$staff_id)$claimed) # who has it renews it
+
+  # a claim not renewed for stale_seconds has lapsed, and anyone may take over
+  expect_true(draft_row_model_claim(test_connection, id, colleague$staff_id, stale_seconds = 0)$claimed)
+  expect_true(draft_row_model_claim(test_connection, id, me$staff_id, take_over = TRUE)$claimed)
+
+  row <- draft_row_model_get(test_connection, id)
+  expect_equal(draft_row_editing(row)$by, me$name)
+  expect_equal(draft_row_editing(row)$by_id, me$staff_id)
+  expect_equal(row$revision, 1) # claiming isn't a change to the content
+  expect_equal(row$saved_by, me$staff_id)
+
+  expect_false(draft_row_model_release(test_connection, id, colleague$staff_id)) # only who has it lets it go
+  expect_true(draft_row_model_release(test_connection, id, me$staff_id))
+  expect_null(draft_row_editing(draft_row_model_get(test_connection, id)))
+  expect_error(draft_row_model_claim(test_connection, "1", me$staff_id), "no longer in the database")
+})

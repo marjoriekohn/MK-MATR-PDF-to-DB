@@ -69,9 +69,11 @@ draft_service_load <- function(connection, id) {
 #' @param staff_id The staff id of the person saving.
 #' @param review_edits What the reviewer has changed in what the AI returned, so far (see
 #'   `draft_service_review_edits()`), or `NULL` to leave it as it is.
-#' @return Called for its effect.
-draft_service_save <- function(connection, id, draft, staff_id, review_edits = NULL) {
-  draft_model_save_reviewed(connection, id, draft_service_to_json(draft), staff_id, review_edits)
+#' @param expected_revision The revision the person was looking at, or `NULL` not to check.
+#' @return The draft's revision after the save, invisibly. An error with a sentence if someone saved
+#'   it after `expected_revision`.
+draft_service_save <- function(connection, id, draft, staff_id, review_edits = NULL, expected_revision = NULL) {
+  draft_model_save_reviewed(connection, id, draft_service_to_json(draft), staff_id, review_edits, expected_revision)
 }
 
 #' A draft with nothing in it.
