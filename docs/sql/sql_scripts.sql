@@ -353,6 +353,7 @@ create table public.response_option (
   code_value       text    not null,     -- text: codes may be 1, 0, -9, A ...
   printed_label    text,
   skip_instruction text,
+  skip_to_component_id bigint,           -- where the skip instruction sends respondents
   primary key (variable_key, answer_option_id),
   -- BR103 (and BR104: the same answer option may carry different codes on different variables)
   constraint response_option_display_order_unique
@@ -624,7 +625,9 @@ alter table public.response_option
   add constraint response_option_variable_key_fkey
     foreign key (variable_key) references public.closed_ended (variable_key) on delete cascade,
   add constraint response_option_answer_option_id_fkey
-    foreign key (answer_option_id) references public.answer_option (answer_option_id);
+    foreign key (answer_option_id) references public.answer_option (answer_option_id),
+  add constraint response_option_skip_to_component_id_fkey
+    foreign key (skip_to_component_id) references public.component (component_id);
 
 alter table public.question_category
   add constraint question_category_component_id_fkey
@@ -698,6 +701,7 @@ create index variable_subject_id_idx               on public.variable (subject_i
 create index closed_ended_option_set_id_idx        on public.closed_ended (option_set_id);
 create index answer_option_set_answer_option_idx   on public.answer_option_set (answer_option_id);
 create index response_option_answer_option_idx     on public.response_option (answer_option_id);
+create index response_option_skip_to_idx           on public.response_option (skip_to_component_id);
 create index question_category_mesh_id_idx         on public.question_category (mesh_id);
 create index question_scale_component_id_idx       on public.question_scale (component_id);
 create index question_scale_expected_set_idx       on public.question_scale (expected_option_set_id);
@@ -2047,6 +2051,8 @@ comment on column public.variable.variable_key is 'System key. Deliberately not 
 comment on column public.variable.matr_id is 'What MATR staff call the variable ID, e.g. AH25LF. Unique within a questionnaire; never changes.';
 comment on column public.variable.subject_id is 'Who the variable is about (public.subject). Null when not known.';
 comment on column public.response_option.code_value is 'Stored value for this option in the response data, e.g. 1 for Yes.';
+comment on column public.response_option.skip_to_component_id is
+  'Where the skip instruction sends respondents: the question (or section) it names. Empty when nothing is linked.';
 
 comment on column public.staff.role is
   'STAFF: deleting, or pushing an extraction, needs one approval from another staff member. ADMIN: never needs approval.';
@@ -2164,7 +2170,7 @@ insert into public.component_type (name, description) values
 
 -- Who a variable can be about; staff keep this list on Make an edit.
 insert into public.subject (name) values
-  ('Self'), ('Respondent''s Family'), ('Respondent''s Children'), ('Respondent''s Siblings');
+  ('Respondent'), ('Respondent''s Family'), ('Respondent''s Children'), ('Respondent''s Siblings');
 
 commit;
 

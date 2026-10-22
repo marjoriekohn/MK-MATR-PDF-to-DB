@@ -2,9 +2,9 @@
 #'
 #' Blocks as a tree, each edited where it is: type a block's words into its row, pick the question it
 #' follows and type its condition, open and close sections and question groups, open a question's panel
-#' for its variables, add a variable's optional fields, mark a block as checked, add and delete blocks,
-#' variables and choices, and drag any of them into a new order. Every change goes through
-#' `state$change()`.
+#' for its variables, add a variable's optional fields and take them away again, mark a block as checked,
+#' add and delete blocks, variables and choices, take a section or group away but keep what is inside, and
+#' drag any of them into a new order. Every change goes through `state$change()`.
 #'
 #' Drawing the whole tree takes seconds for a long questionnaire, for the server and again for the
 #' browser, so it is drawn only when a draft opens or much of it changes. What a click or keystroke
@@ -35,8 +35,10 @@ extraction_outline_server <- function(
     # ------ REACTIVE ----------------------------------------------------------
     collapsed <- reactiveVal(character()) # sections whose contents are hidden
     opened <- reactiveVal(character()) # questions whose panel is open
-    shown <- reactiveVal(character()) # optional fields added to variables, as "v12:label" (see variable_card())
+    shown <- reactiveVal(character()) # optional fields added empty, as "v3:subject" or "o12:printed_label" (shown_optional())
     focus <- NULL # the optional field just added, which gets the cursor when it is drawn
+    choices_open <- reactiveVal(character()) # variables whose choices are open under their line
+    split <- reactiveVal(character()) # questions whose variables' shared choices are edited one by one
     redraw <- reactiveVal(0L) # ticks when the whole tree must be drawn again
     drawn <- reactiveVal(NULL) # the draft as the tree on the page shows it
     patched <- reactiveVal(NULL) # the last change put on the tree already drawn (outline_patch())
@@ -60,17 +62,59 @@ extraction_outline_server <- function(
                opened(union(opened(), event$id))
                state$change(draft_service_add_box(draft, event$id))
              },
-             add_choice = state$change(draft_service_add_choice(draft, event$id)),
+             add_choice = state$change(
+               if (length(shared_of(event)) > 0) {
+                 draft_service_add_choice_shared(draft, shared_of(event))
+               } else {
+                 draft_service_add_choice(draft, event$id)
+               }
+             ),
              copy_codes = state$change(draft_service_copy_codes(draft, event$id)),
-             show_field = show_field(event$id, event$name),
+             choices = {
+               choices_open(flip(choices_open(), event$id))
+               redraw_question(question_of(draft, "variables", event$id))
+             },
+             split_choices = {
+               split(union(split(), event$id))
+               redraw_question(event$id)
+             },
+             join_choices = {
+               split(setdiff(split(), event$id))
+               redraw_question(event$id)
+             },
+             show_field = show_field(draft, event$id, event$name),
+             hide_field = hide_field(draft, event$id, event$name, shared_of(event)),
+             ungroup = {
+               inside <- draft_service_children(draft, "components", event$id)$id
+               ungrouped <- state$change(draft_service_ungroup(draft, event$id))
+               if (ungrouped && identical(state$selected(), event$id)) state$selected(inside[1])
+             },
              delete = {
-               deleted <- state$change(draft_service_delete(draft, event$table, event$id))
+               deleted <- state$change(
+                 if (event$table == "response_options" && length(shared_of(event)) > 0) {
+                   draft_service_delete_shared(draft, shared_of(event), event$id)
+                 } else {
+                   draft_service_delete(draft, event$table, event$id)
+                 }
+               )
                if (deleted && event$table == "components" && identical(state$selected(), event$id)) state$selected(NULL)
              }
       )
     })
 
     flip <- function(ids, id) if (id %in% ids) setdiff(ids, id) else c(ids, id)
+
+    # The variables a change in the shared choices editor goes to (the page script sends them as `shared`).
+    shared_of <- function(event) {
+      ids <- strsplit(event$shared %||% "", ",", fixed = TRUE)[[1]]
+      ids[nzchar(ids)]
+    }
+
+    # The question a variable or choice belongs to.
+    question_of <- function(draft, table, id) {
+      variable <- if (table == "variables") id else draft$response_options$variable_id[draft$response_options$id %in% id]
+      draft$variables$component_id[draft$variables$id %in% variable]
+    }
 
     # A question's panel is added to the tree already drawn, or taken out of it.
     toggle_panel <- function(draft, id) {
@@ -88,17 +132,54 @@ extraction_outline_server <- function(
       insertUI(node, "beforeEnd", question_panel(block, draft, current_view(), lookups, ns))
     }
 
-    # An optional field added to a variable shows, empty, with the cursor in it; the variable's panel is
-    # drawn again for it. It stays until the outline is drawn again from scratch, unless something is
-    # typed into it.
-    show_field <- function(id, name) {
-      if (!name %in% names(optional_variable_fields)) {
+    # Which table an optional field is in: a variable's About and label, or a choice's printed words and skip.
+    optional_table <- function(name) {
+      if (name %in% names(optional_variable_fields)) "variables" else if (name %in% names(optional_choice_fields)) "response_options"
+    }
+
+    # An optional field added to a variable or choice shows, empty, with the cursor in it; the question's panel
+    # is drawn again for it. It stays until the outline is drawn again from scratch, unless something is typed
+    # into it.
+    show_field <- function(draft, id, name) {
+      table <- optional_table(name)
+      if (is.null(table)) {
         return()
       }
       shown(union(shown(), paste0(id, ":", name)))
       focus <<- paste0(id, ":", name)
-      put_back("variables", id)
+      redraw_question(question_of(draft, table, id))
       focus <<- NULL
+    }
+
+    # The × of an optional field: it is emptied (a change Undo takes back) and hidden again; in the shared
+    # choices, in every variable's choice.
+    hide_field <- function(draft, id, name, shared = character()) {
+      table <- optional_table(name)
+      if (is.null(table)) {
+        return()
+      }
+      shown(setdiff(shown(), paste0(id, ":", name)))
+      # taking away where a choice skips to takes its link with its printed words
+      fields <- if (name == "skip_instruction") c("skip_to_id", name) else name
+      row <- match(id, draft[[table]]$id)
+      if (any(!is.na(unlist(draft[[table]][row, fields])))) {
+        changed <- draft
+        for (field in fields) {
+          changed <- if (table == "response_options" && length(shared) > 0) {
+            draft_service_update_shared(changed, shared, id, field, "")
+          } else {
+            draft_service_update(changed, table, id, field, "")
+          }
+        }
+        state$change(changed)
+      }
+      redraw_question(question_of(draft, table, id))
+    }
+
+    # Draws again a question's panel, if it is open, for what changed in it without changing the draft.
+    redraw_question <- function(question) {
+      patch <- outline_patch(drawn(), state$draft(), current_view(), lookups, ns, panels = intersect(question, opened()))
+      if (!is.null(patch)) send_patch(patch)
     }
 
     # A new block goes next to the selected one, and is selected so its words can be typed.
@@ -126,8 +207,14 @@ extraction_outline_server <- function(
     # draft has it.
     observeEvent(input$edit, {
       edit <- input$edit
+      draft <- state$draft()
+      shared <- shared_of(edit)
       changed <- state$change(
-        draft_service_update(state$draft(), edit$table, edit$id, edit$field, edit$value),
+        if (edit$table == "response_options" && length(shared) > 0) {
+          draft_service_update_shared(draft, shared, edit$id, edit$field, edit$value)
+        } else {
+          draft_service_update(draft, edit$table, edit$id, edit$field, edit$value)
+        },
         typed = isTRUE(edit$typed)
       )
       if (!changed) put_back(edit$table, edit$id)
@@ -144,7 +231,14 @@ extraction_outline_server <- function(
     # Variables or choices dragged into a new order; a new order the draft refuses is put back.
     observeEvent(input$reorder, {
       ids <- unlist(input$reorder$ids)
-      changed <- state$change(draft_service_reorder(state$draft(), input$reorder$table, ids))
+      shared <- shared_of(input$reorder)
+      changed <- state$change(
+        if (input$reorder$table == "response_options" && length(shared) > 0) {
+          draft_service_reorder_shared(state$draft(), shared, ids)
+        } else {
+          draft_service_reorder(state$draft(), input$reorder$table, ids)
+        }
+      )
       if (!changed) put_back(input$reorder$table, ids[1])
     })
 
@@ -195,7 +289,7 @@ extraction_outline_server <- function(
       list(
         selected = state$selected(), collapsed = collapsed(), opened = opened(),
         problems = state$problems(), suggestions = suggestions(), matr_ids = matr_ids(),
-        shown = shown(), focus = focus
+        shown = shown(), focus = focus, choices = choices_open(), split = split()
       )
     }
 

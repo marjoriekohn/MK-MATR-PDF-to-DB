@@ -291,91 +291,145 @@ button.review-pill:hover { background: rgba($vcu-gold, 0.2); }
   box-shadow: 0 0 0 1px $field-problem-red;
   &:focus { box-shadow: 0 0 0 0.2rem rgba($field-problem-red, 0.35); }
 }
-.variable-card.has-problem { border-color: $field-problem-red; box-shadow: 0 0 0 1px $field-problem-red; }
 
 // ------ Variables and choices -----------------------------------------------
+// A question's variables as a table: one line each, in printed order. Below about 44rem the cells of a line
+// wrap, each named by its data-label, since the column names are hidden then.
 .variable-cards {
+  container-type: inline-size;
   margin: 0.5rem 0 0;
-  padding: 0.75rem;
+  padding: 0.6rem 0.75rem 0.75rem;
   border: 1px solid $review-line;
   border-radius: $border-radius;
-  background: rgba($vcu-gray, 0.2);
+  background: rgba($vcu-gray, 0.06);
 }
 
 .variable-cards-header {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  h3 { margin: 0; font-size: 1rem; }
+  gap: 0.5rem;
+  h3 { margin: 0 auto 0 0; font-size: 1rem; }
 }
 
-// A question's variables side by side, as many as fit; each card as tall as what it holds
-.box-list {
+$variable-columns: 1rem 1.5rem 7.5rem 8rem minmax(9rem, 1.3fr) minmax(9rem, 1.7fr) 1.75rem;
+
+.box-list { display: flex; flex-direction: column; margin-top: 0.25rem; }
+
+.variable-line {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(#{"min(100%, 22rem)"}, 1fr));
-  align-items: start;
-  gap: 0.6rem;
-  margin-top: 0.5rem;
+  grid-template-columns: $variable-columns;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.3rem 0;
+}
+.variable-head {
+  padding-bottom: 0;
+  color: $vcu-gray;
+  font-size: 0.75rem;
+  font-weight: 500;
 }
 
+// Each variable: its line, and its choices under it when they are open
 .variable-card {
-  container-type: inline-size;
-  min-width: 0;
-  padding: 0.6rem 0.7rem 0.7rem;
+  border-top: 1px solid $review-line;
+  &.is-open { background: $vcu-white; }
+  &.has-problem { box-shadow: inset 3px 0 0 $field-problem-red; }
+}
+.variable-card-number { font-weight: 700; text-align: right; font-variant-numeric: tabular-nums; }
+.variable-cell { min-width: 0; .form-control, .form-select { width: 100%; } }
+.variable-cell.is-id .form-control { max-width: 11ch; }
+
+// A variable's choices in short; a button that opens them, or, when they are shared, a note
+.choice-summary {
+  display: block;
+  width: 100%;
+  overflow: hidden;
+  padding: 0.2rem 0.4rem;
   border: 1px solid $review-line;
   border-radius: $border-radius;
   background: $vcu-white;
+  text-align: left;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  &.has-problem { border-color: $field-problem-red; box-shadow: 0 0 0 1px $field-problem-red; }
+  &.is-shared { border-style: dashed; color: $vcu-gray; }
 }
 
-// Its number, kind, the "+ Field" menu and delete
-.variable-card-head {
+@container (max-width: 44rem) {
+  .variable-head { display: none; }
+  .variable-line {
+    grid-template-columns: 1rem 1.5rem minmax(0, 1fr) minmax(0, 1fr) 1.75rem;
+    grid-template-areas:
+      "handle number kind kind delete"
+      "id id id id id"
+      "choices choices choices choices choices"
+      "extras extras extras extras extras";
+    > .box-handle { grid-area: handle; }
+    > .variable-card-number { grid-area: number; }
+    > .is-kind { grid-area: kind; }
+    > .is-id { grid-area: id; }
+    > .is-choices { grid-area: choices; }
+    > .is-extras { grid-area: extras; }
+    > .btn-icon { grid-area: delete; }
+  }
+  .variable-cell.is-id .form-control { max-width: none; }
+  .variable-cards .choice-table { margin-left: 0; }
+  .variable-cards .choice-row .choice-answer { flex-basis: 8rem; }
+  .variable-cell::before {
+    content: attr(data-label);
+    display: block;
+    color: $vcu-gray;
+    font-size: 0.7rem;
+    font-weight: 500;
+  }
+}
+
+// The choices: one line each. How a choice is printed and where it skips to show only on the choices
+// that have them; "+" adds them to one choice, and × takes them away.
+.choice-table {
+  margin: 0.25rem 0 0.6rem 2.9rem;
+  padding: 0.5rem 0.6rem;
+  border-left: 3px solid $review-line;
+  &.is-shared { margin-left: 0; margin-top: 0.6rem; border: 1px dashed $review-line; border-radius: $border-radius; background: $vcu-white; }
+}
+.choice-table-title { display: flex; flex-wrap: wrap; align-items: center; gap: 0.25rem 0.75rem; margin-bottom: 0.4rem; }
+.choice-list { display: flex; flex-direction: column; gap: 0.3rem; }
+
+.choice-row {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 0.4rem 0.6rem;
-  margin-bottom: 0.5rem;
-  .variable-add-field { margin-left: auto; }
-  > .btn-icon:only-of-type { margin-left: auto; }
-}
-.variable-card-number { font-weight: 700; }
-
-// What every variable needs, then what it shows of the rest: short fields side by side, the label across
-.variable-card-fields {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(9rem, 1fr));
-  gap: 0.5rem 0.6rem;
-  .is-wide { grid-column: 1 / -1; }
-  .is-id .form-control { max-width: 10ch; }
-}
-.card-field { display: flex; flex-direction: column; gap: 0.15rem; min-width: 0; margin: 0; }
-.card-field-label { color: $vcu-gray; font-size: 0.75rem; font-weight: 500; }
-
-.choice-table { margin-top: 0.6rem; padding-top: 0.5rem; border-top: 1px solid $review-line; }
-.choice-list { display: flex; flex-direction: column; gap: 0.3rem; }
-
-// Code, then the response option it codes, then how it is printed and where it skips to when shown
-.choice-row {
-  display: grid;
-  grid-template-columns: 1rem $code-width minmax(0, 1fr) 1.75rem;
-  align-items: center;
   gap: 0.3rem;
-  .choice-code { width: $code-width; }
+  .choice-code { flex: 0 0 $code-width; width: $code-width; }
+  .choice-answer { flex: 1 1 12rem; min-width: 0; }
 }
-.has-1-optional .choice-row { grid-template-columns: 1rem $code-width minmax(0, 1.4fr) minmax(0, 1fr) 1.75rem; }
-.has-2-optional .choice-row { grid-template-columns: 1rem $code-width minmax(0, 1.4fr) minmax(0, 1fr) minmax(0, 1fr) 1.75rem; }
+.choice-optional {
+  display: inline-flex;
+  flex: 0 1 11rem;
+  align-items: center;
+  gap: 0.15rem;
+  min-width: 8rem;
+  .form-control { min-width: 0; }
+}
+// Where a choice skips to: the question picked, then the words printed for it
+.choice-optional.is-skip_instruction {
+  flex: 1 1 20rem;
+  .skip-target { flex: 1.2 1 9rem; }
+  .form-control:not(.skip-target) { flex: 1 1 8rem; }
+}
+.add-field .dropdown-toggle::after { display: none; }
 
-// In a narrow card, a choice's printed words and skip instruction go on a line of their own under it
-@container (max-width: 26rem) {
-  .has-1-optional .choice-row,
-  .has-2-optional .choice-row {
-    grid-template-columns: 1rem $code-width minmax(0, 1fr) minmax(0, 1fr) 1.75rem;
-    > :nth-child(3) { grid-column: 3 / 5; }
-    > :nth-child(n + 4):not(:last-child) { grid-row: 2; }
-    > :nth-child(4) { grid-column: 3; }
-    > :nth-child(5):not(:last-child) { grid-column: 4; }
-    > :last-child { grid-column: 5; grid-row: 1; }
-  }
+// A variable's About and label, when it has them, side by side, then its "+"
+.variable-cell.is-extras { display: flex; flex-wrap: wrap; align-items: center; gap: 0.3rem; }
+.variable-optional {
+  display: inline-flex;
+  flex: 1 1 8rem;
+  align-items: center;
+  gap: 0.15rem;
+  min-width: 0;
+  .form-control { min-width: 0; }
 }
+.field-remove { padding: 0 0.2rem; line-height: 1; font-size: 0.75rem; }
 
 .choice-actions {
   display: flex;
@@ -413,3 +467,33 @@ button.review-pill:hover { background: rgba($vcu-gold, 0.2); }
   .question-panel { margin-left: 0.5rem; padding: 0.6rem; }
   .btn-sm, .btn-icon { min-height: 2.25rem; min-width: 2.25rem; }
 }
+
+// ------ What there is to fix, listed as a "to fix" badge or count is pointed at (review.js) ----------------
+.outline-problems, .to-fix-note { cursor: help; }
+.problem-pop {
+  position: fixed;
+  z-index: 1060;
+  display: none;
+  max-width: #{"min(26rem, calc(100vw - 1rem))"};
+  max-height: 18rem;
+  overflow: auto;
+  padding: 0.5rem 0.75rem;
+  border: 1px solid $field-problem-red;
+  border-left-width: 4px;
+  border-radius: $border-radius;
+  background: $vcu-white;
+  box-shadow: 0 0.5rem 1rem rgba($vcu-black, 0.15);
+  font-size: 0.85rem;
+  ul { margin: 0; padding-left: 1rem; }
+  li + li { margin-top: 0.25rem; }
+}
+.problem-pop-link {
+  padding: 0;
+  border: 0;
+  background: none;
+  text-align: left;
+  text-decoration: underline;
+  text-decoration-color: rgba($vcu-gray, 0.5);
+  &:hover, &:focus-visible { text-decoration-color: $vcu-black; }
+}
+.problem-pop-more { list-style: none; color: $vcu-gray; }

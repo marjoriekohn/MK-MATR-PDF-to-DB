@@ -83,7 +83,8 @@ edit_extraction_server <- function(
     # shows; rebuilding it would move the cursor. `redraw` is FALSE for any other change the outline
     # marks without drawing it again (marking a block as checked). A block that was marked as checked and has
     # been edited is no longer checked, unless `keep_checked`. The questions are numbered again by
-    # their place in the outline. Returns TRUE if it worked.
+    # their place in the outline, and the questions a choice skips past follow its question
+    # (draft_service_skip_parents()). Returns TRUE if it worked.
     change_draft <- function(new_draft, typed = FALSE, keep_checked = FALSE, redraw = !typed) {
       if (!can_change()) {
         layout_version(layout_version() + 1L) # put the inputs back as the draft has them
@@ -105,7 +106,7 @@ edit_extraction_server <- function(
       }
       # A block that was marked as checked and has been edited is no longer checked.
       if (!keep_checked) new_draft <- draft_service_uncheck_edited(draft(), new_draft)
-      new_draft <- draft_service_renumber_questions(new_draft)
+      new_draft <- draft_service_skip_parents(draft_service_renumber_questions(new_draft))
       if (!identical(new_draft, draft())) {
         undo_stack(c(list(draft()), head(undo_stack(), undo_depth - 1)))
         draft(new_draft)

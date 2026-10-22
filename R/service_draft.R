@@ -40,17 +40,20 @@ container_types <- c("Section", "Question Group")
 #' @return A logical vector.
 is_container <- function(component_types) component_types %in% container_types
 
-# Who a variable is about when it is about the respondent: the subject the database keeps for them.
-# Staff and the AI leave About blank for the respondent; the blank is saved to the database as this one.
-respondent_subject <- "Self"
+# Who a variable is about when it is about the respondent: the subject the database keeps for them, and the
+# name it had before (docs/sql/5_respondent.sql renames it). Staff and the AI leave About blank for the
+# respondent; the blank is saved to the database as this subject.
+respondent_subject <- "Respondent"
+respondent_names <- c("Respondent", "Self")
 
 #' Who a variable is about, with the respondent as a blank.
 #'
-#' @param subjects Subjects as typed or read; `"Self"` in any capitals, or a blank, is the respondent.
+#' @param subjects Subjects as typed or read; "Respondent" or "Self" in any capitals, or a blank, is the
+#'   respondent.
 #' @return The subjects, trimmed, with `NA` for the respondent.
 blank_respondent <- function(subjects) {
   subjects <- trimws(as.character(subjects))
-  subjects[!is.na(subjects) & (!nzchar(subjects) | tolower(subjects) == tolower(respondent_subject))] <- NA
+  subjects[!is.na(subjects) & (!nzchar(subjects) | tolower(subjects) %in% tolower(respondent_names))] <- NA
   subjects
 }
 
@@ -70,7 +73,8 @@ new_row_defaults <- list(
     id = NA_character_, parent_id = NA_character_, display_order = Inf,
     component_type = NA_character_, text = NA_character_,
     question_number = NA_character_, printed_number = NA_character_, self_contained = NA,
-    condition = NA_character_, parent_question_id = NA_character_, checked = FALSE, ref = NA_character_
+    condition = NA_character_, parent_question_id = NA_character_, checked = FALSE, ref = NA_character_,
+    parent_from_skip = FALSE
   ),
   variables = data.frame(
     id = NA_character_, component_id = NA_character_, display_order = Inf,
@@ -80,7 +84,8 @@ new_row_defaults <- list(
   response_options = data.frame(
     id = NA_character_, variable_id = NA_character_, display_order = Inf,
     answer_option = NA_character_, code_value = NA_integer_,
-    printed_label = NA_character_, skip_instruction = NA_character_, ref = NA_character_
+    printed_label = NA_character_, skip_instruction = NA_character_, ref = NA_character_,
+    skip_to_id = NA_character_
   )
 )
 
@@ -150,7 +155,8 @@ draft_service_percent_checked <- function(counts) {
 #' Rows get ids when a draft is loaded (c1, v1, o1...); ids aren't saved, but `ref` is (see the top of
 #' this file). Positions are numbered 1, 2, 3... within each parent, the questions by their place among
 #' the questions, and choices without a code are coded. A variable about the respondent has a blank
-#' subject, however the JSON says it.
+#' subject, however the JSON says it. Skip instructions are linked to where they send respondents, and the
+#' questions they skip past follow their question (service_draft_skips.R).
 #'
 #' @param json The questionnaire as nested lists: `questionnaire` and `components`, and `schema_version`
 #'   for a reviewed copy (without it, it is what the reading job returned).
@@ -181,7 +187,8 @@ draft_service_from_json <- function(json) {
       condition = pluck(blocks, "condition"),
       parent_question_id = find_parent_questions(parent_by, pluck(blocks, "parent_question"), block_ids),
       checked = pluck(blocks, "checked", FALSE),
-      ref = refs(blocks, block_ids)
+      ref = refs(blocks, block_ids),
+      parent_from_skip = pluck(blocks, "parent_from_skip", FALSE)
     ),
     variables = data.frame(
       id = ids_for("v", seq_along(boxes)),
@@ -202,12 +209,17 @@ draft_service_from_json <- function(json) {
       code_value = pluck(choices, "code_value", NA_integer_),
       printed_label = pluck(choices, "printed_label"),
       skip_instruction = pluck(choices, "skip_instruction"),
-      ref = refs(choices, ids_for("o", seq_along(choices)))
+      ref = refs(choices, ids_for("o", seq_along(choices))),
+      # a reviewed copy names where a choice skips to by the block's place in printed order, which is its id
+      skip_to_id = ids_for("c", pluck(choices, "skip_to", NA_integer_))
     )
   )
   # Rows were numbered in printed order; make that 1, 2, 3... within each parent.
   for (table in names(parent_columns)) draft <- renumber(draft, table)
-  draft_service_renumber_questions(default_codes(draft))
+  draft <- draft_service_renumber_questions(default_codes(draft))
+  # what the AI returned names where a choice skips to only in words, which are linked now
+  if (!reviewed) draft <- draft_service_link_skips(draft)
+  draft_service_skip_parents(draft)
 }
 
 #' Every block in the order a respondent meets it.
@@ -272,9 +284,12 @@ same_number <- function(numbers, number) {
 # ------ Tables to JSON ---------------------------------------------------------
 # The reviewed copy: the same shape the pipeline returns, plus `schema_version`, and what review adds:
 # `question_number` (its place) and `checked` on each block, `matr_id` on each variable, `code_value` on
-# each choice, and `ref` on each row the AI returned. A question names its parent by the parent's place.
+# each choice, `ref` on each row the AI returned, where a choice skips to (`skip_to`: the block's place in
+# printed order) and whether a question's parent was worked out from a skip. A question names its parent
+# by the parent's place among the questions.
 # Fields with nothing in them are left out, as in tests/testthat/fixtures/gna_gold.json.
 draft_service_to_json <- function(draft) {
+  attr(draft, "printed") <- draft_service_printed_order(draft)
   list(
     schema_version = draft_schema_version,
     questionnaire = draft$questionnaire,
@@ -298,6 +313,7 @@ blocks_json <- function(draft, parent_id) {
       json$self_contained <- block$self_contained
       json$condition <- block$condition
       json$parent_question <- question_number_of(draft, block$parent_question_id)
+      if (isTRUE(block$parent_from_skip)) json$parent_from_skip <- TRUE
       json$variables <- boxes_json(draft, block$id)
     }
     json$checked <- block$checked
@@ -333,6 +349,7 @@ choices_json <- function(draft, variable_id) {
       code_value = choice$code_value,
       printed_label = choice$printed_label,
       skip_instruction = choice$skip_instruction,
+      skip_to = match(choice$skip_to_id, attr(draft, "printed")),
       ref = choice$ref
     ))
   })

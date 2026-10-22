@@ -21,10 +21,17 @@
     }
   }
 
+  // A change inside the choices a question's variables share (data-shared) says which variables it goes to.
+  function withShared(el, data) {
+    const box = el.closest('[data-shared]');
+    if (box && box.dataset.shared) data.shared = box.dataset.shared;
+    return data;
+  }
+
   // ------ Buttons and outline rows -----------------------------------------------
   document.addEventListener('click', function (event) {
     const target = event.target.closest('[data-action]');
-    if (target && !target.disabled) send(target, 'action', Object.assign({}, target.dataset));
+    if (target && !target.disabled) send(target, 'action', withShared(target, Object.assign({}, target.dataset)));
   });
 
   // Outline rows can be reached with Tab; Enter or Space selects one (not while typing in its words).
@@ -62,13 +69,13 @@
 
   function sendField(field) {
     clearTimeout(field.sendTimer);
-    send(field, 'edit', {
+    send(field, 'edit', withShared(field, {
       table: field.dataset.table,
       id: field.dataset.id,
       field: field.dataset.field,
       value: field.type === 'checkbox' ? field.checked : field.value,
       typed: isTyped(field)
-    });
+    }));
   }
 
   document.addEventListener('input', function (event) {
@@ -211,7 +218,7 @@
   // R), and are put on again whenever Shiny redraws something. Until the first marks come, the classes
   // the outline was drawn with stay as they are.
   let marks = {
-    selected: null, problems: [], fields: [], matr_ids: null, matr_list: null,
+    selected: null, problems: [], fields: [], matr_ids: null, matr_list: null, labels: null, label_list: null,
     collapsed: null, opened: null, checked: null, all_checked: null, check_titles: null
   };
 
@@ -277,6 +284,7 @@
 
   function applyMatrIds() {
     fillList(marks.matr_list, marks.matr_ids);
+    fillList(marks.label_list, marks.labels);
   }
 
   function applyMarks() {
@@ -299,13 +307,113 @@
       if (!badge) return;
       const problem = byId[row.dataset.id];
       badge.classList.toggle('is-hidden', !problem);
-      badge.title = problem ? problem.title : '';
+      badge.dataset.problems = problem ? problem.title : '';
       const count = badge.querySelector('.problem-count');
       if (count) count.textContent = problem ? problem.n + ' to fix' : '0 to fix';
     });
     applyFieldMarks(tree);
     applyMatrIds();
   }
+
+  // ------ What there is to fix, listed as it is pointed at ---------------------------------
+  // A row's "N to fix" badge lists that block's problems, and the toolbar's "N blocks to fix" every block's,
+  // each a link to its block. The list is made only when it is shown, from what the marks already hold.
+  const problemPop = {
+    box: null,
+    owner: null,
+    timer: null,
+
+    items: function (owner) {
+      if (owner.matches('.outline-problems')) {
+        return (owner.dataset.problems || '').split('\n').filter(Boolean).map(function (text) { return { text: text }; });
+      }
+      return marks.problems.map(function (problem) {
+        const node = nodeOf(problem.id);
+        const label = node && node.dataset.label ? node.dataset.label.charAt(0).toUpperCase() + node.dataset.label.slice(1) : 'A block';
+        return { id: problem.id, text: label + ': ' + problem.title.split('\n').join(' ') };
+      });
+    },
+
+    show: function (owner) {
+      const items = this.items(owner);
+      const panel = owner.closest('.outline-panel');
+      if (items.length === 0 || !panel) return;
+      clearTimeout(this.timer);
+      if (!this.box) {
+        this.box = document.createElement('div');
+        this.box.className = 'problem-pop';
+        this.box.setAttribute('role', 'tooltip');
+        this.box.addEventListener('mouseenter', function () { clearTimeout(problemPop.timer); });
+        this.box.addEventListener('mouseleave', function () { problemPop.hideSoon(); });
+        this.box.addEventListener('click', function (event) { if (event.target.closest('[data-action]')) problemPop.hide(); });
+      }
+      if (this.box.parentElement !== panel) panel.appendChild(this.box); // inside the module, so a link's click reaches it
+      const list = document.createElement('ul');
+      items.slice(0, 40).forEach(function (item) {
+        const li = document.createElement('li');
+        if (item.id) {
+          const link = document.createElement('button');
+          link.type = 'button';
+          link.className = 'problem-pop-link';
+          link.dataset.action = 'select';
+          link.dataset.id = item.id;
+          link.textContent = item.text;
+          li.appendChild(link);
+        } else {
+          li.textContent = item.text;
+        }
+        list.appendChild(li);
+      });
+      if (items.length > 40) {
+        const more = document.createElement('li');
+        more.className = 'problem-pop-more';
+        more.textContent = 'and ' + (items.length - 40) + ' more';
+        list.appendChild(more);
+      }
+      this.box.replaceChildren(list);
+      const rect = owner.getBoundingClientRect();
+      this.box.style.left = Math.max(8, Math.min(rect.left, window.innerWidth - 400)) + 'px';
+      this.box.style.top = (rect.bottom + 4) + 'px';
+      this.box.style.display = 'block';
+      this.owner = owner;
+      owner.setAttribute('aria-describedby', 'problem-pop');
+      this.box.id = 'problem-pop';
+    },
+
+    hideSoon: function () {
+      clearTimeout(this.timer);
+      this.timer = setTimeout(function () { problemPop.hide(); }, 200);
+    },
+
+    hide: function () {
+      clearTimeout(this.timer);
+      if (this.box) this.box.style.display = 'none';
+      if (this.owner) this.owner.removeAttribute('aria-describedby');
+      this.owner = null;
+    }
+  };
+
+  const problemOwners = '.outline-problems:not(.is-hidden), .to-fix-note:not(.is-clear)';
+  document.addEventListener('mouseover', function (event) {
+    const owner = event.target.closest && event.target.closest(problemOwners);
+    if (owner && owner !== problemPop.owner) problemPop.show(owner);
+  });
+  document.addEventListener('mouseout', function (event) {
+    const owner = event.target.closest && event.target.closest(problemOwners);
+    if (owner && !(event.relatedTarget && owner.contains(event.relatedTarget))) problemPop.hideSoon();
+  });
+  document.addEventListener('focusin', function (event) {
+    if (event.target.matches && event.target.matches(problemOwners)) problemPop.show(event.target);
+  });
+  document.addEventListener('focusout', function (event) {
+    if (event.target.matches && event.target.matches(problemOwners)) problemPop.hideSoon();
+  });
+  document.addEventListener('keydown', function (event) {
+    if (event.key === 'Escape') problemPop.hide();
+  });
+  window.addEventListener('scroll', function (event) {
+    if (!(problemPop.box && problemPop.box.contains(event.target))) problemPop.hide(); // the page moved, not the list
+  }, true);
 
   // ------ Changes to the layout, put in place -------------------------------------------
   // When blocks are added, deleted, moved or picked from a list, only what is different is drawn
@@ -376,6 +484,7 @@
       if (number && patch.numbers[id] !== undefined) number.textContent = patch.numbers[id];
     });
     fillList(patch.parent_list, patch.questions);
+    fillList(patch.skip_list, patch.skip_targets);
     marks.selected = patch.selected || null;
     afterDrawing();
     // an optional field just added to a variable gets the cursor
@@ -406,6 +515,7 @@
       marks = {
         selected: sent.selected || null, problems: sent.problems || [], fields: sent.fields || [],
         matr_ids: sent.matr_ids || [], matr_list: sent.matr_list || null,
+        labels: sent.labels || [], label_list: sent.label_list || null,
         collapsed: set(sent.collapsed), opened: set(sent.opened), checked: set(sent.checked),
         all_checked: set(sent.all_checked) || new Set(), check_titles: sent.check_titles || null
       };
@@ -458,7 +568,7 @@
     // After variables or choices are dragged, send their new order.
     sendList: function (evt) {
       const ids = Array.from(evt.to.children).map(function (el) { return el.dataset.id; });
-      send(evt.to, 'reorder', { table: evt.to.dataset.table, ids: ids });
+      send(evt.to, 'reorder', withShared(evt.to, { table: evt.to.dataset.table, ids: ids }));
     }
   };
 })();

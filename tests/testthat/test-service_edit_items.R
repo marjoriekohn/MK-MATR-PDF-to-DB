@@ -719,3 +719,17 @@ test_that("a block goes in a section or question group, but a section never goes
   question <- form_for("questionnaire_component", "update", "1|7", scope = "1", snap = snap, questionnaire_component__parent_component_id = "1")
   expect_null(edit_service_check(question$fields, question$values)$problems$questionnaire_component__parent_component_id)
 })
+
+test_that("deleting a component a choice skips to empties the link, and keeps the printed words", {
+  entity <- edit_entities$component
+  snap <- test_snapshot(edit_service_tables(entity), change = function(snap) {
+    if (!is.null(snap$response_option)) {
+      snap$response_option$skip_to_component_id[snap$response_option$variable_key == 2 & snap$response_option$answer_option_id == 2] <- 7
+    }
+    snap
+  })
+  expect_true("response_option" %in% edit_service_tables(entity))
+  built <- edit_service_build(entity, "delete", snap, edit_service_row(entity, snap, "7"))
+  expect_true('Update response_option {"answer_option_id":2,"variable_key":2} skip_to_component_id: 7 -> -' %in% item_lines(built$items))
+  expect_false(any(grepl('response_option {"answer_option_id":2,"variable_key":2} skip_instruction', item_lines(built$items), fixed = TRUE)))
+})

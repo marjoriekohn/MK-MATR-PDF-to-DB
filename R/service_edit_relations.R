@@ -110,6 +110,8 @@ edit_relations <- list(
   relation("open_ended", "variable", c(variable_key = "variable_key"), "remove"),
   relation("closed_ended", "variable", c(variable_key = "variable_key"), "remove"),
   relation("response_option", "closed_ended", c(variable_key = "variable_key"), "remove"),
+  # a choice that skips to a component that goes no longer skips anywhere; its printed words stay
+  relation("response_option", "component", c(skip_to_component_id = "component_id"), "clear", clears = "question it skips to"),
   relation(
     "response_option", "answer_option", c(answer_option_id = "answer_option_id"), "block",
     why = "Variables already offer this answer choice.",

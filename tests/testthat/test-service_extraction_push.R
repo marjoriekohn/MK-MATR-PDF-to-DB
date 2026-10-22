@@ -301,6 +301,18 @@ test_that("the wave records each question's place among the questions, and the n
   expect_equal(asked$new_value[asked$entity_name == "wave_question" & asked$attribute_name == "printed_number"], c("1a4", "1a4"))
 })
 
+test_that("the respondent's subject is found by either of its names, so the rename can run before or after", {
+  for (name in c("Self", "Respondent")) {
+    ids <- no_ids
+    ids$subjects <- data.frame(subject_id = c(5, 6), name = c("Respondent's Family", name))
+    items <- extraction_service_build_items(small_draft(subject = NA), extraction_service_info(list(info = list(questionnaire_id = "7", wave_id = "41"))),
+      ids = ids, existing = empty_questionnaire(), options = no_options
+    )$items
+    expect_equal(unique(items$new_value[items$entity_name == "variable" & items$attribute_name == "subject_id"]), "6")
+    expect_false("subject" %in% items$entity_name)
+  }
+})
+
 test_that("who a variable is about: a blank is the respondent, a known subject is used, and a new one is added once", {
   draft <- small_draft(subject = NA)
   items <- build_for(draft)$items
@@ -318,4 +330,19 @@ test_that("who a variable is about: a blank is the respondent, a known subject i
   expect_equal(subject_ids[2], "new:subject:1")
   expect_equal(built$summary$subjects, 1L)
   expect_match(extraction_service_push_summary(built$summary), "1 new subject")
+})
+
+test_that("a choice that skips points at the block it skips to, added before any variable", {
+  draft <- small_draft()
+  no <- draft$response_options$id[draft$response_options$answer_option == "No"]
+  later <- draft$components$id[draft$components$component_type == "Question"][2]
+  draft <- draft_service_update(draft, "response_options", no, "skip_to_id", later)
+  draft <- draft_service_update(draft, "response_options", no, "skip_instruction", "Go to Question 2")
+  items <- build_for(draft)$items
+  skip <- items[items$entity_name == "response_option" & items$attribute_name == "skip_to_component_id", ]
+  expect_equal(nrow(skip), 1)
+  expect_equal(skip$new_value, "new:component:4") # the second question (the section, the instruction, the first question come first)
+  # every block is in before the first variable
+  expect_lt(max(which(items$entity_name == "component")), min(which(items$entity_name == "variable")))
+  expect_true(all(items$action == "Insert"))
 })

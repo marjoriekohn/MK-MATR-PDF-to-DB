@@ -602,7 +602,7 @@ subject_entity <- list(
   label = "Subject", noun = "subject", plural = "subjects", article = "a",
   group = "Shared lists", table = "subject",
   about = paste0(
-    "Who a variable can be about, like “Self” or “Respondent's Family”. The Edit Extraction page offers these, and the ",
+    "Who a variable can be about, like “Respondent” or “Respondent's Family”. The Edit Extraction page offers these, and the ",
     "reading instructions list them for Gemini."
   ),
   delete_about = paste0(

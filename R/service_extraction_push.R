@@ -26,8 +26,10 @@
 #   * Each variable's choices are its RESPONSE_OPTION rows: one per variable and answer choice, with
 #     its code. They are always new, since the variable is, even where the words repeat; the answer
 #     choices and the sets of choices they point at are the ones reused.
-#   * Who a variable is about is a SUBJECT row: the respondent's ("Self") for a blank, the one with the
+#   * Who a variable is about is a SUBJECT row: the respondent's ("Respondent") for a blank, the one with the
 #     same name (ignoring capitals and spaces at the ends) when there is one, or a new one staff typed.
+#   * A choice that skips points at the block it sends respondents to (skip_to_component_id), so every
+#     block is added before any variable.
 #   * The wave records each question's place among the questions (question_number, 1, 2, 3...,
 #     sections and question groups not counted) and the number printed beside it (printed_number),
 #     which can repeat or be missing.
@@ -218,7 +220,12 @@ extraction_service_build_items <- function(draft, info, ids, existing, options) 
     push$insert("wave_question", list(component_id = component_of[[id]], questionnaire_id = questionnaire, wave_id = wave), list(
       question_number = block$question_number, printed_number = block$printed_number
     ))
-    push_variables(push, draft, block, component_of[[id]], questionnaire)
+  }
+  # ---- then the variables, once every block is there: a choice can skip to a block printed after it
+  push$component_of <- component_of
+  for (id in draft_service_printed_order(draft)) {
+    block <- blocks[blocks$id == id, ]
+    if (block$component_type == "Question") push_variables(push, draft, block, component_of[[id]], questionnaire)
   }
   list(items = edit_number_items(do.call(rbind, push$items())), summary = push$summary)
 }
@@ -260,7 +267,9 @@ push_start <- function(ids, existing, options) {
   # Who a variable is about: a blank is the respondent; a name the database doesn't have yet is added once.
   push$subject_id <- function(name) {
     name <- trimws(if (is.na(name)) respondent_subject else name)
-    there <- ids$subjects$subject_id[tolower(trimws(ids$subjects$name)) == tolower(name)]
+    # the respondent's row, whichever name it has
+    same <- if (is.na(blank_respondent(name))) tolower(respondent_names) else tolower(name)
+    there <- ids$subjects$subject_id[tolower(trimws(ids$subjects$name)) %in% same]
     if (length(there) > 0) {
       return(there[1])
     }
@@ -315,7 +324,8 @@ push_variables <- function(push, draft, block, component, questionnaire) {
       push$insert("response_option", list(variable_key = variable, answer_option_id = push_answer_option(push, choice$answer_option)), list(
         display_order = j, code_value = if (is.na(choice$code_value)) NA else as.character(choice$code_value),
         printed_label = choice$printed_label,
-        skip_instruction = choice$skip_instruction
+        skip_instruction = choice$skip_instruction,
+        skip_to_component_id = if (!is.na(choice$skip_to_id)) push$component_of[[choice$skip_to_id]] %||% NA else NA
       ))
       push$summary$choices <- push$summary$choices + 1L
     }

@@ -2,14 +2,14 @@ test_that("a draft turns back into the same JSON the pipeline returned, and a sa
   json <- gold_json()
   saved <- draft_service_to_json(draft_service_from_json(json))
   # Review adds `schema_version`, `checked` and `question_number` (the question's place) to blocks, `ref`
-  # to every row, `matr_id` to variables and `code_value` to choices, and names a question's parent by
-  # its place rather than its printed number; nothing else changes.
+  # to every row, `matr_id` to variables, `code_value` and `skip_to` (where it skips to) to choices, and names
+  # a question's parent by its place rather than its printed number; nothing else changes.
   expect_equal(saved$schema_version, draft_schema_version)
   without_review_fields <- function(x) {
     if (!is.list(x)) {
       return(x)
     }
-    review_fields <- c("schema_version", "checked", "question_number", "parent_question", "ref", "matr_id", "code_value")
+    review_fields <- c("schema_version", "checked", "question_number", "parent_question", "parent_from_skip", "ref", "matr_id", "code_value", "skip_to")
     if (!is.null(names(x))) x <- x[setdiff(names(x), review_fields)]
     lapply(x, without_review_fields)
   }

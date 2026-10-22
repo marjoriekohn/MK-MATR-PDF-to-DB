@@ -178,6 +178,9 @@ local_pdf_cache <- function(env = parent.frame()) {
 # One block of a draft, as a one-row data frame.
 component <- function(draft, id) draft$components[draft$components$id == id, ]
 
+# One choice of a draft, as a one-row data frame.
+component_choice <- function(draft, id) draft$response_options[draft$response_options$id == id, ]
+
 # The draft with these blocks marked as checked.
 with_checked <- function(draft, ids) {
   draft$components$checked[draft$components$id %in% ids] <- TRUE

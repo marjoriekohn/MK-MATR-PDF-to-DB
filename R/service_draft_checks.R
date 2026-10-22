@@ -123,7 +123,19 @@ variable_problems <- function(draft, matr_ids = TRUE) {
       table = "response_options", rows = choices$id, field = field
     )
   }
+  # where each choice skips to: a skip instruction that names a question or section has to be linked to it,
+  # and a link has to point forward
+  printed <- draft_service_printed_order(draft)
+  source_place <- match(boxes$component_id[match(choices$variable_id, boxes$id)], printed)
+  skips <- choices$skip_instruction
+  names_a_place <- !is.na(skips) & (!is.na(skip_number(skips)) | !is.na(skip_section(skips)))
+  said <- sprintf("choice “%s”", ifelse(is.na(choices$answer_option), "(blank)", choices$answer_option))
   rbind(
+    choice_problem(names_a_place & is.na(choices$skip_to_id), paste0("pick where ", said, " skips to."), "skip_to_id"),
+    choice_problem(
+      !is.na(choices$skip_to_id) & match(choices$skip_to_id, printed) <= source_place,
+      paste0(said, " skips back to something printed before it. Pick where it skips to."), "skip_to_id"
+    ),
     box_problem(is_choice_box & n_choices < 1, "add its choices."), # BR99: a lone check box has one
     choice_problem(is.na(choices$answer_option), "fill in the blank choice.", "answer_option"),
     choice_problem(duplicated_within(choices$answer_option, choices$variable_id), "list each choice once.", "answer_option"),

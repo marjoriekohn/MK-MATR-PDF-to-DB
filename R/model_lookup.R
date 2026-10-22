@@ -12,7 +12,7 @@ lookup_model_get_component_types <- function(connection) {
   database_model_get(connection, "component_type", c("component_type_id", "name"), order_by = "component_type_id")
 }
 
-#' Who a variable can be about, the respondent ("Self") included.
+#' Who a variable can be about, the respondent ("Respondent") included.
 #'
 #' @param connection The MATR database, `list(url, key)`; see `model_database.R`.
 #' @return A data frame with `subject_id` and `name`.

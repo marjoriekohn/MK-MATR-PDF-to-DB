@@ -10,7 +10,7 @@ editable_fields <- list(
     "condition", "parent_question_id", "checked"
   ),
   variables = c("variable_type", "label", "subject", "answer_data_type", "matr_id"),
-  response_options = c("answer_option", "code_value", "printed_label", "skip_instruction")
+  response_options = c("answer_option", "code_value", "printed_label", "skip_instruction", "skip_to_id")
 )
 
 #' Change one field of one row.
@@ -34,6 +34,15 @@ draft_service_update <- function(draft, table, id, field, value) {
     variable_type = set_variable_type(draft, row, value),
     matr_id = set_matr_id(draft, row, value),
     parent_question_id = set_parent_question(draft, row, value),
+    skip_to_id = set_skip_to(draft, row, value),
+    skip_instruction = {
+      # printed words naming a question are linked to it, unless the choice is linked already
+      draft$response_options$skip_instruction[row] <- value
+      if (is.na(draft$response_options$skip_to_id[row])) {
+        draft$response_options$skip_to_id[row] <- draft_service_skip_target(draft, draft$response_options$id[row])
+      }
+      draft
+    },
     subject = {
       draft$variables$subject[row] <- blank_respondent(value)
       draft
@@ -95,6 +104,7 @@ set_component_type <- function(draft, row, type) {
 # or failing that the first one after it (which the checks point out). A block's id is taken as it is.
 set_parent_question <- function(draft, row, value) {
   blocks <- draft$components
+  draft$components$parent_from_skip[row] <- FALSE # staff's pick, which a skip never replaces
   if (is.na(value) || value %in% blocks$id) {
     draft$components$parent_question_id[row] <- value
     return(draft)
@@ -318,6 +328,119 @@ add_blank_choices <- function(draft, variable_id, n) {
   default_codes(draft, variable_id)
 }
 
+#' Take away a section or question group but keep what is inside it.
+#'
+#' The blocks inside move up to where it was, in the same order, and it is deleted. Says so with
+#' `message()`, since Undo puts it back.
+#'
+#' @param draft A draft: `list(questionnaire, components, variables, response_options)`; see the top of `service_draft.R`.
+#' @param id The section's or question group's id.
+#' @return The changed draft. An error if the block holds nothing it could keep.
+draft_service_ungroup <- function(draft, id) {
+  blocks <- draft$components
+  row <- match(id, blocks$id)
+  if (is.na(row) || !is_container(blocks$component_type[row])) {
+    stop("Only a section or question group can be taken away and its blocks kept.")
+  }
+  inside <- draft_service_children(draft, "components", id)
+  # what is inside takes its place: between it and the block after it
+  at <- match(inside$id, blocks$id)
+  blocks$parent_id[at] <- blocks$parent_id[row]
+  blocks$display_order[at] <- blocks$display_order[row] + seq_along(at) / (length(at) + 1)
+  draft$components <- blocks[-row, , drop = FALSE]
+  draft <- unlink_skips(draft, id)
+  message(sprintf(
+    "Took away the %s and kept the %s inside it. Undo puts it back.",
+    tolower(blocks$component_type[row]), plural(length(at), "block")
+  ))
+  renumber(draft, "components")
+}
+
+# ------ Choices shared by a question's variables ------------------------------------------
+# A grid's columns, or a battery's items asked as one question, are variables that offer the same choices.
+# The page shows those choices once and edits them once: each change is made to the choice in the same place
+# of every one of the variables.
+
+#' The variables of a question that offer the same choices.
+#'
+#' The same answers in the same order, with the same codes, printed words and skip instructions and links.
+#'
+#' @param draft A draft: `list(questionnaire, components, variables, response_options)`; see the top of `service_draft.R`.
+#' @param component_id The question's id.
+#' @return The ids of its variables with choices, when there are two or more and they all offer the same
+#'   choices; otherwise none.
+draft_service_shared_choices <- function(draft, component_id) {
+  boxes <- draft_service_children(draft, "variables", component_id)
+  ids <- boxes$id[boxes$variable_type == "closed_ended"]
+  if (length(ids) < 2) {
+    return(character())
+  }
+  choices <- draft$response_options
+  lists <- vapply(ids, function(id) {
+    mine <- choices[choices$variable_id %in% id, , drop = FALSE]
+    mine <- mine[order(mine$display_order), , drop = FALSE]
+    paste(mine$answer_option, mine$code_value, mine$printed_label, mine$skip_instruction, mine$skip_to_id, sep = "\r", collapse = "\n")
+  }, character(1))
+  if (length(unique(lists)) == 1 && nzchar(lists[1])) ids else character()
+}
+
+#' The choices in the same place as `choice_id` in each of these variables.
+#'
+#' @param draft A draft.
+#' @param variable_ids Variables that offer the same choices (`draft_service_shared_choices()`).
+#' @param choice_id A choice of one of them.
+#' @return Choice ids, one for each variable that has a choice in that place.
+same_place_choices <- function(draft, variable_ids, choice_id) {
+  choices <- draft$response_options
+  at <- choices$display_order[match(choice_id, choices$id)]
+  choices$id[choices$variable_id %in% variable_ids & choices$display_order %in% at]
+}
+
+#' Change one field of a choice in every variable that offers the same choices.
+#'
+#' @inheritParams same_place_choices
+#' @param field,value As for `draft_service_update()`.
+#' @return The changed draft.
+draft_service_update_shared <- function(draft, variable_ids, choice_id, field, value) {
+  for (id in same_place_choices(draft, variable_ids, choice_id)) {
+    draft <- draft_service_update(draft, "response_options", id, field, value)
+  }
+  draft
+}
+
+#' Add a blank choice to every variable that offers the same choices.
+#'
+#' @inheritParams same_place_choices
+#' @return The changed draft.
+draft_service_add_choice_shared <- function(draft, variable_ids) {
+  for (id in variable_ids) draft <- add_blank_choices(draft, id, 1)
+  draft
+}
+
+#' Delete a choice from every variable that offers the same choices.
+#'
+#' @inheritParams same_place_choices
+#' @return The changed draft; says so once with `message()`.
+draft_service_delete_shared <- function(draft, variable_ids, choice_id) {
+  draft_service_delete(draft, "response_options", same_place_choices(draft, variable_ids, choice_id))
+}
+
+#' Put the choices of every variable that offers the same choices in a new order.
+#'
+#' @inheritParams same_place_choices
+#' @param ids One variable's choice ids, in their new order.
+#' @return The changed draft.
+draft_service_reorder_shared <- function(draft, variable_ids, ids) {
+  choices <- draft$response_options
+  places <- choices$display_order[match(ids, choices$id)]
+  if (anyNA(places)) stop("That list was out of date. Try that again.")
+  for (variable in variable_ids) {
+    mine <- choices[choices$variable_id %in% variable, , drop = FALSE]
+    draft <- draft_service_reorder(draft, "response_options", mine$id[match(places, mine$display_order)])
+  }
+  draft
+}
+
 #' Delete a block, variable or choice.
 #'
 #' A section takes everything inside it, a question its variables, and a variable its
@@ -332,7 +455,7 @@ draft_service_delete <- function(draft, table, id) {
   if (table == "components") id <- c(id, draft_service_printed_order(draft, id))
   draft[[table]] <- draft[[table]][!draft[[table]]$id %in% id, ]
   message("Deleted. Undo brings it back.")
-  unlink_followers(drop_orphans(renumber(draft, table)), id)
+  unlink_skips(unlink_followers(drop_orphans(renumber(draft, table)), id), id)
 }
 
 # ------ Codes ------------------------------------------------------------------

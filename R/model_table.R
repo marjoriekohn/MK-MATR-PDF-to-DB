@@ -151,7 +151,7 @@ database_tables <- list(
     columns = c(
       variable_key = "id", answer_option_id = "id", display_order = "number",
       code_value = "text", printed_label = "text",
-      skip_instruction = "text"
+      skip_instruction = "text", skip_to_component_id = "id"
     )
   )
 )

@@ -142,7 +142,7 @@
         make('span', { class: 'edit-variable-number' }, [String(i + 1)]),
         selectField(variable, 'variable_type', [['Choices', 'closed_ended'], ['Write-in', 'open_ended']], 'Kind', 'Kind', true),
         textField(variable, 'matr_id', 'MATR ID'),
-        textField(variable, 'subject', 'About: the respondent', { list: subjectList }),
+        textField(variable, 'subject', 'Respondent', { list: subjectList, 'aria-label': 'About (blank for the respondent)', title: 'About (blank for the respondent)' }),
         textField(variable, 'label', 'Label (optional)'),
         closed ? null : selectField(variable, 'answer_data_type', answerTypes, 'Select an answer type', 'Answer type', false),
         removeButton('Delete this variable', function () {

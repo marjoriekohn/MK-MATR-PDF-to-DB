@@ -137,10 +137,11 @@ test_that("what the site works out isn't a difference: codes, places, the checke
   expect_equal(edits_of(draft_service_copy_codes(reviewed, reviewed$variables$id[1])), list())
 })
 
-test_that("a variable about the respondent is the same, written as a blank or as Self", {
+test_that("a variable about the respondent is the same, written as a blank, Respondent or Self", {
   box <- original()$variables$id[1]
   expect_true(is.na(original()$variables$subject[1]))
   expect_equal(edits_of(draft_service_update(original(), "variables", box, "subject", "Self")), list())
+  expect_equal(edits_of(draft_service_update(original(), "variables", box, "subject", "respondent")), list())
   edit <- edits_of(draft_service_update(original(), "variables", box, "subject", "Respondent's Siblings"))[[1]]
   expect_equal(c(edit$field, edit$after), c("subject", "Respondent's Siblings"))
   expect_null(edit$before)

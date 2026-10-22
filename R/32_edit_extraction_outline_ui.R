@@ -81,6 +81,10 @@ matr_id_list_id <- function(ns) ns("matr-ids")
 # script keeps it up to date as blocks move (review.js).
 parent_list_id <- function(ns) ns("parent-questions")
 
+# The id of the list of places a choice can skip to ("32 · Have you smoked…", "Section · Part B…"), which
+# every Skip to field offers. The page script keeps it up to date as blocks move (review.js).
+skip_list_id <- function(ns) ns("skip-targets")
+
 #' The outline as a tree.
 #'
 #' @param draft A draft.
@@ -104,9 +108,11 @@ outline_tree <- function(draft, view, lookups, ns) {
     }),
     suggestions(ns("answer-options"), lookups$answer_options),
     suggestions(ns("subjects"), lookups$subjects),
+    suggestions(ns("labels"), label_suggestions(draft)),
     suggestions(ns("conditions"), unique(c("If yes", "If no", stats::na.omit(draft$components$condition)))),
     suggestions(matr_id_list_id(ns), view$matr_ids %||% character()),
-    suggestions(parent_list_id(ns), attr(draft, "outline_questions")$questions$label)
+    suggestions(parent_list_id(ns), attr(draft, "outline_questions")$questions$label),
+    suggestions(skip_list_id(ns), skip_targets(draft)$label)
   )
 }
 
@@ -144,6 +150,8 @@ outline_marks <- function(draft, problems, selected, collapsed, opened, matr_ids
     }),
     matr_ids = as.list(matr_ids),
     matr_list = matr_id_list_id(ns),
+    labels = as.list(label_suggestions(draft)),
+    label_list = ns("labels"),
     collapsed = as.list(collapsed),
     opened = as.list(opened),
     checked = as.list(checked),
@@ -214,6 +222,8 @@ outline_patch <- function(drawn, draft, view, lookups, ns, most = 30, rows = NUL
     labels = stats::setNames(map_rows(new, block_label), new$id),
     questions = as.list(questions$questions$label),
     parent_list = parent_list_id(ns),
+    skip_targets = as.list(skip_targets(draft)$label),
+    skip_list = skip_list_id(ns),
     selected = view$selected
   )
 }
@@ -404,7 +414,8 @@ problem_badge <- function(messages) {
   row_badge(
     icon("triangle-exclamation"), span(class = "problem-count", paste(n, "to fix")),
     class = c("is-warning", "outline-problems", if (n == 0) "is-hidden"),
-    title = paste(messages, collapse = "\n")
+    # listed as the badge is pointed at or focused (review.js)
+    tabindex = "0", `data-problems` = paste(messages, collapse = "\n")
   )
 }
 
@@ -415,13 +426,20 @@ outline_check_titles <- c(
   unchecked = "Mark as checked and go to the next block. If you change it afterwards, it needs checking again."
 )
 
-# Mark as checked, and delete. A section or group counts as checked for the eye only once everything inside
-# it is.
+# Mark as checked, take a section or group away but keep what's inside, and delete. A section or group counts
+# as checked for the eye only once everything inside it is.
 outline_actions <- function(block, draft) {
   inside <- draft_service_printed_order(draft, block$id)
   all_checked <- block$checked && all(draft$components$checked[draft$components$id %in% inside])
+  ungroup <- if (block$component_type == "Section") "Remove this heading and keep what's inside" else "Ungroup: keep what's inside"
   span(
     class = "outline-actions",
+    if (is_container(block$component_type)) {
+      review_button(
+        icon("object-ungroup"), "ungroup",
+        `data-id` = block$id, class = "btn btn-sm btn-icon", title = ungroup, `aria-label` = ungroup
+      )
+    },
     review_button(
       icon("user-check"), "check",
       `data-id` = block$id,
@@ -450,6 +468,12 @@ question_panel <- function(block, draft, view, lookups, ns) {
   )
 }
 
+# The labels the draft's variables have, each once, offered as a label is typed ("First child", "Second child").
+label_suggestions <- function(draft) {
+  labels <- trimws(draft$variables$label)
+  sort(unique(labels[!is.na(labels) & nzchar(labels)]))
+}
+
 # A draft's questions in printed order, each with its place and its label in the parent-question list
 # ("1a · Do you smoke?"), and every block's id in printed order.
 outline_questions <- function(draft) {
@@ -474,165 +498,190 @@ list_sortable_options <- function(handle) {
   sortable::sortable_options(handle = handle, onEnd = htmlwidgets::JS("editExtractionPage.sendList"))
 }
 
-#' A question's variables and their choices.
+#' A question's variables, as a table: one line for each, in printed order.
 #'
-#' Each variable is a card, side by side with the question's other variables on a wide screen and one
-#' under another on a narrow one, each as tall as what it holds. A card shows what every variable needs:
-#' its kind (choices or write-in), its MATR ID, who it's about (blank for the respondent) and, for a
-#' write-in, the kind of answer. Its label, and its choices' printed words and skip instructions, show
-#' when they have something in them, or once added from the card's "+ Field" menu. What each field holds
-#' is said in it while it is empty, and its label is kept for screen readers.
+#' A line has the variable's kind (choices or write-in), its MATR ID and, for a write-in, the kind of answer;
+#' for a variable with choices, the choices in short ("1 Yes · 2 No"), which open their editor under the line
+#' when clicked. Who it's about and its label show when they have something in them (About is blank for the
+#' respondent), or once added from the line's "+". When the question's variables
+#' all offer the same choices (a grid's columns), the choices are shown once under the table and edited once
+#' for all of them, unless staff chose to edit each variable's own (`view$split`). What each field holds is
+#' said in it while it is empty, and its label is kept for screen readers.
 #'
 #' @param block One row of a draft's `components`: a question.
 #' @param draft A draft.
-#' @param view What the outline shows; see `outline_tree()`. `problems` outlines the fields at fault,
-#'   and `shown` lists the optional fields added that have nothing in them yet.
+#' @param view What the outline shows; see `outline_tree()`. `problems` outlines the fields at fault, `opened`
+#'   is used for the variables whose choices are open (`view$choices`), `split` for the questions whose
+#'   variables' choices are edited one by one, and `shown` for the choices' optional fields added empty.
 #' @param lookups The pick lists, from `lookup_service_get_all()`.
 #' @param ns The module's namespace function.
 #' @return A UI element.
 variable_cards <- function(block, draft, view, lookups, ns) {
   boxes <- draft_service_children(draft, "variables", block$id)
+  shared <- if (block$id %in% view$split) character() else draft_service_shared_choices(draft, block$id)
   list_id <- ns(paste0("boxes-", block$id))
   div(
     class = "variable-cards",
     div(
       class = "variable-cards-header",
       h3("Variables"),
+      if (block$id %in% view$split && length(draft_service_shared_choices(draft, block$id)) > 0) {
+        review_button("Edit their choices together", "join_choices", `data-id` = block$id, class = "btn btn-sm btn-link")
+      },
       review_button(tagList(icon("plus"), " Variable"), "add_box", `data-id` = block$id)
     ),
+    if (nrow(boxes) > 0) {
+      div(
+        class = "variable-line variable-head", `aria-hidden` = "true",
+        span(), span("#"), span("Kind"), span("MATR ID"), span("Choices or answer"), span("About and label"), span()
+      )
+    },
     div(
       id = list_id, class = "box-list", `data-table` = "variables",
-      map_rows(boxes, variable_card, draft, view, lookups, ns)
+      map_rows(boxes, variable_line, draft, view, lookups, ns, shared)
     ),
-    sortable::sortable_js(list_id, list_sortable_options(".box-handle"))
+    sortable::sortable_js(list_id, list_sortable_options(".box-handle")),
+    if (length(shared) > 0) choice_editor(boxes[boxes$id == shared[1], ], draft, view, ns, shared = shared, question = block$id)
   )
 }
 
-# The optional fields of a variable, by what the "+ Field" menu calls them: the variable's own label, and
-# its choices' printed words and skip instructions (one column of its choices each).
-optional_variable_fields <- c(label = "Label", printed_label = "Printed as (choices)", skip_instruction = "Skip to (choices)")
+# One cell of a variable's line, named for a narrow screen, where the cells stack (data-label).
+variable_cell <- function(label, ..., class = NULL) span(class = c("variable-cell", class), `data-label` = label, ...)
 
-#' Which of a variable's optional fields it shows.
-#'
-#' Those that have something in them (in the variable, or in any of its choices), and those staff added,
-#' so a field the AI filled in is never hidden.
-#'
-#' @param box One row of a draft's `variables`.
-#' @param draft A draft.
-#' @param shown The optional fields added that have nothing in them yet, as `"<variable id>:<field>"`.
-#' @return A character vector of field names, from `names(optional_variable_fields)`.
-shown_variable_fields <- function(box, draft, shown = character()) {
-  choices <- draft$response_options[draft$response_options$variable_id %in% box$id, , drop = FALSE]
-  filled <- c(
-    label = !is.na(box$label),
-    printed_label = any(!is.na(choices$printed_label)),
-    skip_instruction = any(!is.na(choices$skip_instruction))
-  )
-  is_choice_box <- box$variable_type == "closed_ended"
-  possible <- c(label = TRUE, printed_label = is_choice_box, skip_instruction = is_choice_box)
-  names(filled)[possible & (filled | paste0(box$id, ":", names(filled)) %in% shown)]
-}
-
-variable_card <- function(box, draft, view, lookups, ns) {
+variable_line <- function(box, draft, view, lookups, ns, shared = character()) {
   problems <- view$problems
   is_choice_box <- box$variable_type == "closed_ended"
-  shown <- shown_variable_fields(box, draft, view$shown)
-  can_add <- setdiff(names(optional_variable_fields)[c(TRUE, is_choice_box, is_choice_box)], shown)
+  choices <- draft_service_children(draft, "response_options", box$id)
+  choices_at_fault <- any(problems$table %in% "response_options" & problems$row %in% choices$id)
+  is_open <- is_choice_box && !box$id %in% shared && box$id %in% view$choices
   div(
-    class = c("variable-card", field_problem_class(problems, "variables", box$id, NA)),
+    class = c("variable-card", field_problem_class(problems, "variables", box$id, NA), if (is_open) "is-open"),
     `data-id` = box$id,
     div(
-      class = "variable-card-head",
+      class = "variable-line",
       span(class = "box-handle", title = "Drag to reorder", icon("grip-vertical")),
       span(class = "variable-card-number", as.integer(box$display_order)),
-      field_toggle(
-        "variables", box, "variable_type", c("Choices" = "closed_ended", "Write-in" = "open_ended"),
-        label = "Kind"
+      variable_cell("Kind", field_select(
+        "variables", box, "variable_type", c("Choices" = "closed_ended", "Write-in" = "open_ended"), label = "Kind"
+      ), class = "is-kind"),
+      variable_cell("MATR ID", field_text(
+        "variables", box, "matr_id",
+        placeholder = "MATR ID", list = matr_id_list_id(ns), label = "MATR ID", problems = problems
+      ), class = "is-id"),
+      variable_cell(
+        if (is_choice_box) "Choices" else "Answer type",
+        if (!is_choice_box) {
+          field_select(
+            "variables", box, "answer_data_type", lookups$answer_data_types,
+            blank = "Pick one", label = "Answer type", problems = problems
+          )
+        } else if (box$id %in% shared) {
+          span(
+            class = "choice-summary is-shared", title = "The same choices as the question's other variables, edited below",
+            choice_summary(choices)
+          )
+        } else {
+          review_button(
+            tagList(icon(if (is_open) "caret-down" else "caret-right"), " ", choice_summary(choices)), "choices",
+            `data-id` = box$id, `aria-expanded` = if (is_open) "true" else "false",
+            class = c("btn btn-sm choice-summary", if (choices_at_fault) "has-problem"),
+            title = if (is_open) "Close the choices" else "Edit the choices"
+          )
+        },
+        class = "is-choices"
       ),
-      if (length(can_add) > 0) add_field_menu(box, can_add),
+      variable_extras(box, view, ns),
       review_button(
         icon("trash-can"), "delete",
         `data-table` = "variables", `data-id` = box$id,
         class = "btn btn-sm btn-icon", title = "Delete this variable", `aria-label` = "Delete this variable"
       )
     ),
-    div(
-      class = "variable-card-fields",
-      card_field(
-        "MATR ID",
-        field_text(
-          "variables", box, "matr_id",
-          placeholder = "MATR ID", list = matr_id_list_id(ns), label = "MATR ID", problems = problems
-        ),
-        class = "is-id"
-      ),
-      card_field(
-        "About",
-        field_text(
-          "variables", box, "subject",
-          placeholder = "The respondent", list = ns("subjects"), label = "Who it's about (blank for the respondent)", problems = problems
-        )
-      ),
-      if (!is_choice_box) {
-        card_field("Answer type", field_select(
-          "variables", box, "answer_data_type", lookups$answer_data_types,
-          blank = "Pick one", label = "Answer type", problems = problems
-        ))
-      },
-      if ("label" %in% shown) {
-        card_field(
-          "Label",
-          field_text("variables", box, "label", placeholder = "Label", label = "Label") |> autofocus_if(box, "label", view),
-          class = "is-wide"
-        )
-      }
-    ),
-    if (is_choice_box) choice_table(box, draft, problems, ns, shown, view)
+    if (is_open) choice_editor(box, draft, view, ns)
   )
 }
 
-# One field of a variable card, with its name above it.
-card_field <- function(label, field, class = NULL) {
-  tags$label(class = c("card-field", class), span(class = "card-field-label", label), field)
-}
+# The optional fields of a variable, by what its "+" menu calls them: who it's about (blank is the
+# respondent) and its label. A variable shows one when it has something in it, or once it is added.
+optional_variable_fields <- c(subject = "About", label = "Label")
 
-# The field staff just added gets the cursor (review.js).
-autofocus_if <- function(field, box, name, view) {
-  if (identical(view$focus, paste0(box$id, ":", name))) tagAppendAttributes(field, `data-focus-now` = NA) else field
-}
-
-# "+ Field": the optional fields a variable doesn't show yet.
-add_field_menu <- function(box, fields) {
-  div(
-    class = "dropdown variable-add-field",
-    tags$button(
-      type = "button", class = "btn btn-sm btn-outline-dark dropdown-toggle",
-      `data-bs-toggle` = "dropdown", `aria-expanded` = "false",
-      icon("plus"), " Field"
-    ),
-    tags$ul(
-      class = "dropdown-menu dropdown-menu-end",
-      lapply(fields, function(field) {
-        tags$li(review_button(
-          optional_variable_fields[[field]], "show_field",
-          `data-id` = box$id, `data-name` = field, class = "dropdown-item"
-        ))
-      })
+# A variable's About and label when it shows them, each with its ×, and the "+" that adds them.
+variable_extras <- function(box, view, ns) {
+  showing <- shown_optional(box, optional_variable_fields, view)
+  field <- function(name) {
+    input <- switch(name,
+      subject = field_text(
+        "variables", box, "subject",
+        placeholder = "Who it's about", list = ns("subjects"), label = "About: who it's about (blank for the respondent)",
+        problems = view$problems
+      ),
+      label = field_text("variables", box, "label", placeholder = "Label", list = ns("labels"), label = "Label")
     )
+    if (identical(view$focus, paste0(box$id, ":", name))) input <- tagAppendAttributes(input, `data-focus-now` = NA)
+    span(
+      class = c("variable-optional", paste0("is-", name)), `data-label` = optional_variable_fields[[name]],
+      input, remove_field_button(box, name, optional_variable_fields)
+    )
+  }
+  addable <- setdiff(names(optional_variable_fields), showing)
+  variable_cell(
+    "About and label",
+    lapply(showing, field),
+    if (length(addable) > 0) add_field_menu(box, addable, optional_variable_fields, "Add who it's about, or a label"),
+    class = "is-extras"
   )
 }
 
-# The code, the response option it codes, and, when shown, how it is printed and where it skips to. "Use
-# these codes everywhere" copies the codes to every variable with the same choices.
-choice_table <- function(box, draft, problems, ns, shown = character(), view = list()) {
+# Which of a row's optional fields it shows: those with something in them, and those added empty.
+shown_optional <- function(row, fields, view) {
+  names(fields)[vapply(names(fields), function(field) {
+    !is.na(row[[field]]) || paste0(row$id, ":", field) %in% view$shown
+  }, logical(1))]
+}
+
+# A variable's choices in a few words: "1 Yes · 2 No", the first few only.
+choice_summary <- function(choices) {
+  if (nrow(choices) == 0) {
+    return("No choices yet")
+  }
+  codes <- ifelse(is.na(choices$code_value), "", paste0(choices$code_value, " "))
+  words <- paste0(codes, ifelse(is.na(choices$answer_option), "(blank)", choices$answer_option))
+  shown <- head(words, 4)
+  paste0(paste(shorten(shown, 24), collapse = " · "), if (length(words) > 4) paste0(" · +", length(words) - 4, " more"))
+}
+
+# The optional fields of a choice, by what its "+" menu calls them: how it is printed and where it skips to
+# (a link to the question or section, and the words printed for it). A choice shows one when it has
+# something in it, or once it is added; most choices have neither.
+optional_choice_fields <- c(printed_label = "Printed as", skip_instruction = "Skip to")
+
+#' The editor of a variable's choices: one line per choice, then + Choice.
+#'
+#' @param box One row of a draft's `variables`.
+#' @param draft A draft.
+#' @param view What the outline shows; see `outline_tree()`.
+#' @param ns The module's namespace function.
+#' @param shared The ids of the question's variables these choices are edited for (all of them get each
+#'   change), or none for this variable's own.
+#' @param question The question's id, for "Edit each variable's own" (with `shared`).
+#' @return A UI element.
+choice_editor <- function(box, draft, view, ns, shared = character(), question = NULL) {
   choices <- draft_service_children(draft, "response_options", box$id)
+  if (any(!is.na(choices$skip_to_id))) view$targets <- skip_targets(draft) # to name where they skip to
   list_id <- ns(paste0("choices-", box$id))
-  columns <- intersect(c("printed_label", "skip_instruction"), shown)
   div(
-    class = c("choice-table", paste0("has-", length(columns), "-optional")),
+    class = c("choice-table", if (length(shared) > 0) "is-shared"),
+    `data-shared` = paste(shared, collapse = ","),
+    if (length(shared) > 0) {
+      div(
+        class = "choice-table-title",
+        strong(sprintf("Choices of all %d variables", length(shared))),
+        review_button("Edit each variable's own", "split_choices", `data-id` = question, class = "btn btn-sm btn-link")
+      )
+    },
     div(
       id = list_id, class = "choice-list", `data-table` = "response_options",
-      map_rows(choices, choice_row, problems, ns, columns, box, view)
+      map_rows(choices, choice_row, view$problems, ns, view)
     ),
     sortable::sortable_js(list_id, list_sortable_options(".choice-handle")),
     div(
@@ -646,14 +695,25 @@ choice_table <- function(box, draft, problems, ns, shown = character(), view = l
   )
 }
 
-# Code first, then the response option it codes, and the optional columns shown. Every choice is printed on
-# the form: one that isn't can't be marked, so it isn't a choice (a lone check box has one).
-choice_row <- function(choice, problems, ns, columns = character(), box = NULL, view = list()) {
-  first <- !is.null(box) && choice$display_order == 1
-  optional <- function(field, placeholder, label) {
-    input <- field_text("response_options", choice, field, placeholder = placeholder, label = label)
-    if (first) autofocus_if(input, box, field, view) else input
+# Code first, then the response option it codes, then how it is printed and where it skips to when it has
+# them, each with the × that takes it away, and the "+" that adds them. Every choice is printed on the form:
+# one that isn't can't be marked, so it isn't a choice (a lone check box has one).
+choice_row <- function(choice, problems, ns, view = list()) {
+  key <- function(field) paste0(choice$id, ":", field)
+  showing <- union(shown_optional(choice, optional_choice_fields, view), if (!is.na(choice$skip_to_id)) "skip_instruction")
+  showing <- intersect(names(optional_choice_fields), showing)
+  optional <- function(field) {
+    name <- optional_choice_fields[[field]]
+    focus <- identical(view$focus, key(field))
+    input <- if (field == "skip_instruction") {
+      skip_fields(choice, problems, ns, view$targets, focus)
+    } else {
+      field_text("response_options", choice, field, placeholder = name, label = name)
+    }
+    if (focus && field != "skip_instruction") input <- tagAppendAttributes(input, `data-focus-now` = NA)
+    span(class = c("choice-optional", paste0("is-", field)), input, remove_field_button(choice, field, optional_choice_fields))
   }
+  addable <- setdiff(names(optional_choice_fields), showing)
   div(
     class = "choice-row", `data-id` = choice$id,
     span(class = "choice-handle", title = "Drag to reorder", icon("grip-vertical")),
@@ -662,14 +722,58 @@ choice_row <- function(choice, problems, ns, columns = character(), box = NULL, 
     field_text(
       "response_options", choice, "answer_option",
       placeholder = "Response option", list = ns("answer-options"), label = "Response option", problems = problems
-    ),
-    if ("printed_label" %in% columns) optional("printed_label", "Printed as", "Printed as"),
-    if ("skip_instruction" %in% columns) optional("skip_instruction", "Skip to", "Skip to"),
+    ) |> tagAppendAttributes(class = "choice-answer"),
+    lapply(showing, optional),
+    if (length(addable) > 0) add_field_menu(choice, addable, optional_choice_fields, "Add how it is printed, or where it skips to"),
     review_button(
       icon("trash-can"), "delete",
       `data-table` = "response_options", `data-id` = choice$id,
       class = "btn btn-sm btn-icon", title = "Delete this choice", `aria-label` = "Delete this choice"
     )
+  )
+}
+
+# Where a choice skips to: the question or section, picked from the list every Skip to field shares (or its
+# number typed), and the words printed for it ("Go to Question 32").
+skip_fields <- function(choice, problems, ns, targets = NULL, focus = FALSE) {
+  target <- if (!is.na(choice$skip_to_id) && !is.null(targets)) targets$label[match(choice$skip_to_id, targets$id)]
+  tagList(
+    tags$input(
+      type = "text",
+      class = c("form-control form-control-sm skip-target", field_problem_class(problems, "response_options", choice$id, "skip_to_id")),
+      value = blank_if_na(target %||% NA), placeholder = "Skips to", `aria-label` = "Skips to: the question's number, or pick it",
+      `data-suggest` = skip_list_id(ns), `data-pick` = NA, `data-focus-now` = if (focus) NA,
+      !!!field_problem_attributes(problems, "response_options", choice$id, "skip_to_id"),
+      !!!field_attributes("response_options", choice, "skip_to_id")
+    ),
+    field_text("response_options", choice, "skip_instruction", placeholder = "As printed", label = "Skip instruction, as printed")
+  )
+}
+
+# The "+" of a variable or choice: the optional fields it doesn't show yet (`names` says what each is called).
+add_field_menu <- function(row, fields, names, title) {
+  div(
+    class = "dropdown add-field",
+    tags$button(
+      type = "button", class = "btn btn-sm btn-icon dropdown-toggle", `data-bs-toggle` = "dropdown", `aria-expanded` = "false",
+      title = title, `aria-label` = title,
+      icon("plus")
+    ),
+    tags$ul(
+      class = "dropdown-menu dropdown-menu-end",
+      lapply(fields, function(field) {
+        tags$li(review_button(names[[field]], "show_field", `data-id` = row$id, `data-name` = field, class = "dropdown-item"))
+      })
+    )
+  )
+}
+
+# The × that empties an optional field of a variable or choice and hides it again; Undo brings it back.
+remove_field_button <- function(row, field, names) {
+  what <- paste("Take away", tolower(names[[field]]))
+  review_button(
+    icon("xmark"), "hide_field",
+    `data-id` = row$id, `data-name` = field, class = "btn btn-sm btn-icon field-remove", title = what, `aria-label` = what
   )
 }
 
@@ -682,5 +786,6 @@ to_fix_note <- function(problems) {
   if (n == 0) {
     return(span(class = "to-fix-note is-clear", icon("check"), " Nothing to fix"))
   }
-  span(class = "to-fix-note", icon("triangle-exclamation"), paste0(" ", plural(n, "block"), " to fix"))
+  # pointing at it, or focusing it, lists the problems, each a link to its block (review.js)
+  span(class = "to-fix-note", tabindex = "0", icon("triangle-exclamation"), paste0(" ", plural(n, "block"), " to fix"))
 }

@@ -609,3 +609,44 @@ test_that("who a variable is about is blank for the respondent, however it is ty
   expect_true(is.na(draft_service_update(draft, "variables", box, "subject", " ")$variables$subject[1]))
   expect_equal(draft_service_update(draft, "variables", box, "subject", " Respondent's Twin ")$variables$subject[1], "Respondent's Twin")
 })
+
+test_that("ungrouping keeps a group's blocks, in order, where the group was", {
+  draft <- gold_draft()
+  q1a <- block_numbered(draft, "1a")$id
+  group <- draft$components$parent_id[draft$components$id == q1a]
+  inside <- draft_service_children(draft, "components", group)$id
+  top <- draft_service_children(draft, "components", NA)$id
+  expect_message(ungrouped <- draft_service_ungroup(draft, group), "kept the [0-9]+ blocks inside it")
+  expect_false(group %in% ungrouped$components$id)
+  at <- match(group, top)
+  expect_equal(draft_service_children(ungrouped, "components", NA)$id, append(top[-at], inside, after = at - 1))
+  expect_equal(draft_service_printed_order(ungrouped), setdiff(draft_service_printed_order(draft), group))
+  expect_error(draft_service_ungroup(draft, q1a), "Only a section or question group")
+  # a section's heading can go too, keeping what is inside
+  as_section <- draft_service_update(draft, "components", group, "component_type", "Section")
+  expect_false(group %in% suppressMessages(draft_service_ungroup(as_section, group))$components$id)
+})
+
+test_that("a question's variables share their choices when they all offer the same ones, and a change goes to each", {
+  draft <- gold_draft()
+  q <- block_numbered(draft, "3#3")$id # a grid column: five children, each Male / Female
+  shared <- draft_service_shared_choices(draft, q)
+  expect_equal(shared, draft_service_children(draft, "variables", q)$id)
+  expect_equal(draft_service_shared_choices(draft, block_numbered(draft, "1a")$id), character()) # one variable shares nothing
+
+  first <- draft_service_children(draft, "response_options", shared[1])$id
+  changed <- draft_service_update_shared(draft, shared, first[2], "printed_label", "F")
+  expect_equal(unique(changed$response_options$printed_label[changed$response_options$variable_id %in% shared & changed$response_options$display_order == 2]), "F")
+  expect_equal(draft_service_shared_choices(changed, q), shared) # still the same as each other
+
+  added <- draft_service_add_choice_shared(draft, shared)
+  expect_true(all(vapply(shared, function(id) nrow(draft_service_children(added, "response_options", id)), 1L) == 3L))
+  deleted <- suppressMessages(draft_service_delete_shared(draft, shared, first[1]))
+  expect_true(all(vapply(shared, function(id) draft_service_children(deleted, "response_options", id)$answer_option, "") == "Female"))
+  turned <- draft_service_reorder_shared(draft, shared, rev(first))
+  expect_true(all(vapply(shared, function(id) draft_service_children(turned, "response_options", id)$answer_option[1], "") == "Female"))
+
+  # one variable changed on its own: they no longer share
+  own <- draft_service_update(draft, "response_options", first[1], "answer_option", "Boy")
+  expect_equal(draft_service_shared_choices(own, q), character())
+})
