@@ -41,7 +41,7 @@ test_that("a reading's skip instructions are linked when it arrives: the nearest
   # a section by its heading
   section <- draft$components$id[draft$components$component_type == "Section"]
   expect_equal(draft_service_skip_target(draft, no_choice(draft), "Skip to Section B"), section)
-  expect_true(is.na(draft_service_skip_target(draft, no_choice(draft), "End of survey")))
+  expect_equal(draft_service_skip_target(draft, no_choice(draft), "End of survey"), skip_to_end_id)
   expect_true(is.na(draft_service_skip_target(draft, no_choice(draft), "Go to Question 9")))
 })
 
@@ -80,12 +80,18 @@ test_that("where a choice skips to is picked from the list, or typed as a number
   no <- no_choice(draft)
   targets <- skip_targets(draft)
   expect_equal(targets$label[targets$id == id_of(draft, "3")], "3 · Question 3")
-  expect_equal(targets$label[nrow(targets) - 1], "Section · Section B. Your health")
+  section <- draft$components$id[draft$components$component_type == "Section"]
+  expect_equal(targets$label[targets$id == section], "Section · Section B. Your health")
+  # a question group by its first question, and the end of the questionnaire last
+  group <- draft$components$id[draft$components$component_type == "Question Group"]
+  expect_equal(targets$label[targets$id == group], "Group · 2a · Question 2a")
+  expect_equal(utils::tail(targets$label, 1), "End of Questionnaire")
   at <- function(d) d$response_options$skip_to_id[d$response_options$id == no]
   expect_equal(at(draft_service_update(draft, "response_options", no, "skip_to_id", "2b · Question 2b")), id_of(draft, "2b"))
   expect_equal(at(draft_service_update(draft, "response_options", no, "skip_to_id", " 2b ")), id_of(draft, "2b"))
-  section <- draft$components$id[draft$components$component_type == "Section"]
   expect_equal(at(draft_service_update(draft, "response_options", no, "skip_to_id", "Section · Section B. Your health")), section)
+  expect_equal(at(draft_service_update(draft, "response_options", no, "skip_to_id", "Group · 2a · Question 2a")), group)
+  expect_equal(at(draft_service_update(draft, "response_options", no, "skip_to_id", "End of Questionnaire")), skip_to_end_id)
   expect_true(is.na(at(draft_service_update(draft, "response_options", no, "skip_to_id", ""))))
   expect_error(draft_service_update(draft, "response_options", no, "skip_to_id", "99"), "Nothing in the questionnaire is 99")
   # printed words typed for a choice that isn't linked link it
@@ -102,7 +108,7 @@ test_that("a skip that names a question it can't find, or points back, is a prob
   expect_equal(problems$field, "skip_to_id")
   back <- draft_service_update(draft, "response_options", no_choice(draft), "skip_to_id", id_of(draft, "1"))
   expect_match(draft_service_check(back, lookups)$message, "skips back to something printed before it")
-  # "End of survey" names nothing, so it needs no link
+  # "End of survey" is the end of the questionnaire
   ending <- draft_service_update(draft, "response_options", no_choice(draft), "skip_instruction", "End of survey")
   expect_equal(nrow(draft_service_check(ending, lookups)), 0)
 
@@ -133,4 +139,48 @@ test_that("the accuracy record leaves out the links and parents the site works o
   relinked <- draft_service_update(original, "response_options", no_choice(original), "skip_to_id", id_of(original, "2b"))
   edits <- draft_service_review_edits(original, draft_service_skip_parents(relinked))
   expect_false(any(vapply(edits, function(edit) identical(edit$field, "skip_to_id"), logical(1))))
+})
+
+test_that("a skip to the end of the questionnaire covers every question after it, and a closing section with no question is the end", {
+  draft <- draft_service_from_json(skip_json(skip = "End of questionnaire"))
+  no <- no_choice(draft)
+  expect_equal(draft$response_options$skip_to_id[draft$response_options$id == no], skip_to_end_id)
+  after <- setdiff(draft$components$id[draft$components$component_type == "Question"], id_of(draft, "1"))
+  expect_true(all(draft$components$parent_from_skip[draft$components$id %in% after]))
+  # a section holding only its closing words: "Go to Section C" ends the questionnaire
+  json <- skip_json(skip = "Go to Section C")
+  json$components <- c(json$components, list(list(
+    component_type = "Section", text = "Section C. Thank you",
+    children = list(list(component_type = "Note", text = "You have finished."))
+  )))
+  closing <- draft_service_from_json(json)
+  expect_equal(closing$response_options$skip_to_id[closing$response_options$id == no_choice(closing)], skip_to_end_id)
+  # it is saved, and read back
+  again <- draft_service_from_json(draft_service_to_json(draft))
+  expect_equal(again$response_options$skip_to_id[again$response_options$id == no_choice(again)], skip_to_end_id)
+})
+
+test_that("a write-in skips for the answer it names, linked like a choice's, and is saved with it", {
+  json <- skip_json()
+  json$components[[1]]$variables <- list(list(
+    variable_type = "open_ended", answer_data_type = "NUMBER", skip_condition = "None", skip_instruction = "Go to Question 3"
+  ))
+  draft <- draft_service_from_json(json)
+  box <- draft$variables[draft$variables$component_id == id_of(draft, "1"), ]
+  expect_equal(box$skip_condition, "None")
+  expect_equal(box$skip_to_id, id_of(draft, "3"))
+  expect_true(draft$components$parent_from_skip[draft$components$id == id_of(draft, "2a")])
+  again <- draft_service_from_json(draft_service_to_json(draft))
+  expect_identical(again$variables, draft$variables)
+  # picked from the list, and checked like a choice's
+  ended <- draft_service_update(draft, "variables", box$id, "skip_to_id", "End of Questionnaire")
+  expect_equal(ended$variables$skip_to_id[ended$variables$id == box$id], skip_to_end_id)
+  draft$variables$matr_id <- paste0("m", seq_len(nrow(draft$variables)))
+  no_answer <- draft_service_update(draft, "variables", box$id, "skip_condition", "")
+  expect_match(draft_service_check(no_answer, test_lookups())$message, "say which answer skips")
+  back <- draft_service_update(draft, "variables", box$id, "skip_to_id", id_of(draft, "1", 1))
+  expect_match(draft_service_check(back, test_lookups())$message, "skips back to something printed before it")
+  # a variable that gets choices skips by its choices instead
+  choices <- draft_service_update(draft, "variables", box$id, "variable_type", "closed_ended")
+  expect_true(all(is.na(unlist(choices$variables[choices$variables$id == box$id, c("skip_condition", "skip_instruction", "skip_to_id")]))))
 })

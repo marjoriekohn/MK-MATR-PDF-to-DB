@@ -6,7 +6,21 @@
   max-width: 100%;
   > .btn { min-width: 0; letter-spacing: normal; }
 }
+// the picked one is filled in black (a quiet button pressed is only tinted)
+.btn-check:checked + .btn-outline-dark {
+  --bs-btn-active-color: #{$vcu-white};
+  --bs-btn-active-bg: #{$vcu-black};
+  --bs-btn-active-border-color: #{$vcu-black};
+}
 
+// On a phone a toggle fills its row, each choice an equal share (a grid's columns: flex can't shrink a button
+// below its padding, so the shares came out uneven)
 @media (max-width: 575.98px) {
-  .toggle-buttons > .btn { flex: 1 1 0; padding-inline: 0.5rem; }
+  .toggle-buttons {
+    display: grid;
+    grid-auto-columns: minmax(0, 1fr);
+    grid-auto-flow: column;
+    width: 100%;
+    > .btn { padding-inline: 0.25rem; }
+  }
 }

@@ -25,6 +25,10 @@
 # beside it ("1a", "12"), read off the PDF and corrected by staff; it can repeat (each section can
 # start again at 1) or be missing, and the wave keeps it too (`wave_question.printed_number`).
 # Sections and question groups aren't counted.
+#
+# Each block also notes the PDF page it was read from (`page`: the first page of the range the reading
+# job sent with it), so the page can open the PDF at it. Blocks staff add take the page
+# of the block they're added next to.
 
 # The version of the reviewed copy's JSON. A copy without one is what the reading job returned.
 draft_schema_version <- 2L
@@ -74,12 +78,13 @@ new_row_defaults <- list(
     component_type = NA_character_, text = NA_character_,
     question_number = NA_character_, printed_number = NA_character_, self_contained = NA,
     condition = NA_character_, parent_question_id = NA_character_, checked = FALSE, ref = NA_character_,
-    parent_from_skip = FALSE
+    parent_from_skip = FALSE, page = NA_integer_
   ),
   variables = data.frame(
     id = NA_character_, component_id = NA_character_, display_order = Inf,
     variable_type = "closed_ended", label = NA_character_, subject = NA_character_,
-    answer_data_type = NA_character_, matr_id = NA_character_, ref = NA_character_
+    answer_data_type = NA_character_, matr_id = NA_character_, ref = NA_character_,
+    skip_condition = NA_character_, skip_instruction = NA_character_, skip_to_id = NA_character_
   ),
   response_options = data.frame(
     id = NA_character_, variable_id = NA_character_, display_order = Inf,
@@ -188,7 +193,8 @@ draft_service_from_json <- function(json) {
       parent_question_id = find_parent_questions(parent_by, pluck(blocks, "parent_question"), block_ids),
       checked = pluck(blocks, "checked", FALSE),
       ref = refs(blocks, block_ids),
-      parent_from_skip = pluck(blocks, "parent_from_skip", FALSE)
+      parent_from_skip = pluck(blocks, "parent_from_skip", FALSE),
+      page = pluck(blocks, "page", NA_integer_)
     ),
     variables = data.frame(
       id = ids_for("v", seq_along(boxes)),
@@ -199,7 +205,11 @@ draft_service_from_json <- function(json) {
       subject = blank_respondent(pluck(boxes, "subject")),
       answer_data_type = pluck(boxes, "answer_data_type"),
       matr_id = pluck(boxes, "matr_id"),
-      ref = refs(boxes, ids_for("v", seq_along(boxes)))
+      ref = refs(boxes, ids_for("v", seq_along(boxes))),
+      # a write-in's skip: the answer that skips, the words printed for it, and where it sends respondents
+      skip_condition = pluck(boxes, "skip_condition"),
+      skip_instruction = pluck(boxes, "skip_instruction"),
+      skip_to_id = skip_ids(boxes)
     ),
     response_options = data.frame(
       id = ids_for("o", seq_along(choices)),
@@ -211,7 +221,7 @@ draft_service_from_json <- function(json) {
       skip_instruction = pluck(choices, "skip_instruction"),
       ref = refs(choices, ids_for("o", seq_along(choices))),
       # a reviewed copy names where a choice skips to by the block's place in printed order, which is its id
-      skip_to_id = ids_for("c", pluck(choices, "skip_to", NA_integer_))
+      skip_to_id = skip_ids(choices)
     )
   )
   # Rows were numbered in printed order; make that 1, 2, 3... within each parent.
@@ -258,6 +268,14 @@ pluck <- function(rows, field, missing = NA_character_) {
   )
 }
 
+# Where rows of a reviewed copy skip to: a block by its place in printed order (its id), or the end of the
+# questionnaire (`skip_to_end`).
+skip_ids <- function(rows) {
+  ids <- ids_for("c", pluck(rows, "skip_to", NA_integer_))
+  ids[pluck(rows, "skip_to_end", FALSE)] <- skip_to_end_id
+  ids
+}
+
 ids_for <- function(prefix, positions) {
   ids <- paste0(prefix, positions, recycle0 = TRUE) # no positions, no ids
   ids[is.na(positions)] <- NA
@@ -284,8 +302,8 @@ same_number <- function(numbers, number) {
 # ------ Tables to JSON ---------------------------------------------------------
 # The reviewed copy: the same shape the pipeline returns, plus `schema_version`, and what review adds:
 # `question_number` (its place) and `checked` on each block, `matr_id` on each variable, `code_value` on
-# each choice, `ref` on each row the AI returned, where a choice skips to (`skip_to`: the block's place in
-# printed order) and whether a question's parent was worked out from a skip. A question names its parent
+# each choice, `ref` on each row the AI returned, where a choice or write-in skips to (`skip_to`: the
+# block's place in printed order, or `skip_to_end`) and whether a question's parent was worked out from a skip. A question names its parent
 # by the parent's place among the questions.
 # Fields with nothing in them are left out, as in tests/testthat/fixtures/gna_gold.json.
 draft_service_to_json <- function(draft) {
@@ -302,7 +320,8 @@ blocks_json <- function(draft, parent_id) {
     json <- list(
       component_type = block$component_type,
       display_order = as.integer(block$display_order),
-      text = block$text
+      text = block$text,
+      page = block$page
     )
     if (is_container(block$component_type)) {
       json$children <- blocks_json(draft, block$id)
@@ -335,6 +354,9 @@ boxes_json <- function(draft, component_id) {
       json$response_options <- choices_json(draft, box$id)
     } else {
       json$answer_data_type <- box$answer_data_type
+      json$skip_condition <- box$skip_condition
+      json$skip_instruction <- box$skip_instruction
+      json <- c(json, skip_json(box$skip_to_id, attr(draft, "printed")))
     }
     json$ref <- box$ref
     without_blanks(json)
@@ -349,10 +371,16 @@ choices_json <- function(draft, variable_id) {
       code_value = choice$code_value,
       printed_label = choice$printed_label,
       skip_instruction = choice$skip_instruction,
-      skip_to = match(choice$skip_to_id, attr(draft, "printed")),
+      skip_to = skip_json(choice$skip_to_id, attr(draft, "printed"))$skip_to,
+      skip_to_end = skip_json(choice$skip_to_id, attr(draft, "printed"))$skip_to_end,
       ref = choice$ref
     ))
   })
+}
+
+# Where a row skips to, in the reviewed copy: `skip_to` (a block's place in printed order) or `skip_to_end`.
+skip_json <- function(skip_to_id, printed) {
+  if (identical(skip_to_id, skip_to_end_id)) list(skip_to = NA, skip_to_end = TRUE) else list(skip_to = match(skip_to_id, printed), skip_to_end = NA)
 }
 
 #' A JSON object without its empty fields.

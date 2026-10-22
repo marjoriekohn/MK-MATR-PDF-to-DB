@@ -50,8 +50,8 @@ database <- list(url = Sys.getenv("SUPABASE_URL"),
                  key = Sys.getenv("SUPABASE_SECRET_KEY"))
 
 # The site doesn't keep asking the database whether something changed: each time
-# it asks, the page shows it is busy. Pages read again when they are opened, and
-# the menu's Refresh reads everything again. The one exception: while a draft a
+# it asks, the page shows it is busy. Pages read again when they are opened, and a
+# reload of the browser page reads everything again. The one exception: while a draft a
 # staff member started is being read by Gemini, their drafts are read every
 # `reading_check_ms` milliseconds, so they see how far it has got (and a reading
 # job that died is noticed).

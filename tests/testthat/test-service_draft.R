@@ -24,6 +24,21 @@ test_that("a draft turns back into the same JSON the pipeline returned, and a sa
   expect_identical(draft$response_options$ref, draft$response_options$id)
 })
 
+test_that("a block keeps the PDF page it was read from, and a block added takes its neighbour's", {
+  json <- short_gold_json()
+  json$components[[1]]$page <- 2L
+  draft <- draft_service_from_json(json)
+  first <- draft$components$id[1]
+  expect_equal(draft$components$page[1], 2L)
+  expect_true(all(is.na(draft$components$page[-1])))
+  new_id <- draft_service_next_id(draft, "components")
+  added <- draft_service_add_block(draft, "Instruction", new_id, near_id = first)
+  expect_equal(added$components$page[added$components$id == new_id], 2L)
+  saved <- draft_service_to_json(added)
+  expect_equal(saved$components[[1]]$page, 2L)
+  expect_identical(draft_service_from_json(draft_service_to_json(draft))$components$page, draft$components$page)
+})
+
 test_that("a row keeps its ref however the draft changes, and a row added has none", {
   draft <- gold_draft()
   q1a <- block_numbered(draft, "1a")$id

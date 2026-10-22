@@ -346,3 +346,20 @@ test_that("a choice that skips points at the block it skips to, added before any
   expect_lt(max(which(items$entity_name == "component")), min(which(items$entity_name == "variable")))
   expect_true(all(items$action == "Insert"))
 })
+test_that("a write-in that skips, and a skip to the end, say so in their rows; without them nothing new is sent", {
+  plain <- build_for(small_draft())$items
+  expect_false(any(plain$attribute_name %in% c("skip_to_end", "skip_condition"))) # pushes before 7_more_skips.sql runs
+  draft <- small_draft()
+  no <- draft$response_options$id[draft$response_options$answer_option == "No"]
+  draft <- draft_service_update(draft, "response_options", no, "skip_to_id", "End of Questionnaire")
+  box <- draft$variables$id[draft$variables$variable_type == "open_ended"]
+  draft <- draft_service_update(draft, "variables", box, "skip_condition", "None")
+  draft <- draft_service_update(draft, "variables", box, "skip_to_id", skip_to_end_id)
+  items <- build_for(draft)$items
+  value_of <- function(entity, attribute) items$new_value[items$entity_name == entity & items$attribute_name == attribute]
+  expect_equal(value_of("response_option", "skip_to_end"), "true")
+  expect_length(value_of("response_option", "skip_to_component_id"), 0) # the end is no component
+  expect_equal(value_of("open_ended", "skip_condition"), "None")
+  expect_equal(value_of("open_ended", "skip_to_end"), "true")
+})
+

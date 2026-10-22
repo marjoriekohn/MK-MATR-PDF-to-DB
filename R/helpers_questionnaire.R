@@ -1,12 +1,11 @@
 # ------ A questionnaire, laid out to read -----------------------------------------------------
-# A draft's questionnaire drawn as a table to read, with nothing to edit, the way a codebook lists it:
-# one row for each variable, with the number its question is asked as (No.), its MATR ID (Variable ID),
-# the words of its question with the variable's label and who it is about in square brackets (Question
-# Text), and its codes and choices, or a write-in's kind of answer (Variable Coding). A section heads the
-# rows printed under it, which are indented under it, and a gold line closes it where it ends; blocks
-# that aren't questions are rows across the whole table, in printed order, so they start just under
-# their section's heading rather than in the Question Text column. A change request shows this before
-# it is submitted and while it waits for a reviewer to approve it.
+# A draft's questionnaire drawn as a table to read, with nothing to edit, the way a codebook lists it: one
+# row for each variable, with its MATR ID (Variable ID), the words of its question with the variable's label
+# and who it is about in square brackets (Question Text), and its codes and choices, or a write-in's kind of
+# answer (Variable Coding). Blocks that aren't questions have a row each, in printed order, with their kind.
+# The rows are grouped under the section (and question group) they are printed in. It is a DataTables table
+# (the DT package): it can be searched, and downloaded as a CSV. A change request shows it before it is
+# submitted and while it waits for a reviewer to approve it.
 
 #' A draft's questionnaire, laid out to read as a table.
 #'
@@ -16,106 +15,132 @@ questionnaire_preview_ui <- function(draft) {
   if (nrow(draft$components) == 0) {
     return(p(class = "form-text", "This questionnaire has no blocks."))
   }
+  rows <- questionnaire_preview_rows(draft)
+  shown <- data.frame(
+    Section = htmltools::htmlEscape(rows$section),
+    Kind = htmltools::htmlEscape(rows$kind),
+    `Variable ID` = ifelse(is.na(rows$matr_id), preview_blank(rows$missing), htmltools::htmlEscape(rows$matr_id)),
+    `Question Text` = paste0(
+      htmltools::htmlEscape(rows$text),
+      ifelse(nzchar(rows$tags), paste0(' <span class="qt-tags">', htmltools::htmlEscape(rows$tags), "</span>"), "")
+    ),
+    `Variable Coding` = vapply(rows$coding, function(lines) paste(htmltools::htmlEscape(lines), collapse = "<br>"), character(1)),
+    check.names = FALSE, stringsAsFactors = FALSE
+  )
   div(
     class = "questionnaire-preview",
-    tags$table(
-      class = "table table-sm questionnaire-table",
-      tags$thead(tags$tr(
-        tags$th(scope = "col", class = "qt-number", "No."),
-        tags$th(scope = "col", class = "qt-id", "Variable ID"),
-        tags$th(scope = "col", class = "qt-text", "Question Text"),
-        tags$th(scope = "col", class = "qt-coding", "Variable Coding")
-      )),
-      tags$tbody(preview_rows(draft, NA, depth = 0L))
+    DT::datatable(
+      shown,
+      class = "compact questionnaire-table", rownames = FALSE, escape = FALSE,
+      extensions = c("Buttons", "RowGroup"),
+      options = list(
+        dom = "Bfrtip", ordering = FALSE, pageLength = 50, autoWidth = FALSE,
+        # the rows stay in printed order, grouped under their section
+        rowGroup = list(dataSrc = 0, emptyDataGroup = "Not in a section"),
+        columnDefs = list(
+          list(targets = 0, visible = FALSE),
+          list(targets = 1, width = "7rem"), list(targets = 2, width = "9rem"), list(targets = 4, width = "32%")
+        ),
+        buttons = list(list(
+          extend = "csv", text = "Download CSV", filename = preview_file_name(draft),
+          # every column, the section too, with a choice on each line and no markup
+          exportOptions = list(columns = 0:4, format = list(body = DT::JS(
+            "function (data) { return String(data).replace(/<br\\s*\\/?>/g, '\\n').replace(/<[^>]+>/g, '')",
+            ".replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '\"').replace(/&#39;/g, \"'\").replace(/&amp;/g, '&'); }"
+          )))
+        )),
+        language = list(search = "Search:", info = "_START_ to _END_ of _TOTAL_ rows", emptyTable = "No rows")
+      )
     )
   )
 }
 
-# How many columns the table has, for the rows that go across all of them.
-preview_columns <- 4
+# "no MATR ID" or "no variables", in italics.
+preview_blank <- function(missing) ifelse(nzchar(missing), paste0("<em>", missing, "</em>"), "")
 
-# The rows for the blocks inside a section (or at the top level, for `parent_id = NA`), in printed order.
-preview_rows <- function(draft, parent_id, depth) {
-  rows <- map_rows(draft_service_children(draft, "components", parent_id), preview_block_rows, draft, depth)
-  do.call(tagList, rows)
+# The CSV's name: the questionnaire's abbreviation or name, or "questionnaire".
+preview_file_name <- function(draft) {
+  name <- draft$questionnaire$abbreviation %||% NA
+  if (!has_text(name)) name <- draft$questionnaire$name %||% NA
+  if (!has_text(name)) name <- "questionnaire"
+  gsub("[^A-Za-z0-9_-]+", "_", trimws(name))
 }
 
-preview_block_rows <- function(block, draft, depth) {
-  if (is_container(block$component_type)) {
-    return(tagList(
-      tags$tr(
-        class = c("qt-section", if (block$component_type == "Question Group") "is-group"), `data-depth` = depth,
-        tags$th(
-          colspan = preview_columns, scope = "rowgroup",
-          type_chip(block$component_type), " ",
-          if (!is.na(block$text)) block$text else if (block$component_type == "Section") span(class = "preview-note", "(no heading)")
+#' The rows of the questionnaire's table, in printed order.
+#'
+#' A question has a row for each of its variables (or one, saying it has none); any other block that isn't a
+#' section or question group has one row. Each row names the sections and question groups it is in.
+#'
+#' @param draft A draft.
+#' @return A data frame: `section` (e.g. "PART B. YOUR HABITS › Question group", or "" at the top level),
+#'   `kind`, `matr_id` (NA when there is none), `missing` ("no MATR ID", "no variables" or ""), `text`,
+#'   `tags` ("[Lifetime] [Siblings]", or "") and `coding` (a list of lines: "1 = Yes", or the write-in's kind of
+#'   answer).
+questionnaire_preview_rows <- function(draft) {
+  rows <- list()
+  add <- function(section, kind, matr_id = NA_character_, missing = "", text = "", tags = "", coding = character()) {
+    rows[[length(rows) + 1]] <<- list(
+      section = section, kind = kind, matr_id = matr_id, missing = missing, text = text, tags = tags, coding = list(coding)
+    )
+  }
+  walk <- function(parent_id, path) {
+    blocks <- draft_service_children(draft, "components", parent_id)
+    for (i in seq_len(nrow(blocks))) {
+      block <- blocks[i, , drop = FALSE]
+      if (is_container(block$component_type)) {
+        walk(block$id, c(path, preview_container_name(block)))
+        next
+      }
+      section <- paste(path, collapse = " \u203a ")
+      if (block$component_type != "Question") {
+        add(section, block$component_type, text = preview_words(block))
+        next
+      }
+      words <- preview_question_words(block)
+      boxes <- draft_service_children(draft, "variables", block$id)
+      if (nrow(boxes) == 0) add(section, "Question", missing = "no variables", text = words)
+      for (j in seq_len(nrow(boxes))) {
+        box <- boxes[j, , drop = FALSE]
+        add(
+          section, "Question",
+          matr_id = box$matr_id, missing = if (is.na(box$matr_id)) "no MATR ID" else "",
+          text = words, tags = preview_variable_tags(box), coding = preview_coding(box, draft)
         )
-      ),
-      preview_rows(draft, block$id, depth + 1L),
-      # where the section ends: a gold line under the last row inside it
-      tags$tr(
-        class = "qt-section-end", `data-depth` = depth, `aria-hidden` = "true",
-        tags$td(colspan = preview_columns, span(class = "qt-section-end-label", paste("End of", preview_section_name(block))))
-      )
-    ))
+      }
+    }
   }
-  switch(block$component_type,
-    Question = preview_question_rows(block, draft, depth),
-    tags$tr(
-      class = "qt-block", `data-depth` = depth,
-      tags$td(
-        colspan = preview_columns, class = "qt-text",
-        type_chip(block$component_type), " ", span(class = "preview-text", preview_words(block))
-      )
-    )
+  walk(NA, character())
+  if (length(rows) == 0) {
+    return(data.frame(section = character(), kind = character(), matr_id = character(), missing = character(), text = character(), tags = character(), coding = I(list())))
+  }
+  data.frame(
+    section = vapply(rows, `[[`, "", "section"),
+    kind = vapply(rows, `[[`, "", "kind"),
+    matr_id = vapply(rows, function(row) as.character(row$matr_id), ""),
+    missing = vapply(rows, `[[`, "", "missing"),
+    text = vapply(rows, `[[`, "", "text"),
+    tags = vapply(rows, `[[`, "", "tags"),
+    coding = I(lapply(rows, function(row) row$coding[[1]])),
+    stringsAsFactors = FALSE
   )
 }
 
-# "PART B. YOUR HABITS", or "the section" for one without a heading, or "the question group".
-preview_section_name <- function(block) {
+# A section by its heading ("(no heading)" for one without), a question group as "Question group".
+preview_container_name <- function(block) {
   if (block$component_type == "Question Group") {
-    return("the question group")
+    return("Question group")
   }
-  if (is.na(block$text)) "the section" else shorten(block$text, 60)
+  if (is.na(block$text)) "(no heading)" else block$text
 }
 
 preview_words <- function(block) {
-  if (is.na(block$text)) tags$em("(no words)") else block$text
-}
-
-# One row for each of a question's variables; a question with none still has its row. Its number is on
-# its first row.
-preview_question_rows <- function(block, draft, depth) {
-  words <- preview_question_words(block)
-  number <- draft_service_question_number(block)
-  number_cell <- function(first) {
-    tags$td(class = "qt-number", if (first) span(class = "preview-number", if (is.na(number)) "?" else number))
-  }
-  boxes <- draft_service_children(draft, "variables", block$id)
-  if (nrow(boxes) == 0) {
-    return(tags$tr(
-      class = "qt-question", `data-depth` = depth,
-      number_cell(TRUE),
-      tags$td(class = "qt-id", tags$em("no variables")),
-      tags$td(class = "qt-text", span(class = "preview-text", words)),
-      tags$td(class = "qt-coding")
-    ))
-  }
-  map_rows(boxes, function(box) {
-    tags$tr(
-      class = "qt-question", `data-depth` = depth,
-      number_cell(box$display_order == 1),
-      tags$td(class = "qt-id", if (is.na(box$matr_id)) tags$em("no MATR ID") else span(class = "preview-matr-id", box$matr_id)),
-      tags$td(class = "qt-text", span(class = "preview-text", words), preview_variable_tags(box)),
-      tags$td(class = "qt-coding", preview_coding(box, draft))
-    )
-  })
+  if (is.na(block$text)) "(no words)" else block$text
 }
 
 # The question's words, without its number at the start if they were read with it ("3. Have you ...").
 preview_question_words <- function(block) {
   if (is.na(block$text)) {
-    return(tags$em("(no words)"))
+    return("(no words)")
   }
   number <- draft_service_question_number(block)
   if (is.na(number) || !nzchar(number)) {
@@ -126,37 +151,28 @@ preview_question_words <- function(block) {
   if (nzchar(trimmed)) trimmed else block$text
 }
 
-# " [Lifetime] [Siblings]": the variable's label and who it is about, each when it has one (a variable
-# about the respondent has no subject).
+# "[Lifetime] [Siblings]": the variable's label and who it is about, each when it has one (a variable about
+# the respondent has no subject), or "".
 preview_variable_tags <- function(box) {
   tags <- c(box$label, box$subject)
   tags <- trimws(tags[!is.na(tags)])
   tags <- tags[nzchar(tags)]
-  if (length(tags) > 0) span(class = "qt-tags", paste0(" ", paste0("[", tags, "]", collapse = " ")))
+  if (length(tags) > 0) paste0("[", tags, "]", collapse = " ") else ""
 }
 
-# Each choice on its own line with its code ("1 = Yes"), or a write-in's kind of answer.
+# Each choice with its code ("1 = Yes"), one line each, or a write-in's kind of answer.
 preview_coding <- function(box, draft) {
   if (box$variable_type != "closed_ended") {
-    return(span(
-      class = "qt-write-in",
-      paste("Write-in:", if (is.na(box$answer_data_type)) "answer type not picked" else box$answer_data_type)
-    ))
+    return(paste("Write-in:", if (is.na(box$answer_data_type)) "answer type not picked" else box$answer_data_type))
   }
   choices <- draft_service_children(draft, "response_options", box$id)
   if (nrow(choices) == 0) {
-    return(tags$em("no choices"))
+    return("no choices")
   }
-  lines <- lapply(seq_len(nrow(choices)), function(i) {
-    choice <- choices[i, , drop = FALSE]
-    div(
-      class = "qt-choice",
-      span(class = "qt-code", if (is.na(choice$code_value)) "?" else choice$code_value),
-      " = ",
-      if (is.na(choice$answer_option)) tags$em("(blank)") else choice$answer_option
-    )
-  })
-  do.call(tagList, lines)
+  paste0(
+    ifelse(is.na(choices$code_value), "?", choices$code_value), " = ",
+    ifelse(is.na(choices$answer_option), "(blank)", choices$answer_option)
+  )
 }
 
 # ------ A change request, laid out to read --------------------------------------------------------
@@ -229,7 +245,7 @@ request_card_ui <- function(card) {
 new_badge <- function() {
   span(
     class = "new-badge", role = "img", `aria-label` = "New: this request adds it",
-    icon("certificate", class = "fa-solid"),
+    app_icon("new", class = "fa-solid"),
     span(class = "new-badge-text", `aria-hidden` = "true", "NEW")
   )
 }

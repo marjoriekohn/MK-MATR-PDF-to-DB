@@ -23,8 +23,6 @@
 #'   records, and `changed()` tells it this session changed one.
 #' @param active A reactive that says whether this page is the one on screen, or `NULL`. Opening the
 #'   page reads the requests again, since other staff send and approve them too.
-#' @param refresh A reactive that ticks when staff press Refresh in the menu, or `NULL`. Each tick
-#'   reads the page's lists again.
 #' @return Called for its effect.
 change_requests_server <- function(
   id,
@@ -34,8 +32,7 @@ change_requests_server <- function(
   open_edit_extraction,
   catalog,
   extractions,
-  active = NULL,
-  refresh = NULL
+  active = NULL
 ) {
   moduleServer(id, function(input, output, session) {
     ns <- session$ns
@@ -46,14 +43,10 @@ change_requests_server <- function(
     reviewing <- reactiveVal(NULL) # the request the dialog is about, as it was read
     reviewing_detail <- reactiveVal(NULL) # what the dialog shows of it, from request_detail()
 
-    # Read when the page is opened, when staff press Refresh (other staff send requests and approve them
-    # too) and straight after this session changed one; the database isn't asked over and over. If it
+    # Read when the page is opened (other staff send requests and approve them too) and straight after this session changed one; the database isn't asked over and over. If it
     # can't be reached the last requests read stay on screen, with a message, and the next read tries again.
     if (!is.null(active)) {
       observeEvent(active(), if (isTRUE(active())) refreshed(refreshed() + 1L), ignoreInit = TRUE)
-    }
-    if (!is.null(refresh)) {
-      observeEvent(refresh(), refreshed(refreshed() + 1L), ignoreInit = TRUE)
     }
     last_requests <- list()
     requests <- reactive({

@@ -24,7 +24,11 @@
 .page-header-aside {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
+  gap: $control-gap;
+}
+// on a phone it is a row of its own under the title, and a toggle in it fills that row
+@media (max-width: 575.98px) {
+  .page-header-aside { flex: 1 1 100%; }
 }
 
 // Pages are opened from the home page and other pages, not the menu

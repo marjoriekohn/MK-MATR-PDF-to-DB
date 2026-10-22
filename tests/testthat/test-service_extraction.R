@@ -188,7 +188,7 @@ test_that("the progress on each card is how it was read and how much of it is ch
   expect_false(any(grepl("MATR IDs|Submitted|Wave details", progress$label)))
 
   unread <- extraction_service_progress(list(status = "Draft", extraction_status = "failed", info = list(), matr_csv = NULL))
-  expect_equal(unread$label, c("Read by Gemini · failed", "Structure"))
+  expect_equal(unread$label, c("Read by Gemini · failed", "0% human-reviewed")) # nothing to check yet
   expect_equal(unread$state, c("attention", "not_started"))
   expect_equal(draft_service_percent_checked(list(blocks = 0, checked = 0)), 0L)
 })
@@ -231,7 +231,8 @@ test_that("cards are named from where it goes, else what the AI read, else the P
   record <- list(pdf = list(name = "scan.pdf"), info = picked_info())
   expect_equal(extraction_service_title(record, catalog), "Adult Health and Personality (AHP) · Wave 2")
   expect_equal(extraction_service_title(list(pdf = list(name = "scan.pdf"), info = list()), catalog), "scan.pdf")
-  expect_equal(extraction_service_title(list(pdf = list(name = "scan.pdf"), info = list()), catalog, list(name = "Sleep Diary")), "Sleep Diary")
+  # the name the AI read is often a heading inside the questionnaire, so the PDF's name stands until one is picked
+  expect_equal(extraction_service_title(list(pdf = list(name = "scan.pdf"), info = list()), catalog, list(name = "Sleep Diary")), "scan.pdf")
   expect_equal(extraction_service_title(list(pdf = list(), info = list()), catalog), "Untitled questionnaire") # typed by hand, no PDF
   expect_equal(extraction_service_title(list(info = picked_info(wave_id = "")), catalog), "Adult Health and Personality (AHP)")
 })
@@ -257,15 +258,15 @@ test_that("a recorded wave has to be the questionnaire's, ask no questions yet, 
   expect_equal(questionnaire_service_empty_wave_choices(catalog, "1", c("1" = 3L)), c("Wave 2 · given 04/15/2022 · no questions yet" = "2"))
 })
 
-test_that("the Edit Extraction page is headed by where it goes, else what Gemini read", {
+test_that("the Edit Extraction page is headed by where it goes, else the PDF's name, never what Gemini read", {
   catalog <- test_catalog()
   read <- list(name = "Printed Title", abbreviation = "PT")
   expect_equal(
     extraction_service_heading(list(info = picked_info()), catalog, read),
     list(title = "AHP · Wave 2", subtitle = "Adult Health and Personality")
   )
-  expect_equal(extraction_service_heading(list(info = list()), catalog, read), list(title = "PT", subtitle = "Printed Title"))
-  expect_equal(extraction_service_heading(list(info = list()), catalog)$title, "Unnamed questionnaire")
+  expect_equal(extraction_service_heading(list(pdf = list(name = "AHP_Redacted.pdf"), info = list()), catalog, read), list(title = "AHP_Redacted.pdf", subtitle = ""))
+  expect_equal(extraction_service_heading(list(info = list()), catalog, read)$title, "Unnamed questionnaire")
 })
 
 test_that("MATR IDs are read from the CSV's ID column, with or without a heading", {

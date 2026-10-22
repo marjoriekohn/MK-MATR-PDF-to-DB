@@ -18,7 +18,7 @@ quick_add_dialog <- function(entity, ns, back = FALSE) {
       p(
         class = "quick-add-more",
         paste0("The ", what$noun, " isn't in the list? "),
-        actionLink(ns("add_needed"), paste("Add", what$article, what$noun), icon = icon("plus"))
+        actionLink(ns("add_needed"), paste("Add", what$article, what$noun), icon = app_icon("add"))
       )
     }),
     edit_change_ui(ns("change")),

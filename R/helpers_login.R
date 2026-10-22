@@ -1,6 +1,6 @@
 # ------ Signing in, and the menu under the signed-in name --------------------------------------
 # The login screen covers the site until server.R has a signed-in staff member, then goes. The menu
-# in the top right names who is signed in and holds "Set or change password", "Report a problem" (a
+# in the top right names who is signed in and holds "Update Password", "Report a problem" (a
 # link to the problem form) and "Log out". All are drawn here; what they do is
 # in server.R. While a button's request is on its way it says what is happening (`data-busy-label`,
 # which www/js/site.js reads) and can't be pressed again.
@@ -43,7 +43,7 @@ login_ui <- function() {
 #' @return A modal dialog with `password_fields()`.
 password_dialog <- function() {
   modalDialog(
-    title = "Set your password",
+    title = "Update Password",
     password_fields(),
     footer = modalButton("Cancel"),
     size = "s",
@@ -100,39 +100,25 @@ login_button <- function(id, label, busy, primary = TRUE) {
 #' @param kind `"problem"` or `"note"`.
 #' @return A UI element.
 login_message <- function(text, kind = "problem") {
-  p(class = paste0("login-note is-", kind), if (kind == "problem") icon("triangle-exclamation") else icon("envelope"), " ", text)
+  p(class = paste0("login-note is-", kind), if (kind == "problem") app_icon("problem") else app_icon("email"), " ", text)
 }
 
 #' The menu under the signed-in name, in the top right.
 #'
-#' "Set or change password" is the input `change_password` (not for a development sign-in, which has no
+#' "Update Password" is the input `change_password` (not for a development sign-in, which has no
 #' password); "Report a problem" is a link to the problem form (`report_problem_url`), opened in a new
 #' tab; "Log out" is the input `log_out`.
 #'
 #' @param me Who is signed in: `list(staff_id, name, role, email)`.
 #' @param development Whether this is a development sign-in (STAFF_EMAIL), which the menu says.
 #' @return A UI element.
-#' The menu's Refresh button: reads everything on the pages again from the database.
-#'
-#' The site doesn't keep asking the database whether something changed, so what other staff did since
-#' a page was opened shows when the page is opened again, when this is pressed, or when the browser
-#' reloads the page (the sign-in is kept).
-#'
-#' @return A UI element.
-refresh_button <- function() {
-  actionButton(
-    "refresh_data", "Refresh", icon = icon("rotate-right"), class = "btn navbar-refresh",
-    title = "Read everything again from the database, with what other staff have changed"
-  )
-}
-
 user_menu <- function(me, development = FALSE) {
   div(
     class = "dropdown navbar-user",
     tags$button(
       type = "button", class = "btn navbar-user-button dropdown-toggle",
       `data-bs-toggle` = "dropdown", `aria-expanded` = "false",
-      icon("circle-user"), span(class = "navbar-user-name", me$name)
+      app_icon("account"), span(class = "navbar-user-name", me$name)
     ),
     tags$ul(
       class = "dropdown-menu dropdown-menu-end navbar-user-menu",
@@ -143,12 +129,12 @@ user_menu <- function(me, development = FALSE) {
         div(class = "navbar-user-role", paste0(me$role %||% "STAFF", if (development) " · development sign-in"))
       )),
       tags$li(tags$hr(class = "dropdown-divider")),
-      if (!development) tags$li(actionLink("change_password", tagList(icon("key"), " Set or change password"), class = "dropdown-item")),
+      if (!development) tags$li(actionLink("change_password", tagList(app_icon("password"), " Update Password"), class = "dropdown-item")),
       tags$li(tags$a(
         href = report_problem_url, target = "_blank", rel = "noopener", class = "dropdown-item",
-        icon("bug"), " Report a problem"
+        app_icon("report"), " Report a problem"
       )),
-      tags$li(actionLink("log_out", tagList(icon("right-from-bracket"), " Log out"), class = "dropdown-item"))
+      tags$li(actionLink("log_out", tagList(app_icon("log_out"), " Log out"), class = "dropdown-item"))
     )
   )
 }

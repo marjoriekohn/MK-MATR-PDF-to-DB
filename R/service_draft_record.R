@@ -28,7 +28,7 @@
 # The fields that are compared, for each table of a draft.
 review_edit_fields <- list(
   components = c("component_type", "text", "printed_number", "self_contained", "condition", "parent_question_id"),
-  variables = c("variable_type", "label", "subject", "answer_data_type"),
+  variables = c("variable_type", "label", "subject", "answer_data_type", "skip_condition", "skip_instruction"),
   response_options = c("answer_option", "printed_label", "skip_instruction")
 )
 review_edit_items <- c(components = "block", variables = "variable", response_options = "choice")
@@ -89,6 +89,52 @@ draft_service_review_edits <- function(original, reviewed) {
     }
   }
   edits
+}
+
+#' The blocks of a reviewed copy that differ from what the AI returned, for the outline's "Changed from
+#' AI" filter.
+#'
+#' A block is changed when it was added, when a field the accuracy record compares differs, or when one of
+#' its variables or choices was added, taken out or has such a field that differs. Moves don't count: a
+#' block moved is the same block, somewhere else.
+#'
+#' @param original The draft loaded from what the AI returned, or `NULL` (a draft typed by hand).
+#' @param reviewed The draft as the Edit Extraction page has it.
+#' @return The changed blocks' ids, or `NULL` when there is nothing to compare with.
+draft_service_changed_blocks <- function(original, reviewed) {
+  if (is.null(original)) {
+    return(NULL)
+  }
+  # the question (or other block) each row belongs to
+  block_of <- list(
+    components = function(draft, ids) ids,
+    variables = function(draft, ids) draft$variables$component_id[match(ids, draft$variables$id)],
+    response_options = function(draft, ids) {
+      boxes <- draft$response_options$variable_id[match(ids, draft$response_options$id)]
+      draft$variables$component_id[match(boxes, draft$variables$id)]
+    }
+  )
+  changed <- character()
+  for (table in names(review_edit_fields)) {
+    old <- original[[table]]
+    new <- reviewed[[table]]
+    added <- is.na(new$ref) | !new$ref %in% old$id
+    kept <- which(!added)
+    old_rows <- match(new$ref[kept], old$id)
+    differs <- rep(FALSE, length(kept))
+    for (field in review_edit_fields[[table]]) {
+      a <- review_edit_keys(original, table, old_rows, field)
+      b <- review_edit_keys(reviewed, table, kept, field)
+      differs <- differs | xor(is.na(a), is.na(b)) | (!is.na(a) & !is.na(b) & a != b)
+    }
+    changed <- c(changed, block_of[[table]](reviewed, new$id[c(which(added), kept[differs])]))
+    if (table != "components") {
+      # a variable or choice taken out changes the block it was in (the AI's ids are the reviewed copy's refs)
+      then <- block_of[[table]](original, setdiff(old$id, new$ref))
+      changed <- c(changed, reviewed$components$id[match(then, reviewed$components$ref)])
+    }
+  }
+  unique(changed[!is.na(changed)])
 }
 
 # The questionnaire's own name and abbreviation, as printed.

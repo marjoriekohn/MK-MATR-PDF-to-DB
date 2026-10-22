@@ -7,3 +7,4 @@
 *.Rproj
 .env
 logs/
+docs/audit.*

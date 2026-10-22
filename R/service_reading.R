@@ -31,7 +31,8 @@ reading_service_read <- function(pdf_path, lookups, progress = function(status) 
                                  generate = gemini_model_generate, model = reading_gemini_model,
                                  pages = NULL) {
   instructions <- reading_service_instructions(lookups)
-  requests <- page_requests(pages %||% count_pages(pdf_path, generate, model))
+  pages <- pages %||% count_pages(pdf_path, generate, model)
+  requests <- page_requests(pages)
   feedback <- ""
   best <- NULL
   failure <- NULL
@@ -47,7 +48,7 @@ reading_service_read <- function(pdf_path, lookups, progress = function(status) 
     progress("received")
     reading <- tryCatch(
       {
-        parts <- lapply(answers, function(answer) json_in(answer$text))
+        parts <- Map(on_pages, lapply(answers, function(answer) json_in(answer$text)), first_pages(pages))
         json <- reading_service_tidy(join_page_ranges(parts))
         list(
           json = json, problems = reading_service_problems(json, lookups), model = answers[[1]]$model,
@@ -85,9 +86,12 @@ json_in <- function(text) {
   jsonlite::fromJSON(substr(text, start, max(ends)), simplifyVector = FALSE)
 }
 
+# The first page of each page range, in the order the requests are sent.
+first_pages <- function(pages) seq(1, pages, by = reading_pages_at_once)
+
 # "This PDF has 5 pages. Record pages 3-4." for each pair of pages.
 page_requests <- function(pages) {
-  first <- seq(1, pages, by = reading_pages_at_once)
+  first <- first_pages(pages)
   last <- pmin(first + reading_pages_at_once - 1, pages)
   sprintf(
     "This PDF has %s. Record %s.",
@@ -107,6 +111,19 @@ count_pages <- function(pdf_path, generate, model) {
   pages <- suppressWarnings(as.integer(regmatches(answer$text, regexpr("[0-9]+", answer$text))))
   if (length(pages) == 0 || is.na(pages) || pages < 1) stop("Gemini couldn't count the PDF's pages.", call. = FALSE)
   pages
+}
+
+# Every block of a page range's reading notes the range's first page, so the Edit Extraction page can
+# open the PDF at it. (A block on the range's second page is a page early: the PDF opens at the page
+# before it.)
+on_pages <- function(part, page) {
+  mark <- function(blocks) lapply(blocks, function(block) {
+    block$page <- page
+    if (length(block$children) > 0) block$children <- mark(block$children)
+    block
+  })
+  part$components <- mark(part$components)
+  part
 }
 
 # One reading from the readings of each page range. A range that starts by
@@ -187,17 +204,18 @@ tidy_blocks <- function(blocks) {
     type <- block$component_type
     if (is_container(type)) {
       return(without_blanks(list(
-        component_type = type, display_order = i, text = clean_text(block$text),
+        component_type = type, display_order = i, text = clean_text(block$text), page = block$page,
         children = tidy_blocks(block$children)
       )))
     }
     if (type != "Question") {
-      return(without_blanks(list(component_type = type, display_order = i, text = clean_text(block$text))))
+      return(without_blanks(list(component_type = type, display_order = i, text = clean_text(block$text), page = block$page)))
     }
     without_blanks(list(
       component_type = type,
       display_order = i,
       text = clean_text(block$text),
+      page = block$page,
       printed_number = clean_number(block$printed_number),
       self_contained = block$self_contained %||% TRUE,
       condition = clean_text(block$condition),
@@ -222,7 +240,8 @@ tidy_boxes <- function(boxes) {
     if (box$variable_type == "open_ended") {
       return(without_blanks(list(
         variable_type = box$variable_type, display_order = i, label = clean_text(box$label),
-        subject = blank_respondent(clean_text(box$subject) %||% NA), answer_data_type = box$answer_data_type
+        subject = blank_respondent(clean_text(box$subject) %||% NA), answer_data_type = box$answer_data_type,
+        skip_condition = clean_text(box$skip_condition), skip_instruction = clean_text(box$skip_instruction)
       )))
     }
     without_blanks(list(

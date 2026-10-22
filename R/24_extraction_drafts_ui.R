@@ -68,7 +68,7 @@ draft_card <- function(record, draft, catalog, me, now = Sys.time()) {
         if (!is.null(sent_back)) row_badge("Sent back", class = "is-warning"),
         if (identical(record$method, extraction_manual)) row_badge("Typed by hand"),
         if (failed) row_badge("Reading stopped", class = "is-warning"),
-        if (!is.null(editor)) row_badge(icon("pen"), sprintf(" %s is actively working on this", editor$by), class = "is-editing")
+        if (!is.null(editor)) row_badge(app_icon("edit"), sprintf(" %s is actively working on this", editor$by), class = "is-editing")
       ),
       p(class = "draft-meta", draft_meta(record, me)),
       if (!is.null(sent_back)) {

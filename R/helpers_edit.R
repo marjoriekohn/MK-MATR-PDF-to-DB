@@ -8,17 +8,17 @@
 #' @param kind `"info"`, `"warning"` or `"danger"`.
 #' @param ... What it says.
 #' @param title A bold line above it.
-#' @param icon_name An icon; by default one that suits `kind`.
+#' @param icon_name An icon, by its name in `app_icons`; by default one that suits `kind`.
 #' @return A UI element.
 edit_callout <- function(kind, ..., title = NULL, icon_name = NULL) {
   icon_name <- icon_name %||% switch(kind,
-    danger = "triangle-exclamation",
-    warning = "circle-exclamation",
-    "circle-info"
+    danger = "problem",
+    warning = "warning",
+    "info"
   )
   div(
     class = paste0("edit-callout is-", kind), role = if (kind != "info") "alert",
-    span(class = "edit-callout-icon", `aria-hidden` = "true", icon(icon_name)),
+    span(class = "edit-callout-icon", `aria-hidden` = "true", app_icon(icon_name)),
     div(class = "edit-callout-body", if (!is.null(title)) strong(class = "edit-callout-title", title), ...)
   )
 }
@@ -93,7 +93,7 @@ edit_steps_ui <- function(labels, current) {
       state <- if (i < current) "done" else if (i == current) "current" else "next"
       tags$li(
         class = paste0("edit-step is-", state), `aria-current` = if (state == "current") "step",
-        span(class = "edit-step-mark", if (state == "done") icon("check") else i),
+        span(class = "edit-step-mark", if (state == "done") app_icon("done") else i),
         span(class = "edit-step-label", labels[i])
       )
     })
@@ -127,7 +127,7 @@ edit_field_ui <- function(ns, field, value, slot) {
         class = "locked-value", `aria-label` = field$label, title = field$label,
         edit_display_value(field, edit_service_normalize(field, value))
       ),
-      div(class = "form-text locked-reason", icon("lock"), " ", field$locked)
+      div(class = "form-text locked-reason", app_icon("locked"), " ", field$locked)
     )
   } else {
     switch(field$type,
@@ -191,11 +191,13 @@ edit_variables_ui <- function(id, value, field) {
     `data-subjects` = jsonlite::toJSON(as.character(options$subjects)),
     `data-answer-types` = jsonlite::toJSON(as.character(options$answer_data_types)),
     `data-answers` = list_id,
+    # the icons it draws, so they change with the site's (helpers_icons.R)
+    `data-icons` = jsonlite::toJSON(as.list(app_icons[c("add", "delete")]), auto_unbox = TRUE),
     div(class = "edit-variables-title", field$label),
     div(class = "edit-variables-value", textInput(id, NULL, value)),
     suggestions(list_id, options$answer_options),
     div(class = "edit-variables-list"),
-    tags$button(type = "button", class = "btn btn-sm btn-outline-dark edit-variables-add", icon("plus"), " Variable")
+    tags$button(type = "button", class = "btn btn-sm btn-outline-dark edit-variables-add", app_icon("add"), " Variable")
   )
 }
 
@@ -259,7 +261,7 @@ edit_card_ui <- function(card, verb, selected = FALSE) {
     if (length(card$facts[[1]]) > 0) {
       div(class = "edit-card-facts", lapply(card$facts[[1]], function(fact) row_badge(fact)))
     },
-    if (!is.na(card$warn)) p(class = "edit-card-warn", icon("circle-exclamation"), " ", card$warn),
+    if (!is.na(card$warn)) p(class = "edit-card-warn", app_icon("warning"), " ", card$warn),
     if (!selected) {
       review_button(
         paste(tools::toTitleCase(verb), "this"), "pick",
@@ -382,7 +384,7 @@ edit_delete_ui <- function(entity, title, plan) {
     class = "edit-delete",
     div(
       class = "delete-banner",
-      icon("trash-can"),
+      app_icon("delete"),
       div(
         span(class = "delete-banner-label", paste("You're proposing to delete this", entity$noun)),
         strong(class = "delete-banner-title", title)
@@ -503,7 +505,7 @@ field_tooltip <- function(text, label) {
   bslib::tooltip(
     span(
       class = "field-tooltip", tabindex = "0", role = "img", `aria-label` = paste("About", tolower(label)),
-      icon("circle-info")
+      app_icon("info")
     ),
     text
   )

@@ -369,7 +369,7 @@ test_that("editing a checked block takes the check off, and Undo brings it back"
   shiny::testServer(edit_extraction_server, args = edit_page(me), {
     errors <- collect_errors(session)
     open(first)
-    session$setInputs(`outline-action` = list(action = "check", id = "c3"))
+    change_draft(with_checked(draft(), "c3"), keep_checked = TRUE) # its missing MATR IDs keep Verify off
     expect_equal(checked_blocks(draft()), "c3")
     session$flushReact()
     one_checked <- sprintf("%d%% human-reviewed", floor(100 / nrow(draft()$components)))
@@ -404,8 +404,7 @@ test_that("a change to a checked block's variable or choices takes its check off
     suppressMessages(session$setInputs(`outline-action` = list(action = "delete", table = "response_options", id = "o5")))
     expect_length(checked_blocks(draft()), 0)
 
-    session$setInputs(`outline-action` = list(action = "check", id = "c3"))
-    session$setInputs(`outline-action` = list(action = "check", id = "c3"))
+    session$setInputs(`outline-action` = list(action = "check", id = "c3")) # it has no MATR ID yet: refused
     expect_length(checked_blocks(draft()), 0)
 
     change_draft(with_checked(draft(), c("c3", "c4")), keep_checked = TRUE)
@@ -441,7 +440,26 @@ test_that("a block moved into another section loses its check, and one moved in 
   })
 })
 
-test_that("the PDF opens in its own window when the file is here, and the page is drawn with one panel", {
+test_that("the header is the title and its buttons on one row, with the progress bar across the page under both", {
+  html <- htmltools::renderTags(edit_extraction_ui("edit_extraction"))$html
+  places <- vapply(c('class="review-title"', 'class="review-actions"', 'id="edit_extraction-save_status"', 'class="review-buttons"', 'id="edit_extraction-undo"', 'id="edit_extraction-request_button"', 'id="edit_extraction-progress"'), function(x) {
+    as.integer(regexpr(x, html, fixed = TRUE))
+  }, integer(1))
+  expect_true(all(places > 0))
+  expect_equal(order(places), seq_along(places))
+  # the buttons are a group of their own after how saving stands, so on a phone they can share a row evenly
+  # (_edit_extraction.scss); the toolbar's buttons and fields are full size, like the header's
+  toolbar <- regmatches(html, regexpr('(?s)<div class="outline-toolbar">.*?<div class="outline-split">', html, perl = TRUE))
+  expect_length(toolbar, 1)
+  expect_false(grepl("btn-sm|form-control-sm|form-select-sm", toolbar))
+  # each button is its icon and its words; on a phone only the icon shows (components/_buttons.scss)
+  expect_match(html, '<span class="btn-text">Undo</span>')
+  expect_match(html, '<span class="btn-text">MATR IDs</span>')
+  expect_match(html, "fa-fingerprint")
+  expect_match(as.character(pdf_open_button("http://x/pdf")), '<span class="btn-text">Open PDF</span>')
+})
+
+test_that("the PDF opens in its own tab when the file is here, and the page is drawn with one panel", {
   me <- local_staff()
   tree <- shared_tree()
   seen <- local_browser()
@@ -454,10 +472,15 @@ test_that("the PDF opens in its own window when the file is here, and the page i
   html <- htmltools::renderTags(edit_extraction_ui("edit_extraction"))$html
   expect_match(html, 'id="edit_extraction-pdf_link"')
   expect_match(html, "structure-card")
-  expect_false(grepl("pdf-card|review-details", html))
+  expect_false(grepl("pdf-card|review-details|pdf-pane|pdf_pane|iframe", html))
   expect_equal(lengths(regmatches(html, gregexpr('class="card ', html))), 1)
-  expect_match(as.character(pdf_open_button("http://x/pdf")), 'href="http://x/pdf"')
+  button <- as.character(pdf_open_button("http://x/pdf"))
+  expect_match(button, 'href="http://x/pdf"')
+  expect_match(button, 'target="_blank"')
+  expect_false(grepl("data-pdf-at-picked", button))
   expect_null(pdf_open_button(NULL))
+  # on Edit Extraction it opens at the picked block's page (www/js/review.js)
+  expect_match(as.character(pdf_open_button("http://x/pdf", at_picked = TRUE)), "data-pdf-at-picked")
 })
 
 test_that("Continue shows the PDF that was uploaded with the draft, even on a server that hasn't got it", {
@@ -473,6 +496,7 @@ test_that("Continue shows the PDF that was uploaded with the draft, even on a se
   shiny::testServer(edit_extraction_server, args = edit_page(me), {
     open(extraction_model_get(test_connection, typed$id))
     expect_match(text_of(output$pdf_link), "Open PDF")
+    expect_match(output$pdf_link$html, 'target="_blank"')
     expect_true(file.exists(typed$pdf$path)) # fetched from Storage
   })
 })
@@ -655,4 +679,60 @@ test_that("Save is refused if someone saved the draft after the page opened it, 
     expect_false(has_unsaved_changes())
     expect_equal(loaded_revision(), first$revision + 2)
   })
+})
+
+test_that("a change is saved by itself a few seconds after the last one, quietly, and the header says when", {
+  me <- local_staff()
+  tree <- shared_tree()
+  seen <- local_browser()
+  first <- read_draft(me, tree)
+  shiny::testServer(edit_extraction_server, args = edit_page(me), {
+    open(first)
+    session$flushReact()
+    change_draft(reworded(draft()))
+    session$flushReact() # as after each change staff make
+    session$elapse(autosave_delay * 1000 - 1000)
+    expect_true(has_unsaved_changes()) # still typing, as far as the page knows
+    change_draft(reworded(draft(), "Do you worry a great deal?"))
+    session$flushReact()
+    session$elapse(autosave_delay * 1000 - 1000)
+    expect_true(has_unsaved_changes()) # the wait starts again with each change
+    session$elapse(1500)
+    expect_false(has_unsaved_changes())
+    expect_equal(component(draft_service_load(test_connection, first$id), "c3")$text, "Do you worry a great deal?")
+    expect_length(seen$notifications, 0) # no "Saved." notice
+    expect_match(text_of(output$save_status), "Saved just now")
+  })
+})
+
+test_that("after a save is refused, only Save tries again", {
+  me <- local_staff()
+  colleague <- local_staff()
+  tree <- shared_tree()
+  seen <- local_browser()
+  first <- read_draft(me, tree)
+  shiny::testServer(edit_extraction_server, args = claim_page(me, seen), {
+    open(first)
+    session$flushReact()
+    draft_service_save(test_connection, first$id, reworded(numbered_gold(), "Theirs"), colleague$staff_id)
+    change_draft(reworded(draft()))
+    session$flushReact() # as after each change staff make
+    session$elapse(autosave_delay * 1000 + 500)
+    expect_true(has_unsaved_changes())
+    expect_match(seen$modals[[length(seen$modals)]], "Someone saved this draft after you opened it", fixed = TRUE)
+    modals <- length(seen$modals)
+    change_draft(reworded(draft(), "Mine, again"))
+    session$flushReact()
+    session$elapse(autosave_delay * 1000 + 500)
+    expect_length(seen$modals, modals) # not asked again
+    expect_match(text_of(output$save_status), "Save to keep them")
+  })
+})
+
+test_that("how long ago the draft was saved is said in seconds, then minutes, then the time", {
+  at <- as.POSIXct("2026-10-21 14:05:00", tz = "UTC")
+  expect_equal(saved_ago(at, at + 3), "Saved just now")
+  expect_equal(saved_ago(at, at + 47), "Saved 45 s ago")
+  expect_equal(saved_ago(at, at + 4 * 60 + 10), "Saved 4 min ago")
+  expect_equal(saved_ago(at, at + 2 * 3600), "Saved at 2:05 PM")
 })

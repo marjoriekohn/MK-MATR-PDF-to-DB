@@ -69,9 +69,9 @@ test_that("a staff member's password signs them in, and a wrong one says so", {
     session$setInputs(login_password = account$password, login_sign_in = 2)
     expect_equal(signed_in()$staff_id, me$staff_id)
     expect_true(nzchar(session_state()$tokens$access_token))
-    expect_match(text_of(output$navbar_user), "Set or change password")
+    expect_match(text_of(output$navbar_user), "Update Password")
     session$setInputs(change_password = 1)
-    expect_match(seen$modals[[1]], "Set your password")
+    expect_match(seen$modals[[1]], "Update Password")
     session$setInputs(new_password = own, new_password_again = own, password_change_submit = 1)
     expect_equal(seen$closed, 1L)
     expect_match(notice_texts(seen), "password is saved", all = FALSE)
@@ -122,7 +122,7 @@ test_that("the menu's title and the home page's buttons show the pages they name
   expect_equal(seen$pages, c("home", "make_edit", "extraction"))
 })
 
-test_that("the drafts are read from the database, and a draft added elsewhere is noticed on Refresh or when a page opens", {
+test_that("the drafts are read from the database, and a draft added elsewhere is noticed when a page opens", {
   me <- local_staff()
   seen <- local_browser()
   withr::local_envvar(STAFF_EMAIL = me$email)
@@ -134,7 +134,7 @@ test_that("the drafts are read from the database, and a draft added elsewhere is
     expect_true(first$id %in% names(extractions$all()))
     second <- local_read_extraction(me, env = here) # another session, or the reading job
     expect_false(second$id %in% names(extractions$all())) # nothing has asked yet
-    session$setInputs(refresh_data = 1) # the menu's Refresh
+    session$setInputs(nav = "change_requests") # opening a page that lists them
     expect_true(second$id %in% names(extractions$all()))
 
     fourth <- local_read_extraction(me, env = here)
@@ -173,7 +173,7 @@ test_that("a database that can't be reached leaves the last drafts on screen, wi
     expect_equal(utils::tail(seen$notifications, 1)[[1]]$type, "error")
     net$down <- FALSE
     second <- local_read_extraction(me, env = here)
-    session$setInputs(refresh_data = 1)
+    session$setInputs(nav = "extraction")
     expect_true(second$id %in% names(extractions$all()))
   })
 })
@@ -187,8 +187,7 @@ test_that("the site is drawn with the login screen over it, and the menu's place
   html <- rendered$html
   expect_match(html, 'id="login_screen"')
   expect_match(html, 'id="navbar_user"')
-  expect_match(html, 'id="navbar_refresh"')
-  expect_true(regexpr('id="navbar_refresh"', html) < regexpr('id="navbar_user"', html))
+  expect_false(grepl('id="navbar_refresh"', html)) # a reload of the page reads everything again
   expect_match(paste(rendered$head, html), "js/site.js")
   expect_true(regexpr('id="login_screen"', html) < regexpr('id="home-extraction"', html))
   # while the server works, the page says so with the gold bar across the top and nothing else (no spinners);

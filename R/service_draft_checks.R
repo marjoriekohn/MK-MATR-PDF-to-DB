@@ -130,7 +130,16 @@ variable_problems <- function(draft, matr_ids = TRUE) {
   skips <- choices$skip_instruction
   names_a_place <- !is.na(skips) & (!is.na(skip_number(skips)) | !is.na(skip_section(skips)))
   said <- sprintf("choice “%s”", ifelse(is.na(choices$answer_option), "(blank)", choices$answer_option))
+  # a write-in's skip, the same way, and it says which answer skips
+  box_place <- match(boxes$component_id, printed)
+  box_names_a_place <- !is.na(boxes$skip_instruction) & (!is.na(skip_number(boxes$skip_instruction)) | !is.na(skip_section(boxes$skip_instruction)))
   rbind(
+    box_problem(!is_choice_box & box_names_a_place & is.na(boxes$skip_to_id), "pick where it skips to.", "skip_to_id"),
+    box_problem(
+      !is_choice_box & match(boxes$skip_to_id, printed) <= box_place,
+      "it skips back to something printed before it. Pick where it skips to.", "skip_to_id"
+    ),
+    box_problem(!is_choice_box & !is.na(boxes$skip_to_id) & is.na(boxes$skip_condition), "say which answer skips.", "skip_condition"),
     choice_problem(names_a_place & is.na(choices$skip_to_id), paste0("pick where ", said, " skips to."), "skip_to_id"),
     choice_problem(
       !is.na(choices$skip_to_id) & match(choices$skip_to_id, printed) <= source_place,

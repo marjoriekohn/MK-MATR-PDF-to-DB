@@ -1,0 +1,132 @@
+// ------ Buttons, on every page -----------------------------------------------------------------------
+// Their heights, fonts and padding are set in defaults.scss ($control-height). Every button is its icon and
+// words on one line, centred. The kinds:
+//   .btn-primary      gold: the one thing to do next
+//   .btn-outline-dark white with a quiet border: everything else (Shiny's plain buttons look the same)
+//   .btn-delete       white with red words: takes something away
+//   .btn-icon         a round icon, no border: the small buttons in a list's rows
+//   .btn-link         words only
+//   .btn-wide         as wide as what it is in
+// The colours are Bootstrap's button variables, so pointing, pressing, a toggle's picked button and a
+// button that can't be pressed all follow from them.
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  min-height: $control-height; // also when only its icon shows, which is shorter than a line of words
+  max-width: 100%;
+  transition: background-color 0.15s, border-color 0.15s, color 0.15s, box-shadow 0.15s;
+}
+.btn-sm { min-height: $control-height-sm; }
+// actionButton() puts the icon and words in a span of their own
+.btn > .action-label { display: inline-flex; align-items: center; gap: inherit; min-width: 0; }
+.btn-text { overflow: hidden; text-overflow: ellipsis; }
+
+.btn-primary {
+  --bs-btn-color: #{$vcu-black};
+  --bs-btn-bg: #{$vcu-gold};
+  --bs-btn-border-color: #{$vcu-gold};
+  --bs-btn-hover-color: #{$vcu-gold};
+  --bs-btn-hover-bg: #{$vcu-black};
+  --bs-btn-hover-border-color: #{$vcu-black};
+  --bs-btn-active-color: #{$vcu-gold};
+  --bs-btn-active-bg: #{$vcu-black};
+  --bs-btn-active-border-color: #{$vcu-black};
+  --bs-btn-disabled-color: #{$vcu-black};
+  --bs-btn-disabled-bg: #{$vcu-gold};
+  --bs-btn-disabled-border-color: #{$vcu-gold};
+  box-shadow: 0 1px 2px rgba($vcu-black, 0.12);
+}
+
+// Shiny's plain buttons (a dialog's Cancel, a file input's) are drawn as the quiet button too. The :not()
+// list is bslib's own, so this replaces its grey outline for exactly the buttons it gives one.
+.btn-outline-dark,
+.btn-default:not(.btn-primary, .btn-secondary, .btn-info, .btn-success, .btn-danger, .btn-warning, .btn-light, .btn-dark, .btn-link, [class*="btn-outline-"]),
+.dt-buttons .btn {
+  --bs-btn-color: #{$vcu-black};
+  --bs-btn-bg: #{$vcu-white};
+  --bs-btn-border-color: #{$control-line};
+  --bs-btn-hover-color: #{$vcu-black};
+  --bs-btn-hover-bg: #{rgba($vcu-gold, 0.14)};
+  --bs-btn-hover-border-color: #{$vcu-gray};
+  --bs-btn-active-color: #{$vcu-black};
+  --bs-btn-active-bg: #{rgba($vcu-gold, 0.3)};
+  --bs-btn-active-border-color: #{$vcu-gray};
+  --bs-btn-disabled-color: #{$vcu-black};
+  --bs-btn-disabled-bg: #{$vcu-white};
+  --bs-btn-disabled-border-color: #{$control-line};
+  box-shadow: $control-shadow;
+  &:disabled, &.disabled { box-shadow: none; }
+}
+
+.btn-delete {
+  --bs-btn-color: #{$vcu-red};
+  --bs-btn-bg: #{$vcu-white};
+  --bs-btn-border-color: #{rgba($vcu-red, 0.45)};
+  --bs-btn-hover-color: #{$vcu-red};
+  --bs-btn-hover-bg: #{rgba($vcu-red, 0.08)};
+  --bs-btn-hover-border-color: #{$vcu-red};
+  --bs-btn-active-color: #{$vcu-white};
+  --bs-btn-active-bg: #{$vcu-red};
+  --bs-btn-active-border-color: #{$vcu-red};
+  --bs-btn-disabled-color: #{$vcu-red};
+  --bs-btn-disabled-bg: #{$vcu-white};
+  --bs-btn-disabled-border-color: #{rgba($vcu-red, 0.45)};
+  box-shadow: $control-shadow;
+}
+
+.btn-icon {
+  --bs-btn-color: #{$vcu-gray};
+  --bs-btn-hover-color: #{$vcu-black};
+  --bs-btn-hover-bg: #{rgba($vcu-gray, 0.14)};
+  --bs-btn-active-color: #{$vcu-black};
+  --bs-btn-active-bg: #{rgba($vcu-gray, 0.25)};
+  width: $control-height-sm;
+  height: $control-height-sm;
+  min-height: 0;
+  flex-shrink: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+}
+
+.btn-link {
+  --bs-btn-color: #{$vcu-black};
+  --bs-btn-hover-color: #{$vcu-black};
+  --bs-btn-active-color: #{$vcu-black};
+  text-decoration: none;
+  &:hover, &:focus-visible { text-decoration: underline; text-decoration-color: $vcu-gold; text-underline-offset: 0.15em; }
+}
+
+.btn-wide { display: flex; width: 100%; }
+
+// ------ A row of buttons that share it evenly ---------------------------------------------------------
+// Each takes the same share, whatever its words or padding (a grid's columns, not flex, which can't shrink
+// a button below its padding). An output with nothing in it yet takes no column, but isn't hidden: Shiny
+// doesn't fill in a hidden output.
+@mixin even-buttons {
+  display: grid;
+  grid-auto-columns: minmax(0, 1fr);
+  grid-auto-flow: column;
+  gap: $control-gap;
+  > .shiny-html-output:empty { position: absolute; }
+  .btn { width: 100%; }
+}
+
+// ------ On a phone --------------------------------------------------------------------------------------
+// A button's words beside its icon (icon_label()) aren't shown, only the icon; the words stay for screen
+// readers. The button is then square, so a row of them is even.
+@media (max-width: 767.98px) {
+  .btn .btn-text {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    white-space: nowrap;
+  }
+  .btn:has(.btn-text):not(.btn-sm) { min-width: $control-height; padding-inline: 0; }
+  .btn-sm:has(.btn-text) { min-width: $control-height-sm; padding-inline: 0; }
+}

@@ -1,3 +1,5 @@
+// Fields and drop-downs are the buttons' height (defaults.scss); selectize sizes itself, so it is told
+.selectize-input { min-height: $control-height; font-size: $control-font-size; }
 .form-control, .form-select, .selectize-input {
   border: 1px solid $vcu-gray;
   border-radius: $border-radius;

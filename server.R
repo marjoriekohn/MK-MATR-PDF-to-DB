@@ -14,7 +14,6 @@ function(input, output, session) {
     if (!is.null(isolate(signed_in()))) return(invisible()) # already signed in this session
     tokens <<- signed_in_tokens
     removeUI(paste0("#", login_screen_id))
-    output$navbar_refresh <- renderUI(refresh_button())
     output$navbar_user <- renderUI(user_menu(me, development))
     build_site(me)
   }
@@ -178,18 +177,11 @@ function(input, output, session) {
 
     # The database isn't asked over and over whether something changed: every read makes the page
     # busy, and the gold bar would never go away. What other staff changed is read when a page that
-    # shows it is opened, and when the menu's Refresh is pressed (`refreshed`, which every page that
-    # reads the database is given).
-    refreshed <- reactiveVal(0L)
-    observeEvent(input$refresh_data, {
-      refreshed(refreshed() + 1L)
-      catalog$refresh()
-      showNotification("Read everything again from the database.", type = "message", duration = 3)
-    })
+    # shows it is opened, or when the browser reloads the page (the sign-in is kept).
 
     # Every extraction draft. Read again straight after this session changes one, which it says by
-    # calling extractions$changed(); when a page that shows drafts is opened, or Refresh is pressed
-    # (other staff change them too); and every few seconds while a draft this person started is being
+    # calling extractions$changed(); when a page that shows drafts is opened (other staff change them
+    # too); and every few seconds while a draft this person started is being
     # read, so they see how far the reading job has got.
     extractions_written <- reactiveVal(0L)
     reading_checked <- reactiveVal(0L)
@@ -200,7 +192,6 @@ function(input, output, session) {
       all = reactive({
         extractions_written()
         reading_checked()
-        refreshed()
         tryCatch(
           {
             last_extractions <<- extraction_service_get_all(database)
@@ -249,18 +240,15 @@ function(input, output, session) {
     # from it is opened.
     observeEvent(input$nav, if (input$nav %in% c("extraction", "edit_extraction")) catalog$refresh())
 
-    # Opening a page that lists drafts reads them again, since other staff change them too.
-    observeEvent(input$nav,
-      {
-        if (input$nav %in% c("extraction", "edit_extraction", "change_requests")) extractions$changed()
-      },
-      ignoreInit = TRUE
-    )
+    # Opening a page that lists drafts reads them again, since other staff change them too. (No
+    # ignoreInit: the first page shown is Home, which doesn't list them, and with it the first page a
+    # test opens would be skipped.)
+    observeEvent(input$nav, if (input$nav %in% c("extraction", "edit_extraction", "change_requests")) extractions$changed())
 
     # ------ MODULES -----------------------------------------------------------
 
     # ------ * Home ------------------------------------------------------------
-    home_server("home", database, me, show_page, active = on_page("home"), refresh = refreshed)
+    home_server("home", database, me, show_page, active = on_page("home"))
     observeEvent(input$to_home, show_page("home"))
 
     # ------ * Extraction ------------------------------------------------------
@@ -278,10 +266,10 @@ function(input, output, session) {
     )
 
     # ------ * Make an edit ----------------------------------------------------
-    make_edit <- make_edit_server("make_edit", database, me, show_page, active = on_page("make_edit"), refresh = refreshed)
+    make_edit <- make_edit_server("make_edit", database, me, show_page, active = on_page("make_edit"))
 
     # ------ * Edit history ----------------------------------------------------
-    edit_history_server("edit_history", database, active = on_page("edit_history"), refresh = refreshed)
+    edit_history_server("edit_history", database, active = on_page("edit_history"))
 
     # ------ * Change Requests -------------------------------------------------
     # Editing a request opens it where it was made: an edit on Make an edit, an
@@ -295,8 +283,7 @@ function(input, output, session) {
       open_edit_extraction = open_edit_extraction,
       catalog = catalog,
       extractions = extractions,
-      active = on_page("change_requests"),
-      refresh = refreshed
+      active = on_page("change_requests")
     )
     site <<- list(catalog = catalog, extractions = extractions)
     invisible()

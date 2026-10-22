@@ -112,7 +112,7 @@ test_that("only a page of edits is listed at first, and Show more lists the next
   })
 })
 
-test_that("Refresh, and coming back to the page, read the history again; a read that fails keeps what was last read", {
+test_that("coming back to the page reads the history again; a read that fails keeps what was last read", {
   seen <- local_browser()
   reads <- 0L
   local_stub("history_service_get_all", function(connection) {
@@ -124,9 +124,12 @@ test_that("Refresh, and coming back to the page, read the history again; a read 
   shiny::testServer(edit_history_server, args = history_args(active = active), {
     session$setInputs(kind = "all", search = "")
     expect_match(text_of(output$entries), "Edit number 2")
-    session$setInputs(refresh = 1)
+    active(TRUE)
+    session$flushReact()
     expect_match(text_of(output$entries), "Edit number 2") # kept
     expect_equal(notice_texts(seen), "The database is down.")
+    active(FALSE)
+    session$flushReact()
     active(TRUE)
     session$flushReact()
     expect_match(text_of(output$entries), "Edit number 1")

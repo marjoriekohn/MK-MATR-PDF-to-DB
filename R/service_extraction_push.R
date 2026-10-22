@@ -28,8 +28,8 @@
 #     choices and the sets of choices they point at are the ones reused.
 #   * Who a variable is about is a SUBJECT row: the respondent's ("Respondent") for a blank, the one with the
 #     same name (ignoring capitals and spaces at the ends) when there is one, or a new one staff typed.
-#   * A choice that skips points at the block it sends respondents to (skip_to_component_id), so every
-#     block is added before any variable.
+#   * A choice or a write-in that skips points at the block it sends respondents to (skip_to_component_id),
+#     so every block is added before any variable, or says it ends the questionnaire (skip_to_end).
 #   * The wave records each question's place among the questions (question_number, 1, 2, 3...,
 #     sections and question groups not counted) and the number printed beside it (printed_number),
 #     which can repeat or be missing.
@@ -314,22 +314,37 @@ push_variables <- function(push, draft, block, component, questionnaire) {
     ))
     push$summary$variables <- push$summary$variables + 1L
     if (box$variable_type == "open_ended") {
-      push$insert("open_ended", list(variable_key = variable), list(answer_data_type = box$answer_data_type))
+      push$insert("open_ended", list(variable_key = variable), c(
+        list(answer_data_type = box$answer_data_type, skip_condition = box$skip_condition, skip_instruction = box$skip_instruction),
+        push_skip_to(push, box$skip_to_id)
+      ))
       next
     }
     choices <- draft_service_children(draft, "response_options", box$id)
     push$insert("closed_ended", list(variable_key = variable), list(option_set_id = push_option_set(push, choices$answer_option)))
     for (j in seq_len(nrow(choices))) {
       choice <- choices[j, ]
-      push$insert("response_option", list(variable_key = variable, answer_option_id = push_answer_option(push, choice$answer_option)), list(
-        display_order = j, code_value = if (is.na(choice$code_value)) NA else as.character(choice$code_value),
-        printed_label = choice$printed_label,
-        skip_instruction = choice$skip_instruction,
-        skip_to_component_id = if (!is.na(choice$skip_to_id)) push$component_of[[choice$skip_to_id]] %||% NA else NA
+      push$insert("response_option", list(variable_key = variable, answer_option_id = push_answer_option(push, choice$answer_option)), c(
+        list(
+          display_order = j, code_value = if (is.na(choice$code_value)) NA else as.character(choice$code_value),
+          printed_label = choice$printed_label,
+          skip_instruction = choice$skip_instruction
+        ),
+        push_skip_to(push, choice$skip_to_id)
       ))
       push$summary$choices <- push$summary$choices + 1L
     }
   }
+}
+
+# Where a choice or write-in skips to, as its row records it: the component (skip_to_component_id), or the end of
+# the questionnaire (skip_to_end). Empty fields aren't sent, so a draft with neither is pushed the same as before
+# the columns were added (docs/sql/7_more_skips.sql).
+push_skip_to <- function(push, skip_to_id) {
+  list(
+    skip_to_component_id = if (!is.na(skip_to_id) && skip_to_id != skip_to_end_id) push$component_of[[skip_to_id]] %||% NA else NA,
+    skip_to_end = if (identical(skip_to_id, skip_to_end_id)) TRUE else NA
+  )
 }
 
 # The id (or the name) of an answer choice with these words: the one that is there, or a new one.

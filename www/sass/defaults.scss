@@ -1,17 +1,17 @@
 /* override Bootstrap variables before Bootstrap is compiled. */
 
 // ------ VCU brand palette (only these colors are allowed) --------------------
-$vcu-gold:  #FFB300; // RGB 255,179,0
-$vcu-white: #FFFFFF;
-$vcu-black: #000000;
-$vcu-gray:  #63656A; // RGB 99,101,106
+$vcu-gold:  #FFB300; // buttons
+$vcu-white: #FFFFFF; // background
+$vcu-black: #000000; // font text
+$vcu-gray:  #63656A; // border and lines
 
 // VCU's accent colors. Red for warnings and errors, green for checkmarks and
 // success. Purple, blue and light gray aren't used yet.
-$vcu-red:        #B02E01;
-$vcu-green:      #0B652E;
+$vcu-red:        #B02E01; // warnings, errors, deleting
+$vcu-green:      #0B652E; // verified, checkmarks
 $vcu-purple:     #8E6A90;
-$vcu-blue:       #006894;
+$vcu-blue:       #006894; // edit buttons
 $vcu-light-gray: #DEDEDE;
 
 // just in case we need to change the warning color, its named differently
@@ -60,3 +60,30 @@ $border-radius-lg:   $border-radius;
 $border-radius-xl:   $border-radius;
 $border-radius-xxl:  $border-radius;
 $card-border-radius: $border-radius;
+
+// ------ Controls: buttons, fields and drop-downs ------------------------------
+// Every button, field and drop-down that sits beside others is one height, on every page, so neighbours
+// line up whatever their words. A small one (the same words, less room around them) is for dense lists,
+// cards and the editor's fields. components/_buttons.scss draws the buttons from these.
+$control-height:    2.25rem;
+$control-height-sm: 1.875rem;
+$control-font-size: 0.875rem;
+$control-gap:  0.5rem;                // between neighbouring buttons and fields
+$control-line: rgba($vcu-gray, 0.45); // a quiet button's border
+$control-shadow: 0 1px 2px rgba($vcu-black, 0.06);
+
+// Bootstrap sizes its buttons and fields from these, so they come out at the heights above: the words'
+// line (1.5 times the font size), the padding above and below, and 0.125rem for the 1px border, top and
+// bottom. (bslib's "shiny" preset would otherwise make buttons 15px with 2em on each side.)
+$input-btn-font-size:    $control-font-size;
+$input-btn-font-size-sm: $control-font-size;
+$input-btn-line-height:  1.5;
+$input-btn-padding-y:    ($control-height - $control-font-size * 1.5 - 0.125rem) * 0.5;
+$input-btn-padding-y-sm: ($control-height-sm - $control-font-size * 1.5 - 0.125rem) * 0.5;
+$input-btn-padding-x:    0.75rem;
+$input-btn-padding-x-sm: 0.625rem;
+// the preset sets these three itself, so they aren't left to follow the ones above
+$btn-padding-y:    $input-btn-padding-y;
+$btn-padding-x:    0.875rem;
+$btn-font-weight:  500;
+$btn-white-space:  nowrap; // a button is one line, so neighbours keep one height

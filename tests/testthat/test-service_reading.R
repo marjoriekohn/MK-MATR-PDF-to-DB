@@ -246,6 +246,9 @@ test_that("a questionnaire is read two pages at a time, and the pieces joined", 
   expect_equal(vapply(blocks, function(block) block$component_type, ""), c("Question", "Question Group", "Question"))
   expect_equal(vapply(blocks[[2]]$children, function(block) block$printed_number, ""), c("2a", "2b"))
   expect_null(blocks[[2]]$continued)
+  # each block notes the first page of the range it was read with; a group carried on keeps its first
+  expect_equal(vapply(blocks, function(block) block$page, 1), c(1, 1, 3))
+  expect_equal(vapply(blocks[[2]]$children, function(block) block$page, 1), c(1, 3))
   expect_equal(reading$tokens$output, 100)
   expect_equal(reading$tokens$most_in_one_answer, 70)
 })

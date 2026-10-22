@@ -64,17 +64,6 @@
   font-size: 0.9rem;
   &:hover, &:focus-visible, &.show { color: $vcu-gold; }
 }
-// The menu's Refresh, styled like the signed-in name beside it
-.navbar-refresh {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.4rem;
-  padding: 0.4rem 0.6rem;
-  border: 0;
-  color: $vcu-white;
-  font-size: 0.9rem;
-  &:hover, &:focus-visible { color: $vcu-gold; }
-}
 .navbar-user-menu {
   min-width: 15rem;
   border: 2px solid $vcu-black;

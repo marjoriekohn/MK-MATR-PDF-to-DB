@@ -1,14 +1,19 @@
 # How many changes Undo can take back.
 undo_depth <- 50
 
+# How long after the last change the draft is saved by itself, in seconds.
+autosave_delay <- 5
+
 #' The Edit Extraction page's server, for one extraction draft.
 #'
 #' The whole questionnaire as it was extracted, every block edited where it is
 #' (`extraction_outline_server()`). Other pages open a draft here with the `open` function this
-#' returns. Changes stay in this session until Save writes them to the draft's reviewed copy in the
-#' database.
+#' returns. Changes are saved to the draft's reviewed copy in the database by themselves, a few seconds
+#' after the last one (`autosave_delay`), or at once with Save. While its change request is waiting for
+#' approval they are only saved with Save, since each save is a new version for the reviewer; and after a
+#' save is refused, only Save tries again.
 #'
-#' Preview Change Request shows the questionnaire the way Change Requests shows it to a reviewer;
+#' Preview shows the questionnaire the way Change Requests shows it to a reviewer;
 #' previewing writes nothing. Submit Change Request saves anything unsaved and sends it to Change
 #' Requests, where its Basic Info (registry, study, questionnaire, wave) is filled in; then one other
 #' staff member approves it, or an ADMIN adds their own (`service_extraction_push.R`). Each question
@@ -68,11 +73,14 @@ edit_extraction_server <- function(
     claiming <- reactiveVal(NULL) # a draft someone else has, while staff are asked whether to take it over
     last_active <- reactiveVal(Sys.time()) # when staff last did something on the site
     recorded <- reactiveVal(NULL) # what the recorded questionnaire prints already; see extraction_service_recorded()
-    show_variables <- reactiveVal(0L) # ticks when every question's variables should be shown
+    show_variables <- reactiveVal(0L) # ticks when the list should show each question's MATR IDs
+    loads <- reactiveVal(0L) # ticks each time a draft is opened on this page
     problems <- reactive(draft_service_check(req(draft()), lookups))
     matr_ids <- reactive(extraction_service_matr_ids(record()$matr_csv$text %||% "")) # from the CSV
     available_matr_ids <- reactive(draft_service_available_matr_ids(req(draft()), matr_ids()))
     has_unsaved_changes <- reactive(!identical(draft(), saved()))
+    saved_at <- reactiveVal(NULL) # when this page last saved the draft
+    autosave_off <- reactiveVal(FALSE) # a save was refused: only Save tries again
     has_draft <- reactive(!is.null(record_id()) && is.null(claim())) # to work on: no one else can change it
     heading <- reactive(extraction_service_heading(record(), catalog$get(), req(draft())$questionnaire))
     suggestions <- reactive(draft_service_text_suggestions(req(draft()), recorded()$texts))
@@ -82,7 +90,8 @@ edit_extraction_server <- function(
     # to staff. `typed` is for words typed into a field, which the field already
     # shows; rebuilding it would move the cursor. `redraw` is FALSE for any other change the outline
     # marks without drawing it again (marking a block as checked). A block that was marked as checked and has
-    # been edited is no longer checked, unless `keep_checked`. The questions are numbered again by
+    # been edited is no longer checked, unless `keep_checked`; a section or question group is checked once
+    # everything in it is (draft_service_check_containers()). The questions are numbered again by
     # their place in the outline, and the questions a choice skips past follow its question
     # (draft_service_skip_parents()). Returns TRUE if it worked.
     change_draft <- function(new_draft, typed = FALSE, keep_checked = FALSE, redraw = !typed) {
@@ -107,6 +116,7 @@ edit_extraction_server <- function(
       # A block that was marked as checked and has been edited is no longer checked.
       if (!keep_checked) new_draft <- draft_service_uncheck_edited(draft(), new_draft)
       new_draft <- draft_service_skip_parents(draft_service_renumber_questions(new_draft))
+      new_draft <- draft_service_check_containers(new_draft) # checked once everything inside is
       if (!identical(new_draft, draft())) {
         undo_stack(c(list(draft()), head(undo_stack(), undo_depth - 1)))
         draft(new_draft)
@@ -124,7 +134,9 @@ edit_extraction_server <- function(
       layout_version = layout_version,
       suggestions = suggestions,
       matr_ids = available_matr_ids,
-      show_variables = show_variables
+      show_variables = show_variables,
+      original = original,
+      loaded = loads
     )
 
     observeEvent(input$undo, {
@@ -137,11 +149,19 @@ edit_extraction_server <- function(
 
     observeEvent(input$save, save_draft())
 
+    # Saved by itself once nothing has changed for a few seconds.
+    autosaves <- reactive(!autosave_off() && !identical(record()$status, "Awaiting Review"))
+    settled <- debounce(draft, autosave_delay * 1000)
+    observeEvent(settled(), {
+      if (has_unsaved_changes() && autosaves()) save_draft(quietly = TRUE)
+    }, ignoreInit = TRUE)
+
     # The page saves the questionnaire as it is on screen; for an AI-Powered draft, how it differs from
     # what the AI returned (`original()`) is kept with it (`extraction_service_save_draft()`). It is
     # refused if someone else saved the draft after this page opened it (`loaded_revision()`): then staff
-    # may open the draft as it was saved instead.
-    save_draft <- function() {
+    # may open the draft as it was saved instead. Saved by itself (`quietly`), it says nothing when it
+    # works; when it doesn't, it says so once, and leaves saving to Save.
+    save_draft <- function(quietly = FALSE) {
       if (!can_change()) {
         return(FALSE)
       }
@@ -152,11 +172,16 @@ edit_extraction_server <- function(
           )
           loaded_revision(revision)
           saved(draft())
+          saved_at(Sys.time())
+          autosave_off(FALSE)
           extractions$changed()
-          showNotification("Saved. Nothing is added to the MATR metadata database until its change request is approved.", type = "message")
+          if (!quietly) {
+            showNotification("Saved. Nothing is added to the MATR metadata database until its change request is approved.", type = "message")
+          }
           TRUE
         },
         error = function(problem) {
+          autosave_off(TRUE)
           if (grepl("changed after you opened it", conditionMessage(problem), fixed = TRUE)) {
             offer_saved_version("Saving now would overwrite their changes, so yours weren't saved.")
           } else {
@@ -239,15 +264,18 @@ edit_extraction_server <- function(
         return(FALSE)
       }
       original(loaded$original)
-      loaded <- loaded$draft
+      loaded <- draft_service_check_containers(loaded$draft) # drafts saved before sections were worked out
       record_id(opened$id)
       loaded_revision(revision)
       claim(NULL)
       last_active(Sys.time())
       draft(loaded)
       saved(loaded)
+      saved_at(NULL)
+      autosave_off(FALSE)
       undo_stack(list())
       selected(NULL)
+      loads(loads() + 1L)
       layout_version(layout_version() + 1L)
       read_recorded(opened)
       fill_recorded_matr_ids()
@@ -513,7 +541,9 @@ edit_extraction_server <- function(
       removeModal()
       show_variables(show_variables() + 1L)
       free <- plural(length(available_matr_ids()), "uploaded ID is", plural_form = "uploaded IDs are")
-      showNotification(sprintf("Pick each variable's MATR ID from its drop-down, or type one. %s still free.", free), type = "message")
+      showNotification(sprintf(
+        "Type or pick each question's MATR ID under it in the list (a question with several variables has them in its details). %s still free.", free
+      ), type = "message")
     })
 
     observeEvent(input$matr_questionnaire, {
@@ -652,9 +682,9 @@ edit_extraction_server <- function(
     output$title <- renderText(paste("Edit Extraction:", heading()$title))
     output$subtitle <- renderText(heading()$subtitle)
 
-    # The PDF opens in its own window: the one uploaded with the draft, fetched from Storage if this
-    # server hasn't got it (`extraction_service_pdf()`). The address changes with the file, so a
-    # different PDF is not served from the browser's cache.
+    # The PDF opens in its own tab, at the picked block's page: the one uploaded with the draft, fetched
+    # from Storage if this server hasn't got it (`extraction_service_pdf()`). The address changes with the
+    # file, so a different PDF is not served from the browser's cache.
     record_pdf_url <- reactive({
       pdf <- extraction_service_pdf(connection, req(record()))
       if (is.null(pdf)) {
@@ -662,7 +692,7 @@ edit_extraction_server <- function(
       }
       pdf_address(session, ns("file"), list(path = pdf$path, name = pdf$name, sha256 = pdf$sha256))
     })
-    output$pdf_link <- renderUI(pdf_open_button(record_pdf_url()))
+    output$pdf_link <- renderUI(pdf_open_button(record_pdf_url(), at_picked = TRUE))
 
     output$badges <- renderUI({
       current <- req(record())
@@ -680,7 +710,7 @@ edit_extraction_server <- function(
     # Not for a request already waiting for approval: it is edited and saved, not submitted again.
     output$request_button <- renderUI({
       if (req(record())$status %in% c("Draft", "Sent Back")) {
-        actionButton(ns("request"), "Preview Change Request", icon = icon("eye"), class = "btn-primary")
+        actionButton(ns("request"), icon_label("preview", "Preview"), class = "btn-primary", title = "Preview the change request")
       }
     })
 
@@ -716,7 +746,7 @@ edit_extraction_server <- function(
       n_filled <- sum(!is.na(boxes$matr_id))
       tagList(
         if (is.null(mismatch)) {
-          p(icon("check"), sprintf(" One MATR ID for each of the %d variables.", nrow(boxes)))
+          p(app_icon("done"), sprintf(" One MATR ID for each of the %d variables.", nrow(boxes)))
         } else {
           p(class = "callout", mismatch, " Nothing is lost: what is left over is still offered in the drop-downs.")
         },
@@ -729,10 +759,18 @@ edit_extraction_server <- function(
 
     output$save_status <- renderUI({
       if (has_unsaved_changes()) {
-        span(class = "save-status is-dirty", "Unsaved changes")
-      } else {
-        span(class = "save-status", "All changes saved")
+        return(span(
+          class = "save-status is-dirty",
+          if (autosaves()) "Unsaved changes" else "Unsaved changes: Save to keep them",
+          title = if (autosaves()) sprintf("Saved by itself %d seconds after the last change", autosave_delay)
+        ))
       }
+      at <- saved_at()
+      if (is.null(at)) {
+        return(span(class = "save-status", "All changes saved"))
+      }
+      invalidateLater(15000) # "Saved 30 s ago" moves on
+      span(class = "save-status", title = paste("Saved at", format(at, "%l:%M %p")), saved_ago(at))
     })
 
     # ------ RETURN ------------------------------------------------------------
@@ -752,6 +790,25 @@ edit_extraction_server <- function(
 #' @return The address.
 pdf_address <- function(session, name, data) {
   session$registerDataObj(name = name, data = data, filterFunc = pdf_response)
+}
+
+#' How long ago the draft was saved, as the page's header says it.
+#'
+#' @param at When it was saved.
+#' @param now The time now.
+#' @return "Saved just now", "Saved 30 s ago", "Saved 4 min ago", or "Saved at 2:14 PM" after an hour.
+saved_ago <- function(at, now = Sys.time()) {
+  seconds <- as.numeric(difftime(now, at, units = "secs"))
+  if (seconds < 15) {
+    return("Saved just now")
+  }
+  if (seconds < 60) {
+    return(sprintf("Saved %d s ago", as.integer(seconds %/% 15 * 15)))
+  }
+  if (seconds < 3600) {
+    return(sprintf("Saved %d min ago", as.integer(seconds %/% 60)))
+  }
+  paste("Saved at", trimws(format(at, "%l:%M %p")))
 }
 
 #' The browser's request for the PDF.

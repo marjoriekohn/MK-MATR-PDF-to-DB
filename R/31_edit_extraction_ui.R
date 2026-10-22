@@ -1,9 +1,10 @@
-#' The Edit Extraction page: a title, how far the checking has got, and a row of buttons over the
-#' extracted questionnaire.
+#' The Edit Extraction page: a title on the left and a row of buttons on the right, with how far the checking
+#' has got across the page under both, over the extracted questionnaire.
 #'
-#' One panel: the outline of the whole questionnaire as it was extracted, where every block can be
-#' edited in place (`extraction_outline_ui()`). The header's buttons are all the same size: Undo, Save,
-#' Open PDF (if the file is here), MATR IDs and Preview Change Request.
+#' One panel: the whole questionnaire as it was extracted, as a list with the picked block's details
+#' beside it (`extraction_outline_ui()`). The header's buttons: Undo, Save, Open PDF (if the file is here:
+#' it opens in its own tab, at the page of the block picked), MATR IDs and Preview (of the change request).
+#' On a phone the buttons are only their icons, sharing a row of their own evenly under the progress bar.
 #'
 #' (It was called the review page. Change Requests has its own review, of requests waiting for approval.)
 #'
@@ -21,19 +22,22 @@ edit_extraction_ui <- function(id) {
         h1(textOutput(ns("title"), inline = TRUE)),
         p(class = "subhead", textOutput(ns("subtitle"), inline = TRUE), uiOutput(ns("badges"), inline = TRUE))
       ),
-      uiOutput(ns("progress"), class = "review-progress"),
       div(
         class = "review-actions",
         uiOutput(ns("save_status"), inline = TRUE),
-        actionButton(ns("undo"), "Undo", icon = icon("rotate-left"), class = "btn-outline-dark", disabled = TRUE),
-        actionButton(ns("save"), "Save", icon = icon("floppy-disk"), class = "btn-outline-dark", disabled = TRUE),
-        uiOutput(ns("pdf_link"), inline = TRUE),
-        review_button(
-          tagList(icon("id-badge"), " MATR IDs"), "matr_ids",
-          class = "btn btn-outline-dark", title = "Give the variables their MATR IDs: from a CSV, or from a questionnaire that asks the same questions"
-        ),
-        uiOutput(ns("request_button"), inline = TRUE)
-      )
+        div(
+          class = "review-buttons",
+          actionButton(ns("undo"), icon_label("undo", "Undo"), class = "btn-outline-dark", disabled = TRUE, title = "Undo"),
+          actionButton(ns("save"), icon_label("save", "Save"), class = "btn-outline-dark", disabled = TRUE, title = "Save"),
+          uiOutput(ns("pdf_link"), inline = TRUE),
+          review_button(
+            icon_label("matr_id", "MATR IDs"), "matr_ids",
+            class = "btn btn-outline-dark", title = "Give the variables their MATR IDs: from a CSV, or from a questionnaire that asks the same questions"
+          ),
+          uiOutput(ns("request_button"), inline = TRUE)
+        )
+      ),
+      uiOutput(ns("progress"), class = "review-progress") # how far the checking has got, across the page
     ),
     uiOutput(ns("banner")),
     card(
@@ -45,15 +49,21 @@ edit_extraction_ui <- function(id) {
 
 #' A button that opens the questionnaire's PDF in a new window, if the file is on this server.
 #'
+#' On Edit Extraction it opens at the page the picked block was read from (`at_picked`, www/js/review.js),
+#' when that is known.
+#'
 #' @param url The address the browser gets the PDF from, or `NULL`.
+#' @param at_picked Whether it opens at the picked block's page.
 #' @return A UI element, or `NULL`.
-pdf_open_button <- function(url) {
+pdf_open_button <- function(url, at_picked = FALSE) {
   if (is.null(url)) {
     return(NULL)
   }
   tags$a(
     href = url, target = "_blank", rel = "noopener", class = "btn btn-outline-dark",
-    icon("file-pdf"), " Open PDF"
+    `data-pdf-at-picked` = if (at_picked) NA,
+    title = if (at_picked) "Open the PDF in a new tab, at the page of the block picked" else "Open the PDF in a new tab",
+    icon_label("pdf", "Open PDF")
   )
 }
 
@@ -150,7 +160,7 @@ matr_ids_dialog <- function(ns, can_apply, questionnaires = character(), picked 
       fileInput(ns("matr_csv"), NULL, accept = c(".csv", "text/csv"), buttonLabel = "Choose file") |>
         tagAppendAttributes(class = "quiet-upload"),
       uiOutput(ns("matr_csv_status")),
-      icon = "file-lines"
+      icon = "csv"
     ),
     uiOutput(ns("matr_fill_note")),
     div(

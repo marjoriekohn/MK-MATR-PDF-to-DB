@@ -169,7 +169,7 @@ basic_info_ui <- function(ns, state) {
     div(
       class = "basic-info-actions",
       uiOutput(ns("info_status"), inline = TRUE),
-      actionButton(ns("save_info"), "Save Basic Info", icon = icon("floppy-disk"), class = "btn-outline-dark", disabled = TRUE)
+      actionButton(ns("save_info"), "Save Basic Info", icon = app_icon("save"), class = "btn-outline-dark", disabled = TRUE)
     )
   )
 }

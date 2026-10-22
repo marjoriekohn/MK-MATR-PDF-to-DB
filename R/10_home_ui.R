@@ -11,22 +11,22 @@ home_ui <- function(id) {
     div(
       class = "home-links",
       home_link(
-        ns("extraction"), "file-arrow-up", "Extraction",
+        ns("extraction"), "upload", "Extraction",
         "Extract questionnaire metadata from a PDF."
       ),
       home_link(
-        ns("make_edit"), "pencil", "Make an edit",
+        ns("make_edit"), "make_edit", "Make an edit",
         "Add, update, or delete an item from the database."
       )
     ),
     layout_columns(
       col_widths = c(6, 6),
       home_box(
-        ns, "change_requests", "clipboard-check", "Change Requests",
+        ns, "change_requests", "change_requests", "Change Requests",
         "Waiting for a staff member to review and approve.", uiOutput(ns("requests"))
       ),
       home_box(
-        ns, "edit_history", "clock-rotate-left", "Edit history",
+        ns, "edit_history", "history", "Edit history",
         "The newest changes added to the MATR metadata database.", uiOutput(ns("history"))
       )
     )
@@ -36,14 +36,14 @@ home_ui <- function(id) {
 #' A button to one of the pages: its icon, its name and what it is for.
 #'
 #' @param id The button's input id.
-#' @param icon_name The icon.
+#' @param icon_name The icon, by its name in `app_icons`.
 #' @param title The page's name.
 #' @param text What the page is for.
 #' @return A UI element.
 home_link <- function(id, icon_name, title, text) {
   tags$button(
     id = id, type = "button", class = "action-button home-link",
-    icon(icon_name),
+    app_icon(icon_name),
     span(class = "home-link-title", title),
     span(class = "home-link-text", text)
   )
@@ -54,7 +54,7 @@ home_box <- function(ns, page, icon_name, title, text, list_output) {
   card(
     class = "home-box",
     card_body(
-      div(class = "home-box-head", icon(icon_name), h2(class = "home-box-title", title), p(class = "home-box-text", text)),
+      div(class = "home-box-head", app_icon(icon_name), h2(class = "home-box-title", title), p(class = "home-box-text", text)),
       list_output,
       div(class = "home-box-more", uiOutput(ns(paste0(page, "_more")), inline = TRUE))
     )

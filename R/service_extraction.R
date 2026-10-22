@@ -366,7 +366,7 @@ reading_progress <- function(record) {
 
 structure_progress <- function(draft) {
   if (is.null(draft)) {
-    return(progress_step("Structure", "not_started"))
+    return(progress_step("0% human-reviewed", "not_started")) # while it is being read
   }
   counts <- draft_service_counts(draft)
   progress_step(
@@ -380,22 +380,19 @@ count_state <- function(n_done, n_total) {
 }
 
 # ------ Naming ---------------------------------------------------------------------
-#' A card's title: where it goes, once that is picked; until then the name the AI read off the
-#' PDF, or the PDF's file name.
+#' A card's title: where it goes, once that is picked on Change Requests; until then the PDF's file name.
+#'
+#' The name the AI read off the PDF isn't used: it is often a heading inside the questionnaire.
 #'
 #' @param record An extraction record, as `extraction_model_get_all()` returns it.
 #' @param catalog The live tables the pages pick from, from `questionnaire_service_get_catalog()`.
-#' @param read The draft's questionnaire, with whichever of `name` and `abbreviation` were printed, or `NULL`.
+#' @param read Not used; kept so callers can pass the draft's questionnaire.
 #' @return A string such as `"Adult Health and Personality (AHP) · Wave 3"`.
 extraction_service_title <- function(record, catalog, read = NULL) {
   info <- extraction_service_info(record)
   questionnaire <- extraction_service_questionnaire(info, catalog)
   wave <- extraction_service_wave_name(info, catalog)
   if (is.null(questionnaire) && !nzchar(wave)) {
-    read_name <- questionnaire_name(trimws(read$name %||% ""), trimws(read$abbreviation %||% ""))
-    if (nzchar(read_name)) {
-      return(read_name)
-    }
     return(record$pdf$name %||% "Untitled questionnaire")
   }
   paste(c(
@@ -412,18 +409,19 @@ extraction_service_wave_name <- function(info, catalog) {
 
 #' The Edit Extraction page's heading.
 #'
-#' Until staff say where it goes, it goes by what Gemini read off the PDF.
+#' Until staff say where it goes on Change Requests, it goes by the PDF's file name (the name the AI read off
+#' the PDF is often a heading inside it), or "Unnamed questionnaire" for one typed by hand without a PDF.
 #'
 #' @param record An extraction record, as `extraction_model_get_all()` returns it.
 #' @param catalog The live tables the pages pick from, from `questionnaire_service_get_catalog()`.
-#' @param read The draft's questionnaire, with whichever of `name` and `abbreviation` were printed.
+#' @param read Not used; kept so callers can pass the draft's questionnaire.
 #' @return A list: `title` (e.g. `"AHP · Wave 3"`) and `subtitle` (the full name, or `""`).
 extraction_service_heading <- function(record, catalog, read = NULL) {
   info <- extraction_service_info(record)
-  questionnaire <- extraction_service_questionnaire(info, catalog) %||% read
+  questionnaire <- extraction_service_questionnaire(info, catalog)
   name <- trimws(questionnaire$name %||% "")
   abbreviation <- trimws(questionnaire$abbreviation %||% "")
-  short_name <- if (nzchar(abbreviation)) abbreviation else if (nzchar(name)) name else "Unnamed questionnaire"
+  short_name <- if (nzchar(abbreviation)) abbreviation else if (nzchar(name)) name else record$pdf$name %||% "Unnamed questionnaire"
   wave <- extraction_service_wave_name(info, catalog)
   list(
     title = paste(c(short_name, if (nzchar(wave)) wave), collapse = " · "),

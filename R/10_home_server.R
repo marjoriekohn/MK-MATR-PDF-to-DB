@@ -9,16 +9,13 @@
 #' @param show_page A function taking a page's name and showing it.
 #' @param active A reactive that says whether this page is the one on screen, or `NULL`. Coming
 #'   back to the page reads its lists again, since the other pages change them.
-#' @param refresh A reactive that ticks when staff press Refresh in the menu, or `NULL`. Each tick
-#'   reads the page's lists again.
 #' @return Called for its effect.
 home_server <- function(
   id,
   connection,
   me,
   show_page,
-  active = NULL,
-  refresh = NULL
+  active = NULL
 ) {
   moduleServer(id, function(input, output, session) {
     ns <- session$ns
@@ -28,9 +25,6 @@ home_server <- function(
 
     if (!is.null(active)) {
       observeEvent(active(), if (isTRUE(active())) refreshed(refreshed() + 1L), ignoreInit = TRUE)
-    }
-    if (!is.null(refresh)) {
-      observeEvent(refresh(), refreshed(refreshed() + 1L), ignoreInit = TRUE)
     }
 
     # A read that fails leaves the box saying so, not the whole page.

@@ -34,12 +34,12 @@ extraction_ai_ui <- function(id) {
 #'
 #' @param file_input The file input.
 #' @param ... What to say about it.
-#' @param icon The icon's name.
+#' @param icon The icon, by its name in `app_icons`.
 #' @return A UI element.
-drop_zone <- function(file_input, ..., icon = "file-pdf") {
+drop_zone <- function(file_input, ..., icon = "pdf") {
   div(
     class = "drop-zone",
-    span(class = "drop-zone-icon", shiny::icon(icon)),
+    span(class = "drop-zone-icon", app_icon(icon)),
     div(class = "drop-zone-text", ...),
     file_input
   )
@@ -125,7 +125,7 @@ reading_elapsed <- function(started) {
 reading_step <- function(step) {
   tags$li(
     class = paste0("reading-step is-", step$state),
-    span(class = "reading-step-mark", if (step$state == "done") icon("check") else if (step$state == "attention") icon("exclamation")),
+    span(class = "reading-step-mark", if (step$state == "done") app_icon("done") else if (step$state == "attention") app_icon("attention")),
     div(strong(step$label), div(class = "form-text", step$detail))
   )
 }

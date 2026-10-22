@@ -129,60 +129,22 @@ $history-line: rgba($vcu-gray, 0.35);
   border-radius: $border-radius;
   overflow-y: auto;
 }
-// A codebook-style table: No. | Variable ID | Question Text | Variable Coding
-$qt-indent: 1.25rem; // how far each section's rows sit in from the one around it
-
-.questionnaire-table {
-  margin: 0;
+// A codebook-style table (DataTables, from the DT package): Kind | Variable ID | Question Text | Variable Coding,
+// its rows grouped under the section they are printed in, with search and Download CSV above it
+.questionnaire-preview {
   font-size: 0.9rem;
-  th, td { padding: 0.4rem 0.6rem; vertical-align: top; }
-  // the header row is drawn as every table's is (_grid-table.scss), and stays put as the rows scroll
-  thead th {
-    position: sticky;
-    top: 0;
-    z-index: 1;
-    white-space: nowrap;
-  }
-  .qt-number { width: 4.5rem; white-space: nowrap; }
-  .qt-id { width: 9rem; }
-  .qt-coding { width: 32%; }
-
-  // a section heads the rows under it, which sit in under its heading, and a gold line closes it
-  .qt-section > th {
-    padding-top: 0.6rem;
+  table.dataTable { margin: 0.5rem 0 !important; }
+  table.dataTable th, table.dataTable td { padding: 0.4rem 0.6rem; vertical-align: top; }
+  // the section heading over its rows
+  table.dataTable tr.dtrg-group th, table.dataTable tr.dtrg-group td {
     border-bottom: 1px solid rgba($vcu-gold, 0.6);
-    background: rgba($vcu-gold, 0.15);
+    background: rgba($vcu-gold, 0.15) !important;
     color: $vcu-black;
-    font-size: 0.95rem;
     font-weight: 700;
   }
-  .qt-section:hover, .qt-section-end:hover { background: none; }
-  .qt-section-end > td {
-    padding-top: 0.1rem;
-    padding-bottom: 0.15rem;
-    border-bottom: 2px solid $vcu-gold;
-    text-align: right;
-  }
-  .qt-section-end-label { color: $vcu-gray; font-size: 0.75rem; font-style: italic; }
-
-  @for $depth from 1 through 5 {
-    .qt-section[data-depth="#{$depth}"] > th,
-    .qt-section-end[data-depth="#{$depth}"] > td,
-    .qt-question[data-depth="#{$depth}"] > .qt-text,
-    .qt-block[data-depth="#{$depth}"] > .qt-text { padding-left: 0.6rem + $qt-indent * $depth; }
-  }
-  // the rows inside a section have a gold rule down their left edge, so what it holds can be seen
-  tr[data-depth]:not([data-depth="0"]) > :first-child { box-shadow: inset 3px 0 0 rgba($vcu-gold, 0.6); }
-  .qt-block > td { color: $vcu-gray; }
+  em { color: $vcu-gray; }
 }
-.preview-number { font-weight: 700; }
-.preview-text { white-space: pre-wrap; }
-.preview-note { color: $vcu-gray; font-size: 0.85rem; }
-.preview-matr-id { font-family: $font-family-monospace; font-weight: 700; }
 .qt-tags { color: $vcu-gray; }
-.qt-choice { white-space: normal; }
-.qt-code { font-family: $font-family-monospace; font-weight: 700; }
-.qt-write-in { color: $vcu-gray; }
 
 // ------ The changed rows ------------------------------------------------------------------
 .change-list { display: flex; flex-direction: column; gap: 0.5rem; max-height: 55vh; overflow-y: auto; }

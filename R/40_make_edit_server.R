@@ -15,10 +15,8 @@
 #' @param show_page A function taking a page's name and showing it.
 #' @param active A reactive that says whether this page is the one on screen, or `NULL`. Opening the
 #'   page reads the saved drafts again, since a reviewer can send one back.
-#' @param refresh A reactive that ticks when staff press Refresh in the menu, or `NULL`. Each tick
-#'   reads the page's lists again.
 #' @return A list with `open`, a function taking a saved edit's record that opens it on the form.
-make_edit_server <- function(id, connection, me, show_page, active = NULL, refresh = NULL) {
+make_edit_server <- function(id, connection, me, show_page, active = NULL) {
   moduleServer(id, function(input, output, session) {
     ns <- session$ns
 
@@ -57,14 +55,11 @@ make_edit_server <- function(id, connection, me, show_page, active = NULL, refre
       edit_service_row(entity(), snapshot(), picked())
     })
 
-    # Read when the page is opened, when staff press Refresh (a reviewer can send one back) and when this
+    # Read when the page is opened, (a reviewer can send one back) and when this
     # session saved or discarded one; the database isn't asked over and over. If it can't be reached the
     # last proposals read stay on screen, with a message, and the next read tries again.
     if (!is.null(active)) {
       observeEvent(active(), if (isTRUE(active())) saved_count(saved_count() + 1L), ignoreInit = TRUE)
-    }
-    if (!is.null(refresh)) {
-      observeEvent(refresh(), saved_count(saved_count() + 1L), ignoreInit = TRUE)
     }
     last_proposals <- list()
     proposals <- reactive({
@@ -494,7 +489,7 @@ make_edit_server <- function(id, connection, me, show_page, active = NULL, refre
       record <- outcome$record
       card(class = "edit-sent", card_body(
         h2(
-          span(class = "edit-sent-mark", icon("check")),
+          span(class = "edit-sent-mark", app_icon("done")),
           if (isTRUE(outcome$applied)) "Done" else if (isTRUE(outcome$resaved)) "Saved" else "Sent for approval"
         ),
         p(strong(record$summary)),

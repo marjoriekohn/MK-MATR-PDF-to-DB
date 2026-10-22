@@ -165,3 +165,27 @@ test_that("the questionnaire's printed name and abbreviation are compared", {
   edit <- edits_of(reviewed)[[1]]
   expect_equal(c(edit$item, edit$field, edit$before, edit$after), c("questionnaire", "abbreviation", "GNA", "GNA-2"))
 })
+
+test_that("the blocks changed from what the AI read: a field, a variable or choice added, changed or taken out, a block added", {
+  original <- gold_draft()
+  expect_length(draft_service_changed_blocks(original, original), 0)
+  expect_null(draft_service_changed_blocks(NULL, original)) # typed by hand: nothing to compare with
+  q1a <- block_numbered(original, "1a")$id
+  q1b <- block_numbered(original, "1b")$id
+  q1c <- block_numbered(original, "1c")$id
+  q1d <- block_numbered(original, "1d")$id
+  box_1b <- original$variables$id[original$variables$component_id == q1b][1]
+  choice_1c <- original$response_options$id[original$response_options$variable_id == original$variables$id[original$variables$component_id == q1c][1]][1]
+  box_1d <- original$variables$id[original$variables$component_id == q1d][1]
+  reviewed <- draft_service_update(original, "components", q1a, "text", "Reworded")
+  reviewed <- draft_service_update(reviewed, "variables", box_1b, "label", "A label")
+  reviewed <- draft_service_update(reviewed, "response_options", choice_1c, "printed_label", "Y")
+  reviewed <- suppressMessages(draft_service_delete(reviewed, "variables", box_1d))
+  added <- draft_service_next_id(reviewed, "components")
+  reviewed <- draft_service_add_block(reviewed, "Instruction", added, near_id = q1a)
+  expect_setequal(draft_service_changed_blocks(original, reviewed), c(q1a, q1b, q1c, q1d, added))
+  # the checked mark and a MATR ID aren't what the AI reads
+  ticked <- draft_service_update(original, "components", q1a, "checked", TRUE)
+  ticked <- draft_service_update(ticked, "variables", box_1b, "matr_id", "GNA_9")
+  expect_length(draft_service_changed_blocks(original, ticked), 0)
+})

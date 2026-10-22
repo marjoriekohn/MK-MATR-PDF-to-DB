@@ -8,20 +8,17 @@
 #' @param active A reactive that says whether this page is the one on screen, or `NULL`. Opening
 #'   the page reads the history again, since an add or an update goes in at once and the list
 #'   was read before it.
-#' @param refresh A reactive that ticks when staff press Refresh in the menu, or `NULL`. Each tick
-#'   reads the page's lists again.
 #' @return Called for its effect.
 edit_history_server <- function(
   id,
   connection,
-  active = NULL,
-  refresh = NULL
+  active = NULL
 ) {
   moduleServer(id, function(input, output, session) {
     ns <- session$ns
 
     # ------ REACTIVE ----------------------------------------------------------
-    refreshed <- reactiveVal(0L) # ticks when staff ask for a fresh look
+    refreshed <- reactiveVal(0L) # ticks each time the page is opened
     showing <- reactiveVal(history_page_size) # how many edits are listed
 
     # If the database can't be reached the last edits read stay on screen, with a message.
@@ -42,12 +39,8 @@ edit_history_server <- function(
 
     matching <- reactive(history_service_filter(records(), input$kind %||% "all", input$search %||% ""))
 
-    observeEvent(input$refresh, refreshed(refreshed() + 1L))
     if (!is.null(active)) {
       observeEvent(active(), if (isTRUE(active())) refreshed(refreshed() + 1L), ignoreInit = TRUE)
-    }
-    if (!is.null(refresh)) {
-      observeEvent(refresh(), refreshed(refreshed() + 1L), ignoreInit = TRUE)
     }
     observeEvent(list(input$kind, input$search), showing(history_page_size), ignoreInit = TRUE)
     observeEvent(input$action, {

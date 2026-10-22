@@ -73,25 +73,20 @@ $extraction-line: $vcu-gray;
   background: rgba($vcu-gray, 0.04);
 
   &.is-dragged-over { border-color: $vcu-gold; background: rgba($vcu-gold, 0.12); }
-  // as wide as its button (bslib makes inputs 300px)
-  .shiny-input-container.shiny-input-container { width: auto; margin: 0; }
+  // as wide as its button (bslib makes inputs 300px), centred beside the words
+  .shiny-input-container.shiny-input-container { position: relative; width: auto; margin: 0; }
   .input-group > .form-control { display: none; }
-  .shiny-file-input-progress { margin: 0.4rem 0 0; }
+  // the upload's progress sits just under the button, taking no room, so the button stays in the middle
+  .shiny-file-input-progress { position: absolute; top: 100%; right: 0; left: 0; margin: 0.3rem 0 0; }
 }
 .drop-zone-icon { color: $vcu-gray; font-size: 1.5rem; }
 // Small files: what's shown beside the button says it arrived
 .quiet-upload .shiny-file-input-progress { display: none; }
 .drop-zone-text { flex: 1 1 14rem; font-size: 0.9rem; }
 
-// Shiny's file buttons, drawn like the other outline buttons
-.btn-file {
-  border: 1px solid $vcu-black;
-  border-radius: $border-radius !important;
-  background: $vcu-white;
-  color: $vcu-black;
-  font-weight: 500;
-  &:hover { background: rgba($vcu-gold, 0.2); }
-}
+// Shiny's file buttons are drawn as the quiet button (components/_buttons.scss); the input group would square
+// off one side
+.btn-file { border-radius: $border-radius !important; }
 
 // The uploaded PDF
 .pdf-file {

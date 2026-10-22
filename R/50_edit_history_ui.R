@@ -14,8 +14,7 @@ edit_history_ui <- function(id) {
       toggle_input(
         ns("kind"), c("All" = "all", "Added" = "Add", "Updated" = "Update", "Deleted" = "Delete"),
         selected = "all", label = "Kind of edit"
-      ),
-      actionButton(ns("refresh"), tagList(icon("rotate"), " Refresh"), class = "btn-sm btn-outline-dark")
+      )
     ),
     textInput(
       ns("search"), NULL,

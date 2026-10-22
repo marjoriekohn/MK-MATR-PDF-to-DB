@@ -1,16 +1,21 @@
 // Edit Extraction page (edit_extraction and outline modules)
-$review-line: rgba($vcu-gray, 0.35);
+$review-line: rgba($vcu-gray, 0.6); // dark enough to see on a white screen
 $code-width: 4.25rem; // a choice's code: a few digits
 
 // ------ Header ---------------------------------------------------------------
+// The title on the left, the buttons on the right, and how far the checking has got across the page under
+// both. On a phone: the title, the progress bar, then the buttons (only their icons) across the screen.
 .review-header {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: flex-end;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-areas: "title actions" "progress progress";
+  align-items: center;
   gap: 0.75rem 1.5rem;
   padding-bottom: 1rem;
   border-bottom: 1px solid $review-line;
-  justify-content: space-between;
+  > .review-title { grid-area: title; min-width: 0; }
+  > .review-actions { grid-area: actions; justify-content: flex-end; }
+  > .review-progress { grid-area: progress; }
 
   h1 {
     margin: 0;
@@ -21,14 +26,31 @@ $code-width: 4.25rem; // a choice's code: a few digits
   .subhead { margin: 0.25rem 0 0; color: $vcu-gray; }
 }
 
-.review-progress { display: flex; flex-wrap: wrap; align-items: center; gap: 0.75rem; }
+// How saving stands, then the header's buttons
+.review-actions, .review-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: $control-gap;
+}
 
-// How far the checking has got: a bar that fills as blocks are marked as checked
-.review-structure { display: flex; align-items: center; gap: 0.5rem; }
+@media (max-width: 767.98px) {
+  .review-header {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-areas: "title" "progress" "actions";
+  }
+  // how saving stands has a line of its own, and the buttons share the row under it evenly
+  .review-header > .review-actions { flex-direction: column; align-items: stretch; }
+  .review-buttons { @include even-buttons; }
+}
+
+// How far the checking has got: a bar across the page that fills as blocks are marked as checked
+.review-progress { display: block; width: 100%; }
+.review-structure { display: flex; align-items: center; gap: 0.5rem; width: 100%; }
 .review-structure-label { font-weight: 500; }
 .review-structure-bar {
   position: relative;
-  width: 12rem;
+  width: 100%;
   height: 1.5rem;
   border: 1px solid $vcu-black;
   border-radius: $border-radius;
@@ -65,15 +87,6 @@ button.review-pill:hover { background: rgba($vcu-gold, 0.2); }
   &.is-warning { background: $vcu-gold; font-weight: 700; }
 }
 
-// The header's buttons, all the same size
-.review-actions {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 0.5rem;
-  .btn { white-space: nowrap; }
-}
-
 .save-status {
   color: $vcu-gray;
   font-size: 0.9rem;
@@ -94,7 +107,8 @@ button.review-pill:hover { background: rgba($vcu-gold, 0.2); }
 }
 .claim-lost .edit-callout .btn { margin-top: 0.25rem; }
 
-// ------ The one panel: the outline, edited in place -----------------------------------
+// ------ The one panel: the list, with the picked block's details beside it -----------------------------
+// The two scroll on their own. The toolbar spans both.
 .edit-extraction-page .structure-card > .structure-body {
   display: flex;
   flex-direction: column;
@@ -102,27 +116,45 @@ button.review-pill:hover { background: rgba($vcu-gold, 0.2); }
   overflow: hidden;
 }
 .outline-panel {
+  display: flex;
   flex: 1 1 0;
+  flex-direction: column;
   min-height: 0;
-  overflow: auto;
+  overflow: hidden;
+  > .outline-split { display: flex; flex: 1 1 0; min-height: 0; }
 }
-.outline-body { padding: 0.5rem 0.75rem 1rem; }
+.outline-body {
+  flex: 0 0 clamp(22rem, 45%, 36rem);
+  min-width: 0;
+  overflow: auto;
+  padding: 0.5rem 0.75rem 1rem;
+  border-right: 1px solid $review-line;
+}
+.detail-panel { display: flex; flex: 1 1 0; flex-direction: column; min-width: 0; }
 
 .outline-toolbar {
-  position: sticky;
-  top: 0;
-  z-index: 2;
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  justify-content: flex-end;
-  gap: 0.25rem 0.5rem;
+  justify-content: flex-start;
+  gap: $control-gap;
   padding: 0.5rem;
   border-bottom: 1px solid $review-line;
   background: $vcu-white;
-  .dropdown { margin-right: auto; }
 }
-.to-fix-note { margin-right: 0.5rem; font-size: 0.9rem; font-weight: 500; &.is-clear { color: $vcu-gray; font-weight: 400; } }
+// Search and Add Filter, each with its icon in front. They take what room the row has, between about 8 and 12
+// characters' worth, and the buttons keep theirs.
+.toolbar-field {
+  position: relative;
+  display: inline-flex;
+  flex: 1 1 8rem;
+  align-items: center;
+  min-width: 0;
+  max-width: 12rem;
+  > .fa, > .fas, > svg { position: absolute; left: 0.6rem; color: $vcu-gray; font-size: 0.8rem; pointer-events: none; }
+  > .form-control, > .form-select { width: 100%; padding-left: 1.85rem; }
+}
+.to-fix-note { margin: 0 0.25rem; font-size: 0.875rem; font-weight: 500; &.is-clear { color: $vcu-gray; font-weight: 400; } }
 
 .outline-list {
   display: flex;
@@ -132,8 +164,8 @@ button.review-pill:hover { background: rgba($vcu-gold, 0.2); }
 
 // A section's contents, indented under its row
 .outline-node > .outline-list {
-  margin: 0.35rem 0 0.15rem 1.25rem;
-  padding-left: 0.75rem;
+  margin: 0.35rem 0 0.15rem 0.6rem;
+  padding-left: 0.5rem;
   border-left: 2px dashed $review-line;
 
   &:empty {
@@ -144,65 +176,41 @@ button.review-pill:hover { background: rgba($vcu-gold, 0.2); }
   }
 }
 .outline-node.is-collapsed > .outline-list { display: none; }
-.outline-node.is-collapsed > .outline-row .btn-toggle > * { transform: rotate(-90deg); }
-.outline-node.is-open > .outline-row .btn-toggle.is-details > * { transform: rotate(90deg); }
+// the toolbar's filter: what it leaves out is hidden, and sections stay open while it is on
+.outline-tree.is-filtered .outline-node.is-collapsed > .outline-list { display: flex; }
+.outline-node.is-filtered-out { display: none; }
+.outline-filter { width: auto; }
+.outline-filter-empty { display: none; margin: 1rem 0.5rem; color: $vcu-gray; }
+.outline-body.is-filter-empty .outline-filter-empty { display: block; }
 
+// A row: the block's kind, words, counts and what there is to fix, and the arrow that opens it. Its colours are
+// solid, so the buttons that show over its count when it is pointed at can take its background. A block
+// verified is green, and a section or group once everything in it is.
 .outline-row {
+  position: relative;
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 0.5rem;
-  padding: 0.35rem 0.6rem;
+  gap: 0.35rem;
+  padding: 0.3rem 0.4rem;
   border: 1px solid $review-line;
   border-radius: $border-radius;
-  background: $vcu-white;
+  background-color: $vcu-white;
   cursor: pointer;
 
-  &:hover { background: rgba($vcu-gold, 0.08); }
+  &:hover { background-color: mix($vcu-gold, $vcu-white, 8%); }
+  &.is-verified { background-color: mix($vcu-green, $vcu-white, 20%); }
+  &.is-verified:hover { background-color: mix($vcu-green, $vcu-white, 28%); }
   &.is-selected { border-color: $vcu-black; box-shadow: inset 5px 0 0 $vcu-gold, 0 0 0 1px $vcu-black; }
 }
 
 .drag-handle, .box-handle, .choice-handle { color: $vcu-gray; cursor: grab; }
 
-.btn-toggle {
-  width: 1.25rem;
-  flex-shrink: 0;
-  padding: 0;
-  border: 0;
-  background: none;
-  > * { transition: transform 0.15s; }
-}
-
-// Display order, right-aligned so the numbers line up down a list
-.outline-order {
-  width: 1.5rem;
-  flex-shrink: 0;
-  color: $vcu-gray;
-  font-variant-numeric: tabular-nums;
-  font-weight: 700;
-  text-align: right;
-}
-
-// A question's place among the questions, then the number printed beside it (typed)
-.outline-numbers { display: inline-flex; flex-shrink: 0; align-items: center; gap: 0.35rem; }
-.outline-number {
-  min-width: 1.5rem;
-  color: $vcu-gray;
-  font-variant-numeric: tabular-nums;
-  font-weight: 700;
-  text-align: right;
-}
-.outline-printed-number.form-control {
-  width: 4rem;
-  padding: 0.15rem 0.35rem;
-  font-weight: 700;
-  &::placeholder { color: rgba($vcu-gray, 0.8); font-weight: 400; font-style: italic; }
-}
-
-// The block's words, typed in its row: drawn as plain words until pointed at or typed in
+// The block's words. In the list a question's read as plain words (a click picks the row); a section's and a
+// text block's are typed where they are.
 .outline-text {
   flex: 1;
-  min-width: 8rem;
+  min-width: 0;
   min-height: 0;
   padding: 0.2rem 0.4rem;
   border-color: transparent;
@@ -210,35 +218,69 @@ button.review-pill:hover { background: rgba($vcu-gold, 0.2); }
   resize: none;
   overflow: hidden;
   line-height: 1.4;
-  cursor: text;
-  &:hover { border-color: $review-line; }
   &:focus { border-color: $vcu-gold; background: $vcu-white; box-shadow: 0 0 0 0.2rem rgba($vcu-gold, 0.35); }
   &::placeholder { color: rgba($vcu-gray, 0.8); font-style: italic; }
 }
+.outline-tree {
+  .outline-text { pointer-events: none; cursor: pointer; &::placeholder { color: transparent; } }
+  .outline-text:placeholder-shown { min-width: 2rem; max-height: 2rem; } // its hidden placeholder sets no height
+  .outline-row.is-editable .outline-text::placeholder { color: rgba($vcu-gray, 0.8); }
+  // typed in only once the row's edit button is pressed (review.js); until then a click opens or picks the row
+  .outline-row.is-editable .outline-text:not([readonly]) { pointer-events: auto; cursor: text; }
+  .outline-row.is-container .outline-text { font-weight: 600; }
+}
+
+// A question's variables in short under its row, only while MATR IDs are given out by hand: a lone variable's
+// MATR ID, then the rest in short
+.outline-row-summary {
+  display: none;
+  flex-basis: 100%;
+  align-items: center;
+  gap: 0.4rem;
+  min-width: 0;
+  padding-left: 2.25rem;
+  .summary-matr-id { flex: 0 0 9rem; }
+}
+.outline-panel.is-assigning .outline-row-summary { display: flex; }
+// words in a row more than a button: no button height, and cut short with "…" (which a flex box can't do)
+.summary-open {
+  display: block;
+  overflow: hidden;
+  min-width: 0;
+  min-height: 0;
+  padding: 0.1rem 0.4rem;
+  border: 0;
+  color: $vcu-gray;
+  font-size: 0.85rem;
+  text-align: left;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  &:hover, &:focus-visible { color: $vcu-black; text-decoration: underline; }
+}
 
 // A question group has no words: the space they would take
-.outline-group-note { flex: 1; min-width: 8rem; }
-
-// The question it follows, beside its words, then the condition printed for it
-.outline-parent {
-  flex: 0 1 13rem;
-  min-width: 8rem;
-  .form-control { width: 100%; }
-}
-.outline-condition {
-  flex: 0 1 9rem;
-  min-width: 7rem;
-  .form-control { width: 100%; }
-}
+.outline-group-note { flex: 1; min-width: 4rem; }
 
 .outline-badges { display: flex; flex-shrink: 0; align-items: center; gap: 0.35rem; }
 .outline-problems.is-hidden { display: none; }
-.outline-actions { display: flex; flex-shrink: 0; align-items: center; gap: 0.1rem; }
-.outline-check {
-  &.is-checked { color: $vcu-green; }
-  &.is-all-checked { background: $vcu-green; color: $vcu-white; border-radius: 50%; }
-  &:not(.is-checked) { color: rgba($vcu-red, 0.7); }
+
+// The buttons of a section's, group's or text block's row (change its kind, ungroup, delete) show over its
+// count while it is pointed at or something in it has focus, so the row doesn't change its layout
+.outline-actions {
+  position: absolute;
+  top: 50%;
+  right: 0.4rem;
+  display: none;
+  align-items: center;
+  gap: 0.1rem;
+  padding-left: 0.4rem;
+  background-color: inherit;
+  transform: translateY(-50%);
 }
+.outline-row:not(.is-container) > .outline-actions { right: 2.6rem; } // the arrow that opens it stays
+.outline-row:hover > .outline-actions,
+.outline-row:focus-within > .outline-actions { display: flex; }
+.kind-menu .dropdown-toggle::after { display: none; }
 
 // The words offered as a block's words are typed (review.js)
 .suggest-box {
@@ -274,15 +316,6 @@ button.review-pill:hover { background: rgba($vcu-gold, 0.2); }
   opacity: 1 !important;
 }
 
-// ------ A question's panel: nested under its row --------------------------------------------
-.question-panel {
-  margin: 0.35rem 0 0.5rem 2.75rem;
-  padding: 0.75rem 0.9rem;
-  border: 1px solid $review-line;
-  border-left: 3px solid $vcu-black;
-  border-radius: $border-radius;
-  background: rgba($vcu-gray, 0.03);
-}
 .details-problems { margin: 0 0 0.75rem; ul { margin: 0; padding-left: 1.1rem; } }
 
 // A field the checks found at fault (review.js keeps the marks up to date as they run)
@@ -293,34 +326,35 @@ button.review-pill:hover { background: rgba($vcu-gold, 0.2); }
 }
 
 // ------ Variables and choices -----------------------------------------------
-// A question's variables as a table: one line each, in printed order. Below about 44rem the cells of a line
-// wrap, each named by its data-label, since the column names are hidden then.
+// A question's variables as a table: one line each, in printed order (not numbered). The About and Label
+// columns are there once a variable has one (has-subject, has-label). Below about 40rem a line's cells stack,
+// each named by its data-label, since the column names are hidden then.
 .variable-cards {
   container-type: inline-size;
   margin: 0.5rem 0 0;
   padding: 0.6rem 0.75rem 0.75rem;
   border: 1px solid $review-line;
   border-radius: $border-radius;
-  background: rgba($vcu-gray, 0.06);
+  background: rgba($vcu-gray, 0.04);
+  > .wide-menu { margin-top: 0.6rem; }
 }
-
-.variable-cards-header {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  h3 { margin: 0 auto 0 0; font-size: 1rem; }
-}
-
-$variable-columns: 1rem 1.5rem 7.5rem 8rem minmax(9rem, 1.3fr) minmax(9rem, 1.7fr) 1.75rem;
 
 .box-list { display: flex; flex-direction: column; margin-top: 0.25rem; }
 
+// handle, MATR ID, response, [about], [label], +, delete
 .variable-line {
   display: grid;
-  grid-template-columns: $variable-columns;
+  grid-template-columns: 1rem minmax(7rem, 10rem) minmax(10rem, 1fr) 1.9rem 1.9rem;
   align-items: center;
   gap: 0.4rem;
-  padding: 0.3rem 0;
+  padding: 0.35rem 0;
+}
+.variable-cards.has-subject .variable-line,
+.variable-cards.has-label .variable-line {
+  grid-template-columns: 1rem minmax(7rem, 10rem) minmax(10rem, 1.4fr) minmax(8rem, 1fr) 1.9rem 1.9rem;
+}
+.variable-cards.has-subject.has-label .variable-line {
+  grid-template-columns: 1rem minmax(7rem, 10rem) minmax(10rem, 1.4fr) minmax(8rem, 1fr) minmax(8rem, 1fr) 1.9rem 1.9rem;
 }
 .variable-head {
   padding-bottom: 0;
@@ -329,52 +363,51 @@ $variable-columns: 1rem 1.5rem 7.5rem 8rem minmax(9rem, 1.3fr) minmax(9rem, 1.7f
   font-weight: 500;
 }
 
-// Each variable: its line, and its choices under it when they are open
+// Each variable: its line, and its choices under it when they are open; a line between each two (none between
+// the column names and the first)
 .variable-card {
   border-top: 1px solid $review-line;
+  &:first-child { border-top: 0; }
   &.is-open { background: $vcu-white; }
   &.has-problem { box-shadow: inset 3px 0 0 $field-problem-red; }
 }
-.variable-card-number { font-weight: 700; text-align: right; font-variant-numeric: tabular-nums; }
 .variable-cell { min-width: 0; .form-control, .form-select { width: 100%; } }
-.variable-cell.is-id .form-control { max-width: 11ch; }
 
 // A variable's choices in short; a button that opens them, or, when they are shared, a note
 .choice-summary {
   display: block;
   width: 100%;
   overflow: hidden;
-  padding: 0.2rem 0.4rem;
+  padding: 0.25rem 0.5rem;
   border: 1px solid $review-line;
   border-radius: $border-radius;
   background: $vcu-white;
   text-align: left;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  white-space: normal; // every choice shows; the box wraps
+  &:hover { border-color: $vcu-gray; }
   &.has-problem { border-color: $field-problem-red; box-shadow: 0 0 0 1px $field-problem-red; }
   &.is-shared { border-style: dashed; color: $vcu-gray; }
 }
 
-@container (max-width: 44rem) {
+@container (max-width: 40rem) {
   .variable-head { display: none; }
-  .variable-line {
-    grid-template-columns: 1rem 1.5rem minmax(0, 1fr) minmax(0, 1fr) 1.75rem;
-    grid-template-areas:
-      "handle number kind kind delete"
-      "id id id id id"
-      "choices choices choices choices choices"
-      "extras extras extras extras extras";
-    > .box-handle { grid-area: handle; }
-    > .variable-card-number { grid-area: number; }
-    > .is-kind { grid-area: kind; }
-    > .is-id { grid-area: id; }
-    > .is-choices { grid-area: choices; }
-    > .is-extras { grid-area: extras; }
-    > .btn-icon { grid-area: delete; }
+  .variable-cards .variable-line {
+    grid-template-columns: 1rem minmax(0, 1fr) 1.9rem 1.9rem;
+    > .box-handle { order: 1; }
+    > .is-id { order: 2; }
+    > .variable-add { order: 3; }
+    > .variable-delete { order: 4; }
+    > .is-response, > .is-subject, > .is-label { order: 5; grid-column: 2 / -1; }
   }
-  .variable-cell.is-id .form-control { max-width: none; }
   .variable-cards .choice-table { margin-left: 0; }
-  .variable-cards .choice-row .choice-answer { flex-basis: 8rem; }
+  // a choice's Printed as and Skip to each take a line under its code and words, named
+  .choice-head { display: none; }
+  .variable-cards .choice-table .choice-row:not(.choice-head) { // outranks the wide columns below
+    grid-template-columns: 1rem $code-width minmax(0, 1fr) 1.9rem 1.9rem;
+    > .choice-cell { grid-column: 2 / -1; order: 5; }
+    > .choice-cell:empty { display: none; }
+    > .choice-cell::before { content: attr(data-label); display: block; color: $vcu-gray; font-size: 0.7rem; font-weight: 500; }
+  }
   .variable-cell::before {
     content: attr(data-label);
     display: block;
@@ -382,10 +415,12 @@ $variable-columns: 1rem 1.5rem 7.5rem 8rem minmax(9rem, 1.3fr) minmax(9rem, 1.7f
     font-size: 0.7rem;
     font-weight: 500;
   }
+  .variable-cell:empty { display: none; }
 }
 
-// The choices: one line each. How a choice is printed and where it skips to show only on the choices
-// that have them; "+" adds them to one choice, and × takes them away.
+// The choices: one line each, in columns: code, response option, then how it is printed and where it skips to,
+// once any choice has them (has-printed_label, has-skip_instruction; a choice without one leaves its cell
+// empty); "+" adds them to one choice, and × takes them away.
 .choice-table {
   margin: 0.25rem 0 0.6rem 2.9rem;
   padding: 0.5rem 0.6rem;
@@ -395,35 +430,56 @@ $variable-columns: 1rem 1.5rem 7.5rem 8rem minmax(9rem, 1.3fr) minmax(9rem, 1.7f
 .choice-table-title { display: flex; flex-wrap: wrap; align-items: center; gap: 0.25rem 0.75rem; margin-bottom: 0.4rem; }
 .choice-list { display: flex; flex-direction: column; gap: 0.3rem; }
 
+// handle, code, response option, [printed as], [skip to], +, delete
 .choice-row {
+  display: grid;
+  grid-template-columns: 1rem $code-width minmax(8rem, 1fr) 1.9rem 1.9rem;
+  align-items: center;
+  gap: 0.3rem;
+  > * { min-width: 0; }
+  .form-control { width: 100%; }
+}
+.choice-table.has-printed_label .choice-row,
+.choice-table.has-skip_instruction .choice-row {
+  grid-template-columns: 1rem $code-width minmax(8rem, 1fr) minmax(8rem, 1fr) 1.9rem 1.9rem;
+}
+.choice-table.has-skip_instruction .choice-row { grid-template-columns: 1rem $code-width minmax(8rem, 1fr) minmax(10rem, 1.2fr) 1.9rem 1.9rem; }
+.choice-table.has-printed_label.has-skip_instruction .choice-row {
+  grid-template-columns: 1rem $code-width minmax(8rem, 1fr) minmax(7rem, 0.8fr) minmax(10rem, 1.2fr) 1.9rem 1.9rem;
+}
+// a field and the × that takes it away
+.choice-optional {
+  display: flex;
+  align-items: center;
+  gap: 0.15rem;
+  .form-control { min-width: 0; }
+}
+
+// The names of the columns, over the first choice
+.choice-head {
+  color: $vcu-gray;
+  font-size: 0.75rem;
+  font-weight: 500;
+}
+
+// A write-in's skip, under its line: "If the answer is [None] skip to [Question 57]"
+.variable-skip {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 0.3rem;
-  .choice-code { flex: 0 0 $code-width; width: $code-width; }
-  .choice-answer { flex: 1 1 12rem; min-width: 0; }
+  gap: 0.35rem;
+  padding: 0 0 0.5rem 1.4rem;
+  font-size: 0.875rem;
+  > .form-control:not(.skip-target) { flex: 0 1 8rem; width: 8rem; }
+  > .skip-target { flex: 1 1 12rem; min-width: 0; }
 }
-.choice-optional {
-  display: inline-flex;
-  flex: 0 1 11rem;
-  align-items: center;
-  gap: 0.15rem;
-  min-width: 8rem;
-  .form-control { min-width: 0; }
-}
-// Where a choice skips to: the question picked, then the words printed for it
-.choice-optional.is-skip_instruction {
-  flex: 1 1 20rem;
-  .skip-target { flex: 1.2 1 9rem; }
-  .form-control:not(.skip-target) { flex: 1 1 8rem; }
-}
+.variable-skip-words { color: $vcu-gray; }
 .add-field .dropdown-toggle::after { display: none; }
 
-// A variable's About and label, when it has them, side by side, then its "+"
-.variable-cell.is-extras { display: flex; flex-wrap: wrap; align-items: center; gap: 0.3rem; }
+// A variable's About or label, with its ×
 .variable-optional {
-  display: inline-flex;
-  flex: 1 1 8rem;
+  display: flex;
+  width: 100%;
   align-items: center;
   gap: 0.15rem;
   min-width: 0;
@@ -431,16 +487,15 @@ $variable-columns: 1rem 1.5rem 7.5rem 8rem minmax(9rem, 1.3fr) minmax(9rem, 1.7f
 }
 .field-remove { padding: 0 0.2rem; line-height: 1; font-size: 0.75rem; }
 
+// Apply to All? (once a code is changed), then + Choice across the table
 .choice-actions {
   display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 0.25rem 0.75rem;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.4rem;
   margin-top: 0.5rem;
-  .choice-apply { padding-inline: 0; }
+  .choice-apply[hidden] { display: none; }
 }
-
-.btn-icon { color: $vcu-gray; &:hover { color: $vcu-black; } }
 
 // ------ The MATR IDs dialog: two ways to give the uploaded IDs out --------------------------
 .matr-modes {
@@ -456,16 +511,143 @@ $variable-columns: 1rem 1.5rem 7.5rem 8rem minmax(9rem, 1.3fr) minmax(9rem, 1.7f
   h3 { margin: 0 0 0.35rem; font-size: 1rem; }
 }
 
-// ------ Narrow screens ---------------------------------------------------------------
-// A row's words take a line of their own, under its kind and numbers, and its parent question and
-// condition the next; the question's panel uses the whole width.
+// ------ The picked block's details ------------------------------------------------------------------
+.detail-body { display: flex; flex: 1 1 0; flex-direction: column; min-height: 0; }
+.block-detail { display: flex; flex: 1 1 0; flex-direction: column; min-height: 0; }
+.detail-empty { margin: auto; padding: 2rem; color: $vcu-gray; text-align: center; }
+
+// The header, one row: the block's kind, its words (typed there), what there is to fix, Verify, Delete
+.detail-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: 0.5rem;
+  padding: 0.75rem 1rem;
+  border-bottom: 1px solid $review-line;
+  > .type-chip, > .outline-problems { margin-top: 0.5rem; }
+}
+.block-detail .detail-words.outline-text {
+  flex: 1 1 14rem;
+  min-height: 2.25rem;
+  padding: 0.3rem 0.5rem;
+  border-color: transparent;
+  border-radius: $border-radius;
+  font-size: 1.2rem;
+  font-weight: 600;
+  line-height: 1.35;
+  &:hover { border-color: $review-line; }
+  &:focus { border-color: $vcu-gold; background: $vcu-white; }
+}
+.detail-group-title { flex: 1 1 14rem; margin: 0.35rem 0 0; font-size: 1.2rem; }
+.detail-back { display: none; padding-left: 0; }
+// The details' buttons, along the bottom: the same size, evenly spaced, one column each
+.detail-actions {
+  @include even-buttons;
+  padding: 0.6rem 1rem;
+  border-top: 1px solid $review-line;
+  background: $vcu-white;
+}
+.verify-wrap { display: flex; min-width: 0; }
+
+.detail-content { flex: 1 1 0; min-height: 0; overflow: auto; padding: 0.75rem 1rem 1.5rem; }
+.detail-section + .detail-section { margin-top: 1.5rem; }
+.detail-section h3 {
+  margin: 0 0 0.6rem;
+  padding: 3rem 0.3rem 0.3rem;
+  border-bottom: 1px solid $vcu-gray;
+  font-size: 1.2rem;
+}
+// Labelled fields in a grid of two to four columns
+.detail-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(11rem, 1fr));
+  align-items: start;
+  gap: 0.75rem 1rem;
+  > .is-wide { grid-column: 1 / -1; }
+}
+.detail-field { min-width: 0; .form-control, .form-select { width: 100%; } }
+.detail-field .detail-number { width: 6rem; } // a question number is a few characters
+.detail-label { display: block; margin-bottom: 0.2rem; color: $vcu-gray; font-size: 0.75rem; font-weight: 500; }
+.detail-value { display: block; padding: 0.2rem 0; font-weight: 700; font-variant-numeric: tabular-nums; }
+.detail-note { margin: 0; color: $vcu-gray; font-size: 0.85rem; }
+
+// The question's variables, without a box of their own
+.block-detail .question-panel { grid-column: 1 / -1; }
+.block-detail .variable-cards { margin: 0; padding: 0; border: 0; background: none; }
+
+// Skip conditions and logic, in sentences; one worked out from a Skip to links to that question
+.skip-logic { display: flex; flex-direction: column; gap: 0.4rem; }
+.skip-sentence {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.35rem;
+  padding: 0.5rem 0.75rem;
+  border: 1px solid $review-line;
+  border-left: 3px solid $vcu-gold;
+  border-radius: $border-radius;
+  background: rgba($vcu-gold, 0.06);
+  .detail-note { flex-shrink: 0; margin-left: auto; align-self: center; }
+}
+.edit-extraction-page .skip-link {
+  min-height: 0;
+  padding: 0;
+  color: $vcu-black;
+  text-align: left;
+  white-space: normal;
+}
+.skip-text { flex: 1; }
+
+// Dialogs of boxes, one for each choice: Add Skip Logic, + Variable, and + Block (squares in a grid). Pointing at
+// one lifts it with a shadow; its words stay black.
+.logic-choices, .pick-boxes { display: grid; gap: 0.75rem; }
+.pick-boxes.is-grid { grid-template-columns: repeat(auto-fill, minmax(11rem, 1fr)); }
+.btn.logic-choice, .btn.pick-box {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.75rem;
+  padding: 1rem;
+  border: 1px solid $review-line;
+  border-radius: 0.5rem;
+  background: $vcu-white;
+  color: $vcu-black;
+  text-align: left;
+  white-space: normal;
+  transition: box-shadow 0.15s, border-color 0.15s, transform 0.15s;
+  .action-label { display: flex; align-items: flex-start; gap: 0.75rem; } // the icon beside the words, not over them
+  .fa, .fas, svg { margin-top: 0.2rem; font-size: 1.2rem; }
+  &:hover, &:focus-visible, &:active {
+    border-color: $vcu-gold;
+    background: $vcu-white;
+    color: $vcu-black;
+    box-shadow: 0 0.35rem 0.9rem rgba($vcu-black, 0.18);
+    transform: translateY(-1px);
+  }
+}
+.pick-box-words { display: flex; flex-direction: column; gap: 0.2rem; font-size: 0.9rem; strong { font-size: 1rem; } }
+.pick-boxes.is-grid .btn.pick-box { flex-direction: column; min-height: 9rem; }
+
+// A phone: the list and the details take turns, with Back. The header fills most of the screen, so the
+// panel keeps a screen's height of its own and the page scrolls to it.
 @media (max-width: 767.98px) {
-  .outline-text, .outline-group-note { flex-basis: 100%; order: 1; }
-  .outline-parent, .outline-condition { flex: 1 1 10rem; order: 2; }
-  .outline-badges, .outline-actions { order: 0; }
-  .outline-actions { margin-left: auto; }
-  .question-panel { margin-left: 0.5rem; padding: 0.6rem; }
-  .btn-sm, .btn-icon { min-height: 2.25rem; min-width: 2.25rem; }
+  .edit-extraction-page .structure-card { min-height: 85vh; }
+  .outline-body { flex: 1 1 0; border-right: 0; }
+  .detail-panel { display: none; }
+  .outline-panel.is-detail-open {
+    .outline-body { display: none; }
+    .detail-panel { display: flex; flex: 1 1 0; }
+  }
+  .detail-back { display: inline-block; }
+}
+
+// ------ Buttons on this page ------------------------------------------------------------------------------
+// Drawn as on every page (components/_buttons.scss); a verified block's Verify is green.
+.detail-verify.is-checked {
+  --bs-btn-color: #{$vcu-white};
+  --bs-btn-bg: #{$vcu-green};
+  --bs-btn-border-color: #{$vcu-green};
+  --bs-btn-hover-color: #{$vcu-white};
+  --bs-btn-hover-bg: #{darken($vcu-green, 5%)};
+  --bs-btn-hover-border-color: #{darken($vcu-green, 5%)};
 }
 
 // ------ What there is to fix, listed as a "to fix" badge or count is pointed at (review.js) ----------------
@@ -486,14 +668,16 @@ $variable-columns: 1rem 1.5rem 7.5rem 8rem minmax(9rem, 1.3fr) minmax(9rem, 1.7f
   font-size: 0.85rem;
   ul { margin: 0; padding-left: 1rem; }
   li + li { margin-top: 0.25rem; }
+  // a question's MATR IDs, listed as its count of variables is pointed at
+  &.is-info { border-color: $vcu-gray; ul { padding-left: 0; list-style: none; font-family: $font-family-monospace; } }
 }
+.outline-count { cursor: help; }
 .problem-pop-link {
   padding: 0;
   border: 0;
   background: none;
   text-align: left;
-  text-decoration: underline;
-  text-decoration-color: rgba($vcu-gray, 0.5);
-  &:hover, &:focus-visible { text-decoration-color: $vcu-black; }
+  text-decoration: none;
+  &:hover, &:focus-visible { text-decoration: underline; }
 }
 .problem-pop-more { list-style: none; color: $vcu-gray; }

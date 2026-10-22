@@ -189,6 +189,22 @@ test_that("codes typed for one box are used in every box with the same choices",
   expect_identical(choices$code_value[!in_yes_no_box], draft$response_options$code_value[!in_yes_no_box])
 })
 
+test_that("Apply to All? names the variables with the same choices coded otherwise, and none once they match", {
+  draft <- gold_draft()
+  box <- draft$variables$id[1]
+  yes_no <- draft_service_children(draft, "response_options", box)
+  draft <- draft_service_update(draft, "response_options", yes_no$id[1], "code_value", "1")
+  draft <- draft_service_update(draft, "response_options", yes_no$id[2], "code_value", "0")
+  differ <- draft_service_codes_differ(draft, box)
+  expect_gt(length(differ), 0)
+  expect_false(box %in% differ)
+  choices <- draft$response_options
+  lists <- tapply(choices$answer_option[order(choices$variable_id, choices$display_order)],
+                  choices$variable_id[order(choices$variable_id, choices$display_order)], paste, collapse = "/")
+  expect_true(all(lists[differ] == "Yes/No")) # only those with the same choices
+  expect_length(draft_service_codes_differ(suppressMessages(draft_service_copy_codes(draft, box)), box), 0)
+})
+
 test_that("new choices take the next code in their box, counting from 1", {
   draft <- gold_draft()
   box <- draft$variables$id[1]
@@ -600,6 +616,35 @@ test_that("the question a question follows is picked from its list or typed as a
   q10 <- block_numbered(twice, "10")$id
   followed <- draft_service_update(twice, "components", q10, "parent_question_id", "7")
   expect_equal(followed$components$parent_question_id[followed$components$id == q10], q9)
+})
+
+test_that("a section or question group is checked once every block in it is, and not while one isn't", {
+  draft <- gold_draft()
+  container <- draft$components$id[is_container(draft$components$component_type)][1]
+  inside <- draft_service_printed_order(draft, container)
+  others <- inside[!is_container(draft$components$component_type[match(inside, draft$components$id)])]
+  checked_now <- function(draft) draft$components$checked[draft$components$id == container]
+  expect_false(checked_now(draft_service_check_containers(with_checked(draft, container)))) # not on its own
+  expect_false(checked_now(draft_service_check_containers(with_checked(draft, utils::head(others, -1)))))
+  expect_true(checked_now(draft_service_check_containers(with_checked(draft, others))))
+  # an empty one isn't checked
+  empty <- draft_service_add_block(draft, "Section", draft_service_next_id(draft, "components"))
+  added <- setdiff(empty$components$id, draft$components$id)
+  expect_false(draft_service_check_containers(with_checked(empty, added))$components$checked[empty$components$id == added])
+})
+
+test_that("a variable is added with the kind picked: a write-in has no choices, choices start with a blank one", {
+  draft <- gold_draft()
+  q1a <- block_numbered(draft, "1a")$id
+  write_in <- draft_service_add_box(draft, q1a, "open_ended")
+  added <- setdiff(write_in$variables$id, draft$variables$id)
+  expect_equal(write_in$variables$variable_type[write_in$variables$id == added], "open_ended")
+  expect_equal(nrow(draft_service_children(write_in, "response_options", added)), 0)
+  choices <- draft_service_add_box(write_in, q1a, "closed_ended")
+  again <- setdiff(choices$variables$id, write_in$variables$id)
+  expect_equal(choices$variables$variable_type[choices$variables$id == again], "closed_ended")
+  expect_gte(nrow(draft_service_children(choices, "response_options", again)), 1)
+  expect_error(draft_service_add_box(draft, q1a, "something else"), "Pick choices or write-in.")
 })
 
 test_that("who a variable is about is blank for the respondent, however it is typed", {

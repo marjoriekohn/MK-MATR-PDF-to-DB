@@ -9,7 +9,7 @@ editable_fields <- list(
     "component_type", "text", "printed_number", "self_contained",
     "condition", "parent_question_id", "checked"
   ),
-  variables = c("variable_type", "label", "subject", "answer_data_type", "matr_id"),
+  variables = c("variable_type", "label", "subject", "answer_data_type", "matr_id", "skip_condition", "skip_instruction", "skip_to_id"),
   response_options = c("answer_option", "code_value", "printed_label", "skip_instruction", "skip_to_id")
 )
 
@@ -34,12 +34,12 @@ draft_service_update <- function(draft, table, id, field, value) {
     variable_type = set_variable_type(draft, row, value),
     matr_id = set_matr_id(draft, row, value),
     parent_question_id = set_parent_question(draft, row, value),
-    skip_to_id = set_skip_to(draft, row, value),
+    skip_to_id = set_skip_to(draft, row, value, table),
     skip_instruction = {
-      # printed words naming a question are linked to it, unless the choice is linked already
-      draft$response_options$skip_instruction[row] <- value
-      if (is.na(draft$response_options$skip_to_id[row])) {
-        draft$response_options$skip_to_id[row] <- draft_service_skip_target(draft, draft$response_options$id[row])
+      # printed words naming a question are linked to it, unless the choice (or write-in) is linked already
+      draft[[table]]$skip_instruction[row] <- value
+      if (is.na(draft[[table]]$skip_to_id[row])) {
+        draft[[table]]$skip_to_id[row] <- draft_service_skip_target(draft, draft[[table]]$id[row], table = table)
       }
       draft
     },
@@ -136,6 +136,7 @@ set_variable_type <- function(draft, row, type) {
     return(draft)
   }
   draft$variables$answer_data_type[row] <- NA
+  draft$variables[row, c("skip_condition", "skip_instruction", "skip_to_id")] <- NA # a choice skips, not the variable
   add_blank_choices(draft, box$id, 1)
 }
 
@@ -196,6 +197,24 @@ draft_service_uncheck_edited <- function(before, after) {
   edited <- kept[was[kept] != now[kept]]
   after$components$checked[after$components$id %in% edited & after$components$checked %in% TRUE] <- FALSE
   after
+}
+
+#' Sections and question groups are checked once everything in them is.
+#'
+#' Staff verify questions and the other blocks; a section or group counts as checked (for the progress bar,
+#' the list's colours and what is left to check before submitting) once every block inside it is, and stops
+#' counting as soon as one isn't. One with nothing in it isn't checked.
+#'
+#' @param draft A draft.
+#' @return The draft, with its sections' and groups' `checked` worked out.
+draft_service_check_containers <- function(draft) {
+  blocks <- draft$components
+  for (id in blocks$id[is_container(blocks$component_type)]) {
+    inside <- draft_service_printed_order(draft, id)
+    inside <- inside[!is_container(blocks$component_type[match(inside, blocks$id)])]
+    draft$components$checked[blocks$id == id] <- length(inside) > 0 && all(blocks$checked[match(inside, blocks$id)] %in% TRUE)
+  }
+  draft
 }
 
 # ------ Moving blocks ----------------------------------------------------------
@@ -273,7 +292,8 @@ draft_service_add_block <- function(draft, component_type, id, near_id = NULL) {
     parent_id = if (goes_inside) near$id else if (has_near) near$parent_id else NA_character_,
     display_order = if (has_near && !goes_inside) near$display_order + 0.5 else Inf,
     component_type = component_type,
-    self_contained = if (component_type == "Question") TRUE else NA
+    self_contained = if (component_type == "Question") TRUE else NA,
+    page = if (has_near) near$page else NA_integer_ # printed beside it, most likely
   ))
 }
 
@@ -281,14 +301,26 @@ draft_service_add_block <- function(draft, component_type, id, near_id = NULL) {
 #'
 #' It copies the question's last variable (its kind, who it is about and its choices), since
 #' one question's variables are usually alike; a write-in has no choices to copy. A question's first
-#' variable starts with one blank choice: a lone check box has only the one.
+#' variable starts with one blank choice: a lone check box has only the one. Staff pick its kind as they
+#' add it (`variable_type`): one of another kind than the variable it copies keeps who it is about, and
+#' starts with a blank choice, or none for a write-in.
 #'
 #' @param draft A draft: `list(questionnaire, components, variables, response_options)`; see the top of `service_draft.R`.
 #' @param component_id The question's id.
+#' @param variable_type `"closed_ended"` (choices) or `"open_ended"` (write-in), or `NULL` for the kind
+#'   of the variable it copies.
 #' @return The changed draft.
-draft_service_add_box <- function(draft, component_id) {
-  boxes <- draft_service_children(draft, "variables", component_id)
+draft_service_add_box <- function(draft, component_id, variable_type = NULL) {
   id <- draft_service_next_id(draft, "variables")
+  added <- add_box(draft, component_id, id)
+  if (is.null(variable_type)) {
+    return(added)
+  }
+  draft_service_update(added, "variables", id, "variable_type", variable_type)
+}
+
+add_box <- function(draft, component_id, id) {
+  boxes <- draft_service_children(draft, "variables", component_id)
   if (nrow(boxes) == 0) {
     draft <- add_rows(draft, "variables", data.frame(id = id, component_id = component_id))
     return(add_blank_choices(draft, id, 1))
@@ -498,10 +530,7 @@ draft_service_copy_codes <- function(draft, variable_id) {
   if (nrow(source) == 0 || anyNA(source$code_value)) {
     stop("Give every choice in this variable a code first.")
   }
-  choices <- draft$response_options
-  choices <- choices[order(choices$variable_id, choices$display_order), ]
-  choice_lists <- tapply(choices$answer_option, choices$variable_id, paste, collapse = "\n")
-  same_boxes <- names(choice_lists)[choice_lists == choice_lists[[variable_id]]]
+  same_boxes <- same_choice_variables(draft, variable_id)
   rows <- draft$response_options$variable_id %in% same_boxes
   draft$response_options$code_value[rows] <-
     source$code_value[match(draft$response_options$answer_option[rows], source$answer_option)]
@@ -510,6 +539,32 @@ draft_service_copy_codes <- function(draft, variable_id) {
     length(same_boxes) - 1
   ))
   draft
+}
+
+#' The other variables that offer the same choices as this one but code them differently: those
+#' `draft_service_copy_codes()` would change.
+#'
+#' @param draft A draft.
+#' @param variable_id The variable whose codes would be copied.
+#' @return The variables' ids, in the order the draft has them.
+draft_service_codes_differ <- function(draft, variable_id) {
+  choices <- draft$response_options
+  choices <- choices[order(choices$variable_id, choices$display_order), , drop = FALSE]
+  codes <- tapply(as.character(choices$code_value), choices$variable_id, paste, collapse = "\n")
+  others <- setdiff(same_choice_variables(draft, variable_id), variable_id)
+  ids <- others[codes[others] != codes[[variable_id]]]
+  draft$variables$id[draft$variables$id %in% ids]
+}
+
+# The variables (this one too) whose choices are the same words in the same order as this one's.
+same_choice_variables <- function(draft, variable_id) {
+  choices <- draft$response_options
+  choices <- choices[order(choices$variable_id, choices$display_order), , drop = FALSE]
+  choice_lists <- tapply(choices$answer_option, choices$variable_id, paste, collapse = "\n")
+  if (!variable_id %in% names(choice_lists)) {
+    return(character())
+  }
+  names(choice_lists)[choice_lists == choice_lists[[variable_id]]]
 }
 
 # ------ MATR IDs ---------------------------------------------------------------

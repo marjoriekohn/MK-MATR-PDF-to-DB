@@ -8,7 +8,7 @@
 // into the text box as it is changed, so Shiny reads it like any other field. Who a variable can be about
 // is typed (blank is the respondent), with the subjects in the editor's data-subjects offered; the kinds of
 // answer come from data-answer-types; the answer choices it offers as they are typed are in the <datalist>
-// data-answers names.
+// data-answers names. Its icons are in data-icons, by what they mean ("add", "delete").
 (function () {
   'use strict';
 
@@ -38,8 +38,11 @@
     return el;
   }
 
-  function icon(name) {
-    return make('i', { class: 'fas fa-' + name, role: 'presentation', 'aria-hidden': 'true' });
+  // An icon, by what it means: the editor's data-icons says which Font Awesome icon that is.
+  function icon(editor, meaning) {
+    let names = {};
+    try { names = JSON.parse(editor.dataset.icons || '{}'); } catch (e) { names = {}; }
+    return make('i', { class: 'fas fa-' + (names[meaning] || meaning), role: 'presentation', 'aria-hidden': 'true' });
   }
 
   function text(value) {
@@ -119,7 +122,7 @@
     }
 
     function removeButton(label, onclick) {
-      return make('button', { type: 'button', class: 'btn btn-sm btn-icon', title: label, 'aria-label': label, onclick: onclick }, [icon('trash-can')]);
+      return make('button', { type: 'button', class: 'btn btn-sm btn-icon', title: label, 'aria-label': label, onclick: onclick }, [icon(editor, 'delete')]);
     }
 
     function choiceRow(variable, choice, j) {
@@ -159,7 +162,7 @@
             variable.response_options.push(blankChoice(variable.response_options));
             save(true);
           }
-        }, [icon('plus'), ' Choice'])
+        }, [icon(editor, 'add'), ' Choice'])
       ])) : null;
       return make('div', { class: 'edit-variable' }, [row, choices]);
     }

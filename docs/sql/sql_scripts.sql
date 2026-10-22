@@ -318,7 +318,12 @@ create table public.variable (
 create table public.open_ended (
   variable_key     bigint primary key,                                   -- BR88, BR89
   answer_data_type text   not null                                       -- BR95
-    constraint open_ended_answer_data_type_check check (answer_data_type in ('NUMBER', 'TEXT', 'DATE', 'TIME'))
+    constraint open_ended_answer_data_type_check check (answer_data_type in ('NUMBER', 'TEXT', 'DATE', 'TIME')),
+  skip_condition   text,                 -- the answer that skips ("None")
+  skip_instruction text,                 -- the routing printed for it
+  skip_to_component_id bigint,           -- where it sends respondents
+  skip_to_end      boolean not null default false, -- or to the end of the questionnaire
+  constraint open_ended_skip_to_one_place check (not (skip_to_end and skip_to_component_id is not null))
 );
 
 create table public.option_set (
@@ -354,6 +359,8 @@ create table public.response_option (
   printed_label    text,
   skip_instruction text,
   skip_to_component_id bigint,           -- where the skip instruction sends respondents
+  skip_to_end      boolean not null default false, -- or to the end of the questionnaire
+  constraint response_option_skip_to_one_place check (not (skip_to_end and skip_to_component_id is not null)),
   primary key (variable_key, answer_option_id),
   -- BR103 (and BR104: the same answer option may carry different codes on different variables)
   constraint response_option_display_order_unique
@@ -607,7 +614,9 @@ alter table public.variable
 
 alter table public.open_ended
   add constraint open_ended_variable_key_fkey
-    foreign key (variable_key) references public.variable (variable_key) on delete cascade;
+    foreign key (variable_key) references public.variable (variable_key) on delete cascade,
+  add constraint open_ended_skip_to_component_id_fkey
+    foreign key (skip_to_component_id) references public.component (component_id);
 
 alter table public.closed_ended
   add constraint closed_ended_variable_key_fkey
@@ -702,6 +711,7 @@ create index closed_ended_option_set_id_idx        on public.closed_ended (optio
 create index answer_option_set_answer_option_idx   on public.answer_option_set (answer_option_id);
 create index response_option_answer_option_idx     on public.response_option (answer_option_id);
 create index response_option_skip_to_idx           on public.response_option (skip_to_component_id);
+create index open_ended_skip_to_idx                on public.open_ended (skip_to_component_id);
 create index question_category_mesh_id_idx         on public.question_category (mesh_id);
 create index question_scale_component_id_idx       on public.question_scale (component_id);
 create index question_scale_expected_set_idx       on public.question_scale (expected_option_set_id);
@@ -2052,7 +2062,17 @@ comment on column public.variable.matr_id is 'What MATR staff call the variable 
 comment on column public.variable.subject_id is 'Who the variable is about (public.subject). Null when not known.';
 comment on column public.response_option.code_value is 'Stored value for this option in the response data, e.g. 1 for Yes.';
 comment on column public.response_option.skip_to_component_id is
-  'Where the skip instruction sends respondents: the question (or section) it names. Empty when nothing is linked.';
+  'Where the skip instruction sends respondents: the question, section or question group it names. Empty when nothing is linked, or when it ends the questionnaire (skip_to_end).';
+comment on column public.response_option.skip_to_end is
+  'The skip instruction sends respondents to the end of the questionnaire.';
+comment on column public.open_ended.skip_condition is
+  'The answer that skips, e.g. None for "If none, go to Question 57". Empty when the write-in has no skip.';
+comment on column public.open_ended.skip_instruction is
+  'The routing printed for the write-in, e.g. "Go to Question 57".';
+comment on column public.open_ended.skip_to_component_id is
+  'Where the skip sends respondents: the question, section or question group it names. Empty when nothing is linked, or when it ends the questionnaire (skip_to_end).';
+comment on column public.open_ended.skip_to_end is
+  'The skip sends respondents to the end of the questionnaire.';
 
 comment on column public.staff.role is
   'STAFF: deleting, or pushing an extraction, needs one approval from another staff member. ADMIN: never needs approval.';

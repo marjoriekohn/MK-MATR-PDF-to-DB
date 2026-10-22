@@ -1,9 +1,9 @@
 // Make an edit page (make_edit, edit_find and edit_change modules)
-$edit-line: rgba($vcu-gray, 0.35);
+$edit-line: $vcu-gray;
 
 .edit-page {
-  h2 { margin: 0; font-size: 1.15rem; }
-  h3 { font-size: 1rem; }
+  h2 { margin: 0; font-size: 1.2rem; }
+  h3 { font-size: 1.2rem; }
 }
 
 // ------ Steps ----------------------------------------------------------------------
@@ -137,14 +137,6 @@ $edit-line: rgba($vcu-gray, 0.35);
 
 .edit-more { text-align: center; margin-bottom: 1rem; }
 .edit-empty { padding: 1.5rem; border: 2px dashed $edit-line; border-radius: $border-radius; color: $vcu-gray; text-align: center; }
-
-.btn-delete {
-  border: 1px solid $vcu-red;
-  background: $vcu-white;
-  color: $vcu-red;
-  font-weight: 500;
-  &:hover, &:focus-visible { border-color: $vcu-red; background: $vcu-red; color: $vcu-white; }
-}
 
 // ------ The form ---------------------------------------------------------------------------------
 .edit-columns {
