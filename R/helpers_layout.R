@@ -29,6 +29,17 @@ page_header <- function(title, subtitle, ...) {
   )
 }
 
+# ------ Details, beside an outline (Edit Extraction, Make an edit) -------------------------------------------
+# A heading over some of the details' fields, laid out in a grid.
+detail_section <- function(heading, ...) {
+  div(class = "detail-section", if (!is.null(heading)) h3(heading), div(class = "detail-grid", ...))
+}
+
+# One field of the details, with its label above it; `wide` takes the grid's whole width.
+detail_field <- function(label, ..., wide = FALSE) {
+  div(class = c("detail-field", if (wide) "is-wide"), span(class = "detail-label", label), ...)
+}
+
 #' A coloured circle that shows how far something has got.
 #'
 #' @param state `"done"`, `"in_progress"`, `"not_started"` or `"attention"`.
@@ -86,6 +97,28 @@ toggle_input <- function(input_id, choices, selected, label) {
 show_problem <- function(problem, doing = NULL, type = "error") {
   text <- conditionMessage(problem)
   showNotification(if (is.null(doing)) text else paste0(doing, ": ", text), type = type)
+}
+
+#' A change to a draft, as a service function makes it, with what it says shown to staff.
+#'
+#' Service functions explain themselves: their message()s are shown as notes, and when one stop()s, why is
+#' shown and nothing changes.
+#'
+#' @param new_draft The service function's call, e.g. `draft_service_add_choice(draft, "v1")`; it runs here.
+#' @param notes Whether to show its notes. They are written for Edit Extraction ("Deleted. Undo brings it
+#'   back."), so a page without Undo leaves them out.
+#' @return The changed draft, or `NULL` if it was refused.
+try_change <- function(new_draft, notes = TRUE) {
+  tryCatch(
+    withCallingHandlers(new_draft, message = function(note) {
+      if (notes) showNotification(conditionMessage(note), type = "message")
+      invokeRestart("muffleMessage")
+    }),
+    error = function(problem) {
+      show_problem(problem, type = "warning")
+      NULL
+    }
+  )
 }
 
 #' A dialog that asks staff to confirm.

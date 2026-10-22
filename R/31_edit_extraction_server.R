@@ -99,16 +99,7 @@ edit_extraction_server <- function(
         layout_version(layout_version() + 1L) # put the inputs back as the draft has them
         return(FALSE)
       }
-      new_draft <- tryCatch(
-        withCallingHandlers(new_draft, message = function(note) {
-          showNotification(conditionMessage(note), type = "message")
-          invokeRestart("muffleMessage")
-        }),
-        error = function(problem) {
-          show_problem(problem, type = "warning")
-          NULL
-        }
-      )
+      new_draft <- try_change(new_draft)
       if (is.null(new_draft)) {
         layout_version(layout_version() + 1L) # put the inputs back as the draft has them
         return(FALSE)

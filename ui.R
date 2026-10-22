@@ -4,7 +4,7 @@ page_navbar(
   title = actionLink("to_home", "MATR Database Admin"),
   window_title = "MATR Database Admin",
   theme = vcu_theme,
-  fillable = "edit_extraction",
+  fillable = c("edit_extraction", "make_edit"), # an outline beside its details, filling the window
   navbar_options = navbar_options(theme = "dark", collapsible = FALSE),
   header = tagList(
     tags$head(
@@ -12,9 +12,7 @@ page_navbar(
       page_script("js/site.js"),
       page_script("js/review.js"),
       page_script("js/extraction.js"),
-      page_script("js/edit.js"),
-      page_script("js/busy.js"),
-      page_script("js/variables.js")
+      page_script("js/busy.js")
     ),
     # While the server is working: a gold bar across the top of the page, and nothing else (no spinners,
     # no fading); busy.js holds the button that was pressed so it isn't pressed twice.

@@ -1,5 +1,6 @@
 // Every page's title, and the menu's signed-in name
 .page {
+  width: 100%; // also when the page fills the window (Make an edit), as a flex container's item
   max-width: 1320px;
   margin: 0 auto;
 }

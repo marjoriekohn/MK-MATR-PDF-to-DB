@@ -105,21 +105,6 @@ edit_service_load <- function(connection, entity) {
   stats::setNames(lapply(tables, function(table) table_model_get(connection, table)), tables)
 }
 
-# ------ The sentence -----------------------------------------------------------------------------------
-#' The kinds of thing staff can edit, in groups.
-#'
-#' What staff can finish "I want to update a ..." with.
-#'
-#' @return A list of named character vectors, one per group; the names are shown and the
-#'   values are the kinds' keys.
-edit_service_kinds <- function() {
-  groups <- unique(vapply(edit_entities, function(entity) entity$group, character(1)))
-  stats::setNames(lapply(groups, function(group) {
-    entities <- Filter(function(entity) entity$group == group, edit_entities)
-    stats::setNames(names(entities), vapply(entities, function(entity) entity$noun, character(1)))
-  }), groups)
-}
-
 #' Lower-case the first letter.
 #'
 #' @param text A string.
@@ -775,39 +760,6 @@ edit_service_blockers <- function(mode, found = NULL, n_changes = 0, shared = 0,
     out <- c(out, "Tick the box to confirm it changes everywhere it's used.")
   }
   out
-}
-
-#' The steps shown above the Make an edit page, and the one staff are on.
-#'
-#' @param verb `"add"`, `"update"` or `"delete"`.
-#' @param has_sentence Whether a verb and a kind are chosen.
-#' @param picked Whether a row has been picked.
-#' @param ready Whether the change can be sent.
-#' @param sent Whether it has been sent or applied.
-#' @param approval Whether it needs another staff member's approval, which changes what the last
-#'   step is called.
-#' @return A list: `labels` and `current` (one past the last once it is sent).
-edit_service_steps <- function(verb, has_sentence, picked, ready, sent, approval = TRUE) {
-  last <- if (approval) "Send for approval" else "Apply"
-  labels <- switch(verb,
-    add = c("What to do", "Fill it in", last),
-    delete = c("What to do", "Find it", "Check what goes", last),
-    c("What to do", "Find it", "Change it", last)
-  )
-  current <- if (sent) {
-    length(labels) + 1
-  } else if (!has_sentence) {
-    1
-  } else if (verb == "add") {
-    if (ready) 3 else 2
-  } else if (!picked) {
-    2
-  } else if (ready) {
-    4
-  } else {
-    3
-  }
-  list(labels = labels, current = current)
 }
 
 #' What a form that still has things to fix is saved as.

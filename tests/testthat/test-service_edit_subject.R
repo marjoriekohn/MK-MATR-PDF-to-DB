@@ -76,6 +76,6 @@ test_that("a subject is read like the other tables, by its key and name, in the 
   expect_equal(rows$name[1], "Respondent")
 })
 
-test_that("the Subject kind is offered with the other shared lists", {
-  expect_equal(unname(edit_service_kinds()[["Shared lists"]]), c("category", "answer_option", "subject"))
+test_that("the Subject kind is a section of Make an edit's list", {
+  expect_equal(make_edit_kinds$subject, c("Subjects", "Subject"))
 })

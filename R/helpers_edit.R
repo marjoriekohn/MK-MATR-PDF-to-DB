@@ -1,7 +1,7 @@
 # ------ Make an edit page building blocks ----------------------------------------------------
-# What the page's modules draw with: the sentence, the steps, a form's fields,
-# a row's card, what changed and what a change reaches. Buttons that act on a
-# card or a row use the page script's data-action (see helpers_review.R).
+# What the page's details draw with: what staff should know, a form's fields, what
+# changed and what a change reaches (the list is 40_make_edit_ui.R's). Buttons use the
+# page script's data-action (see helpers_review.R).
 
 #' A box with something staff should know.
 #'
@@ -20,34 +20,6 @@ edit_callout <- function(kind, ..., title = NULL, icon_name = NULL) {
     class = paste0("edit-callout is-", kind), role = if (kind != "info") "alert",
     span(class = "edit-callout-icon", `aria-hidden` = "true", app_icon(icon_name)),
     div(class = "edit-callout-body", if (!is.null(title)) strong(class = "edit-callout-title", title), ...)
-  )
-}
-
-# ------ The sentence ---------------------------------------------------------------------------
-#' "I want to [update] a [question]."
-#'
-#' Both blanks are drop-downs: `verb` and `kind`.
-#'
-#' @param ns The module's namespace function.
-#' @return A UI element.
-edit_sentence_ui <- function(ns) {
-  verbs <- c("choose what to do…" = "", "add" = "add", "update" = "update", "delete" = "delete")
-  kinds <- c(list("choose a kind of thing…" = ""), edit_service_kinds())
-  div(
-    class = "edit-sentence",
-    span(
-      class = "edit-sentence-part",
-      span("I want to"),
-      selectInput(ns("verb"), NULL, verbs, selectize = FALSE, width = "auto") |>
-        tag_input_attributes("select", class = "sentence-select", `aria-label` = "What do you want to do?")
-    ),
-    span(
-      class = "edit-sentence-part",
-      uiOutput(ns("article"), inline = TRUE),
-      selectInput(ns("kind"), NULL, kinds, selectize = FALSE, width = "auto") |>
-        tag_input_attributes("select", class = "sentence-select", `aria-label` = "What kind of thing?"),
-      span(".")
-    )
   )
 }
 
@@ -81,28 +53,6 @@ edit_info_block <- function(entity, verb, approval = FALSE, editing_request = FA
     if (identical(verb, "delete")) "danger" else "info",
     title = if (nzchar(verb)) paste(doing[[verb]], entity$article, entity$noun),
     lapply(c(entity$about, how, sent), p)
-  )
-}
-
-# ------ Steps -----------------------------------------------------------------------------------
-#' Where staff are in the steps.
-#'
-#' Done steps are ticked, the current one is numbered in black.
-#'
-#' @param labels The steps' names.
-#' @param current The number of the current step.
-#' @return A UI element.
-edit_steps_ui <- function(labels, current) {
-  tags$ol(
-    class = "edit-steps", `aria-label` = "Steps",
-    lapply(seq_along(labels), function(i) {
-      state <- if (i < current) "done" else if (i == current) "current" else "next"
-      tags$li(
-        class = paste0("edit-step is-", state), `aria-current` = if (state == "current") "step",
-        span(class = "edit-step-mark", if (state == "done") app_icon("done") else i),
-        span(class = "edit-step-label", labels[i])
-      )
-    })
   )
 }
 
@@ -149,7 +99,7 @@ edit_field_ui <- function(ns, field, value, slot) {
         role = "group", `aria-label` = field$label, title = field$label,
         toggle_input(id, field$choices, selected = value, label = field$label)
       ),
-      variables = edit_variables_ui(id, value, field),
+      variables = variable_editor_ui(ns("variables"), field$label), # its server is edit_change_server()'s
       {
         box <- named(textInput(id, NULL, value, placeholder = inside, width = "100%"), "input")
         if (!is.null(field$suggest)) {
@@ -174,36 +124,6 @@ edit_field_ui <- function(ns, field, value, slot) {
   conditionalPanel(
     sprintf("input['%s__%s'] == '%s'", field$part, field$show_when$field, field$show_when$value),
     ns = ns, field_div
-  )
-}
-
-#' The variables of a question, and their choices, edited together.
-#'
-#' The field's value is a hidden text box holding the variables as JSON; the page script
-#' (www/js/variables.js) draws an editor from it, like the Edit Extraction page's variable cards, and
-#' writes it back as they are changed. Who a variable can be about, the kinds of answer and the answer
-#' choices to offer come from `field$options`.
-#'
-#' @param id The input's id.
-#' @param value The variables as JSON.
-#' @param field The field, from `edit_service_fields()`.
-#' @return A UI element.
-edit_variables_ui <- function(id, value, field) {
-  options <- field$options
-  list_id <- paste0(id, "-answers")
-  div(
-    class = "edit-variables", role = "group", `aria-label` = field$label,
-    `data-input` = id,
-    `data-subjects` = jsonlite::toJSON(as.character(options$subjects)),
-    `data-answer-types` = jsonlite::toJSON(as.character(options$answer_data_types)),
-    `data-answers` = list_id,
-    # the icons it draws, so they change with the site's (helpers_icons.R)
-    `data-icons` = jsonlite::toJSON(as.list(app_icons[c("add", "delete")]), auto_unbox = TRUE),
-    div(class = "edit-variables-title", field$label),
-    div(class = "edit-variables-value", textInput(id, NULL, value)),
-    suggestions(list_id, options$answer_options),
-    div(class = "edit-variables-list"),
-    tags$button(type = "button", class = "btn btn-sm btn-outline-dark edit-variables-add", app_icon("add"), " Variable")
   )
 }
 
@@ -245,37 +165,6 @@ edit_field_placeholder <- function(field) {
 #' @return A UI element.
 edit_part_heading <- function(title, why = NULL) {
   div(class = "edit-part-heading", h3(title), if (!is.null(why)) p(class = "form-text", why))
-}
-
-# ------ Cards -----------------------------------------------------------------------------------------
-#' One row, with what it is and how much depends on it.
-#'
-#' @param card One row of the cards data frame from `edit_cards()`.
-#' @param verb What the button does: `"update"` or `"delete"`.
-#' @param selected Whether it is the picked card.
-#' @return A UI element.
-edit_card_ui <- function(card, verb, selected = FALSE) {
-  danger <- verb == "delete"
-  div(
-    class = c("edit-card", if (selected) "is-selected", if (danger) "is-danger"),
-    div(
-      class = "edit-card-head",
-      if (!is.na(card$tag)) type_chip(card$tag),
-      h3(class = "edit-card-title", card$title)
-    ),
-    if (nzchar(card$subtitle)) p(class = "edit-card-subtitle", card$subtitle),
-    if (length(card$facts[[1]]) > 0) {
-      div(class = "edit-card-facts", lapply(card$facts[[1]], function(fact) row_badge(fact)))
-    },
-    if (!is.na(card$warn)) p(class = "edit-card-warn", app_icon("warning"), " ", card$warn),
-    if (!selected) {
-      review_button(
-        paste(tools::toTitleCase(verb), "this"), "pick",
-        `data-id` = card$key,
-        class = c("btn btn-sm", if (danger) "btn-delete" else "btn-outline-dark")
-      )
-    }
-  )
 }
 
 # ------ What changed -------------------------------------------------------------------------------------

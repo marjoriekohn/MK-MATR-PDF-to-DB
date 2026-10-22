@@ -695,10 +695,33 @@ test_that("the variables start as one, about the respondent, with one blank choi
       utils::modifyList(list(id = "questionnaire_question__variables", part = "questionnaire_question")),
     edit_variables_default(snap), "change-note_1"
   ))$html
-  expect_match(html, 'class="edit-variables"')
-  expect_match(html, 'data-input="change-questionnaire_question__variables"')
-  expect_match(html, 'data-subjects="\\[&quot;Respondent')
-  expect_match(html, "edit-variables-add")
+  # the variable editor Edit Extraction uses, as a module of the form (its server is edit_change_server()'s), which
+  # draws it once the form gives it the variables (test-variable_editor_server.R)
+  expect_match(html, 'class="variable-editor"')
+  expect_match(html, 'data-ns="change-variables-"')
+  expect_match(html, 'id="change-variables-cards"')
+})
+
+test_that("the variables go from the form's JSON to a draft and back unchanged, a write-in's skip and a choice's too", {
+  json <- variables_json(
+    list(
+      variable_type = "open_ended", matr_id = "AH9", subject = "Siblings", label = "Age", answer_data_type = "NUMBER",
+      skip_condition = "None", skip_instruction = "Go to Question 57"
+    ),
+    list(
+      variable_type = "closed_ended", matr_id = "AH10", subject = "", label = "",
+      response_options = list(
+        list(code_value = "1", answer_option = "Yes", printed_label = "", skip_instruction = "Go to Question 12"),
+        list(code_value = "2", answer_option = "No", printed_label = "NO", skip_instruction = "")
+      )
+    )
+  )
+  draft <- edit_variables_draft(edit_variables_parse(json))
+  expect_equal(draft$variables$skip_condition[1], "None")
+  expect_equal(jsonlite::fromJSON(edit_variables_json(draft), simplifyVector = FALSE), jsonlite::fromJSON(json, simplifyVector = FALSE))
+  # the default, and none at all
+  expect_equal(edit_variables_json(edit_variables_draft(edit_variables_parse(edit_variables_default(NULL)))), edit_variables_default(NULL))
+  expect_equal(edit_variables_json(edit_variables_draft(list())), "[]")
 })
 
 test_that("a block goes in a section or question group, but a section never goes inside a group", {

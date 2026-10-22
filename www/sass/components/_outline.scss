@@ -1,0 +1,193 @@
+// ------ An outline, with the picked row's details beside it ---------------------------------------------------
+// Edit Extraction's questionnaire (32_edit_extraction_outline_ui.R) and Make an edit's kinds of thing
+// (40_make_edit_ui.R): a list of rows, a row that holds others (a section; on Make an edit, a kind) opening and closing
+// when clicked, and the details of the row picked beside it, with their buttons along the bottom. The page script
+// (www/js/review.js) opens and closes them, searches the list, and on a phone shows the list or the details.
+
+// ------ The one panel: the list, with the picked block's details beside it -----------------------------
+// The two scroll on their own. The toolbar spans both.
+.structure-card > .structure-body {
+  display: flex;
+  flex-direction: column;
+  padding: 0;
+  overflow: hidden;
+}
+.outline-panel {
+  display: flex;
+  flex: 1 1 0;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
+  > .outline-split { display: flex; flex: 1 1 0; min-height: 0; }
+}
+.outline-body {
+  flex: 0 0 clamp(22rem, 45%, 36rem);
+  min-width: 0;
+  overflow: auto;
+  padding: 0.5rem 0.75rem 1rem;
+  border-right: 1px solid $line;
+}
+// sized by the room the list leaves it, so what is in it goes by its width (container queries), not the screen's
+.detail-panel { display: flex; flex: 1 1 0; flex-direction: column; min-width: 0; container: detail / inline-size; }
+
+.outline-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-start;
+  gap: $control-gap;
+  padding: 0.5rem;
+  border-bottom: 1px solid $line;
+  background: $vcu-white;
+}
+// Search and Add Filter, each with its icon in front. They take what room the row has, between about 8 and 12
+// characters' worth, and the buttons keep theirs.
+.toolbar-field {
+  position: relative;
+  display: inline-flex;
+  flex: 1 1 8rem;
+  align-items: center;
+  min-width: 0;
+  max-width: 12rem;
+  > .fa, > .fas, > svg { position: absolute; left: 0.6rem; color: $vcu-gray; font-size: 0.8rem; pointer-events: none; }
+  > .form-control, > .form-select { width: 100%; padding-left: 1.85rem; }
+}
+
+.outline-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+// A section's contents, indented under its row
+.outline-node > .outline-list {
+  margin: 0.35rem 0 0.15rem 0.6rem;
+  padding-left: 0.5rem;
+  border-left: 2px dashed $line;
+
+}
+.outline-node.is-collapsed > .outline-list { display: none; }
+// the toolbar's filter: what it leaves out is hidden, and on Edit Extraction sections stay open while it is on (Make an
+// edit's search looks only in the kinds that are open: opening every one would read them all from the database)
+.edit-extraction-page .outline-tree.is-filtered .outline-node.is-collapsed > .outline-list { display: flex; }
+.outline-node.is-filtered-out { display: none; }
+.outline-filter { width: auto; }
+.outline-filter-empty { display: none; margin: 1rem 0.5rem; color: $vcu-gray; }
+.outline-body.is-filter-empty .outline-filter-empty { display: block; }
+
+// A row: the block's kind, words, counts and what there is to fix, and the arrow that opens it. Its colours are
+// solid, so the buttons that show over its count when it is pointed at can take its background. A block
+// verified is green, and a section or group once everything in it is.
+.outline-row {
+  position: relative;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.3rem 0.4rem;
+  border: 1px solid $line;
+  border-radius: $border-radius;
+  background-color: $vcu-white;
+  cursor: pointer;
+
+  &:hover { background-color: mix($vcu-gold, $vcu-white, 8%); }
+  &.is-verified { background-color: mix($vcu-green, $vcu-white, 20%); }
+  &.is-verified:hover { background-color: mix($vcu-green, $vcu-white, 28%); }
+  &.is-selected { border-color: $vcu-black; box-shadow: inset 5px 0 0 $vcu-gold, 0 0 0 1px $vcu-black; }
+}
+
+// The block's words. In the list a question's read as plain words (a click picks the row); a section's and a
+// text block's are typed where they are.
+.outline-text {
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  padding: 0.2rem 0.4rem;
+  border-color: transparent;
+  background: transparent;
+  resize: none;
+  overflow: hidden;
+  line-height: 1.4;
+  &:focus { border-color: $vcu-gold; background: $vcu-white; box-shadow: 0 0 0 0.2rem rgba($vcu-gold, 0.35); }
+  &::placeholder { color: rgba($vcu-gray, 0.8); font-style: italic; }
+}
+.outline-tree {
+  .outline-text { pointer-events: none; cursor: pointer; &::placeholder { color: transparent; } }
+  .outline-text:placeholder-shown { min-width: 2rem; max-height: 2rem; } // its hidden placeholder sets no height
+  .outline-row.is-editable .outline-text::placeholder { color: rgba($vcu-gray, 0.8); }
+  // typed in only once the row's edit button is pressed (review.js); until then a click opens or picks the row
+  .outline-row.is-editable .outline-text:not([readonly]) { pointer-events: auto; cursor: text; }
+  .outline-row.is-container .outline-text { font-weight: 600; }
+}
+
+// ------ The picked block's details ------------------------------------------------------------------
+.detail-body { display: flex; flex: 1 1 0; flex-direction: column; min-height: 0; }
+.block-detail { display: flex; flex: 1 1 0; flex-direction: column; min-height: 0; }
+.detail-empty { margin: auto; padding: 2rem; color: $vcu-gray; text-align: center; }
+
+// The header, one row: the block's kind, its words (typed there), what there is to fix, Verify, Delete
+.detail-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: 0.5rem;
+  padding: 0.75rem 1rem;
+  border-bottom: 1px solid $line;
+  > .type-chip, > .outline-problems { margin-top: 0.5rem; }
+}
+
+.detail-back { display: none; padding-left: 0; }
+
+// The details' buttons, along the bottom: the same size, evenly spaced, one column each
+.detail-actions {
+  @include even-buttons;
+  padding: 0.6rem 1rem;
+  border-top: 1px solid $line;
+  background: $vcu-white;
+}
+// too narrow for four buttons with their words in a row (a tablet, beside the list): two rows of two
+@container detail (max-width: 32rem) {
+  .detail-actions { grid-auto-flow: row; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
+.detail-content { flex: 1 1 0; min-height: 0; overflow: auto; padding: 0.75rem 1rem 1.5rem; }
+.detail-section + .detail-section { margin-top: 1.5rem; }
+.detail-section h3 {
+  margin: 0 0 0.6rem;
+  padding: 3rem 0.3rem 0.3rem;
+  border-bottom: 1px solid $vcu-gray;
+  font-size: 1.2rem;
+}
+// Labelled fields in a grid of two to four columns
+.detail-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(11rem, 1fr));
+  align-items: start;
+  gap: 0.75rem 1rem;
+  > .is-wide { grid-column: 1 / -1; }
+}
+.detail-field { min-width: 0; .form-control, .form-select { width: 100%; } }
+.detail-field .detail-number { width: 6rem; } // a question number is a few characters
+.detail-label { display: block; margin-bottom: 0.2rem; color: $vcu-gray; font-size: 0.75rem; font-weight: 500; }
+.detail-value { display: block; padding: 0.2rem 0; font-weight: 700; font-variant-numeric: tabular-nums; }
+.detail-note { margin: 0; color: $vcu-gray; font-size: 0.85rem; }
+
+// A phone: the list and the details take turns, with Back. The header fills most of the screen, so the
+// panel keeps a screen's height of its own and the page scrolls to it.
+@include media-breakpoint-down(md) {
+  .structure-card { min-height: 85vh; }
+  .outline-body { flex: 1 1 0; border-right: 0; }
+  .detail-panel { display: none; }
+  .outline-panel.is-detail-open {
+    .outline-body { display: none; }
+    .detail-panel { display: flex; flex: 1 1 0; }
+  }
+  // with nothing picked (a delete done, an add cancelled) there is nothing to show but the list
+  .outline-panel.is-detail-open:has(.detail-empty) {
+    .outline-body { display: block; }
+    .detail-panel { display: none; }
+  }
+  .detail-back { display: inline-block; }
+  // only their icons show here, so the four fit in one row
+  .detail-actions { grid-auto-flow: column; grid-template-columns: none; }
+}

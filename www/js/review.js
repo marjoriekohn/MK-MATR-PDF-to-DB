@@ -368,7 +368,7 @@
   }
 
   function applyMarks() {
-    const tree = document.querySelector('.outline-tree');
+    const tree = document.querySelector('.edit-extraction-page .outline-tree');
     if (!tree) return;
     tree.querySelectorAll('.outline-row.is-selected').forEach(function (row) {
       if (row.dataset.id !== marks.selected) row.classList.remove('is-selected');
@@ -440,15 +440,14 @@
   // or those changed from what the AI read. A section or question group stays while anything in it is shown,
   // and is open while the filter is on. Blocks are hidden, not taken out, so nothing is drawn again.
   // The toolbar's search narrows it further: blocks whose words, numbers or variables in short have what is typed.
-  let filter = 'all';
-  let search = '';
-  function shownByFilter(id, toFix) {
+  // Each outline keeps its own (Edit Extraction's and Make an edit's), on its tree: data-filter and data-search.
+  function shownByFilter(filter, id, toFix) {
     if (filter === 'unchecked') return !(marks.checked && marks.checked.has(id));
     if (filter === 'problems') return toFix.has(id);
     if (filter === 'changed') return !!(marks.changed && marks.changed.has(id));
     return true;
   }
-  function shownBySearch(node) {
+  function shownBySearch(search, node) {
     if (!search) return true;
     const row = node.querySelector(':scope > .outline-row');
     if (!row) return false;
@@ -459,12 +458,14 @@
     return words.join(' ').toLowerCase().indexOf(search) !== -1;
   }
   function applyFilter(tree) {
-    const picker = document.querySelector('[data-outline-filter]');
+    let filter = tree.dataset.filter || 'all';
+    const search = tree.dataset.search || '';
+    const picker = tree.closest('.outline-panel') && tree.closest('.outline-panel').querySelector('[data-outline-filter]');
     if (picker) {
       const changed = picker.querySelector('option[value="changed"]');
       // a draft typed by hand has no AI reading to compare with
       if (changed) changed.disabled = !marks.changed;
-      if (filter === 'changed' && !marks.changed) filter = picker.value = 'all';
+      if (filter === 'changed' && !marks.changed) filter = tree.dataset.filter = picker.value = 'all';
     }
     const on = filter !== 'all' || search !== '';
     const toFix = new Set(marks.problems.map(function (problem) { return problem.id; }));
@@ -472,7 +473,7 @@
     let any = false;
     // the deepest blocks first, so a section knows whether anything in it is shown
     Array.from(tree.querySelectorAll('.outline-node')).reverse().forEach(function (node) {
-      const shown = !on || (shownByFilter(node.dataset.id, toFix) && shownBySearch(node)) ||
+      const shown = !on || (shownByFilter(filter, node.dataset.id, toFix) && shownBySearch(search, node)) ||
         !!node.querySelector(':scope > .outline-list > .outline-node:not(.is-filtered-out)');
       node.classList.toggle('is-filtered-out', !shown);
       any = any || shown;
@@ -480,28 +481,45 @@
     const body = tree.closest('.outline-body');
     if (body) body.classList.toggle('is-filter-empty', on && !any);
   }
+  // the outline in the same panel as the filter or search box
+  function treeOf(el) {
+    const panel = el.closest('.outline-panel');
+    return panel && panel.querySelector('.outline-tree');
+  }
   document.addEventListener('change', function (event) {
     if (!event.target.matches || !event.target.matches('[data-outline-filter]')) return;
-    filter = event.target.value;
-    const tree = document.querySelector('.outline-tree');
-    if (tree) applyFilter(tree);
+    const tree = treeOf(event.target);
+    if (!tree) return;
+    tree.dataset.filter = event.target.value;
+    applyFilter(tree);
   });
   document.addEventListener('input', function (event) {
     if (!event.target.matches || !event.target.matches('[data-outline-search]')) return;
-    search = event.target.value.trim().toLowerCase();
-    const tree = document.querySelector('.outline-tree');
-    if (tree) applyFilter(tree);
+    const tree = treeOf(event.target);
+    if (!tree) return;
+    tree.dataset.search = event.target.value.trim().toLowerCase();
+    applyFilter(tree);
   });
 
   // ------ On a phone the list and the details take turns -----------------------------------
-  // Picking a block shows its details, and Back the list.
+  // Picking a block (or Make an edit's + Add) shows its details, and Back the list. The row picked is marked at once.
   document.addEventListener('click', function (event) {
-    const target = event.target.closest && event.target.closest('[data-detail-back], .outline-panel [data-action="select"], .outline-panel [data-action="details"]');
+    const target = event.target.closest && event.target.closest(
+      '[data-detail-back], .outline-panel [data-action="select"], .outline-panel [data-action="details"], .outline-tree [data-action="add"]'
+    );
     if (!target) return;
     const panel = target.closest('.outline-panel');
     if (!panel) return;
-    if (target.matches('[data-detail-back]')) panel.classList.remove('is-detail-open');
-    else panel.classList.add('is-detail-open');
+    if (target.matches('[data-detail-back]')) {
+      panel.classList.remove('is-detail-open');
+      return;
+    }
+    panel.classList.add('is-detail-open');
+    const row = target.closest('.outline-row');
+    if (row && target.dataset.action === 'select') {
+      panel.querySelectorAll('.outline-row.is-selected').forEach(function (picked) { picked.classList.remove('is-selected'); });
+      row.classList.add('is-selected');
+    }
   });
 
   // ------ The PDF, in its own tab ----------------------------------------------------
@@ -625,11 +643,11 @@
   // (outline_patch() in R): blocks to take out and to add, rows and open question panels drawn again,
   // every list's blocks in order, and the numbers, display orders and labels that follow from the order.
   function nodeOf(id) {
-    return document.querySelector('.outline-tree .outline-node[data-id="' + CSS.escape(id) + '"]');
+    return document.querySelector('.edit-extraction-page .outline-tree .outline-node[data-id="' + CSS.escape(id) + '"]');
   }
 
   function listOf(parent) {
-    if (!parent) return document.querySelector('.outline-tree > .outline-list');
+    if (!parent) return document.querySelector('.edit-extraction-page .outline-tree > .outline-list');
     const node = nodeOf(parent);
     return node ? node.querySelector(':scope > .outline-list') : null;
   }
@@ -671,7 +689,7 @@
       const node = nodeOf(row.id);
       if (node) drawInPlace(node.querySelector(':scope > .outline-row'), null, row.html);
     });
-    document.querySelectorAll('.outline-tree .outline-node').forEach(function (node) {
+    document.querySelectorAll('.edit-extraction-page .outline-tree .outline-node').forEach(function (node) {
       const id = node.dataset.id;
       const row = node.querySelector(':scope > .outline-row');
       if (patch.labels[id] !== undefined) {
@@ -719,8 +737,8 @@
     applyMarks();
     const emptyWords = document.querySelector('.block-detail [data-autofocus]');
     if (emptyWords && !emptyWords.value && document.activeElement !== emptyWords) emptyWords.focus();
-    // an optional field just added to a variable gets the cursor
-    const added = document.querySelector('.outline-panel [data-focus-now]');
+    // an optional field just added to a variable gets the cursor (on Edit Extraction or Make an edit)
+    const added = document.querySelector('[data-focus-now]');
     if (added) {
       added.removeAttribute('data-focus-now');
       added.focus();
@@ -752,10 +770,10 @@
   else if (window.jQuery) jQuery(document).one('shiny:connected', register);
 
   // ------ After Shiny redraws the outline -----------------------------------------------
-  // Only the outline's own redraw: the page's other outputs (the progress bar, the count to fix) change as
-  // words are typed, and sizing every text box again each time made typing stutter.
+  // Only the outline's own redraw, and a variable editor's: the page's other outputs (the progress bar, the
+  // count to fix) change as words are typed, and sizing every text box again each time made typing stutter.
   $(document).on('shiny:value', function (event) {
-    if (event.name && !/outline-(tree|detail)$/.test(event.name)) return;
+    if (event.name && !/(outline-(tree|detail)|variables-cards)$/.test(event.name)) return;
     setTimeout(afterDrawing);
   });
 

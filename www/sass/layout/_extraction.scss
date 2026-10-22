@@ -244,17 +244,6 @@
 // ------ Adding what a drop-down lacks -------------------------------------------------
 // The pop-up a drop-down's "add" opens (the Make an edit form for one row)
 .quick-add {
-  // Only the form, without a card or a heading of its own: the pop-up's title and paragraph say what is being added
-  .edit-columns {
-    display: block;
-    margin: 0 0 1rem;
-    > .card:first-child {
-      border: 0;
-      box-shadow: none;
-      > .card-body { padding: 0; }
-      h2 { display: none; }
-    }
-  }
   .quick-add-more { margin: 0 0 1rem; font-size: 0.9rem; }
 }
 // why Add it can't be pressed yet: beside the buttons (on a phone, the action bar puts it above them)

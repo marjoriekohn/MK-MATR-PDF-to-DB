@@ -85,7 +85,7 @@ test_that("drafts, edits and change requests are one kind of list card, and no p
 
 test_that("on a phone a bar of buttons puts its note above them, and never makes a button narrower than its words", {
   css <- site_css()
-  for (bar in c(".modal-footer", ".list-card-actions", ".extraction-footer", ".edit-footer-bar")) {
+  for (bar in c(".modal-footer", ".list-card-actions", ".extraction-footer")) {
     expect_match(css_rule(css, paste(bar, "> .btn")), "min-width:\\s*max-content", info = bar)
     # (the note's selector has a comma of its own, so it is looked for whole)
     expect_match(css, paste0("\\", bar, " > :not\\(\\.btn, a\\) \\{[^}]*order:\\s*-1"), info = bar)

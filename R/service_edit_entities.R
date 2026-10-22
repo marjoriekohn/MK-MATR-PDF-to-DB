@@ -116,8 +116,8 @@ edit_choice_labels <- list(
 
 # How a form's field is described. `type` is text, textarea, number, date,
 # select (`choices`), choice (side-by-side buttons), or variables (a question's
-# variables and their choices, as JSON, drawn by www/js/variables.js from what
-# `options` lists). `locked` is the reason a field can't change once the row exists.
+# variables and their choices, as JSON, edited with the variable editor,
+# variable_editor_server(), which offers what `options` lists). `locked` is the reason a field can't change once the row exists.
 # `show_when` is list(field, value): the field only matters while another has
 # that value. `problem` and `warn` are functions of (value, values), where
 # `values` is everything typed in the same part of the form by field name,

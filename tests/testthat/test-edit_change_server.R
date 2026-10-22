@@ -130,14 +130,32 @@ test_that("something that is not shared has no such box, and its aside says noth
   })
 })
 
-test_that("adding a study asks only for the study, in one column: what it is is said in the info block", {
+test_that("adding a study asks only for the study: what it is is said in the info block, above the form", {
   page <- change_page("study", "add")
   shiny::testServer(edit_change_server, args = change_args(page), {
     draw()
     main <- paste(as.character(output$main$html), collapse = "")
-    expect_match(main, "Fill in the details")
-    expect_match(main, "is-single")
+    expect_match(main, "study__name")
+    # the form sits in Make an edit's details, under their own title, without a card or heading of its own
+    expect_false(grepl("Fill in the details|class=\"card|edit-columns", main))
     expect_false(grepl("What you're adding|It comes with more", main))
+  })
+})
+
+test_that("a row in the details is its fields as text, with where it is used, and nothing to send", {
+  page <- change_page("registry", "view", "1")
+  shiny::testServer(edit_change_server, args = change_args(page), {
+    main <- paste(as.character(output$main$html), collapse = "")
+    expect_match(text_of(main), "Mid-Atlantic Twin Registry", fixed = TRUE)
+    expect_match(text_of(main), "MATR")
+    expect_match(main, 'class="detail-value"')
+    expect_false(grepl("<input|<select|<textarea", main))
+    expect_false(ready())
+    expect_equal(blockers(), "Press Edit to change it.")
+    # Edit: the same row's form
+    page$args$verb("update")
+    draw()
+    expect_match(paste(as.character(output$main$html), collapse = ""), "<input")
   })
 })
 

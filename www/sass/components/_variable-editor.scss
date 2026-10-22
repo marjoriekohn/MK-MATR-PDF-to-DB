@@ -1,0 +1,181 @@
+// ------ The variable editor ------------------------------------------------------------------------------------
+// A question's variables and their choices (R/33_variable_editor_ui.R): in Edit Extraction's details, and in Make an
+// edit's form when a question is added.
+
+$code-width: 4.25rem; // a choice's code: a few digits
+
+// Make an edit's: its name over it, and + Variable across the bottom
+.variable-editor-title { margin-bottom: 0.4rem; font-weight: 700; }
+.variable-editor-add { margin-top: 0.6rem; }
+
+// ------ Variables and choices -----------------------------------------------
+// A question's variables as a table: one line each, in printed order (not numbered). The About and Label
+// columns are there once a variable has one (has-subject, has-label). Below about 40rem a line's cells stack,
+// each named by its data-label, since the column names are hidden then.
+.variable-cards {
+  container-type: inline-size;
+  margin: 0.5rem 0 0;
+  padding: 0.6rem 0.75rem 0.75rem;
+  border: 1px solid $line;
+  border-radius: $border-radius;
+  background: rgba($vcu-gray, 0.04);
+  > .wide-menu { margin-top: 0.6rem; }
+}
+
+.box-list { display: flex; flex-direction: column; margin-top: 0.25rem; }
+
+// handle, MATR ID, response, [about], [label], +, delete
+.variable-line {
+  display: grid;
+  grid-template-columns: 1rem minmax(7rem, 10rem) minmax(10rem, 1fr) 1.9rem 1.9rem;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.35rem 0;
+}
+.variable-cards.has-subject .variable-line,
+.variable-cards.has-label .variable-line {
+  grid-template-columns: 1rem minmax(7rem, 10rem) minmax(10rem, 1.4fr) minmax(8rem, 1fr) 1.9rem 1.9rem;
+}
+.variable-cards.has-subject.has-label .variable-line {
+  grid-template-columns: 1rem minmax(7rem, 10rem) minmax(10rem, 1.4fr) minmax(8rem, 1fr) minmax(8rem, 1fr) 1.9rem 1.9rem;
+}
+.variable-head {
+  padding-bottom: 0;
+  color: $vcu-gray;
+  font-size: 0.75rem;
+  font-weight: 500;
+}
+
+// Each variable: its line, and its choices under it when they are open; a line between each two (none between
+// the column names and the first)
+.variable-card {
+  border-top: 1px solid $line;
+  &:first-child { border-top: 0; }
+  &.is-open { background: $vcu-white; }
+  &.has-problem { box-shadow: inset 3px 0 0 $field-problem-red; }
+}
+.variable-cell { min-width: 0; .form-control, .form-select { width: 100%; } }
+
+// A variable's choices in short; a button that opens them, or, when they are shared, a note
+.choice-summary {
+  display: block;
+  width: 100%;
+  overflow: hidden;
+  padding: 0.25rem 0.5rem;
+  border: 1px solid $line;
+  border-radius: $border-radius;
+  background: $vcu-white;
+  text-align: left;
+  white-space: normal; // every choice shows; the box wraps
+  &:hover { border-color: $vcu-gray; }
+  &.has-problem { border-color: $field-problem-red; box-shadow: 0 0 0 1px $field-problem-red; }
+  &.is-shared { border-style: dashed; color: $vcu-gray; }
+}
+
+@container (max-width: 40rem) {
+  .variable-head { display: none; }
+  .variable-cards .variable-line {
+    grid-template-columns: 1rem minmax(0, 1fr) 1.9rem 1.9rem;
+    > .box-handle { order: 1; }
+    > .is-id { order: 2; }
+    > .variable-add { order: 3; }
+    > .variable-delete { order: 4; }
+    > .is-response, > .is-subject, > .is-label { order: 5; grid-column: 2 / -1; }
+  }
+  .variable-cards .choice-table { margin-left: 0; }
+  // a choice's Printed as and Skip to each take a line under its code and words, named
+  .choice-head { display: none; }
+  .variable-cards .choice-table .choice-row:not(.choice-head) { // outranks the wide columns below
+    grid-template-columns: 1rem $code-width minmax(0, 1fr) 1.9rem 1.9rem;
+    > .choice-cell { grid-column: 2 / -1; order: 5; }
+    > .choice-cell:empty { display: none; }
+    > .choice-cell::before { content: attr(data-label); display: block; color: $vcu-gray; font-size: 0.7rem; font-weight: 500; }
+  }
+  .variable-cell::before {
+    content: attr(data-label);
+    display: block;
+    color: $vcu-gray;
+    font-size: 0.7rem;
+    font-weight: 500;
+  }
+  .variable-cell:empty { display: none; }
+}
+
+// The choices: one line each, in columns: code, response option, then how it is printed and where it skips to,
+// once any choice has them (has-printed_label, has-skip_instruction; a choice without one leaves its cell
+// empty); "+" adds them to one choice, and × takes them away.
+.choice-table {
+  margin: 0.25rem 0 0.6rem 2.9rem;
+  padding: 0.5rem 0.6rem;
+  border-left: 3px solid $line;
+  &.is-shared { margin-left: 0; margin-top: 0.6rem; border: 1px dashed $line; border-radius: $border-radius; background: $vcu-white; }
+}
+.choice-table-title { display: flex; flex-wrap: wrap; align-items: center; gap: 0.25rem 0.75rem; margin-bottom: 0.4rem; }
+.choice-list { display: flex; flex-direction: column; gap: 0.3rem; }
+
+// handle, code, response option, [printed as], [skip to], +, delete
+.choice-row {
+  display: grid;
+  grid-template-columns: 1rem $code-width minmax(8rem, 1fr) 1.9rem 1.9rem;
+  align-items: center;
+  gap: 0.3rem;
+  > * { min-width: 0; }
+  .form-control { width: 100%; }
+}
+.choice-table.has-printed_label .choice-row,
+.choice-table.has-skip_instruction .choice-row {
+  grid-template-columns: 1rem $code-width minmax(8rem, 1fr) minmax(8rem, 1fr) 1.9rem 1.9rem;
+}
+.choice-table.has-skip_instruction .choice-row { grid-template-columns: 1rem $code-width minmax(8rem, 1fr) minmax(10rem, 1.2fr) 1.9rem 1.9rem; }
+.choice-table.has-printed_label.has-skip_instruction .choice-row {
+  grid-template-columns: 1rem $code-width minmax(8rem, 1fr) minmax(7rem, 0.8fr) minmax(10rem, 1.2fr) 1.9rem 1.9rem;
+}
+// a field and the × that takes it away
+.choice-optional {
+  display: flex;
+  align-items: center;
+  gap: 0.15rem;
+  .form-control { min-width: 0; }
+}
+
+// The names of the columns, over the first choice
+.choice-head {
+  color: $vcu-gray;
+  font-size: 0.75rem;
+  font-weight: 500;
+}
+
+// A write-in's skip, under its line: "If the answer is [None] skip to [Question 57]"
+.variable-skip {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0 0 0.5rem 1.4rem;
+  font-size: 0.875rem;
+  > .form-control:not(.skip-target) { flex: 0 1 8rem; width: 8rem; }
+  > .skip-target { flex: 1 1 12rem; min-width: 0; }
+}
+.variable-skip-words { color: $vcu-gray; }
+.add-field .dropdown-toggle::after { display: none; }
+
+// A variable's About or label, with its ×
+.variable-optional {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  gap: 0.15rem;
+  min-width: 0;
+  .form-control { min-width: 0; }
+}
+.field-remove { padding: 0 0.2rem; line-height: 1; font-size: 0.75rem; }
+
+// Apply to All? (once a code is changed), then + Choice across the table
+.choice-actions {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.4rem;
+  margin-top: 0.5rem;
+  .choice-apply[hidden] { display: none; }
+}

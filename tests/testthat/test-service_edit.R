@@ -1,10 +1,11 @@
-# ------ The sentence and the cards ----------------------------------------------------------
-test_that("the kinds are offered in groups, named as they read in the sentence", {
-  kinds <- edit_service_kinds()
-  expect_equal(names(kinds)[1], "Registries and studies")
-  expect_equal(kinds[["Registries and studies"]], c(registry = "registry", investigator = "investigator", study = "study"))
-  expect_equal(unname(kinds[["In one questionnaire only"]]), c("questionnaire_component", "questionnaire_question"))
-  expect_equal(names(kinds[["In one questionnaire only"]]), c("questionnaire component", "questionnaire question"))
+# ------ The kinds and their cards ----------------------------------------------------------
+test_that("Make an edit's list has a section for every kind there is, each named for staff", {
+  expect_setequal(names(make_edit_kinds), names(edit_entities))
+  for (key in names(make_edit_kinds)) {
+    expect_length(make_edit_kinds[[key]], 2) # the section's name, and one of them (for + Add)
+    expect_true(all(nzchar(make_edit_kinds[[key]])), info = key)
+  }
+  expect_equal(unname(make_edit_kinds$questionnaire_component), c("Blocks", "Block"))
 })
 
 test_that("every kind has what the page needs", {
@@ -484,34 +485,6 @@ test_that("a delete something stands in the way of can't be sent, whatever's tic
     edit_service_blockers("delete", plan = blocked, confirmed = list(read = TRUE, word = "DELETE")),
     "This can't be deleted yet: see what's in the way above."
   )
-})
-
-test_that("the steps above the page follow the sentence, the pick, the form and the send", {
-  step <- function(verb, has_sentence = TRUE, picked = FALSE, ready = FALSE, sent = FALSE) {
-    edit_service_steps(verb, has_sentence, picked, ready, sent)$current
-  }
-  expect_equal(edit_service_steps("add", TRUE, FALSE, FALSE, FALSE)$labels, c("What to do", "Fill it in", "Send for approval"))
-  expect_equal(edit_service_steps("update", TRUE, FALSE, FALSE, FALSE)$labels, c("What to do", "Find it", "Change it", "Send for approval"))
-  expect_equal(
-    edit_service_steps("delete", TRUE, FALSE, FALSE, FALSE)$labels,
-    c("What to do", "Find it", "Check what goes", "Send for approval")
-  )
-  # a change that needs no approval is applied at once
-  expect_equal(edit_service_steps("add", TRUE, FALSE, FALSE, FALSE, approval = FALSE)$labels, c("What to do", "Fill it in", "Apply"))
-  expect_equal(
-    edit_service_steps("delete", TRUE, FALSE, FALSE, FALSE, approval = FALSE)$labels,
-    c("What to do", "Find it", "Check what goes", "Apply")
-  )
-
-  expect_equal(step("", has_sentence = FALSE), 1)
-  expect_equal(step("add"), 2)
-  expect_equal(step("add", ready = TRUE), 3)
-  expect_equal(step("update"), 2)
-  expect_equal(step("update", picked = TRUE), 3)
-  expect_equal(step("update", picked = TRUE, ready = TRUE), 4)
-  expect_equal(step("delete", picked = TRUE, ready = TRUE), 4)
-  expect_equal(step("add", ready = TRUE, sent = TRUE), 4) # one past the last of three
-  expect_equal(step("update", picked = TRUE, ready = TRUE, sent = TRUE), 5)
 })
 
 test_that("a form with things to fix is saved as an unfinished draft with no items", {

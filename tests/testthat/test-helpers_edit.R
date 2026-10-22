@@ -142,18 +142,21 @@ test_that("a delete that something stands in the way of lists what, and offers n
   expect_match(html, "can't be deleted|in the way|lead", ignore.case = TRUE)
 })
 
-test_that("the card for a row says what it is, its counts and any warning, and has a button to pick it", {
+test_that("each item of a kind is a row of Make an edit's list, which picks it, and the kind has + Add", {
   snap <- test_snapshot(edit_service_tables(edit_entities$component))
   cards <- edit_service_cards(edit_entities$component, snap, NULL)
   shared <- cards[cards$key == "1", ]
-  html <- paste(as.character(edit_card_ui(shared, "update")), collapse = "")
+  html <- paste(as.character(make_edit_item("component", shared)), collapse = "")
   expect_match(text_of(html), "A. About you", fixed = TRUE)
-  expect_match(html, 'data-action="pick"', fixed = TRUE)
-  expect_match(text_of(html), "Update this")
-  expect_false(grepl(
-    'data-action="pick"',
-    paste(as.character(edit_card_ui(shared, "update", selected = TRUE)), collapse = ""),
-    fixed = TRUE
-  ))
-  expect_match(text_of(edit_card_ui(shared, "delete")), "Delete this")
+  expect_match(html, 'class="outline-row edit-item" tabindex="0" data-action="select"', fixed = TRUE)
+  expect_match(html, 'data-kind="component" data-key="1" data-scope=""', fixed = TRUE)
+  expect_match(html, "btn-open") # the arrow that opens it
+  expect_match(as.character(make_edit_item("component", shared, selected = TRUE)), "is-selected")
+  add <- as.character(make_edit_add_button("questionnaire_question", "12"))
+  expect_match(add, 'data-action="add" data-kind="questionnaire_question" data-scope="12"', fixed = TRUE)
+  expect_match(text_of(add), "Add Question")
+  # a kind is a section that opens and closes, closed to begin with
+  section <- as.character(make_edit_section("registry", "Registries", NULL))
+  expect_match(section, 'class="outline-node is-collapsed"')
+  expect_match(section, 'class="outline-row is-container" tabindex="0" data-action="toggle" data-id="registry" aria-expanded="false"')
 })

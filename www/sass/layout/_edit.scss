@@ -1,83 +1,10 @@
-// Make an edit page (make_edit, edit_find and edit_change modules)
+// Make an edit page (make_edit and edit_change modules): the list and the details are the shared outline
+// (components/_outline.scss); this is what is Make an edit's own.
 
 .edit-page {
   h2 { margin: 0; font-size: 1.2rem; }
   h3 { font-size: 1.2rem; }
 }
-
-// ------ Steps ----------------------------------------------------------------------
-.edit-steps {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.35rem 1.25rem;
-  margin: 0;
-  padding: 0;
-  list-style: none;
-  font-size: 0.9rem;
-}
-.edit-step { display: inline-flex; align-items: center; gap: 0.4rem; color: $vcu-gray; }
-.edit-step-mark {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 1.5rem;
-  height: 1.5rem;
-  border: 2px solid rgba($vcu-gray, 0.6);
-  border-radius: 50%;
-  font-size: 0.75rem;
-  font-weight: 700;
-}
-.edit-step.is-done .edit-step-mark { border-color: $vcu-black; background: $vcu-black; color: $vcu-white; }
-.edit-step.is-current { color: $vcu-black; font-weight: 700; }
-.edit-step.is-current .edit-step-mark { border-color: $vcu-black; background: $vcu-gold; color: $vcu-black; }
-
-// ------ The sentence ------------------------------------------------------------------
-.edit-sentence-card .card-body {
-  padding: 1.5rem;
-  @include media-breakpoint-down(sm) { padding: 1rem; }
-}
-
-.edit-sentence {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 0.6rem 0.75rem;
-  font-weight: 500;
-  line-height: 1.3;
-
-  .shiny-input-container { width: auto; max-width: 100%; margin: 0; }
-}
-// "I want to [add]" and "a [question]." each stay on one line when the sentence wraps; a drop-down too wide
-// for a phone gives way rather than the full stop going onto a line of its own
-.edit-sentence-part {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.75rem;
-  min-width: 0;
-  max-width: 100%;
-  > .shiny-input-container { min-width: 0; }
-  .sentence-select { max-width: 100%; }
-}
-
-// The two blanks, drawn as words that can be changed
-.sentence-select {
-  width: auto;
-  max-width: 100%;
-  padding: 0.1rem 2.25rem 0.1rem 0.6rem;
-  border: 2px solid $vcu-black;
-  border-bottom: 5px solid $vcu-gold;
-  background-color: rgba($vcu-gold, 0.12);
-  font: inherit;
-  font-weight: 700;
-  cursor: pointer;
-  &:focus { border-color: $vcu-black; border-bottom-color: $vcu-gold; }
-}
-// Deleting is drawn in red from the moment it's picked
-.edit-sentence:has(option[value="delete"]:checked) .shiny-input-container:first-of-type .sentence-select {
-  border-bottom-color: $vcu-red;
-  background-color: rgba($vcu-red, 0.1);
-}
-
 
 // ------ Notes ------------------------------------------------------------------------------
 .edit-callout {
@@ -99,23 +26,6 @@
 .edit-callout-icon { flex-shrink: 0; padding-top: 0.15rem; }
 .edit-callout-body { flex: 1; min-width: 0; }
 .edit-callout-title { display: block; margin-bottom: 0.25rem; }
-
-// ------ Finding the row ---------------------------------------------------------------------
-.edit-find-header {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 0.25rem 1rem;
-}
-.edit-find-count { color: $vcu-gray; font-size: 0.9rem; }
-
-.edit-cards {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(19rem, 1fr));
-  gap: 0.9rem;
-  margin: 1rem 0;
-}
 
 .edit-card {
   display: flex;
@@ -145,23 +55,7 @@
   font-weight: 500;
 }
 
-.edit-picked { margin: 1rem 0; .edit-card { max-width: 40rem; } }
-.edit-picked-change { margin-top: 0.5rem; }
-
-.edit-more { text-align: center; margin-bottom: 1rem; }
-.edit-empty { padding: 1.5rem; border: 2px dashed $line; border-radius: $border-radius; color: $vcu-gray; text-align: center; }
-
 // ------ The form ---------------------------------------------------------------------------------
-.edit-columns {
-  display: grid;
-  grid-template-columns: minmax(0, 3fr) minmax(0, 2fr);
-  gap: 1.5rem;
-  align-items: start;
-  margin: 1rem 0;
-}
-.edit-columns.is-single { grid-template-columns: minmax(0, 1fr); }
-@include media-breakpoint-down(lg) { .edit-columns { grid-template-columns: minmax(0, 1fr); } }
-
 // A drop-down that searches as it is typed in, left blank when it is required
 .form-field:has(.field-missing) .selectize-input { border-color: $field-problem-red; box-shadow: 0 0 0 1px $field-problem-red; }
 
@@ -307,7 +201,7 @@
 .edit-draft-meta { color: $vcu-gray; font-size: 0.85rem; }
 
 // ------ After sending -------------------------------------------------------------------------------------------
-.edit-sent { max-width: 40rem; margin: 1rem 0; .btn { margin-right: 0.5rem; } }
+.edit-sent h2 { display: flex; align-items: center; margin-bottom: 0.75rem; }
 .edit-sent-mark {
   display: inline-flex;
   align-items: center;
@@ -320,54 +214,18 @@
   color: $vcu-white;
 }
 
-// ------ The bar at the bottom ----------------------------------------------------------------------------------
-// Why the change is being made, then the bar of buttons that stays in view
-.edit-send { margin-top: 1.5rem; }
-.edit-footer {
-  position: sticky;
-  bottom: 0;
-  z-index: 10;
-  margin-top: 1rem;
-  padding: 0.75rem 0;
-  border-top: 1px solid $line;
-  background: $vcu-white;
-}
-.edit-footer-bar {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: flex-end;
-  gap: 0.5rem 1rem;
-  .edit-footer-note { flex: 1 1 14rem; color: $vcu-gray; font-size: 0.9rem; text-align: right; }
-  @include action-bar;
-}
+// ------ The list ---------------------------------------------------------------------------------------------
+// An item's row: its name, then a line about it (where it is, what it holds)
+.edit-item-meta { display: block; color: $vcu-gray; font-size: 0.85rem; }
+.edit-list-note { margin: 0.25rem 0.5rem; color: $vcu-gray; font-size: 0.9rem; p { margin: 0 0 0.4rem; } }
+.edit-add { margin-top: 0.15rem; }
 
-// ------ A question's variables, when a question is added (variables.js) -------------------------------------------
-// One card per variable: its kind, MATR ID, who it's about, label (and a write-in's answer type), then its choices
-.edit-variables-value { display: none; }
-.edit-variables-title { margin-bottom: 0.4rem; font-weight: 700; }
-.edit-variables-list { display: flex; flex-direction: column; gap: 0.6rem; margin-bottom: 0.6rem; }
-.edit-variable {
-  padding: 0.6rem;
-  border: 1px solid $line;
-  border-radius: $border-radius;
-  background: $vcu-white;
-}
-.edit-variable-row {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 0.5rem 0.75rem;
-  > .form-control, > .form-select { flex: 1 1 9rem; width: auto; min-width: 0; }
-  .btn-icon { margin-left: auto; }
-}
-.edit-variable-number { font-weight: 700; }
-.edit-choices { display: flex; flex-direction: column; gap: 0.3rem; margin-top: 0.6rem; }
-// Code, then the response option it codes, how it is printed, and where it skips to
-.edit-choice-row {
-  display: grid;
-  grid-template-columns: 5.5rem minmax(0, 2fr) minmax(0, 1.4fr) minmax(0, 1.4fr) 2rem;
-  align-items: center;
-  gap: 0.35rem;
-}
-.edit-choice-add { align-self: flex-start; margin-top: 0.25rem; }
+// ------ The details --------------------------------------------------------------------------------------------
+// The kind and the item's name, what the kind is, the fields, and where it is used; for a form, what is left to do
+// last, over the buttons
+.detail-title { flex: 1 1 14rem; margin: 0.15rem 0 0; font-size: 1.2rem; overflow-wrap: anywhere; }
+.edit-detail .detail-head > .row-badge { margin-top: 0.3rem; }
+.edit-about { margin-bottom: 1rem; }
+.edit-usage { margin-top: 1.5rem; }
+.edit-reviewer { margin-top: 1.25rem; }
+.edit-footer-note { margin-top: 1rem; color: $vcu-gray; font-size: 0.9rem; &:empty { display: none; } }

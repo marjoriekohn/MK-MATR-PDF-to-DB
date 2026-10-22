@@ -5,12 +5,13 @@
 # and its variables with their MATR IDs and choices. It is written as one edit, so it is added all at once
 # or not at all, and nothing is left half-finished.
 #
-# The variables are typed in one field (type "variables"): the page script (www/js/variables.js) draws an
-# editor for them and keeps the field's value as JSON, a list of variables in the shape the Edit
-# Extraction page saves (service_draft.R): variable_type, matr_id, subject, label, answer_data_type and,
-# for choices, response_options (code_value, answer_option, printed_label, skip_instruction). They are
-# added the way an extraction adds them (push_variables(), service_extraction_push.R), so an answer choice
-# or a set of choices that is there already is used again.
+# The variables are typed in one field (type "variables"), edited with the Edit Extraction page's variable
+# editor (variable_editor_server()), which keeps the field's value as JSON: a list of variables in the shape
+# the Edit Extraction page saves (service_draft.R): variable_type, matr_id, subject, label, and for a
+# write-in answer_data_type, skip_condition and skip_instruction, or for choices response_options
+# (code_value, answer_option, printed_label, skip_instruction). Skips are the words printed for them: there is
+# no outline here to link them to. They are added the way an extraction adds them (push_variables(),
+# service_extraction_push.R), so an answer choice or a set of choices that is there already is used again.
 
 #' The form for adding a question to one questionnaire.
 #'
@@ -251,6 +252,8 @@ edit_variables_draft <- function(variables) {
       subject = text_or_null(box$subject),
       matr_id = text_or_null(box$matr_id),
       answer_data_type = if (!closed) text_or_null(box$answer_data_type),
+      skip_condition = if (!closed) text_or_null(box$skip_condition),
+      skip_instruction = if (!closed) text_or_null(box$skip_instruction),
       response_options = if (closed) {
         lapply(box$response_options %||% list(), function(choice) {
           without_blanks(list(
@@ -264,6 +267,33 @@ edit_variables_draft <- function(variables) {
     ))
   })
   draft_service_from_json(list(components = list(list(component_type = "Question", variables = boxes))))
+}
+
+#' The variables of a draft's question, as the field's JSON again: the other way from `edit_variables_draft()`.
+#'
+#' @param draft A draft from `edit_variables_draft()`, as the editor has changed it.
+#' @return A JSON string; what isn't filled in is "".
+edit_variables_json <- function(draft) {
+  text <- function(value) if (length(value) == 0 || is.na(value)) "" else as.character(value)
+  boxes <- draft_service_children(draft, "variables", draft$components$id[1])
+  variables <- map_rows(boxes, function(box) {
+    about <- list(variable_type = if (identical(box$variable_type, "open_ended")) "open_ended" else "closed_ended",
+                  matr_id = text(box$matr_id), subject = text(box$subject), label = text(box$label))
+    if (about$variable_type == "open_ended") {
+      return(c(about, list(
+        answer_data_type = text(box$answer_data_type),
+        skip_condition = text(box$skip_condition), skip_instruction = text(box$skip_instruction)
+      )))
+    }
+    choices <- draft_service_children(draft, "response_options", box$id)
+    c(about, list(response_options = map_rows(choices, function(choice) {
+      list(
+        code_value = text(choice$code_value), answer_option = text(choice$answer_option),
+        printed_label = text(choice$printed_label), skip_instruction = text(choice$skip_instruction)
+      )
+    })))
+  })
+  as.character(jsonlite::toJSON(variables, auto_unbox = TRUE))
 }
 
 # ------ Writing it as items -----------------------------------------------------------------------------

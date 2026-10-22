@@ -1,15 +1,18 @@
-#' The form for adding or changing a row, or the review before deleting one.
+#' A row's details, the form for adding or changing one, or the review before deleting one: what Make an
+#' edit's details panel shows.
 #'
-#' Nothing is saved here: the page saves proposals. The form is drawn once for each kind and
-#' row. What it says about what you have typed (the notes under fields, what changed, what
-#' it reaches) is drawn apart from it, so typing never redraws the fields. A form is marked
+#' The details (`verb` "view") are the row's fields as text, with where it is used. Nothing is saved here: the
+#' page saves proposals. The form is drawn once for each kind and row. What it says about what you have typed
+#' (the notes under fields, what changed, what it reaches) is drawn apart from it, so typing never redraws the
+#' fields. A form is marked
 #' with a number (`form_token`) the browser sends back once it has drawn it, and what was
 #' typed counts only once the number matches, so the fields of the form before are never
 #' read as the new form's.
 #'
 #' @param id The module's id.
-#' @param entity,verb,snapshot,row,scope,resume Reactives from the page: the kind, the verb,
-#'   the tables, the row picked, the questionnaire, and a saved draft being opened again.
+#' @param entity,verb,snapshot,row,scope,resume Reactives from the page: the kind, the verb ("view",
+#'   "add", "update" or "delete"), the tables, the row picked, the questionnaire, and a saved draft being
+#'   opened again.
 #' @return A list of reactives: `active`, `stuck` (a delete something stands in the way
 #'   of), `ready` (it can be sent), `blockers` (what is left to do), `built` (the items and
 #'   summary), `form` (as it would be opened again), `jump` (a request to go to another
@@ -31,16 +34,18 @@ edit_change_server <- function(
     # ------ REACTIVE ----------------------------------------------------------
     generation <- reactiveVal(0L) # which form is on screen
     jump <- reactiveVal(NULL) # a request to go to another kind, e.g. to add what a drop-down lacks
+    # A question's variables (adding a question), edited as on Edit Extraction; a form has at most one such field.
+    variables <- variable_editor_server("variables")
 
     # What's being done to what, once it's all known: otherwise nothing is drawn.
     context <- reactive({
       kind <- req(entity())
       snap <- req(snapshot())
       mode <- req(verb())
-      req(mode %in% c("add", "update", "delete"))
+      req(mode %in% c("view", "add", "update", "delete"))
       if (!is.null(kind$scope)) req(nzchar(scope() %||% ""))
       target <- if (mode == "add") NULL else req(row())
-      req(is.null(edit_service_can(kind, snap, mode)))
+      if (mode != "view") req(is.null(edit_service_can(kind, snap, mode)))
       list(entity = kind, snap = snap, mode = mode, row = target, scope = if (nzchar(scope() %||% "")) scope())
     })
     active <- reactive(tryCatch(
@@ -51,14 +56,16 @@ edit_change_server <- function(
       shiny.silent.error = function(problem) FALSE
     ))
 
+    # The details are the fields as a change would start from them.
+    form_mode <- reactive(if (context()$mode == "view") "update" else context()$mode)
     fields <- reactive({
       ctx <- context()
       req(ctx$mode != "delete")
-      edit_service_fields(ctx$entity, ctx$snap, ctx$mode, ctx$row, ctx$scope)
+      edit_service_fields(ctx$entity, ctx$snap, form_mode(), ctx$row, ctx$scope)
     })
     initial <- reactive({
       ctx <- context()
-      edit_service_initial(ctx$entity, fields(), ctx$snap, ctx$mode, ctx$row, ctx$scope)
+      edit_service_initial(ctx$entity, fields(), ctx$snap, form_mode(), ctx$row, ctx$scope)
     })
 
     # What's in the form now, by field id.
@@ -67,7 +74,13 @@ edit_change_server <- function(
       start <- initial()
       req(identical(as.character(input$form_token), as.character(generation())))
       now <- lapply(all_fields, function(field) {
-        if (!is.null(field$locked)) start[[field$id]] else input[[field$id]] %||% start[[field$id]]
+        if (!is.null(field$locked)) {
+          start[[field$id]]
+        } else if (field$type == "variables") {
+          variables$value() %||% start[[field$id]]
+        } else {
+          input[[field$id]] %||% start[[field$id]]
+        }
       })
       stats::setNames(now, vapply(all_fields, function(field) field$id, character(1)))
     })
@@ -79,7 +92,7 @@ edit_change_server <- function(
     })
     usage <- reactive({
       ctx <- context()
-      req(ctx$mode == "update")
+      req(ctx$mode %in% c("view", "update"))
       edit_service_usage(ctx$entity, ctx$snap, ctx$row)
     })
     plan <- reactive({
@@ -91,6 +104,7 @@ edit_change_server <- function(
     # Items and a summary; not for a form that still has things to fix.
     built <- reactive({
       ctx <- context()
+      req(ctx$mode != "view")
       if (ctx$mode == "delete") {
         return(edit_service_build(ctx$entity, "delete", ctx$snap, ctx$row, ctx$scope, plan = plan()))
       }
@@ -109,6 +123,9 @@ edit_change_server <- function(
         return("Choose what to change first.")
       }
       ctx <- context()
+      if (ctx$mode == "view") {
+        return("Press Edit to change it.")
+      }
       edit_service_blockers(
         ctx$mode,
         found = if (ctx$mode != "delete") check(),
@@ -144,18 +161,37 @@ edit_change_server <- function(
     # ------ UI ----------------------------------------------------------------
     output$main <- renderUI({
       ctx <- context()
-      if (ctx$mode == "delete") {
-        return(delete_ui(ctx))
-      }
-      form_ui(ctx)
+      switch(ctx$mode,
+        view = view_ui(ctx),
+        delete = delete_ui(ctx),
+        form_ui(ctx)
+      )
     })
+
+    # The row's fields as text (a field that only matters while another has a value is left out when it doesn't),
+    # and where the row is used.
+    view_ui <- function(ctx) {
+      start <- initial()
+      shown <- Filter(function(field) field$type != "variables" && edit_service_visible(field, start), fields())
+      tagList(
+        detail_section(NULL, lapply(shown, function(field) {
+          value <- start[[field$id]]
+          detail_field(
+            field$label,
+            span(class = "detail-value", edit_display_value(field, if (is.null(value) || !nzchar(value)) NA else value)),
+            wide = field$type == "textarea"
+          )
+        })),
+        div(class = "edit-usage", edit_usage_ui(ctx$entity, edit_label(ctx$snap, ctx$entity$table, ctx$row), usage()))
+      )
+    }
 
     delete_ui <- function(ctx) {
       title <- edit_label(ctx$snap, ctx$entity$table, ctx$row)
-      card(card_body(
+      tagList(
         edit_delete_ui(ctx$entity, title, plan()),
         if (length(plan()$blocked) == 0) edit_delete_confirm_ui(ns, plan())
-      ))
+      )
     }
 
     form_ui <- function(ctx) {
@@ -163,6 +199,7 @@ edit_change_server <- function(
       start <- initial()
       start <- resume_values(start, ctx)
       generation(isolate(generation()) + 1L)
+      for (field in Filter(function(field) field$type == "variables", all_fields)) variables$load(start[[field$id]], field$options)
 
       rows <- Map(function(field, i) {
         heading <- if (!is.null(field$part_title) && (i == 1 || all_fields[[i - 1]]$part_index != field$part_index)) {
@@ -171,22 +208,18 @@ edit_change_server <- function(
         tagList(heading, edit_field_ui(ns, field, start[[field$id]], ns(paste0("note_", i))))
       }, all_fields, seq_along(all_fields))
 
-      div(
-        class = c("edit-columns", if (ctx$mode == "add") "is-single"),
-        card(card_body(
-          h2(if (ctx$mode == "add") "Fill in the details" else "Change it"),
-          edit_empty_choices_ui(all_fields),
-          div(class = "edit-token", textInput(ns("form_token"), NULL, value = isolate(generation()))),
-          rows,
-          if (ctx$mode == "update") uiOutput(ns("changes")),
-          if (ctx$mode == "update" && isolate(usage()$shared) >= 2) {
-            checkboxInput(ns("confirm_shared"), sprintf(
-              "I understand this changes it in all %d questionnaires that use it.", isolate(usage()$shared)
-            ), width = "100%")
-          }
-        )),
+      tagList(
+        edit_empty_choices_ui(all_fields),
+        div(class = "edit-token", textInput(ns("form_token"), NULL, value = isolate(generation()))),
+        rows,
+        if (ctx$mode == "update") uiOutput(ns("changes")),
+        if (ctx$mode == "update" && isolate(usage()$shared) >= 2) {
+          checkboxInput(ns("confirm_shared"), sprintf(
+            "I understand this changes it in all %d questionnaires that use it.", isolate(usage()$shared)
+          ), width = "100%")
+        },
         # an add reaches nothing yet; what it is is said in the info block at the top
-        if (ctx$mode != "add") card(card_body(uiOutput(ns("impact"))))
+        if (ctx$mode != "add") uiOutput(ns("impact"), class = "edit-usage")
       )
     }
 

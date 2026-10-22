@@ -193,7 +193,10 @@ test_that("the site is drawn with the login screen over it, and the menu's place
   # while the server works, the page says so with the gold bar across the top and nothing else (no spinners);
   # busy.js holds the pressed button
   expect_match(paste(rendered$head, html), "js/busy.js")
-  expect_match(paste(rendered$head, html), "js/variables.js")
+  # one variable editor, Edit Extraction's, on Make an edit too: its page script is review.js, and Make an edit's
+  # own (variables.js) is gone
+  expect_match(paste(rendered$head, html), "js/review.js")
+  expect_false(grepl("js/variables.js", paste(rendered$head, html), fixed = TRUE))
   expect_match(paste(rendered$head, html), "dataset.shinyBusyPulse = 'true'", fixed = TRUE)
   expect_match(paste(rendered$head, html), "delete document.documentElement.dataset.shinyBusySpinners", fixed = TRUE)
 })
