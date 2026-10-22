@@ -57,29 +57,29 @@ draft_card <- function(record, draft, catalog, me, now = Sys.time()) {
   sent_back <- record$sent_back
   steps <- extraction_service_progress(record, draft)
   div(
-    class = "draft-card",
+    class = "list-card",
     div(class = "draft-thumbnail", `aria-hidden` = "true", lapply(1:5, function(i) span())),
     div(
-      class = "draft-body",
+      class = "list-card-body",
       div(
-        class = "draft-title-row",
-        h2(class = "draft-title", extraction_service_title(record, catalog, draft$questionnaire)),
+        class = "list-card-title-row",
+        h2(class = "list-card-title", extraction_service_title(record, catalog, draft$questionnaire)),
         row_badge(if (mine) "Yours" else draft_row_service_preparer(record), class = if (mine) "is-mine"),
         if (!is.null(sent_back)) row_badge("Sent back", class = "is-warning"),
         if (identical(record$method, extraction_manual)) row_badge("Typed by hand"),
         if (failed) row_badge("Reading stopped", class = "is-warning"),
         if (!is.null(editor)) row_badge(app_icon("edit"), sprintf(" %s is actively working on this", editor$by), class = "is-editing")
       ),
-      p(class = "draft-meta", draft_meta(record, me)),
+      p(class = "list-card-meta", draft_meta(record, me)),
       if (!is.null(sent_back)) {
-        div(class = "sent-back-note", strong(paste0(sent_back$by, ":")), paste0("“", sent_back$note, "”"))
+        div(class = "list-card-note", strong(paste0(sent_back$by, ":")), paste0("“", sent_back$note, "”"))
       },
       div(class = "draft-progress", map_rows(steps, function(step) {
         span(class = "progress-step", progress_dot(step$state), step$label)
       }))
     ),
     div(
-      class = "draft-actions",
+      class = "list-card-actions",
       if (mine) review_button("Discard", "discard", `data-id` = record$id, class = "btn btn-link"),
       if (failed) {
         review_button("Try reading again", "retry", `data-id` = record$id, class = "btn btn-outline-dark")
@@ -127,7 +127,7 @@ draft_meta <- function(record, me) {
 #' @return A UI element.
 no_drafts <- function(whose) {
   div(
-    class = "draft-card is-empty",
+    class = "list-card is-empty",
     p(if (whose == "mine") "You have no drafts in progress." else "There are no drafts in progress."),
     review_button("Start a new extraction", "new", class = "btn btn-outline-dark")
   )

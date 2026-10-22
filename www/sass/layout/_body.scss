@@ -1,2 +1,9 @@
-.container-fluid { padding: 1.5rem; }
-.card { border: 1px solid $vcu-gray; }
+// The room between the screen's edge and the page, less on a phone. The menu bar's row has the same, so its
+// title lines up with the page's.
+.container-fluid {
+  padding: $page-gutter;
+  @include media-breakpoint-down(sm) { padding: $page-gutter-phone; }
+}
+
+// Cards have the same border as every other box (bslib's preset draws them with only a shadow)
+.card { border: 1px solid $line; }

@@ -1,0 +1,48 @@
+// ------ A list of things, a card each --------------------------------------------------------------------
+// Drafts (Extraction's Existing Draft), edits (Edit history) and requests (Change Requests): what it is (a
+// title with its badges, then a line of who and when), and its buttons on the right. On a small tablet or a
+// phone the buttons go under it, on the right; on a phone they share their row (the action bar).
+.list-card {
+  display: flex;
+  align-items: center;
+  gap: 1.5rem;
+  margin-bottom: 1rem;
+  padding: 1.25rem 1.5rem;
+  border: 1px solid $line;
+  border-radius: $border-radius;
+  background: $vcu-white;
+
+  // nothing to list: what to say about that, and maybe a button to start one
+  &.is-empty { flex-direction: column; align-items: flex-start; gap: 0.25rem; }
+
+  @include media-breakpoint-down(md) { flex-wrap: wrap; gap: 1rem; }
+  @include media-breakpoint-down(sm) { padding: 1rem; }
+}
+
+.list-card-body { flex: 1 1 0; min-width: 0; }
+.list-card-title-row { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem; }
+.list-card-title { margin: 0; font-size: 1.15rem; overflow-wrap: anywhere; }
+// who and when, on a card and in the dialog it opens
+.list-card-meta { margin: 0.35rem 0 0; color: $vcu-gray; font-size: 0.9rem; }
+
+.list-card-actions {
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  gap: 0.75rem;
+  @include media-breakpoint-down(md) { width: 100%; justify-content: flex-end; }
+  @include action-bar;
+}
+
+// "Show more" under the list
+.list-more { display: flex; justify-content: center; margin: 1.25rem 0; }
+
+// A note on a card, e.g. why a draft was sent back
+.list-card-note {
+  margin: 0.6rem 0 0;
+  padding: 0.5rem 0.8rem;
+  border-left: 4px solid $vcu-gold;
+  border-radius: $border-radius;
+  background: rgba($vcu-gold, 0.15);
+  font-size: 0.9rem;
+}

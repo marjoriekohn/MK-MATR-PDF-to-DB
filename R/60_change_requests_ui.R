@@ -41,20 +41,20 @@ change_request_card_ui <- function(record, me) {
   state <- change_request_service_state(record, me)
   kind <- change_request_service_kind(record)
   div(
-    class = "change-request-card",
+    class = "list-card",
     div(
-      class = "change-request-body",
+      class = "list-card-body",
       div(
-        class = "change-request-title-row",
+        class = "list-card-title-row",
         row_badge(kind, class = paste0("is-", tolower(kind))),
-        h2(class = "change-request-title", if (nzchar(record$summary %||% "")) record$summary else "(no description)"),
+        h2(class = "list-card-title", if (nzchar(record$summary %||% "")) record$summary else "(no description)"),
         if (state$mine) row_badge("Yours"),
         if (state$asked_of_me) row_badge("Asked of you", class = "is-warning"),
         if (state$needs_info) row_badge("Needs Basic Info", class = "is-warning"),
         if (state$changed_by_me) row_badge("Changed by you")
       ),
       p(
-        class = "change-request-meta",
+        class = "list-card-meta",
         paste(c(
           paste("Prepared by", if (state$mine) "you" else record$prepared_by),
           paste("sent for review", time_ago(parse_time(record$submitted %||% record$saved))),
@@ -65,13 +65,13 @@ change_request_card_ui <- function(record, me) {
         ), collapse = " · ")
       ),
       if (state$mine) {
-        p(class = "change-request-note-you", "You prepared this. One other staff member has to approve it.")
+        p(class = "list-card-note", "You prepared this. One other staff member has to approve it.")
       } else if (state$changed_by_me) {
-        p(class = "change-request-note-you", "You made the latest changes to this, so someone else has to approve it.")
+        p(class = "list-card-note", "You made the latest changes to this, so someone else has to approve it.")
       }
     ),
     div(
-      class = "change-request-actions",
+      class = "list-card-actions",
       review_button(
         change_request_review_label(state),
         "review",
@@ -120,7 +120,7 @@ change_request_dialog <- function(record, me, ns, detail) {
     size = if (extraction) "xl" else "l",
     easyClose = TRUE,
     p(
-      class = "change-request-meta",
+      class = "list-card-meta",
       paste(c(
         paste("Prepared by", if (state$mine) "you" else record$prepared_by),
         paste("sent for review", time_ago(parse_time(record$submitted %||% record$saved))),
@@ -199,7 +199,7 @@ change_request_send_back_dialog <- function(record, ns) {
 #' @return A UI element.
 no_change_requests <- function(whose) {
   div(
-    class = "change-request-card is-empty",
+    class = "list-card is-empty",
     p(switch(whose,
       me = "Nothing is waiting for you to approve.",
       mine = "You have no requests waiting.",

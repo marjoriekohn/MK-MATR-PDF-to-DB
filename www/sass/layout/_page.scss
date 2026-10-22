@@ -11,12 +11,18 @@
   justify-content: space-between;
   gap: 0.75rem 1.5rem;
   margin-bottom: 1.5rem;
+}
 
+// A page's title, with the sentence under it: the same on every page (Edit Extraction's header too). A long
+// title, e.g. a PDF's file name, breaks rather than running into what is beside it.
+.page-header, .review-header {
   h1 {
     margin: 0;
     padding-left: 0.75rem;
     border-left: 6px solid $vcu-gold;
     font-size: 1.75rem;
+    overflow-wrap: anywhere;
+    @include media-breakpoint-down(sm) { font-size: 1.5rem; }
   }
   .subhead { margin: 0.25rem 0 0; color: $vcu-gray; }
 }
@@ -27,7 +33,7 @@
   gap: $control-gap;
 }
 // on a phone it is a row of its own under the title, and a toggle in it fills that row
-@media (max-width: 575.98px) {
+@include media-breakpoint-down(sm) {
   .page-header-aside { flex: 1 1 100%; }
 }
 

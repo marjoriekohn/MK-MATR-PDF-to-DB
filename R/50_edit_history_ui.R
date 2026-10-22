@@ -31,18 +31,18 @@ edit_history_ui <- function(id) {
 #' @return A UI element.
 history_entry_ui <- function(record) {
   div(
-    class = "history-entry",
+    class = "list-card",
     div(
-      class = "history-body",
+      class = "list-card-body",
       div(
-        class = "history-title-row",
+        class = "list-card-title-row",
         row_badge(record$kind %||% "Edit", class = paste0("is-", tolower(record$kind %||% "edit"))),
-        h2(class = "history-title", if (nzchar(record$summary)) record$summary else "(no description)")
+        h2(class = "list-card-title", if (nzchar(record$summary)) record$summary else "(no description)")
       ),
-      p(class = "history-meta", paste(c(history_service_when(record), history_service_people(record)), collapse = " · "))
+      p(class = "list-card-meta", paste(c(history_service_when(record), history_service_people(record)), collapse = " · "))
     ),
     div(
-      class = "history-actions",
+      class = "list-card-actions",
       review_button("See what changed", "open", `data-id` = record$id, class = "btn btn-outline-dark")
     )
   )
@@ -54,7 +54,7 @@ history_entry_ui <- function(record) {
 #' @return A UI element.
 no_history <- function(filtered) {
   div(
-    class = "history-entry is-empty",
+    class = "list-card is-empty",
     p(if (filtered) "No edit matches that." else "Nothing has been added to the MATR metadata database through this site yet.")
   )
 }

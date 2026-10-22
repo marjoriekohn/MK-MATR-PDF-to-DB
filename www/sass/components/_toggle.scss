@@ -15,7 +15,7 @@
 
 // On a phone a toggle fills its row, each choice an equal share (a grid's columns: flex can't shrink a button
 // below its padding, so the shares came out uneven)
-@media (max-width: 575.98px) {
+@include media-breakpoint-down(sm) {
   .toggle-buttons {
     display: grid;
     grid-auto-columns: minmax(0, 1fr);

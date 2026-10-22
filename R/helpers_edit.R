@@ -35,13 +35,19 @@ edit_sentence_ui <- function(ns) {
   kinds <- c(list("choose a kind of thing…" = ""), edit_service_kinds())
   div(
     class = "edit-sentence",
-    span("I want to"),
-    selectInput(ns("verb"), NULL, verbs, selectize = FALSE, width = "auto") |>
-      tag_input_attributes("select", class = "sentence-select", `aria-label` = "What do you want to do?"),
-    uiOutput(ns("article"), inline = TRUE),
-    selectInput(ns("kind"), NULL, kinds, selectize = FALSE, width = "auto") |>
-      tag_input_attributes("select", class = "sentence-select", `aria-label` = "What kind of thing?"),
-    span(".")
+    span(
+      class = "edit-sentence-part",
+      span("I want to"),
+      selectInput(ns("verb"), NULL, verbs, selectize = FALSE, width = "auto") |>
+        tag_input_attributes("select", class = "sentence-select", `aria-label` = "What do you want to do?")
+    ),
+    span(
+      class = "edit-sentence-part",
+      uiOutput(ns("article"), inline = TRUE),
+      selectInput(ns("kind"), NULL, kinds, selectize = FALSE, width = "auto") |>
+        tag_input_attributes("select", class = "sentence-select", `aria-label` = "What kind of thing?"),
+      span(".")
+    )
   )
 }
 

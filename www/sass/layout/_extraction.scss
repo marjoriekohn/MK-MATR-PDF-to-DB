@@ -1,5 +1,4 @@
 // The Extraction page: its three modes (Manual, AI-Powered, Existing Draft)
-$extraction-line: $vcu-gray;
 
 .extraction-page {
   h2 { margin: 0; font-size: 1.15rem; }
@@ -68,7 +67,7 @@ $extraction-line: $vcu-gray;
   gap: 0.75rem 1rem;
   margin-bottom: 1rem;
   padding: 1rem 1.25rem;
-  border: 2px dashed $extraction-line;
+  border: 2px dashed $line;
   border-radius: $border-radius;
   background: rgba($vcu-gray, 0.04);
 
@@ -94,7 +93,7 @@ $extraction-line: $vcu-gray;
   align-items: center;
   gap: 1rem;
   padding: 1rem;
-  border: 1px solid $extraction-line;
+  border: 1px solid $line;
   border-radius: $border-radius;
 }
 .pdf-file-icon {
@@ -105,7 +104,7 @@ $extraction-line: $vcu-gray;
   width: 2.75rem;
   height: 3.5rem;
   padding-bottom: 0.35rem;
-  border: 1px solid $extraction-line;
+  border: 1px solid $line;
   border-bottom: 4px solid $vcu-gold;
   font-size: 0.65rem;
   font-weight: 700;
@@ -191,8 +190,9 @@ $extraction-line: $vcu-gray;
   gap: 1rem;
   margin-top: 1.5rem;
   padding-top: 1.25rem;
-  border-top: 1px solid $extraction-line;
+  border-top: 1px solid $line;
   color: $vcu-gray;
+  @include action-bar;
 }
 
 // ------ Existing Draft ------------------------------------------------------------
@@ -207,20 +207,8 @@ $extraction-line: $vcu-gray;
   font-size: 0.85rem;
 }
 
-.draft-card {
-  display: flex;
-  align-items: center;
-  gap: 1.5rem;
-  margin-bottom: 1rem;
-  padding: 1.25rem 1.5rem;
-  border: 1px solid $extraction-line;
-  border-radius: $border-radius;
-  background: $vcu-white;
-
-  &.is-empty { flex-direction: column; align-items: flex-start; gap: 0.25rem; }
-}
-
-// A page with lines on it
+// Each draft is a list card (components/_list-card.scss), with a picture of a page on the left: a page with
+// lines on it. Not on a small tablet or a phone, where the room is the words'.
 .draft-thumbnail {
   display: flex;
   flex-direction: column;
@@ -229,35 +217,17 @@ $extraction-line: $vcu-gray;
   width: 4rem;
   height: 5.1rem;
   padding: 0.75rem 0.6rem;
-  border: 1px solid $extraction-line;
+  border: 1px solid $line;
   span { height: 3px; background: rgba($vcu-gray, 0.3); }
   span:nth-child(even) { width: 75%; }
-}
-
-.draft-body { flex: 1; min-width: 0; }
-.draft-title-row { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem; }
-.draft-title { margin: 0; font-size: 1.15rem; }
-.draft-meta { margin: 0.35rem 0 0.6rem; color: $vcu-gray; font-size: 0.9rem; }
-
-.sent-back-note {
-  margin-bottom: 0.6rem;
-  padding: 0.6rem 0.9rem;
-  border-left: 4px solid $vcu-gold;
-  border-radius: $border-radius;
-  background: rgba($vcu-gold, 0.15);
+  @include media-breakpoint-down(md) { display: none; }
 }
 
 // Someone else is working on it now
-.draft-title-row .row-badge.is-editing { background: rgba($vcu-gold, 0.35); font-weight: 600; }
+.row-badge.is-editing { background: rgba($vcu-gold, 0.35); font-weight: 600; }
 
-.draft-progress { display: flex; flex-wrap: wrap; gap: 0.35rem 1.25rem; font-size: 0.85rem; }
-.draft-actions { display: flex; flex-shrink: 0; align-items: center; gap: 0.75rem; }
-
-@media (max-width: 767.98px) {
-  .draft-card { flex-wrap: wrap; }
-  .draft-thumbnail { display: none; }
-  .draft-actions { width: 100%; justify-content: flex-end; }
-}
+// How far it has got, under who started it
+.draft-progress { display: flex; flex-wrap: wrap; gap: 0.35rem 1.25rem; margin-top: 0.6rem; font-size: 0.85rem; }
 
 // ------ The Extraction page: one page, three ways to start ---------------------------------
 .mode-intro {
@@ -272,11 +242,7 @@ $extraction-line: $vcu-gray;
 .mode-intro-aside { display: flex; align-items: center; gap: 0.75rem; }
 
 // ------ Adding what a drop-down lacks -------------------------------------------------
-// The link under a drop-down, and the pop-up it opens (the Make an edit form for one row)
-.quick-add-link {
-  margin: -0.5rem 0 0.75rem;
-  font-size: 0.85rem;
-}
+// The pop-up a drop-down's "add" opens (the Make an edit form for one row)
 .quick-add {
   // Only the form, without a card or a heading of its own: the pop-up's title and paragraph say what is being added
   .edit-columns {
@@ -291,8 +257,11 @@ $extraction-line: $vcu-gray;
   }
   .quick-add-more { margin: 0 0 1rem; font-size: 0.9rem; }
 }
-.modal-footer .quick-add-blocker {
-  flex: 1 1 auto;
-  text-align: right;
-  margin-right: 0.5rem;
+// why Add it can't be pressed yet: beside the buttons (on a phone, the action bar puts it above them)
+@include media-breakpoint-up(sm) {
+  .modal-footer .quick-add-blocker {
+    flex: 1 1 auto;
+    text-align: right;
+    margin-right: 0.5rem;
+  }
 }

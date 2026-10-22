@@ -61,6 +61,19 @@ $border-radius-xl:   $border-radius;
 $border-radius-xxl:  $border-radius;
 $card-border-radius: $border-radius;
 
+// ------ Lines ----------------------------------------------------------------
+// Two strengths, on every page: a card's or box's border, dark enough to see on a white screen, and the
+// lighter rule between the items inside one.
+$line:       rgba($vcu-gray, 0.6);
+$line-light: rgba($vcu-gray, 0.35);
+
+// ------ Page layout ----------------------------------------------------------
+// The room between the screen's edge and the page (the menu bar's title lines up with it), less on a phone.
+// Breakpoints are Bootstrap's: in the rules, media-breakpoint-down(sm) is a phone (under 576px), (md) a
+// phone or a small tablet (under 768px), (lg) under 992px.
+$page-gutter:       1.5rem;
+$page-gutter-phone: 1rem;
+
 // ------ Controls: buttons, fields and drop-downs ------------------------------
 // Every button, field and drop-down that sits beside others is one height, on every page, so neighbours
 // line up whatever their words. A small one (the same words, less room around them) is for dense lists,

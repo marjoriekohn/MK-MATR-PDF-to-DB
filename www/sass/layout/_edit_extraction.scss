@@ -1,29 +1,21 @@
 // Edit Extraction page (edit_extraction and outline modules)
-$review-line: rgba($vcu-gray, 0.6); // dark enough to see on a white screen
 $code-width: 4.25rem; // a choice's code: a few digits
 
 // ------ Header ---------------------------------------------------------------
 // The title on the left, the buttons on the right, and how far the checking has got across the page under
-// both. On a phone: the title, the progress bar, then the buttons (only their icons) across the screen.
+// both. When the title and the buttons don't fit side by side, the buttons go on a line of their own, on the
+// right. On a phone: the title, the progress bar, then the buttons (only their icons) across the screen. (The
+// title's look is every page's: _page.scss.)
 .review-header {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  grid-template-areas: "title actions" "progress progress";
+  display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: 0.75rem 1.5rem;
   padding-bottom: 1rem;
-  border-bottom: 1px solid $review-line;
-  > .review-title { grid-area: title; min-width: 0; }
-  > .review-actions { grid-area: actions; justify-content: flex-end; }
-  > .review-progress { grid-area: progress; }
-
-  h1 {
-    margin: 0;
-    padding-left: 0.75rem;
-    border-left: 6px solid $vcu-gold;
-    font-size: 1.75rem;
-  }
-  .subhead { margin: 0.25rem 0 0; color: $vcu-gray; }
+  border-bottom: 1px solid $line;
+  > .review-title { flex: 1 1 20rem; min-width: 0; }
+  > .review-actions { margin-left: auto; justify-content: flex-end; }
+  > .review-progress { flex: 1 1 100%; }
 }
 
 // How saving stands, then the header's buttons
@@ -34,13 +26,9 @@ $code-width: 4.25rem; // a choice's code: a few digits
   gap: $control-gap;
 }
 
-@media (max-width: 767.98px) {
-  .review-header {
-    grid-template-columns: minmax(0, 1fr);
-    grid-template-areas: "title" "progress" "actions";
-  }
+@include media-breakpoint-down(md) {
   // how saving stands has a line of its own, and the buttons share the row under it evenly
-  .review-header > .review-actions { flex-direction: column; align-items: stretch; }
+  .review-header > .review-actions { order: 1; flex: 1 1 100%; flex-direction: column; align-items: stretch; }
   .review-buttons { @include even-buttons; }
 }
 
@@ -128,9 +116,10 @@ button.review-pill:hover { background: rgba($vcu-gold, 0.2); }
   min-width: 0;
   overflow: auto;
   padding: 0.5rem 0.75rem 1rem;
-  border-right: 1px solid $review-line;
+  border-right: 1px solid $line;
 }
-.detail-panel { display: flex; flex: 1 1 0; flex-direction: column; min-width: 0; }
+// sized by the room the list leaves it, so what is in it goes by its width (container queries), not the screen's
+.detail-panel { display: flex; flex: 1 1 0; flex-direction: column; min-width: 0; container: detail / inline-size; }
 
 .outline-toolbar {
   display: flex;
@@ -139,7 +128,7 @@ button.review-pill:hover { background: rgba($vcu-gold, 0.2); }
   justify-content: flex-start;
   gap: $control-gap;
   padding: 0.5rem;
-  border-bottom: 1px solid $review-line;
+  border-bottom: 1px solid $line;
   background: $vcu-white;
 }
 // Search and Add Filter, each with its icon in front. They take what room the row has, between about 8 and 12
@@ -166,11 +155,11 @@ button.review-pill:hover { background: rgba($vcu-gold, 0.2); }
 .outline-node > .outline-list {
   margin: 0.35rem 0 0.15rem 0.6rem;
   padding-left: 0.5rem;
-  border-left: 2px dashed $review-line;
+  border-left: 2px dashed $line;
 
   &:empty {
     min-height: 2.5rem;
-    border: 2px dashed $review-line;
+    border: 2px dashed $line;
     border-radius: $border-radius;
     &::before { content: "Empty section: drag blocks here"; margin: auto; color: $vcu-gray; font-size: 0.85rem; }
   }
@@ -193,7 +182,7 @@ button.review-pill:hover { background: rgba($vcu-gold, 0.2); }
   align-items: center;
   gap: 0.35rem;
   padding: 0.3rem 0.4rem;
-  border: 1px solid $review-line;
+  border: 1px solid $line;
   border-radius: $border-radius;
   background-color: $vcu-white;
   cursor: pointer;
@@ -333,7 +322,7 @@ button.review-pill:hover { background: rgba($vcu-gold, 0.2); }
   container-type: inline-size;
   margin: 0.5rem 0 0;
   padding: 0.6rem 0.75rem 0.75rem;
-  border: 1px solid $review-line;
+  border: 1px solid $line;
   border-radius: $border-radius;
   background: rgba($vcu-gray, 0.04);
   > .wide-menu { margin-top: 0.6rem; }
@@ -366,7 +355,7 @@ button.review-pill:hover { background: rgba($vcu-gold, 0.2); }
 // Each variable: its line, and its choices under it when they are open; a line between each two (none between
 // the column names and the first)
 .variable-card {
-  border-top: 1px solid $review-line;
+  border-top: 1px solid $line;
   &:first-child { border-top: 0; }
   &.is-open { background: $vcu-white; }
   &.has-problem { box-shadow: inset 3px 0 0 $field-problem-red; }
@@ -379,7 +368,7 @@ button.review-pill:hover { background: rgba($vcu-gold, 0.2); }
   width: 100%;
   overflow: hidden;
   padding: 0.25rem 0.5rem;
-  border: 1px solid $review-line;
+  border: 1px solid $line;
   border-radius: $border-radius;
   background: $vcu-white;
   text-align: left;
@@ -424,8 +413,8 @@ button.review-pill:hover { background: rgba($vcu-gold, 0.2); }
 .choice-table {
   margin: 0.25rem 0 0.6rem 2.9rem;
   padding: 0.5rem 0.6rem;
-  border-left: 3px solid $review-line;
-  &.is-shared { margin-left: 0; margin-top: 0.6rem; border: 1px dashed $review-line; border-radius: $border-radius; background: $vcu-white; }
+  border-left: 3px solid $line;
+  &.is-shared { margin-left: 0; margin-top: 0.6rem; border: 1px dashed $line; border-radius: $border-radius; background: $vcu-white; }
 }
 .choice-table-title { display: flex; flex-wrap: wrap; align-items: center; gap: 0.25rem 0.75rem; margin-bottom: 0.4rem; }
 .choice-list { display: flex; flex-direction: column; gap: 0.3rem; }
@@ -506,7 +495,7 @@ button.review-pill:hover { background: rgba($vcu-gold, 0.2); }
 }
 .matr-mode {
   padding: 0.9rem 1rem;
-  border: 1px solid $review-line;
+  border: 1px solid $line;
   border-radius: $border-radius;
   h3 { margin: 0 0 0.35rem; font-size: 1rem; }
 }
@@ -523,7 +512,7 @@ button.review-pill:hover { background: rgba($vcu-gold, 0.2); }
   align-items: flex-start;
   gap: 0.5rem;
   padding: 0.75rem 1rem;
-  border-bottom: 1px solid $review-line;
+  border-bottom: 1px solid $line;
   > .type-chip, > .outline-problems { margin-top: 0.5rem; }
 }
 .block-detail .detail-words.outline-text {
@@ -535,7 +524,7 @@ button.review-pill:hover { background: rgba($vcu-gold, 0.2); }
   font-size: 1.2rem;
   font-weight: 600;
   line-height: 1.35;
-  &:hover { border-color: $review-line; }
+  &:hover { border-color: $line; }
   &:focus { border-color: $vcu-gold; background: $vcu-white; }
 }
 .detail-group-title { flex: 1 1 14rem; margin: 0.35rem 0 0; font-size: 1.2rem; }
@@ -544,8 +533,12 @@ button.review-pill:hover { background: rgba($vcu-gold, 0.2); }
 .detail-actions {
   @include even-buttons;
   padding: 0.6rem 1rem;
-  border-top: 1px solid $review-line;
+  border-top: 1px solid $line;
   background: $vcu-white;
+}
+// too narrow for four buttons with their words in a row (a tablet, beside the list): two rows of two
+@container detail (max-width: 32rem) {
+  .detail-actions { grid-auto-flow: row; grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 .verify-wrap { display: flex; min-width: 0; }
 
@@ -582,7 +575,7 @@ button.review-pill:hover { background: rgba($vcu-gold, 0.2); }
   align-items: flex-start;
   gap: 0.35rem;
   padding: 0.5rem 0.75rem;
-  border: 1px solid $review-line;
+  border: 1px solid $line;
   border-left: 3px solid $vcu-gold;
   border-radius: $border-radius;
   background: rgba($vcu-gold, 0.06);
@@ -606,7 +599,7 @@ button.review-pill:hover { background: rgba($vcu-gold, 0.2); }
   align-items: flex-start;
   gap: 0.75rem;
   padding: 1rem;
-  border: 1px solid $review-line;
+  border: 1px solid $line;
   border-radius: 0.5rem;
   background: $vcu-white;
   color: $vcu-black;
@@ -628,7 +621,7 @@ button.review-pill:hover { background: rgba($vcu-gold, 0.2); }
 
 // A phone: the list and the details take turns, with Back. The header fills most of the screen, so the
 // panel keeps a screen's height of its own and the page scrolls to it.
-@media (max-width: 767.98px) {
+@include media-breakpoint-down(md) {
   .edit-extraction-page .structure-card { min-height: 85vh; }
   .outline-body { flex: 1 1 0; border-right: 0; }
   .detail-panel { display: none; }
@@ -637,6 +630,8 @@ button.review-pill:hover { background: rgba($vcu-gold, 0.2); }
     .detail-panel { display: flex; flex: 1 1 0; }
   }
   .detail-back { display: inline-block; }
+  // only their icons show here, so the four fit in one row
+  .detail-actions { grid-auto-flow: column; grid-template-columns: none; }
 }
 
 // ------ Buttons on this page ------------------------------------------------------------------------------

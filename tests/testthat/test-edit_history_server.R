@@ -136,3 +136,13 @@ test_that("coming back to the page reads the history again; a read that fails ke
     expect_equal(reads, 3L)
   })
 })
+
+test_that("each edit, and an empty list, is a list card like Extraction's drafts and Change Requests'", {
+  html <- htmltools::renderTags(history_entry_ui(many_records(1)[[1]]))$html
+  for (part in c("list-card", "list-card-body", "list-card-title-row", "list-card-title", "list-card-meta", "list-card-actions")) {
+    expect_match(html, paste0('class="', part, '"'), fixed = TRUE, info = part)
+  }
+  expect_match(htmltools::renderTags(no_history(filtered = FALSE))$html, 'class="list-card is-empty"', fixed = TRUE)
+  expect_match(htmltools::renderTags(no_drafts("mine"))$html, 'class="list-card is-empty"', fixed = TRUE)
+  expect_match(htmltools::renderTags(no_change_requests("me"))$html, 'class="list-card is-empty"', fixed = TRUE)
+})

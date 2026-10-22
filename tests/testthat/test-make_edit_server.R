@@ -34,6 +34,16 @@ local_outcomes <- function(env = parent.frame()) {
   made
 }
 
+test_that("the sentence is two phrases that each stay on one line, the full stop with the second", {
+  html <- htmltools::renderTags(edit_sentence_ui(shiny::NS("make_edit")))$html
+  parts <- strsplit(html, '<span class="edit-sentence-part">', fixed = TRUE)[[1]][-1]
+  expect_length(parts, 2)
+  expect_match(parts[1], "I want to", fixed = TRUE)
+  expect_match(parts[1], 'id="make_edit-verb"', fixed = TRUE)
+  expect_match(parts[2], 'id="make_edit-kind"', fixed = TRUE)
+  expect_match(parts[2], "<span>.</span>", fixed = TRUE)
+})
+
 test_that("choosing what to do and what kind reads the tables, and lists the rows to pick from", {
   me <- local_staff()
   tree <- shared_tree()

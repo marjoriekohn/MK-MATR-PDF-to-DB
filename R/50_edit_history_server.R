@@ -69,7 +69,7 @@ edit_history_server <- function(
         title = record$summary,
         size = "l",
         easyClose = TRUE,
-        p(class = "history-meta", paste(c(history_service_when(record), history_service_people(record)), collapse = " · ")),
+        p(class = "list-card-meta", paste(c(history_service_when(record), history_service_people(record)), collapse = " · ")),
         p(class = "form-text", change_service_counts_text(changes$counts)),
         change_items_ui(changes$groups),
         footer = modalButton("Close")
@@ -86,7 +86,7 @@ edit_history_server <- function(
         lapply(utils::head(found, showing()), history_entry_ui),
         if (length(found) > showing()) {
           div(
-            class = "history-more",
+            class = "list-more",
             review_button(
               sprintf("Show more (%d more)", length(found) - showing()), "more",
               class = "btn btn-outline-dark"

@@ -1,34 +1,8 @@
 // Edit history and Change Requests pages, and the list of changed rows they share
-$history-line: rgba($vcu-gray, 0.35);
 
 // ------ Edit history ---------------------------------------------------------------------
+// Each edit, and each request on Change Requests, is a list card (components/_list-card.scss).
 .history-search { margin-bottom: 1.25rem; }
-
-.history-entry,
-.change-request-card {
-  display: flex;
-  align-items: center;
-  gap: 1.5rem;
-  margin-bottom: 1rem;
-  padding: 1.25rem 1.5rem;
-  border: 1px solid $history-line;
-  border-radius: $border-radius;
-  background: $vcu-white;
-
-  &.is-empty { flex-direction: column; align-items: flex-start; gap: 0.25rem; }
-}
-
-.history-body,
-.change-request-body { flex: 1; min-width: 0; }
-.history-title-row,
-.change-request-title-row { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem; }
-.history-title,
-.change-request-title { margin: 0; font-size: 1.15rem; }
-.history-meta,
-.change-request-meta { margin: 0.35rem 0 0; color: $vcu-gray; font-size: 0.9rem; }
-.history-actions,
-.change-request-actions { display: flex; flex-shrink: 0; align-items: center; gap: 0.75rem; }
-.history-more { display: flex; justify-content: center; margin: 1.25rem 0; }
 
 // Add, Update, Delete, Extraction: told apart by their words; the colours only back them up.
 .row-badge {
@@ -36,39 +10,6 @@ $history-line: rgba($vcu-gray, 0.35);
   &.is-add { background: rgba($vcu-green, 0.15); color: $vcu-green; font-weight: 700; }
   &.is-update { background: rgba($vcu-gold, 0.35); font-weight: 700; }
   &.is-delete { background: rgba($vcu-red, 0.12); color: $vcu-red; font-weight: 700; }
-}
-
-// ------ Change Requests -------------------------------------------------------------------
-.change-request-people {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 0.35rem 1.25rem;
-  margin-top: 0.6rem;
-  font-size: 0.9rem;
-}
-.change-request-sent-back {
-  margin-top: 0.6rem;
-  padding: 0.5rem 0.8rem;
-  border-left: 4px solid $vcu-red;
-  border-radius: $border-radius;
-  background: rgba($vcu-red, 0.08);
-  font-size: 0.9rem;
-}
-.change-request-note-you {
-  margin-top: 0.6rem;
-  padding: 0.5rem 0.8rem;
-  border-left: 4px solid $vcu-gold;
-  border-radius: $border-radius;
-  background: rgba($vcu-gold, 0.15);
-  font-size: 0.9rem;
-}
-
-@media (max-width: 767.98px) {
-  .history-entry,
-  .change-request-card { flex-wrap: wrap; }
-  .history-actions,
-  .change-request-actions { width: 100%; justify-content: flex-end; }
 }
 
 // ------ An extraction's change request, laid out to read -----------------------------------------
@@ -118,14 +59,13 @@ $history-line: rgba($vcu-gray, 0.35);
   gap: 1rem;
   margin-top: 1rem;
   padding-top: 0.75rem;
-  border-top: 1px solid $history-line;
+  border-top: 1px solid $line;
 }
-.change-request-questionnaire-title { margin: 0; font-size: 1.1rem; }
 .change-request-questionnaire {
   max-height: 55vh;
   margin-top: 0.5rem;
   padding: 0;
-  border: 1px solid $history-line;
+  border: 1px solid $line;
   border-radius: $border-radius;
   overflow-y: auto;
 }
@@ -151,7 +91,7 @@ $history-line: rgba($vcu-gray, 0.35);
 
 .change-row {
   padding: 0.6rem 0.8rem;
-  border: 1px solid $history-line;
+  border: 1px solid $line;
   border-left-width: 4px;
   border-radius: $border-radius;
 

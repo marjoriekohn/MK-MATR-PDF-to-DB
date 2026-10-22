@@ -5,3 +5,19 @@
   .navbar-brand, .nav-link { color: $vcu-white; &:hover, &.active { color: $vcu-gold; } }
   .navbar-brand a { color: inherit; text-decoration: none; &:hover { color: $vcu-gold; } }
 }
+
+// One row at every width: the title on the left, the signed-in name on the right. The pages' own links are
+// hidden (_page.scss), so the menu holds only the name; Bootstrap would otherwise put it on a line of its own
+// under the title on screens narrower than a desktop. A title too long for a phone ends with "…".
+.navbar {
+  flex-wrap: nowrap;
+  padding: 0;
+  > .container-fluid { flex-wrap: nowrap; gap: 1rem; padding-block: 0.6rem; }
+  .navbar-header { min-width: 0; }
+  .navbar-brand { display: block; margin: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .navbar-nav { flex-direction: row; flex-wrap: nowrap; align-items: center; margin-left: auto; }
+}
+// on a phone the signed-in name is its icon; the name stays for screen readers, and is in the menu it opens
+@include media-breakpoint-down(sm) {
+  .navbar-user-name { @include visually-hidden; }
+}

@@ -115,18 +115,26 @@
   .btn { width: 100%; }
 }
 
+// ------ The buttons at the end of a card, a form or a dialog, with a note about them ----------------------
+// On a phone the note (whatever isn't a button or a link) has a line of its own above them, and the buttons
+// share the row under it evenly; a link (Cancel, Discard) keeps its own width. A button never gets narrower
+// than its words: when they don't all fit, one goes onto the next line. A note with nothing in it takes no
+// room (it isn't hidden: Shiny doesn't fill in a hidden output). Wider, the bar is the page's own.
+@mixin action-bar {
+  @include media-breakpoint-down(sm) {
+    flex-wrap: wrap;
+    > .btn { flex: 1 1 0; min-width: max-content; }
+    > :not(.btn, a) { flex: 1 1 100%; order: -1; text-align: left; }
+    > .shiny-html-output:empty { position: absolute; }
+  }
+}
+.modal-footer { @include action-bar; }
+
 // ------ On a phone --------------------------------------------------------------------------------------
 // A button's words beside its icon (icon_label()) aren't shown, only the icon; the words stay for screen
 // readers. The button is then square, so a row of them is even.
-@media (max-width: 767.98px) {
-  .btn .btn-text {
-    position: absolute;
-    width: 1px;
-    height: 1px;
-    overflow: hidden;
-    clip: rect(0 0 0 0);
-    white-space: nowrap;
-  }
+@include media-breakpoint-down(md) {
+  .btn .btn-text { @include visually-hidden; }
   .btn:has(.btn-text):not(.btn-sm) { min-width: $control-height; padding-inline: 0; }
   .btn-sm:has(.btn-text) { min-width: $control-height-sm; padding-inline: 0; }
 }

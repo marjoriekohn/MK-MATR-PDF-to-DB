@@ -1,5 +1,4 @@
 // Home page: a button to each working page, and the newest requests and changes
-$home-line: rgba($vcu-gray, 0.35);
 
 .home-links {
   display: grid;
@@ -14,7 +13,7 @@ $home-line: rgba($vcu-gray, 0.35);
   align-items: flex-start;
   gap: 0.4rem;
   padding: 1.25rem;
-  border: 1px solid $vcu-gray;
+  border: 1px solid $line;
   border-radius: $border-radius;
   background: $vcu-white;
   color: $vcu-black;
@@ -49,11 +48,11 @@ $home-line: rgba($vcu-gray, 0.35);
   align-items: flex-start;
   gap: 0.6rem;
   padding: 0.6rem 0;
-  border-top: 1px solid $home-line;
+  border-top: 1px solid $line-light;
   .row-badge { margin-top: 0.15rem; }
 }
 .home-item-body { display: flex; flex-direction: column; min-width: 0; }
 .home-item-title { font-weight: 500; overflow-wrap: anywhere; }
 .home-item-meta { color: $vcu-gray; font-size: 0.85rem; }
-.home-empty { margin: 0; padding: 0.6rem 0; border-top: 1px solid $home-line; color: $vcu-gray; }
+.home-empty { margin: 0; padding: 0.6rem 0; border-top: 1px solid $line-light; color: $vcu-gray; }
 .home-box-more { margin-top: auto; display: flex; justify-content: flex-end; }
