@@ -75,38 +75,45 @@ test_that("blanks are said in words, and an empty questionnaire says so", {
   expect_match(as.character(questionnaire_preview_ui(draft_service_empty())), "no blocks")
 })
 
-test_that("the change request dialog has the Basic Info form, what it adds and the questionnaire, with its PDF when the file is here", {
-  me <- list(staff_id = 1L, name = "Reviewer", role = "STAFF")
+test_that("the change request dialog has the Basic Info form and what it adds, and leaves the questionnaire to Preview", {
+  me <- list(staff_id = 2L, name = "Alex", role = "STAFF")
   record <- list(
     id = "7", kind = extraction_kind, summary = "Push ZZQ Wave 3", prepared_by = "Alex", prepared_by_id = 2L,
     saved_by_id = 2L, saved = format_time(Sys.time()), status = "Awaiting Review", revision = 1L
   )
-  draft <- draft_service_renumber_questions(with_matr_ids())
   preview <- list(
     what = list(list(kind = "Response options", title = "40 response options", subtitle = "", facts = "40 new", is_new = TRUE)),
     summary = "Adds the wave.", unchecked = 2
   )
-  detail <- list(preview = preview, draft = draft, pdf_url = "session/x/file.pdf")
-  html <- htmltools::renderTags(change_request_dialog(record, me, shiny::NS("cr"), detail))$html
+  html <- htmltools::renderTags(change_request_dialog(record, me, shiny::NS("cr"), list(preview = preview)))$html
   expect_match(html, "modal-xl")
-  expect_match(html, "questionnaire-table")
-  expect_match(html, 'href="session/x/file.pdf"')
-  expect_match(html, "Open PDF")
-  expect_match(html, "2 blocks haven&#39;t been marked as checked yet|2 blocks haven't been marked as checked yet")
   expect_match(html, "Basic Info")
   expect_match(html, 'id="cr-info-registry_id"')
   expect_match(html, 'id="cr-save_info"')
-  expect_false(grepl("Where it goes", html))
   expect_match(html, "What it adds")
   expect_match(html, "fa-certificate")
-  # its Basic Info isn't filled in, so Approve starts disabled
+  # the questionnaire, its PDF, and Edit and Withdraw are the Preview's
+  expect_false(grepl("questionnaire-table|Open PDF|marked as checked|The questionnaire", html))
+  expect_false(grepl('id="cr-edit"|id="cr-withdraw"', html))
+
+  # someone else's: Approve starts disabled, since its Basic Info isn't filled in
+  reviewer <- list(staff_id = 1L, name = "Reviewer", role = "STAFF")
+  html <- htmltools::renderTags(change_request_dialog(record, reviewer, shiny::NS("cr"), list(preview = preview)))$html
   approve <- regmatches(html, regexpr('<button[^>]*id="cr-approve"[^>]*>|<button[^>]*disabled[^>]*id="cr-approve"[^>]*>', html))
   expect_match(approve, "disabled")
+  unread <- htmltools::renderTags(change_request_dialog(record, reviewer, shiny::NS("cr"), list(preview = list(problem = "x"))))$html
+  expect_match(unread, "This can&#39;t be added as it is|This can't be added as it is")
+})
 
-  no_file <- htmltools::renderTags(change_request_dialog(record, me, shiny::NS("cr"), detail[c("preview", "draft")]))$html
-  expect_false(grepl("Open PDF", no_file))
-  unread <- htmltools::renderTags(change_request_dialog(record, me, shiny::NS("cr"), list(preview = list(problem = "x"))))$html
-  expect_match(unread, "couldn't be read")
+test_that("an edit's request dialog keeps Edit and Withdraw, since it has no Preview", {
+  me <- list(staff_id = 2L, name = "Alex", role = "STAFF")
+  record <- list(
+    id = "8", kind = "Edit", edit_kind = "Delete", summary = "Delete a type", prepared_by = "Alex", prepared_by_id = 2L,
+    saved_by_id = 2L, saved = format_time(Sys.time()), status = "Awaiting Review", revision = 1L
+  )
+  html <- htmltools::renderTags(change_request_dialog(record, me, shiny::NS("cr"), list(counts = change_service_counts(list()), groups = list())))$html
+  expect_match(html, 'id="cr-edit"')
+  expect_match(html, 'id="cr-withdraw"')
 })
 
 test_that("the Edit Extraction preview shows only the questionnaire and its note, without Basic Info", {
@@ -117,4 +124,33 @@ test_that("the Edit Extraction preview shows only the questionnaire and its note
   expect_false(grepl("Where it goes|Basic Info|What it adds|Open PDF|registry_id", html))
   dialog <- htmltools::renderTags(preview_request_dialog(shiny::NS("edit")))$html
   expect_false(grepl("Where it goes|edit-info-", dialog))
+})
+
+test_that("an extraction's request card has Preview, which shows its questionnaire as Edit Extraction's Preview does", {
+  me <- list(staff_id = 1L, name = "Reviewer", role = "STAFF")
+  record <- list(
+    id = "7", kind = extraction_kind, summary = "Push ZZQ Wave 3", prepared_by = "Alex", prepared_by_id = 2L,
+    saved_by_id = 2L, saved = format_time(Sys.time()), status = "Awaiting Review", revision = 1L
+  )
+  card <- htmltools::renderTags(change_request_card_ui(record, me))$html
+  expect_match(card, 'data-action="preview" data-id="7"', fixed = TRUE)
+  expect_match(card, 'data-action="review" data-id="7"', fixed = TRUE)
+  # an edit's request has no questionnaire to preview
+  edit <- htmltools::renderTags(change_request_card_ui(utils::modifyList(record, list(kind = "Edit")), me))$html
+  expect_false(grepl('data-action="preview"', edit, fixed = TRUE))
+
+  draft <- draft_service_renumber_questions(with_matr_ids())
+  dialog <- htmltools::renderTags(change_request_preview_dialog(record, me, shiny::NS("cr"), draft, "session/x/file.pdf"))$html
+  expect_match(dialog, "modal-xl")
+  expect_match(dialog, "Preview: Push ZZQ Wave 3")
+  expect_match(dialog, "questionnaire-table")
+  expect_match(dialog, "Open PDF")
+  expect_false(grepl("Basic Info|cr-info-|What it adds", dialog))
+  expect_match(dialog, "Review and approve")
+  expect_match(dialog, 'id="cr-edit"') # Edit, with the questionnaire
+  expect_false(grepl('id="cr-withdraw"', dialog)) # only the person who prepared it withdraws it
+  mine <- htmltools::renderTags(change_request_preview_dialog(record, list(staff_id = 2L, name = "Alex", role = "STAFF"), shiny::NS("cr"), draft))$html
+  expect_match(mine, 'id="cr-withdraw"')
+  unread <- htmltools::renderTags(change_request_preview_dialog(record, me, shiny::NS("cr"), NULL))$html
+  expect_match(unread, "couldn't be read")
 })

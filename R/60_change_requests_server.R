@@ -70,7 +70,38 @@ change_requests_server <- function(
     observeEvent(input$action, {
       event <- input$action
       record <- requests()[[event$id %||% ""]]
-      if (identical(event$action, "review") && !is.null(record)) show_request(record)
+      if (is.null(record)) {
+        return()
+      }
+      if (identical(event$action, "review")) show_request(record)
+      if (identical(event$action, "preview")) show_preview(record)
+    })
+
+    # An extraction's questionnaire, read afresh, as Edit Extraction's Preview shows it, with Edit and Withdraw
+    # (which act on `reviewing()`). Its last button goes on to the request's Basic Info dialog, in its place.
+    previewing <- reactiveVal(NULL)
+    show_preview <- function(record) {
+      previewing(record)
+      reviewing(record)
+      draft <- tryCatch(draft_service_load(connection, record$id), error = function(problem) NULL)
+      shown_draft(draft)
+      showModal(change_request_preview_dialog(record, me, ns, draft, request_pdf_url(record), table = request_table()))
+    }
+
+    # The Preview's table, drawn once the dialog is open: a DataTables table put in a dialog as it opens stays
+    # empty. Each Preview gets an output of its own, so the table is drawn anew.
+    shown_draft <- reactiveVal(NULL)
+    table_count <- 0L
+    request_table <- function() {
+      table_count <<- table_count + 1L
+      name <- paste0("request_table_", table_count)
+      output[[name]] <- renderUI(questionnaire_preview_ui(req(shown_draft())))
+      uiOutput(ns(name))
+    }
+    observeEvent(input$preview_review, {
+      record <- req(previewing())
+      previewing(NULL)
+      show_request(record)
     })
 
     # The dialog for a request, read afresh; an extraction's Basic Info form is filled from it.
@@ -84,10 +115,9 @@ change_requests_server <- function(
       if (extraction) info_form$show(record)
     }
 
-    # What a request comes to, laid out as its preparer saw it before submitting it. An extraction's
-    # rows are worked out from the database as it is now, so the reviewer is told at once if it can't be
-    # added as it stands; its questionnaire is read so the dialog can lay it out, and its PDF is served
-    # to this session if the file is here.
+    # What a request comes to, for its dialog. An extraction's rows are worked out from its questionnaire and the
+    # database as it is now, so the reviewer is told at once if it can't be added as it stands (the questionnaire
+    # itself is the Preview's).
     request_detail <- function(record) {
       if (!identical(record$kind, extraction_kind)) {
         return(change_request_service_changes(record))
@@ -105,7 +135,7 @@ change_requests_server <- function(
         },
         error = function(problem) list(problem = conditionMessage(problem))
       )
-      list(preview = preview, draft = draft, pdf_url = request_pdf_url(record))
+      list(preview = preview)
     }
 
     # The address the browser gets the request's PDF from, for this session only (see `pdf_address()`);

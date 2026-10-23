@@ -72,6 +72,10 @@ change_request_card_ui <- function(record, me) {
     ),
     div(
       class = "list-card-actions",
+      # an extraction's questionnaire, as Edit Extraction's Preview shows it
+      if (identical(record$kind, extraction_kind)) {
+        review_button(icon_label("preview", "Preview"), "preview", `data-id` = record$id, class = "btn btn-outline-dark")
+      },
       review_button(
         change_request_review_label(state),
         "review",
@@ -99,18 +103,16 @@ change_request_review_label <- function(state) {
 #' What a person reads before approving, sending back or withdrawing a request.
 #'
 #' For an extraction (`extraction_request_ui()`): its Basic Info, the form where the registry, study,
-#' questionnaire and wave it goes into are filled in and saved; what it adds, as cards of the rows that
-#' are there and the NEW ones; and the whole questionnaire laid out as a table, with a button to its PDF
-#' when the file is here, so a reviewer needn't open it on the Edit Extraction page. It can't be
-#' approved (or added, by an ADMIN who prepared it) until its Basic Info is saved; the page's server
-#' keeps those buttons disabled until then.
+#' questionnaire and wave it goes into are filled in and saved, and what it adds, as cards of the rows that
+#' are there and the NEW ones. The questionnaire itself, with Edit and Withdraw, is the request's Preview
+#' (`change_request_preview_dialog()`). It can't be approved (or added, by an ADMIN who prepared it) until its
+#' Basic Info is saved; the page's server keeps those buttons disabled until then.
 #'
 #' @param record A request.
 #' @param me Who is using the site: `list(staff_id, name, role)`.
 #' @param ns The module's namespace function.
 #' @param detail What the request comes to: for an edit `change_request_service_changes()`; for an
-#'   extraction `list(preview = <from extraction_service_request_preview()>, draft = <its questionnaire,
-#'   or NULL if it couldn't be read>, pdf_url = <the PDF's address, or NULL>)`.
+#'   extraction `list(preview = <from extraction_service_request_preview()>)`.
 #' @return A `modalDialog()`, for `showModal()`.
 change_request_dialog <- function(record, me, ns, detail) {
   state <- change_request_service_state(record, me)
@@ -128,7 +130,7 @@ change_request_dialog <- function(record, me, ns, detail) {
       ), collapse = " · ")
     ),
     if (extraction) {
-      extraction_request_ui(detail$preview, detail$draft, detail$pdf_url, basic_info = basic_info_ui(ns, state))
+      extraction_request_ui(detail$preview, NULL, basic_info = basic_info_ui(ns, state), questionnaire = FALSE)
     } else {
       tagList(
         p(class = "form-text", change_service_counts_text(detail$counts)),
@@ -144,11 +146,40 @@ change_request_dialog <- function(record, me, ns, detail) {
     },
     footer = tagList(
       modalButton("Close"),
-      actionButton(ns("edit"), "Edit", class = "btn-outline-dark"),
-      if (state$can_withdraw) actionButton(ns("withdraw"), "Withdraw", class = "btn-outline-dark"),
+      # an extraction's Edit and Withdraw are on its Preview, with the questionnaire
+      if (!extraction) actionButton(ns("edit"), "Edit", class = "btn-outline-dark"),
+      if (!extraction && state$can_withdraw) actionButton(ns("withdraw"), "Withdraw", class = "btn-outline-dark"),
       if (state$can_send_back) actionButton(ns("send_back"), "Send back", class = "btn-outline-dark"),
       if (state$can_add) actionButton(ns("add"), "Add it to the database", class = "btn-primary", disabled = state$needs_info),
       if (state$can_approve) actionButton(ns("approve"), "Approve", class = "btn-primary", disabled = state$needs_info)
+    )
+  )
+}
+
+#' An extraction request's questionnaire, as the Edit Extraction page's Preview shows it: how many blocks
+#' haven't been marked as checked, its PDF and the questionnaire laid out as a table. Edit opens it on the Edit
+#' Extraction page, Withdraw sets it aside (its preparer only), and the last button goes on to the request's
+#' Basic Info dialog (`change_request_dialog()`).
+#'
+#' @param record A request.
+#' @param me Who is using the site: `list(staff_id, name, role)`.
+#' @param ns The module's namespace function.
+#' @param draft Its questionnaire, or `NULL` if it couldn't be read.
+#' @param pdf_url The address of its PDF, or `NULL`.
+#' @param table Where the page draws the questionnaire's table once the dialog is open, or `NULL` to draw it here.
+#' @return A `modalDialog()`, for `showModal()`.
+change_request_preview_dialog <- function(record, me, ns, draft, pdf_url = NULL, table = NULL) {
+  state <- change_request_service_state(record, me)
+  modalDialog(
+    title = paste("Preview:", if (nzchar(record$summary %||% "")) record$summary else "(no description)"),
+    size = "xl",
+    easyClose = TRUE,
+    extraction_request_ui(list(unchecked = if (!is.null(draft)) extraction_service_unchecked(draft)), draft, pdf_url, table = table),
+    footer = tagList(
+      modalButton("Close"),
+      actionButton(ns("edit"), "Edit", class = "btn-outline-dark"),
+      if (state$can_withdraw) actionButton(ns("withdraw"), "Withdraw", class = "btn-outline-dark"),
+      actionButton(ns("preview_review"), change_request_review_label(state), class = "btn-primary")
     )
   )
 }

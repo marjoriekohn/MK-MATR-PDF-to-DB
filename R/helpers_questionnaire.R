@@ -190,8 +190,12 @@ preview_coding <- function(box, draft) {
 #' @param draft The questionnaire, or `NULL` if it couldn't be read.
 #' @param pdf_url The address of its PDF, or `NULL`.
 #' @param basic_info The Basic Info form, to show first, or `NULL`.
+#' @param table Where the questionnaire's table goes, in place of drawing it here: a `uiOutput()` the page draws
+#'   it in once the dialog is open (a DataTables table put in a dialog as it opens stays empty). `NULL` draws it.
+#' @param questionnaire Whether to show the questionnaire (its table, its PDF and how much of it is checked).
+#'   Change Requests' Basic Info dialog leaves it to the request's Preview.
 #' @return A UI element.
-extraction_request_ui <- function(preview, draft, pdf_url = NULL, basic_info = NULL) {
+extraction_request_ui <- function(preview, draft, pdf_url = NULL, basic_info = NULL, table = NULL, questionnaire = TRUE) {
   div(
     class = "request-preview",
     if (!is.null(basic_info)) {
@@ -208,18 +212,20 @@ extraction_request_ui <- function(preview, draft, pdf_url = NULL, basic_info = N
         div(class = "request-cards", lapply(preview$what, request_card_ui))
       )
     },
-    if (isTRUE(preview$unchecked > 0)) {
+    if (questionnaire && isTRUE(preview$unchecked > 0)) {
       p(class = "form-text", sprintf("%s haven't been marked as checked yet.", plural(preview$unchecked, "block")))
     },
-    div(
-      class = "request-section",
-      if (!is.null(pdf_url)) div(class = "change-request-questionnaire-head", pdf_open_button(pdf_url)),
-      if (is.null(draft)) {
-        p(class = "form-text", "The questionnaire couldn't be read. Edit opens it on the Edit Extraction page.")
-      } else {
-        div(class = "change-request-questionnaire", questionnaire_preview_ui(draft))
-      }
-    )
+    if (questionnaire) {
+      div(
+        class = "request-section",
+        if (!is.null(pdf_url)) div(class = "change-request-questionnaire-head", pdf_open_button(pdf_url)),
+        if (is.null(draft)) {
+          p(class = "form-text", "The questionnaire couldn't be read. Edit opens it on the Edit Extraction page.")
+        } else {
+          div(class = "change-request-questionnaire", table %||% questionnaire_preview_ui(draft))
+        }
+      )
+    }
   )
 }
 
