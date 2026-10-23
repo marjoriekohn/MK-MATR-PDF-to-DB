@@ -120,7 +120,20 @@ edit_relations <- list(
   relation(
     "answer_option_set", "answer_option", c(answer_option_id = "answer_option_id"), "block",
     why = "Option sets already include this answer choice.",
-    fix = "Take it out of those option sets first."
+    fix = "Take it out of those option sets first (Option Sets, then Edit)."
+  ),
+  relation("answer_option_set", "option_set", c(option_set_id = "option_set_id"), "remove"),
+  relation(
+    "closed_ended", "option_set", c(option_set_id = "option_set_id"), "block",
+    why = "These variables offer exactly this set of choices.",
+    fix = "Keep it: a set can only go once no variable offers it."
+  ),
+  # a scale item that expected answers from a set that goes no longer expects any; the item stays
+  relation("question_scale", "option_set", c(expected_option_set_id = "option_set_id"), "clear", clears = "expected choices"),
+  relation(
+    "extracted_draft", "pdf_file", c(pdf_sha256 = "pdf_sha256"), "block",
+    why = "These extractions were read from it.",
+    fix = "Keep it: it is the record of what they were read from."
   )
 )
 
@@ -130,7 +143,7 @@ edit_delete_order <- c(
   "response_option", "open_ended", "closed_ended", "variable", "wave_question",
   "question_scale", "question_category", "questionnaire_question",
   "questionnaire_component", "question", "component", "answer_option_set",
-  "answer_option", "wave", "questionnaire", "study", "registry",
+  "option_set", "answer_option", "wave", "questionnaire", "study", "registry",
   "principal_investigator", "respondent_type", "component_type", "category",
   "measurement_scale", "subject"
 )
@@ -337,13 +350,16 @@ edit_nouns <- list(
   question_category = c("MeSH tag on a question", "MeSH tags on questions"),
   answer_option = c("answer choice", "answer choices"),
   subject = c("subject", "subjects"),
-  answer_option_set = c("option set entry", "option set entries"),
+  answer_option_set = c("choice in an option set", "choices in option sets"),
+  option_set = c("option set", "option sets"),
   measurement_scale = c("measurement scale", "measurement scales"),
   question_scale = c("measurement scale membership", "measurement scale memberships"),
   variable = c("variable", "variables"),
   open_ended = c("open-ended variable", "open-ended variables"),
   closed_ended = c("closed-ended variable", "closed-ended variables"),
-  response_option = c("response options for a variable", "response options for variables")
+  response_option = c("response options for a variable", "response options for variables"),
+  pdf_file = c("PDF", "PDFs"),
+  extracted_draft = c("extraction", "extractions")
 )
 
 #' A count of rows with their table's noun.
@@ -366,7 +382,8 @@ edit_display_order <- c(
   "registry", "study", "questionnaire", "wave", "component", "questionnaire_component",
   "questionnaire_question", "wave_question", "variable", "response_option",
   "question_category", "question_scale", "category", "measurement_scale", "answer_option",
-  "answer_option_set", "principal_investigator", "respondent_type", "component_type", "subject"
+  "answer_option_set", "option_set", "principal_investigator", "respondent_type", "component_type", "subject",
+  "pdf_file", "extracted_draft"
 )
 
 # Naming a row can take other tables (a wave's name starts with its
@@ -383,7 +400,9 @@ edit_label_needs <- list(
   open_ended = "variable",
   closed_ended = "variable",
   response_option = c("variable", "answer_option"),
-  answer_option_set = "answer_option"
+  answer_option_set = c("answer_option", "option_set"),
+  pdf_file = "extracted_draft",
+  extracted_draft = "draft"
 )
 
 #' Every table to read to work out what deleting rows of some tables reaches.
@@ -505,12 +524,18 @@ edit_labels <- list(
   answer_option = function(snap, rows) rows$standardized_label,
   subject = function(snap, rows) rows$name,
   answer_option_set = function(snap, rows) {
+    set <- edit_lookup(snap, "option_set", "option_set_id", rows$option_set_id, "name")
     paste0(
-      "Option set ",
-      rows$option_set_id,
-      " includes ",
-      edit_lookup(snap, "answer_option", "answer_option_id", rows$answer_option_id, "standardized_label")
+      "“", edit_lookup(snap, "answer_option", "answer_option_id", rows$answer_option_id, "standardized_label"), "” in ",
+      ifelse(is.na(set), paste("option set", rows$option_set_id), paste0("“", set, "”"))
     )
+  },
+  option_set = function(snap, rows) rows$name,
+  pdf_file = function(snap, rows) edit_pdf_names(snap, rows$pdf_sha256),
+  extracted_draft = function(snap, rows) {
+    status <- edit_lookup(snap, "draft", "draft_id", rows$draft_id, "status")
+    name <- ifelse(is.na(rows$pdf_name) | !nzchar(rows$pdf_name), paste("Extraction", rows$draft_id), rows$pdf_name)
+    ifelse(is.na(status), name, paste0(name, " (", status, ")"))
   },
   measurement_scale = function(snap, rows) rows$name,
   question_scale = function(snap, rows) {

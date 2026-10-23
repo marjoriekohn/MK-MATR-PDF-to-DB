@@ -265,9 +265,28 @@ edit_service_normalize <- function(field, value) {
       if (is.na(parsed)) value else format(parsed)
     },
     choice = if (value %in% c("TRUE", "FALSE")) tolower(value) else value,
+    several = edit_several_text(edit_several_ids(value)),
     value
   )
 }
+
+#' The values picked in a field of type several.
+#'
+#' @param value What the field holds: the values joined by commas, or (from the page) a vector of them.
+#' @return The values, once each, as text, in order (as numbers if they all are).
+edit_several_ids <- function(value) {
+  ids <- trimws(unlist(strsplit(as.character(value %||% character()), ",", fixed = TRUE)))
+  ids <- unique(ids[!is.na(ids) & nzchar(ids)])
+  numbers <- suppressWarnings(as.numeric(ids))
+  if (length(ids) > 0 && !anyNA(numbers)) ids <- key_text(sort(numbers)) else ids <- sort(ids)
+  ids
+}
+
+#' Values of a field of type several, as it holds them: joined by commas, in order.
+#'
+#' @param ids The values.
+#' @return A string; `""` for none.
+edit_several_text <- function(ids) paste(edit_several_ids(paste(key_text(ids), collapse = ",")), collapse = ",")
 
 # Whether a field matters, given the others: `show_when` hides it otherwise.
 edit_service_visible <- function(field, values) {
@@ -345,6 +364,7 @@ edit_type_problem <- function(field, value) {
     },
     date = edit_date_problem(value),
     select = if (!value %in% unname(field$choices)) "Pick one from the list.",
+    several = if (!all(edit_several_ids(value) %in% unname(field$choices))) "Pick from the list.",
     NULL
   )
 }
@@ -411,6 +431,10 @@ edit_display_value <- function(field, value) {
   }
   switch(field$type,
     select = names(field$choices)[match(value, unname(field$choices))] %||% value,
+    several = {
+      ids <- edit_several_ids(value)
+      paste(ifelse(ids %in% unname(field$choices), names(field$choices)[match(ids, unname(field$choices))], ids), collapse = " / ")
+    },
     choice = names(field$choices)[match(toupper(value), unname(field$choices))] %||% value,
     date = format(as.Date(value), "%m/%d/%Y"),
     value

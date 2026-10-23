@@ -19,7 +19,8 @@ edit_change_ui <- function(id) {
 edit_reference_kinds <- c(
   registry_id = "registry", principal_investigator_id = "investigator", study_id = "study",
   respondent_type_id = "respondent_type", questionnaire_id = "questionnaire",
-  component_type_id = "component_type"
+  component_type_id = "component_type", answer_option_ids = "answer_option",
+  component_id = "question" # a scale item's question (the other forms' are only shown for an existing one)
 )
 
 #' Notes above the form for drop-downs that need a pick and have nothing to pick from.
@@ -31,7 +32,7 @@ edit_reference_kinds <- c(
 edit_empty_choices_ui <- function(fields) {
   notes <- lapply(fields, function(field) {
     real <- unname(field$choices)[nzchar(unname(field$choices))]
-    if (field$type != "select" || !isTRUE(field$required) || length(real) > 0 || !is.null(field$locked) || !is.null(field$show_when)) {
+    if (!field$type %in% c("select", "several") || !isTRUE(field$required) || length(real) > 0 || !is.null(field$locked) || !is.null(field$show_when)) {
       return(NULL)
     }
     kind <- edit_reference_kinds[field$name]

@@ -78,6 +78,8 @@ edit_change_server <- function(
           start[[field$id]]
         } else if (field$type == "variables") {
           variables$value() %||% start[[field$id]]
+        } else if (field$type == "several") {
+          edit_several_text(input[[field$id]]) # nothing picked is NULL, not "the field isn't drawn yet"
         } else {
           input[[field$id]] %||% start[[field$id]]
         }

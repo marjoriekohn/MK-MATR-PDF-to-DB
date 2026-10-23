@@ -153,6 +153,20 @@ database_tables <- list(
       code_value = "text", printed_label = "text",
       skip_instruction = "text", skip_to_component_id = "id"
     )
+  ),
+  # The PDFs extractions were read from, and the extractions that name them: Make an edit lists the PDFs (and
+  # only shows them; nothing about a PDF can change). Only the columns that say which draft is which.
+  pdf_file = list(
+    key = "pdf_sha256", order_by = "pdf_sha256",
+    columns = c(pdf_sha256 = "text", pdf_pages = "number", pdf_bytes = "number")
+  ),
+  extracted_draft = list(
+    key = "draft_id", order_by = "draft_id",
+    columns = c(draft_id = "id", method = "text", pdf_name = "text", pdf_sha256 = "text")
+  ),
+  draft = list(
+    key = "draft_id", order_by = "draft_id",
+    columns = c(draft_id = "id", kind = "text", status = "text")
   )
 )
 

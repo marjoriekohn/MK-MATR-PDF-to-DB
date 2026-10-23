@@ -95,6 +95,14 @@ edit_field_ui <- function(ns, field, value, slot) {
         selectInput(id, NULL, edit_select_choices(field), selected = value, width = "100%", selectize = length(field$choices) > 30),
         "select"
       ),
+      several = named(
+        selectizeInput(
+          id, NULL, field$choices,
+          selected = edit_several_ids(value), multiple = TRUE, width = "100%",
+          options = list(placeholder = inside, plugins = list("remove_button"))
+        ),
+        "select"
+      ),
       choice = div(
         role = "group", `aria-label` = field$label, title = field$label,
         toggle_input(id, field$choices, selected = value, label = field$label)
@@ -113,7 +121,7 @@ edit_field_ui <- function(ns, field, value, slot) {
   }
   help <- c(field$hint, field$tooltip)
   field_div <- div(
-    class = c("form-field", "edit-field", if (field$type %in% c("textarea", "variables")) "is-wide"),
+    class = c("form-field", "edit-field", if (field$type %in% c("textarea", "variables", "several")) "is-wide"),
     control,
     if (length(help) > 0 && is.null(field$locked)) div(class = "form-text field-help", paste(help, collapse = " ")),
     uiOutput(slot, class = "form-text field-note")
@@ -224,7 +232,7 @@ edit_usage_ui <- function(entity, title, usage) {
   div(
     class = "edit-usage",
     h2("Where this appears"),
-    if (!local && (length(usage$uses) > 0 || length(usage$pointing) > 0)) {
+    if (!local && !isTRUE(entity$view_only) && (length(usage$uses) > 0 || length(usage$pointing) > 0)) {
       p(class = "form-text", "Everything below changes if you make this edit.")
     },
     if (entity$table == "component") div(class = "edit-usage-title", paste0("“", title, "”")),
@@ -250,7 +258,10 @@ edit_usage_ui <- function(entity, title, usage) {
       )
     }),
     if (entity$table != "component" && length(usage$pointing) == 0 && !local) {
-      p(class = "edit-usage-none", "Nothing else points at this yet, so changing it affects nothing else.")
+      p(
+        class = "edit-usage-none",
+        if (isTRUE(entity$view_only)) "Nothing else points at this." else "Nothing else points at this yet, so changing it affects nothing else."
+      )
     }
   )
 }

@@ -19,6 +19,9 @@
 #                                         updated or deleted here
 #   duplicates(snap, values)              the rows an add looks like, if it looks like any: a
 #                                         list of list(rows, why). A warning, not a block
+#   initial(snap, row, scope)             what an update starts from, where it isn't the row's column
+#   reads                                 more tables to read than its own and what a delete reaches
+#   view_only                             TRUE for a kind that is only shown: no + Add, Edit or Delete
 # `snap` is a list of whole tables (edit_service_load()). Anything an entry
 # doesn't say, edit_service_*() does the plain way.
 #
@@ -115,7 +118,8 @@ edit_choice_labels <- list(
 )
 
 # How a form's field is described. `type` is text, textarea, number, date,
-# select (`choices`), choice (side-by-side buttons), or variables (a question's
+# select (`choices`), several (any number of `choices`, saved as their values joined by commas),
+# choice (side-by-side buttons), or variables (a question's
 # variables and their choices, as JSON, edited with the variable editor,
 # variable_editor_server(), which offers what `options` lists). `locked` is the reason a field can't change once the row exists.
 # `show_when` is list(field, value): the field only matters while another has
@@ -631,6 +635,320 @@ subject_entity <- list(
   }
 )
 
+# ------ Sets of choices ---------------------------------------------------------------------------------
+#' The answer choices of option sets, as the field of a set's choices holds them.
+#'
+#' @param snap The tables the kind needs, as `edit_service_load()` reads them: a list of data frames named after the tables.
+#' @param set_ids Option set ids.
+#' @return One string per set: its answer choices' ids joined by commas, smallest first.
+edit_set_members <- function(snap, set_ids) {
+  members <- snap$answer_option_set
+  vapply(set_ids, function(id) edit_several_text(members$answer_option_id[members$option_set_id %in% id]), character(1), USE.NAMES = FALSE)
+}
+
+# A set's choices by name, in the order they were added to the list: "Yes / No".
+edit_set_words <- function(snap, set_ids) {
+  members <- snap$answer_option_set
+  vapply(set_ids, function(id) {
+    ids <- sort(members$answer_option_id[members$option_set_id %in% id])
+    labels <- edit_lookup(snap, "answer_option", "answer_option_id", ids, "standardized_label")
+    if (length(labels) == 0) "no choices" else paste(labels, collapse = " / ")
+  }, character(1), USE.NAMES = FALSE)
+}
+
+option_set_entity <- list(
+  label = "Option set", noun = "option set", plural = "option sets", article = "an",
+  group = "Shared lists", table = "option_set",
+  about = paste0(
+    "A named set of answer choices, kept once. A closed-ended variable offers exactly one set's choices, in its ",
+    "own order and with its own codes. An extraction uses the set that has the same choices, or adds one."
+  ),
+  update_about = "The name and description can always change. The choices can only change while no variable offers them.",
+  delete_about = paste0(
+    "An option set can only be deleted once no variable offers it. Scale items that expected its choices stay in ",
+    "their scale, expecting none."
+  ),
+  reads = "answer_option",
+  cards = function(snap, scope) {
+    rows <- snap$option_set
+    offered <- count_in(snap$closed_ended$option_set_id, rows$option_set_id)
+    expected <- count_in(snap$question_scale$expected_option_set_id, rows$option_set_id)
+    edit_cards(
+      key_text(rows$option_set_id), rows$name,
+      subtitle = shorten(edit_set_words(snap, rows$option_set_id), 90),
+      facts = Map(function(v, e) {
+        c(
+          if (v > 0) paste("offered by", edit_count(v, "variable")) else "offered by no variables",
+          if (e > 0) paste("expected by", edit_count(e, "scale item"))
+        )
+      }, offered, expected)
+    )
+  },
+  fields = function(snap, mode, row, scope) {
+    offered <- if (!is.null(row)) sum(snap$closed_ended$option_set_id %in% row$option_set_id) else 0
+    list(
+      edit_field("name", "Name",
+        required = TRUE, placeholder = "e.g. Often / Sometimes / Rarely / Never",
+        problem = function(value, values) {
+          same <- edit_taken(snap, "option_set", "name", value, row)
+          if (has_text(value) && nrow(same) > 0) sprintf("There's already an option set called “%s”.", same$name[1])
+        }
+      ),
+      edit_field("description", "Description", "textarea"),
+      edit_field("answer_option_ids", "Answer choices", "several",
+        required = TRUE, short = "choices",
+        choices = edit_choices(snap, "answer_option"),
+        hint = "Their order and codes are each variable's own. Missing one? Add it under Answer Choices first.",
+        locked = if (offered > 0) {
+          sprintf(
+            "%s %s exactly these choices, so they can't change. The name and description can.",
+            edit_count(offered, "variable"), if (offered == 1) "offers" else "offer"
+          )
+        },
+        warn = function(value, values) {
+          wanted <- edit_several_text(edit_several_ids(value))
+          sets <- snap$option_set
+          if (!is.null(row)) sets <- sets[sets$option_set_id != row$option_set_id, , drop = FALSE]
+          same <- sets$name[edit_set_members(snap, sets$option_set_id) == wanted]
+          if (length(same) > 0) {
+            sprintf("“%s” already has exactly these choices. An extraction uses the first set it finds with them.", same[1])
+          }
+        }
+      )
+    )
+  },
+  initial = function(snap, row, scope) list(answer_option_ids = edit_set_members(snap, row$option_set_id)),
+  build = function(mode, snap, row, scope, fields, values) edit_option_set_items(mode, snap, row, fields, values),
+  duplicates = function(snap, values) {
+    Filter(Negate(is.null), list(
+      edit_duplicate_rows(snap, "option_set", "name", values$name, "An option set with this name")
+    ))
+  }
+)
+
+#' The items of adding or changing an option set: its own row, then the answer choices it gains and loses.
+#'
+#' @param mode `"add"` or `"update"`.
+#' @param snap The tables the kind needs, as `edit_service_load()` reads them: a list of data frames named after the tables.
+#' @param row The set being changed; `NULL` for an add.
+#' @param fields The form's fields, from `edit_service_fields()`.
+#' @param values What is in the form: a named list of strings by field id.
+#' @return A data frame of items; see `edit_item()`.
+edit_option_set_items <- function(mode, snap, row, fields, values) {
+  entity <- edit_entities[["option_set"]]
+  own <- Filter(function(field) field$name != "answer_option_ids", fields)
+  choices <- Filter(function(field) field$name == "answer_option_ids", fields)[[1]]
+  if (mode == "add") {
+    set <- "new:option_set:1"
+    was <- character()
+    items <- list(edit_add_items(entity, snap, own, values))
+  } else {
+    set <- row$option_set_id
+    was <- edit_several_ids(edit_set_members(snap, set))
+    items <- list(edit_update_items(entity, snap, row, own, values))
+  }
+  now <- if (is.null(choices$locked)) edit_several_ids(values[[choices$id]]) else was
+  member <- function(id) edit_identifier(list(answer_option_id = as.numeric(id), option_set_id = set))
+  items <- c(
+    items,
+    lapply(setdiff(was, now), function(id) edit_item("answer_option_set", member(id), "Delete", NULL, NA, NA)),
+    lapply(setdiff(now, was), function(id) edit_item("answer_option_set", member(id), "Insert", NULL, NA, NA))
+  )
+  items <- Filter(Negate(is.null), items)
+  if (length(items) == 0) NULL else do.call(rbind, items)
+}
+
+# ------ Measurement scales -------------------------------------------------------------------------------
+measurement_scale_entity <- list(
+  label = "Measurement scale", noun = "measurement scale", plural = "measurement scales", article = "a",
+  group = "Shared lists", table = "measurement_scale",
+  about = paste0(
+    "A published, validated set of questions scored together, like the CES-D. Its items, the questions that make ",
+    "it up, are under Scale Items."
+  ),
+  delete_about = "Deleting a measurement scale takes away its items too. The questions stay.",
+  cards = function(snap, scope) {
+    rows <- snap$measurement_scale
+    items <- count_in(snap$question_scale$scale_id, rows$scale_id)
+    edit_cards(
+      key_text(rows$scale_id), rows$name,
+      subtitle = paste0(rows$abbreviation, ifelse(is.na(rows$version) | !nzchar(rows$version), "", paste0(" · version ", rows$version))),
+      facts = lapply(items, function(n) edit_count(n, "item"))
+    )
+  },
+  fields = function(snap, mode, row, scope) {
+    taken <- function(column, what) {
+      function(value, values) {
+        same <- edit_taken(snap, "measurement_scale", column, value, row)
+        if (has_text(value) && nrow(same) > 0) sprintf("“%s” already has this %s.", same$name[1], what)
+      }
+    }
+    list(
+      edit_field("name", "Name",
+        required = TRUE, placeholder = "e.g. Center for Epidemiologic Studies Depression Scale",
+        problem = taken("name", "name")
+      ),
+      edit_field("abbreviation", "Abbreviation", required = TRUE, placeholder = "e.g. CES-D", problem = taken("abbreviation", "abbreviation")),
+      edit_field("version", "Version", placeholder = "e.g. 2nd edition"),
+      edit_field("description", "Description", "textarea"),
+      edit_field("citation", "Citation", "textarea", hint = "Where the scale was published.")
+    )
+  },
+  duplicates = function(snap, values) {
+    Filter(Negate(is.null), list(
+      edit_duplicate_rows(snap, "measurement_scale", "name", values$name, "A measurement scale with this name")
+    ))
+  }
+)
+
+# A scale item's number, for sorting: 2 before 10, and 12a after 12.
+edit_item_order <- function(numbers) {
+  order(suppressWarnings(as.numeric(gsub("[^0-9.].*$", "", numbers))), numbers, method = "radix")
+}
+
+scale_scope <- list(table = "measurement_scale", label = "In which measurement scale?")
+
+question_scale_entity <- list(
+  label = "Scale item", noun = "scale item", plural = "scale items", article = "a",
+  group = "Shared lists", table = "question_scale", scope = scale_scope,
+  about = paste0(
+    "A question that is an item of a measurement scale, with its item number in the published scale and, if the ",
+    "scale says, the choices it expects."
+  ),
+  update_about = "This changes the item in this scale only. The question itself isn't changed.",
+  delete_about = "This only takes the question out of this scale. The question stays, in every questionnaire that asks it.",
+  reads = c("option_set", "question", "component", "component_type"),
+  cards = function(snap, scope) {
+    if (!nzchar(scope %||% "")) {
+      return(edit_cards(character(), character()))
+    }
+    rows <- snap$question_scale[snap$question_scale$scale_id %in% as.numeric(scope), , drop = FALSE]
+    rows <- rows[edit_item_order(rows$item_number), , drop = FALSE]
+    expected <- edit_lookup(snap, "option_set", "option_set_id", rows$expected_option_set_id, "name")
+    edit_cards(
+      edit_key(rows, c("scale_id", "component_id")), edit_component_text(snap, rows$component_id, edit_card_title_chars),
+      subtitle = paste("Item", rows$item_number),
+      facts = lapply(expected, function(set) if (!is.na(set)) paste0("expects “", set, "”")),
+      tag = "Question"
+    )
+  },
+  fields = function(snap, mode, row, scope) {
+    scale <- as.numeric(scope %||% row$scale_id)
+    questions <- snap$component[edit_is_question(snap, snap$component$component_id), , drop = FALSE]
+    in_scale <- snap$question_scale[snap$question_scale$scale_id %in% scale, , drop = FALSE]
+    list(
+      edit_field("component_id", "Question", "select",
+        required = TRUE, choices = edit_choices(snap, "component", questions, blank = "Choose a question"),
+        locked = "An item is its question. To use another question, delete this item and add one.",
+        problem = function(value, values) {
+          there <- in_scale[in_scale$component_id %in% as.numeric(value), , drop = FALSE]
+          if (nrow(there) > 0) sprintf("This question is already item %s of this scale.", there$item_number[1])
+        }
+      ),
+      edit_field("item_number", "Item number",
+        required = TRUE, placeholder = "e.g. 3 or 12a",
+        problem = function(value, values) {
+          same <- edit_taken(snap, "question_scale", "item_number", value, row, within = list(scale_id = scale))
+          if (has_text(value) && nrow(same) > 0) {
+            sprintf("Item %s of this scale is already “%s”.", same$item_number[1], edit_component_text(snap, same$component_id[1], 50))
+          }
+        }
+      ),
+      edit_field("expected_option_set_id", "Expected choices", "select",
+        choices = edit_choices(snap, "option_set", blank = "No expected choices"), short = "expected choices",
+        hint = "The option set the published scale asks for, if it says."
+      )
+    )
+  },
+  build = function(mode, snap, row, scope, fields, values) {
+    if (mode == "update") {
+      return(edit_update_items(edit_entities[["question_scale"]], snap, row, fields, values))
+    }
+    question <- Filter(function(field) field$name == "component_id", fields)[[1]]
+    key <- edit_identifier(list(
+      component_id = as.numeric(edit_service_normalize(question, values[[question$id]])), scale_id = as.numeric(scope)
+    ))
+    rest <- Filter(function(field) field$name != "component_id", edit_service_active(fields, values))
+    items <- lapply(rest, function(field) {
+      value <- edit_service_normalize(field, values[[field$id]])
+      if (!is.na(value)) edit_item("question_scale", key, "Insert", field$name, NA, value)
+    })
+    do.call(rbind, Filter(Negate(is.null), items))
+  },
+  summary_add = function(snap, scope, fields, values) {
+    scale <- edit_lookup(snap, "measurement_scale", "scale_id", as.numeric(scope), "name")
+    question <- edit_component_text(snap, as.numeric(values[["question_scale__component_id"]]), 60)
+    paste0("Added “", question, "” to the measurement scale “", scale, "” as item ", trimws(values[["question_scale__item_number"]]))
+  }
+)
+
+# ------ PDFs ---------------------------------------------------------------------------------------------
+#' What PDFs were uploaded as.
+#'
+#' A PDF is kept once by its SHA-256, however many times it is uploaded and under whatever names.
+#'
+#' @param snap The tables the kind needs, as `edit_service_load()` reads them: a list of data frames named after the tables.
+#' @param hashes PDFs' SHA-256s.
+#' @return One string per PDF: its names joined by " / ", or "PDF" and the start of its hash if no draft names it.
+edit_pdf_names <- function(snap, hashes) {
+  drafts <- snap$extracted_draft
+  vapply(hashes, function(hash) {
+    names <- unique(drafts$pdf_name[drafts$pdf_sha256 %in% hash & !is.na(drafts$pdf_name) & nzchar(drafts$pdf_name)])
+    if (length(names) == 0) paste("PDF", substr(hash, 1, 12)) else paste(sort(names), collapse = " / ")
+  }, character(1), USE.NAMES = FALSE)
+}
+
+# "12 pages · 2.1 MB", leaving out what isn't known.
+edit_pdf_facts <- function(pages, bytes) {
+  vapply(seq_along(pages), function(i) {
+    paste(c(if (!is.na(pages[i])) plural(pages[i], "page"), if (!is.na(bytes[i])) file_size(bytes[i])), collapse = " · ")
+  }, character(1))
+}
+
+pdf_file_entity <- list(
+  label = "PDF file", noun = "PDF", plural = "PDFs", article = "a",
+  group = "Extractions", table = "pdf_file", view_only = TRUE,
+  about = paste0(
+    "A questionnaire's PDF, uploaded for an extraction and kept once however many times it's uploaded. It is only ",
+    "shown here: it's the record of what extractions were read from, so it isn't changed or deleted, and new ones come ",
+    "in on the Extraction page."
+  ),
+  reads = c("extracted_draft", "draft"),
+  can = function(snap, mode) {
+    switch(mode,
+      add = "PDFs come in when they're uploaded for an extraction, on the Extraction page.",
+      update = "A PDF's pages and size are facts about the file, so nothing about it can change.",
+      delete = "A PDF is the record of what extractions were read from, so it's kept."
+    )
+  },
+  cards = function(snap, scope) {
+    names <- edit_pdf_names(snap, snap$pdf_file$pdf_sha256)
+    by_name <- order(tolower(names), method = "radix")
+    rows <- snap$pdf_file[by_name, , drop = FALSE]
+    used <- count_in(snap$extracted_draft$pdf_sha256, rows$pdf_sha256)
+    edit_cards(
+      rows$pdf_sha256, names[by_name],
+      subtitle = edit_pdf_facts(rows$pdf_pages, rows$pdf_bytes),
+      facts = lapply(used, function(n) if (n > 0) paste("read for", edit_count(n, "extraction")) else "read for no extractions")
+    )
+  },
+  fields = function(snap, mode, row, scope) {
+    list(
+      edit_field("pdf_name", "Uploaded as"),
+      edit_field("pdf_pages", "Pages"),
+      edit_field("pdf_bytes", "Size"),
+      edit_field("pdf_sha256", "SHA-256", hint = "Its fingerprint: the same file always has the same one.")
+    )
+  },
+  initial = function(snap, row, scope) {
+    list(
+      pdf_name = edit_pdf_names(snap, row$pdf_sha256),
+      pdf_pages = if (is.na(row$pdf_pages)) "" else key_text(row$pdf_pages),
+      pdf_bytes = if (is.na(row$pdf_bytes)) "" else file_size(row$pdf_bytes)
+    )
+  }
+)
+
 # ------ Small helpers the forms use ---------------------------------------------------------------------
 #' A whole number typed as text.
 #'
@@ -1113,6 +1431,10 @@ edit_entities <- list(
   questionnaire_question = questionnaire_question_entity,
   category = category_entity,
   answer_option = answer_option_entity,
-  subject = subject_entity
+  option_set = option_set_entity,
+  measurement_scale = measurement_scale_entity,
+  question_scale = question_scale_entity,
+  subject = subject_entity,
+  pdf_file = pdf_file_entity
 )
 edit_entities <- Map(function(entity, key) c(list(key = key), entity), edit_entities, names(edit_entities))

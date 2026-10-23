@@ -4,7 +4,7 @@
 #' Edit Extraction lays out a questionnaire: an outline on the left and the item picked on the right. Each kind of
 #' thing is a section of the outline, closed until it is clicked; open, it lists that kind's items and + Add. A
 #' kind that belongs to a questionnaire (its blocks, its questions) has a section for each questionnaire inside
-#' it. The details show the item picked, with Edit and Delete; Edit and + Add show its form, with Save. Saved
+#' it, and a scale's items a section for each measurement scale. The details show the item picked, with Edit and Delete; Edit and + Add show its form, with Save. Saved
 #' edits that aren't finished are listed above.
 #'
 #' @param id The module's id.
@@ -46,7 +46,7 @@ make_edit_ui <- function(id) {
 
 # The kinds of thing, in the order the list has them: what the list calls them, and one of them (for + Add).
 # Blocks and Questions are as printed in one questionnaire; the shared wording is a block's or question's words
-# in every questionnaire that prints them.
+# in every questionnaire that prints them. Scale Items are as listed in one measurement scale. PDF Files are only shown.
 make_edit_kinds <- list(
   registry = c("Registries", "Registry"),
   study = c("Studies", "Study"),
@@ -58,24 +58,30 @@ make_edit_kinds <- list(
   respondent_type = c("Respondent Types", "Respondent Type"),
   subject = c("Subjects", "Subject"),
   answer_option = c("Answer Choices", "Answer Choice"),
+  option_set = c("Option Sets", "Option Set"),
+  measurement_scale = c("Measurement Scales", "Measurement Scale"),
+  question_scale = c("Scale Items", "Scale Item"),
   category = c("Categories", "Category"),
   component_type = c("Component Types", "Component Type"),
   component = c("Shared Block Wording", "Block Wording"),
-  question = c("Shared Question Wording", "Question Wording")
+  question = c("Shared Question Wording", "Question Wording"),
+  pdf_file = c("PDF Files", "PDF File")
 )
 
 #' A section of the list: its row, which opens and closes it (the page script does it at once), and what is
 #' inside it, drawn only once it is opened (Shiny doesn't draw what is hidden).
 #'
-#' @param id The section's id: a kind, or a kind and a questionnaire ("questionnaire_question:12").
+#' @param id The section's id: a kind, or a kind and a questionnaire or scale ("questionnaire_question:12").
 #' @param label What the row says.
 #' @param inside What is in it.
+#' @param open Whether it is drawn open: a section inside another is drawn again with it, as staff left it.
 #' @return A UI element.
-make_edit_section <- function(id, label, inside) {
+make_edit_section <- function(id, label, inside, open = FALSE) {
   div(
-    class = "outline-node is-collapsed", `data-id` = id,
+    class = c("outline-node", if (!open) "is-collapsed"), `data-id` = id,
     div(
-      class = "outline-row is-container", tabindex = "0", `data-action` = "toggle", `data-id` = id, `aria-expanded` = "false",
+      class = "outline-row is-container", tabindex = "0", `data-action` = "toggle", `data-id` = id,
+      `aria-expanded` = if (open) "true" else "false",
       span(class = "outline-text", label)
     ),
     inside
@@ -87,7 +93,7 @@ make_edit_section <- function(id, label, inside) {
 #'
 #' @param kind The kind, a name of `edit_entities`.
 #' @param card One of the kind's cards, from `edit_service_cards()`.
-#' @param scope The questionnaire's key, for a kind that belongs to one; otherwise "".
+#' @param scope The questionnaire's (or scale's) key, for a kind that belongs to one; otherwise "".
 #' @param selected Whether it is the one in the details.
 #' @return A UI element.
 make_edit_item <- function(kind, card, scope = "", selected = FALSE) {

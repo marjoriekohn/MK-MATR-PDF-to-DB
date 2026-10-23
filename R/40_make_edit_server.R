@@ -21,7 +21,7 @@ make_edit_server <- function(id, connection, me, show_page, active = NULL) {
 
     # ------ REACTIVE ----------------------------------------------------------
     kind <- reactiveVal("") # the kind of the item in the details, a name of edit_entities
-    scope <- reactiveVal("") # the questionnaire, for a kind that belongs to one
+    scope <- reactiveVal("") # the questionnaire (or measurement scale), for a kind that belongs to one
     picked <- reactiveVal(NULL) # the key of the item in the details
     verb <- reactiveVal("") # what the details show: "" (nothing), "view", "add", "update", "delete" or "done"
     entity <- reactive(if (kind() %in% names(edit_entities)) edit_entities[[kind()]])
@@ -32,7 +32,6 @@ make_edit_server <- function(id, connection, me, show_page, active = NULL) {
     saved_count <- reactiveVal(0L) # ticks when the saved drafts should be read again (one was saved, or the page was opened)
     duplicates <- reactiveVal(NULL) # the existing rows an add looks like, while staff decide
     leaving_to <- reactiveVal(NULL) # what was picked while a form was open, while staff decide whether to leave it
-    opened <- reactiveVal(character()) # the list's open sections (the page script opens and closes them), whose items are drawn
     hint <- reactiveVal(NULL) # what the details say while nothing is picked
 
     # ------ The tables ---------------------------------------------------------
@@ -126,7 +125,14 @@ make_edit_server <- function(id, connection, me, show_page, active = NULL) {
 
     # ------ The list ------------------------------------------------------------
     # A section's items: drawn while it is open, and again when the tables are read again. Only what is open is drawn,
-    # so only the kinds staff look at are read from the database.
+    # so only the kinds staff look at are read from the database. Whether a section is open is kept for each section
+    # (the page script opens and closes it at once, and says so), so opening one doesn't draw the others again: a
+    # section inside one (a questionnaire's, under Questions) would be drawn closed.
+    open_sections <- new.env()
+    section_open <- function(id) {
+      if (!exists(id, envir = open_sections, inherits = FALSE)) assign(id, reactiveVal(FALSE), envir = open_sections)
+      get(id, envir = open_sections, inherits = FALSE)
+    }
     registered <- character()
     items_output <- function(name, section, draw) {
       if (name %in% registered) {
@@ -134,7 +140,7 @@ make_edit_server <- function(id, connection, me, show_page, active = NULL) {
       }
       registered <<- c(registered, name)
       output[[name]] <- renderUI({
-        req(section %in% opened())
+        req(section_open(section)())
         draw()
       })
     }
@@ -151,17 +157,18 @@ make_edit_server <- function(id, connection, me, show_page, active = NULL) {
         }
         entity <- edit_entities[[key]]
         if (!is.null(entity$scope)) {
-          return(questionnaire_sections(key, read))
+          return(scope_sections(key, read))
         }
         items_ui(key, read, "")
       })
     })
 
-    # A kind that belongs to a questionnaire: a section for each questionnaire, holding that questionnaire's items.
-    questionnaire_sections <- function(key, snap) {
-      questionnaires <- edit_choices(snap, "questionnaire")
-      if (length(questionnaires) == 0) {
-        return(p(class = "edit-list-note", "There are no questionnaires in the database yet."))
+    # A kind that belongs to a questionnaire (or a measurement scale): a section for each, holding its items.
+    scope_sections <- function(key, snap) {
+      table <- edit_entities[[key]]$scope$table
+      owners <- edit_choices(snap, table)
+      if (length(owners) == 0) {
+        return(p(class = "edit-list-note", paste0("There are no ", edit_nouns[[table]][2], " in the database yet.")))
       }
       Map(function(label, q) {
         name <- paste0("items_", key, "_", q)
@@ -169,8 +176,9 @@ make_edit_server <- function(id, connection, me, show_page, active = NULL) {
           read <- tables_of(key)
           if (!inherits(read, "error")) items_ui(key, read, q)
         })
-        make_edit_section(paste0(key, ":", q), label, uiOutput(ns(name), class = "outline-list"))
-      }, names(questionnaires), unname(questionnaires))
+        id <- paste0(key, ":", q)
+        make_edit_section(id, label, uiOutput(ns(name), class = "outline-list"), open = isolate(section_open(id)()))
+      }, names(owners), unname(owners))
     }
 
     items_ui <- function(key, snap, q) {
@@ -178,9 +186,9 @@ make_edit_server <- function(id, connection, me, show_page, active = NULL) {
       cards <- edit_service_cards(entity, snap, if (nzchar(q)) q)
       chosen <- isolate(if (identical(kind(), key) && identical(scope(), q)) picked())
       tagList(
-        if (nrow(cards) == 0) p(class = "edit-list-note", paste0("No ", tolower(make_edit_kinds[[key]][1]), " yet.")),
+        if (nrow(cards) == 0) p(class = "edit-list-note", paste0("No ", tolower_words(make_edit_kinds[[key]][1]), " yet.")),
         lapply(seq_len(nrow(cards)), function(i) make_edit_item(key, cards[i, , drop = FALSE], q, identical(cards$key[i], chosen))),
-        make_edit_add_button(key, q)
+        if (!isTRUE(entity$view_only)) make_edit_add_button(key, q)
       )
     }
 
@@ -189,7 +197,10 @@ make_edit_server <- function(id, connection, me, show_page, active = NULL) {
       event <- input$action
       record <- proposals()[[event$id %||% ""]]
       switch(event$action,
-        toggle = opened(if (event$id %in% opened()) setdiff(opened(), event$id) else c(opened(), event$id)),
+        toggle = {
+          is_open <- section_open(event$id)
+          is_open(!is_open())
+        },
         select = go_to(list(kind = event$kind, scope = event$scope %||% "", key = event$key, verb = "view")),
         add = go_to(list(kind = event$kind, scope = event$scope %||% "", key = NULL, verb = "add")),
         edit = verb("update"),
@@ -244,7 +255,8 @@ make_edit_server <- function(id, connection, me, show_page, active = NULL) {
         return()
       }
       show_item(list(kind = "", scope = "", key = NULL, verb = ""))
-      hint(paste0("Open ", make_edit_kinds[[jump$kind]][1], " in the list, then the questionnaire, and pick it there."))
+      owner <- edit_nouns[[edit_entities[[jump$kind]]$scope$table %||% "questionnaire"]][1]
+      hint(paste0("Open ", make_edit_kinds[[jump$kind]][1], " in the list, then the ", owner, ", and pick it there."))
     })
 
     # ------ The details ------------------------------------------------------------
@@ -323,9 +335,13 @@ make_edit_server <- function(id, connection, me, show_page, active = NULL) {
       )
     }
 
-    # View: Edit and Delete (each off, saying why, when the kind can't be changed that way). A form: Cancel, Save
-    # as draft and Save. A delete: Cancel and Delete, or only Back when something stands in its way.
+    # View: Edit and Delete (each off, saying why, when the kind can't be changed that way), or for a PDF, which is
+    # only shown, Open PDF. A form: Cancel, Save as draft and Save. A delete: Cancel and Delete, or only Back when
+    # something stands in its way.
     detail_buttons <- function(mode, blocked) {
+      if (mode == "view" && isTRUE(entity()$view_only)) {
+        return(if (kind() == "pdf_file") pdf_open_button(pdf_url(row())))
+      }
       if (mode == "view") {
         no_update <- cant("update")
         no_delete <- cant("delete")
@@ -351,6 +367,17 @@ make_edit_server <- function(id, connection, me, show_page, active = NULL) {
           )
         }
       )
+    }
+
+    # The address the browser gets a PDF from, for this session only (`pdf_address()`): fetched from Storage if this
+    # server hasn't got it. NULL, and Open PDF left out, if it can't be had.
+    pdf_url <- function(pdf) {
+      path <- tryCatch(extraction_model_local_pdf(connection, pdf$pdf_sha256), error = function(problem) NULL)
+      if (is.null(path)) {
+        return(NULL)
+      }
+      name <- strsplit(edit_pdf_names(snapshot(), pdf$pdf_sha256), " / ", fixed = TRUE)[[1]][1]
+      pdf_address(session, ns(paste0("pdf-", pdf$pdf_sha256)), list(path = path, name = name, sha256 = pdf$pdf_sha256))
     }
 
     sent_back_note <- function() {

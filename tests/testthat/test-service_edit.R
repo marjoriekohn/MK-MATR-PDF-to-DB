@@ -346,9 +346,10 @@ test_that("every kind builds its forms from the tables it reads, whatever it's a
     }
   }
   # (so a kind that stopped being checked here would be noticed)
-  expect_length(not_here, 0) # every kind can be added, updated and deleted here, a questionnaire question too
-  expect_equal(built, 2L * length(edit_entities))
-  expect_equal(planned, length(edit_entities))
+  # every kind can be added, updated and deleted here, a questionnaire question too, but a PDF, which is only shown
+  expect_equal(not_here, c("pdf_file add", "pdf_file update"))
+  expect_equal(built, 2L * (length(edit_entities) - 1L))
+  expect_equal(planned, length(edit_entities) - 1L)
 })
 
 test_that("a draft's values come back as they were saved", {
@@ -386,8 +387,9 @@ test_that("every kind copes with a database that has nothing in it", {
       without_form <- c(without_form, entity$key)
     }
   }
-  # questions come only from New extraction, and the other two belong to a questionnaire
-  expect_equal(without_form, c("question", "questionnaire_component", "questionnaire_question"))
+  # questions come only from New extraction, the next two belong to a questionnaire, a scale item belongs to a
+  # measurement scale, and a PDF comes in with an extraction
+  expect_equal(without_form, c("question", "questionnaire_component", "questionnaire_question", "question_scale", "pdf_file"))
 })
 
 test_that("a questionnaire with nothing in it yet can be added to", {

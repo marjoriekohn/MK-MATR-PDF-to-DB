@@ -8,7 +8,8 @@ test_that("the tests left no marked rows in the live tables, and no unapplied dr
   marked <- c(
     registry = "name", principal_investigator = "name", study = "name",
     respondent_type = "name", questionnaire = "name", wave = "name", component = "text",
-    category = "term", answer_option = "standardized_label", subject = "name", measurement_scale = "name"
+    category = "term", answer_option = "standardized_label", subject = "name", measurement_scale = "name",
+    option_set = "name"
   )
   left <- list()
   for (table in names(marked)) {

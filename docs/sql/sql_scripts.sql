@@ -1321,8 +1321,8 @@ $$;
 -- Constraints that can be deferred are deferred to the end, so rows can be put in order (display
 -- orders) and the answer-format check (BR92) looks at the finished change.
 --
--- An edit can change the tables Make an edit knows (R/model_table.R; a test checks the list against
--- that file). An extraction only adds rows (Insert), to the tables a questionnaire is made of.
+-- An edit can change the tables Make an edit changes (R/service_edit_entities.R, and what their changes
+-- reach). An extraction only adds rows (Insert), to the tables a questionnaire is made of.
 create function private.apply_draft_items(
   d             public.draft,
   p_items       jsonb,
@@ -1336,7 +1336,7 @@ declare
   editable constant text[] := array[
     'registry', 'principal_investigator', 'study', 'respondent_type', 'questionnaire', 'wave',
     'component_type', 'component', 'questionnaire_component', 'question', 'questionnaire_question',
-    'wave_question', 'category', 'question_category', 'answer_option', 'subject', 'answer_option_set',
+    'wave_question', 'category', 'question_category', 'answer_option', 'subject', 'option_set', 'answer_option_set',
     'measurement_scale', 'question_scale', 'variable', 'open_ended', 'closed_ended', 'response_option'
   ];
   loadable constant text[] := array[
