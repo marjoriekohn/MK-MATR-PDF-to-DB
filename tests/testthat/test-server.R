@@ -110,8 +110,8 @@ test_that("the menu's title and the home page's buttons show the pages they name
   here <- environment() # rows made inside the session are removed when this test ends
   shiny::testServer(site_server(), {
     session$setInputs(to_home = 1)
-    session$setInputs(`home-make_edit` = 1)
-    session$setInputs(`home-extraction` = 1)
+    session$setInputs(`home-new_extraction` = 1)
+    session$setInputs(`home-extraction_drafts` = 1)
     catalog <- session_state()$site$catalog
     before <- nrow(catalog$get()$registries)
     added <- local_registry(env = here)
@@ -119,7 +119,7 @@ test_that("the menu's title and the home page's buttons show the pages they name
     session$setInputs(nav = "extraction")
     expect_equal(nrow(catalog$get()$registries), before + 1)
   })
-  expect_equal(seen$pages, c("home", "make_edit", "extraction"))
+  expect_equal(seen$pages, c("home", "extraction", "drafts"))
 })
 
 test_that("the drafts are read from the database, and a draft added elsewhere is noticed when a page opens", {
@@ -189,7 +189,13 @@ test_that("the site is drawn with the login screen over it, and the menu's place
   expect_match(html, 'id="navbar_user"')
   expect_false(grepl('id="navbar_refresh"', html)) # a reload of the page reads everything again
   expect_match(paste(rendered$head, html), "js/site.js")
-  expect_true(regexpr('id="login_screen"', html) < regexpr('id="home-extraction"', html))
+  expect_true(regexpr('id="login_screen"', html) < regexpr('id="home-new_extraction"', html))
+  # the menu: a link to each page staff open themselves, folding into a menu button on a narrow window
+  for (page in c("extraction", "drafts", "make_edit", "change_requests", "edit_history")) {
+    expect_match(html, sprintf('data-value="%s"', page), fixed = TRUE, info = page)
+  }
+  for (label in c("New Extraction", "Extraction Drafts", "Metadata", "Change Requests", "Edit History")) expect_match(html, label, fixed = TRUE)
+  expect_match(html, 'data-bs-toggle="collapse"', fixed = TRUE)
   # while the server works, the page says so with the gold bar across the top and nothing else (no spinners);
   # busy.js holds the pressed button
   expect_match(paste(rendered$head, html), "js/busy.js")

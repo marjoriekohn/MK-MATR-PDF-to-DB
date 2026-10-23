@@ -47,7 +47,7 @@ edit_info_block <- function(entity, verb, approval = FALSE, editing_request = FA
   } else if (approval) {
     "Nothing changes in the MATR metadata database until one other staff member approves it on Change Requests."
   } else {
-    "It changes the MATR metadata database as soon as you send it, and is recorded in the Edit history."
+    "It changes the MATR metadata database as soon as you send it, and is recorded in the Edit History."
   }
   edit_callout(
     if (identical(verb, "delete")) "danger" else "info",

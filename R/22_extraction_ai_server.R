@@ -11,9 +11,9 @@
 #' @param connection The MATR database, `list(url, key)`; see `model_database.R`.
 #' @param me Who is using the site: `list(staff_id, name, role)`.
 #' @param open_edit_extraction A function taking a record and opening it on the Edit Extraction page.
-#' @param switch_mode A function taking a mode of the Extraction page (`"manual"`, `"ai"` or
-#'   `"drafts"`) and showing it.
-#' @return A list with `open`, a function that shows a draft opened from Existing Draft, or an
+#' @param switch_mode A function taking a mode of the Extraction page (`"manual"` or `"ai"`), or `"drafts"`
+#'   for the Extraction Drafts page, and showing it.
+#' @return A list with `open`, a function that shows a draft opened from Extraction Drafts, or an
 #'   empty drop zone for `NULL`.
 extraction_ai_server <- function(
   id,
@@ -37,7 +37,7 @@ extraction_ai_server <- function(
     reading <- reactiveVal(NULL)
     observe(reading(record()[c("method", "pdf", "extraction_status", "error", "reading_started")]))
 
-    # Shows a draft opened from Existing Draft, or with none, an empty drop zone.
+    # Shows a draft opened from Extraction Drafts, or with none, an empty drop zone.
     show_draft <- function(opened = NULL) {
       current_id(opened$id)
     }
@@ -68,7 +68,7 @@ extraction_ai_server <- function(
     observeEvent(input$cancel, {
       showModal(confirm_dialog(
         "Cancel this extraction?",
-        "The draft is set aside and won't appear under Existing Draft. Nothing has been added to the MATR metadata database.",
+        "The draft is set aside and won't appear under Extraction Drafts. Nothing has been added to the MATR metadata database.",
         confirm_id = ns("confirm_cancel"), confirm_label = "Cancel extraction"
       ))
     })

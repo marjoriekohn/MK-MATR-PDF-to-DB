@@ -1,4 +1,4 @@
-# ------ Edit history ---------------------------------------------------------------
+# ------ Edit History ---------------------------------------------------------------
 # An applied change is a DRAFT row with the status Applied (model_draft_row.R): what it was in a
 # sentence, who prepared it, the one person who approved it (its Approved DRAFT_REVIEW_EVENT, or
 # none: an add or an update, or anything an ADMIN did, needs no approval), and when it was

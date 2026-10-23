@@ -263,7 +263,7 @@ submit_request_dialog <- function(ns, summary, unchecked, approval, reviewers) {
         "info",
         title = "It goes to Change Requests",
         "Fill in its Basic Info there: the registry, study, questionnaire and wave it goes into. As an ADMIN you can ",
-        "then add it yourself, without approval. It is recorded in the Edit history."
+        "then add it yourself, without approval. It is recorded in the Edit History."
       )
     },
     if (approval && length(reviewers) > 0) {

@@ -48,7 +48,7 @@ test_that("a respondent type typed into the pop-up is added at once, the pop-up 
     expect_equal(rows$name, name)
     expect_equal(rows$minimum_age, 5)
     expect_equal(seen$closed, 1L)
-    expect_equal(notice_texts(seen)[1], paste0("Added the respondent type “", name, "”. It is in the Edit history."))
+    expect_equal(notice_texts(seen)[1], paste0("Added the respondent type “", name, "”. It is in the Edit History."))
     # the catalog was read again, so the drop-down can offer the new row
     expect_true(got %in% as.character(catalog$get()$respondent_types$respondent_type_id))
   })
@@ -158,7 +158,7 @@ test_that("the form's own 'add one first' button for a missing investigator open
     expect_match(seen$modals[[2]], "Add an investigator")
     change$jump(list(kind = "registry", verb = "add", at = Sys.time()))
     session$flushReact()
-    expect_equal(notice_texts(seen)[length(notice_texts(seen))], "Add a registry on Make an edit first.")
+    expect_equal(notice_texts(seen)[length(notice_texts(seen))], "Add a registry on the Metadata page first.")
   })
 })
 

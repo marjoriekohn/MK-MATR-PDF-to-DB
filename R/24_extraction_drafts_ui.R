@@ -1,7 +1,19 @@
-#' The Existing Draft mode of the Extraction page: a card for each draft.
+#' The Extraction Drafts page: every extraction draft whose change request isn't submitted yet, a card each.
 #'
 #' @param id The module's id.
-#' @return The mode's UI.
+#' @return The page's UI.
+extraction_drafts_page_ui <- function(id) {
+  div(
+    class = "page extraction-page drafts-page",
+    page_header("Extraction Drafts", "Pick up a draft whose change request isn't submitted yet."),
+    extraction_drafts_ui(id)
+  )
+}
+
+#' The list of drafts on the Extraction Drafts page: whose to list, what the dots mean, and a card each.
+#'
+#' @param id The module's id.
+#' @return A UI element.
 extraction_drafts_ui <- function(id) {
   ns <- NS(id)
   div(

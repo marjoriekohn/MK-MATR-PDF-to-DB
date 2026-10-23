@@ -681,7 +681,7 @@ test_that("Save is refused if someone saved the draft after the page opened it, 
   })
 })
 
-test_that("a change is saved by itself a few seconds after the last one, quietly, and the header says when", {
+test_that("a change is saved by itself half a minute after the last one, quietly, and the header says when", {
   me <- local_staff()
   tree <- shared_tree()
   seen <- local_browser()
@@ -720,11 +720,13 @@ test_that("after a save is refused, only Save tries again", {
     session$elapse(autosave_delay * 1000 + 500)
     expect_true(has_unsaved_changes())
     expect_match(seen$modals[[length(seen$modals)]], "Someone saved this draft after you opened it", fixed = TRUE)
-    modals <- length(seen$modals)
+    refused <- function() sum(grepl("Saving now would overwrite their changes", unlist(seen$modals), fixed = TRUE))
+    expect_equal(refused(), 1)
     change_draft(reworded(draft(), "Mine, again"))
     session$flushReact()
     session$elapse(autosave_delay * 1000 + 500)
-    expect_length(seen$modals, modals) # not asked again
+    # not tried again by itself (the claim renewed each minute may say on its own that someone else saved it)
+    expect_equal(refused(), 1)
     expect_match(text_of(output$save_status), "Save to keep them")
   })
 })

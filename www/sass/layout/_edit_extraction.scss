@@ -247,7 +247,12 @@ button.review-pill:hover { background: rgba($vcu-gold, 0.2); }
   background: rgba($vcu-gold, 0.06);
   .detail-note { flex-shrink: 0; margin-left: auto; align-self: center; }
 }
+// the same size of words whichever kind of sentence it is: the link isn't drawn as a button's words
 .edit-extraction-page .skip-link {
+  --bs-btn-font-size: inherit;
+  --bs-btn-line-height: inherit;
+  --bs-btn-font-weight: inherit;
+  flex: 1;
   min-height: 0;
   padding: 0;
   color: $vcu-black;

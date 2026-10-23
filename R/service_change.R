@@ -1,6 +1,6 @@
 # ------ What a set of items changes ------------------------------------------------------
 # An edit is a list of items, one for each field it changes (R/service_edit.R). The
-# Change Requests page shows them before a change is applied and the Edit history page after.
+# Change Requests page shows them before a change is applied and the Edit History page after.
 # This turns them into what a person reads: the rows they touch, grouped by the row,
 # with a count of each kind of change.
 

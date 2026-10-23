@@ -1,8 +1,9 @@
 page_navbar(
   id = "nav",
   # The title is the way back to the home page.
-  title = actionLink("to_home", "MATR Database Admin"),
-  window_title = "MATR Database Admin",
+  # TODO: add logo (logo is in www/img)
+  title = actionLink("to_home", "Metadata Database"),
+  window_title = "MATR Metadata Database",
   theme = vcu_theme,
   fillable = c("edit_extraction", "make_edit"), # an outline beside its details, filling the window
   navbar_options = navbar_options(theme = "dark", collapsible = FALSE),
@@ -14,6 +15,7 @@ page_navbar(
       page_script("js/extraction.js"),
       page_script("js/busy.js")
     ),
+    #TODO: move CSS to SASS files
     # While the server is working: a gold bar across the top of the page, and nothing else (no spinners,
     # no fading); busy.js holds the button that was pressed so it isn't pressed twice.
     useBusyIndicators(spinners = FALSE, pulse = TRUE, fade = FALSE),

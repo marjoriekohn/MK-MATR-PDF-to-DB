@@ -1,5 +1,5 @@
 # ------ A list of changed rows -------------------------------------------------------------
-# What the Edit history and Change Requests pages draw for an edit's items: each row it adds,
+# What the Edit History and Change Requests pages draw for an edit's items: each row it adds,
 # changes or removes, with its fields. The rows come grouped from `change_service_groups()`.
 
 # The most rows drawn; a delete can reach thousands.

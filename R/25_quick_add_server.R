@@ -2,7 +2,7 @@
 #'
 #' A registry, study, questionnaire or wave that is missing from a drop-down can be added where staff are
 #' working. It is the Make an edit form for one row (`edit_change_server()`), and like any add it is
-#' applied at once for STAFF and ADMIN alike and written to the Edit history. What was typed is checked
+#' applied at once for STAFF and ADMIN alike and written to the Edit History. What was typed is checked
 #' for something like it already there as it is typed; that is a warning, not a block. What a form
 #' needs that isn't there yet (a study's investigator, a questionnaire's respondent type;
 #' `edit_quick_needs`) can be added from its pop-up, which comes back with the new one picked.
@@ -121,7 +121,7 @@ quick_add_server <- function(
         add_needed(change$jump()$kind)
       } else {
         showNotification(
-          paste0("Add ", wanted$article, " ", wanted$noun, " on Make an edit first."),
+          paste0("Add ", wanted$article, " ", wanted$noun, " on the Metadata page first."),
           type = "warning"
         )
       }
@@ -143,7 +143,7 @@ quick_add_server <- function(
       }
       removeModal()
       catalog$refresh()
-      showNotification(paste0(result$record$summary, ". It is in the Edit history."), type = "message")
+      showNotification(paste0(result$record$summary, ". It is in the Edit History."), type = "message")
       then <- after()
       if (is.function(then)) then(result$key)
     })

@@ -112,7 +112,7 @@ test_that("an add is applied at once, is in the history, and the details say so"
     expect_true(done()$applied)
     made$applied <- c(made$applied, done()$history_id)
     expect_match(text_of(output$detail), "Done")
-    expect_match(text_of(output$detail), "in the database now, and recorded in the Edit history")
+    expect_match(text_of(output$detail), "in the database now, and recorded in the Edit History")
     # the list is read again, so it has the new one
     open_section(session, "respondent_type")
     expect_match(text_of(output$items_respondent_type), name, fixed = TRUE)

@@ -23,7 +23,8 @@
 #'   records, and `changed()` tells it this session changed one.
 #' @param active A reactive that says whether this page is the one on screen, or `NULL`. Opening the
 #'   page reads the requests again, since other staff send and approve them too.
-#' @return Called for its effect.
+#' @return A list with `review`, a function taking a request's id that opens it in its dialog (the Home page's
+#'   Review).
 change_requests_server <- function(
   id,
   connection,
@@ -210,7 +211,7 @@ change_requests_server <- function(
       tryCatch(
         {
           change_request_service_approve(connection, opened, me)
-          showNotification("Approved. It is in the MATR metadata database now, and in the Edit history.", type = "message")
+          showNotification("Approved. It is in the MATR metadata database now, and in the Edit History.", type = "message")
         },
         error = function(problem) show_problem(problem, "Couldn't approve it")
       )
@@ -226,7 +227,7 @@ change_requests_server <- function(
       tryCatch(
         {
           change_request_service_add(connection, opened, me)
-          showNotification("Added to the MATR metadata database. It is in the Edit history.", type = "message")
+          showNotification("Added to the MATR metadata database. It is in the Edit History.", type = "message")
         },
         error = function(problem) show_problem(problem, "Couldn't add it")
       )
@@ -314,6 +315,19 @@ change_requests_server <- function(
         return(no_change_requests(whose()))
       }
       lapply(unname(shown()), change_request_card_ui, me = me)
+    })
+
+    # ------ RETURN ------------------------------------------------------------
+    # The request is read afresh when its dialog opens; one no longer waiting (approved, sent back or withdrawn
+    # since the Home page listed it) says so instead.
+    list(review = function(id) {
+      record <- isolate(requests())[[as.character(id)]]
+      if (is.null(record)) {
+        showNotification("That request isn't waiting any more: it was approved, sent back or withdrawn.", type = "warning")
+        return(invisible(FALSE))
+      }
+      show_request(record)
+      invisible(TRUE)
     })
   })
 }

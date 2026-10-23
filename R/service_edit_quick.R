@@ -2,7 +2,7 @@
 # The Basic Info drop-downs on Change Requests can add what is missing without leaving the page: a
 # registry, a study, a questionnaire and a wave, and what those need (a study's investigator, a
 # questionnaire's respondent type). It is the Make an edit form for one row, and
-# like any add it is applied at once (for STAFF and ADMIN alike), written to the Edit history, and
+# like any add it is applied at once (for STAFF and ADMIN alike), written to the Edit History, and
 # warned about if it looks like something that is already there (`edit_service_duplicates()`).
 
 # The kinds that can be added this way.
@@ -35,7 +35,7 @@ edit_service_quick_entity <- function(key) {
 #' Add one row from inside a drop-down.
 #'
 #' Saved as an edit first, so if the database refuses it the person's work is still there on Make an
-#' edit; then applied, which writes the Edit history.
+#' edit; then applied, which writes the Edit History.
 #'
 #' @param connection The MATR database, `list(url, key)`; see `model_database.R`.
 #' @param entity The kind, from `edit_service_quick_entity()`.

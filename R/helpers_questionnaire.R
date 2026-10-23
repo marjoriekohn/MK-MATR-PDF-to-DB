@@ -2,7 +2,7 @@
 # A draft's questionnaire drawn as a table to read, with nothing to edit, the way a codebook lists it: one
 # row for each variable, with its MATR ID (Variable ID), the words of its question with the variable's label
 # and who it is about in square brackets (Question Text), and its codes and choices, or a write-in's kind of
-# answer (Variable Coding). Blocks that aren't questions have a row each, in printed order, with their kind.
+# answer (Variable Coding). Blocks that aren't questions (an instruction, a note) have a row each, in printed order.
 # The rows are grouped under the section (and question group) they are printed in. It is a DataTables table
 # (the DT package): it can be searched, and downloaded as a CSV. A change request shows it before it is
 # submitted and while it waits for a reviewer to approve it.
@@ -18,7 +18,6 @@ questionnaire_preview_ui <- function(draft) {
   rows <- questionnaire_preview_rows(draft)
   shown <- data.frame(
     Section = htmltools::htmlEscape(rows$section),
-    Kind = htmltools::htmlEscape(rows$kind),
     `Variable ID` = ifelse(is.na(rows$matr_id), preview_blank(rows$missing), htmltools::htmlEscape(rows$matr_id)),
     `Question Text` = paste0(
       htmltools::htmlEscape(rows$text),
@@ -39,12 +38,12 @@ questionnaire_preview_ui <- function(draft) {
         rowGroup = list(dataSrc = 0, emptyDataGroup = "Not in a section"),
         columnDefs = list(
           list(targets = 0, visible = FALSE),
-          list(targets = 1, width = "7rem"), list(targets = 2, width = "9rem"), list(targets = 4, width = "32%")
+          list(targets = 1, width = "9rem"), list(targets = 3, width = "32%")
         ),
         buttons = list(list(
           extend = "csv", text = "Download CSV", filename = preview_file_name(draft),
           # every column, the section too, with a choice on each line and no markup
-          exportOptions = list(columns = 0:4, format = list(body = DT::JS(
+          exportOptions = list(columns = 0:3, format = list(body = DT::JS(
             "function (data) { return String(data).replace(/<br\\s*\\/?>/g, '\\n').replace(/<[^>]+>/g, '')",
             ".replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '\"').replace(/&#39;/g, \"'\").replace(/&amp;/g, '&'); }"
           )))

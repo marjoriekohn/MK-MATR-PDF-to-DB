@@ -22,9 +22,9 @@ login_ui <- function() {
     title = "Sign in",
     p(
       class = "login-text",
-      "Sign in with your VCU email and your password. No password yet, or forgotten it? ",
-      "Have a sign-in link emailed to you instead (check your spam folder if it doesn't come), ",
-      "then set one under your name in the top right."
+      "Sign in with your VCU email. No password yet or forgotten it? ",
+      "Select the sign-in link (check your spam folder if it doesn't come), ",
+      "then reset your password."
     ),
     textInput("login_email", NULL, width = "100%", placeholder = "you@vcu.edu") |>
       tag_input_attributes("input", `aria-label` = "Email", autocomplete = "email") |>
@@ -63,7 +63,7 @@ password_fields <- function() {
     passwordInput("new_password", NULL, width = "100%", placeholder = "New password") |>
       tag_input_attributes("input", `aria-label` = "New password", autocomplete = "new-password") |>
       tagAppendAttributes(class = "login-field"),
-    passwordInput("new_password_again", NULL, width = "100%", placeholder = "The new password again") |>
+    passwordInput("new_password_again", NULL, width = "100%", placeholder = "Confirm new password") |>
       tag_input_attributes("input", `aria-label` = "The new password again", autocomplete = "new-password") |>
       tagAppendAttributes(class = "login-field"),
     p(class = "login-hint", sprintf("At least %d characters.", password_min_length)),
@@ -73,12 +73,13 @@ password_fields <- function() {
 }
 
 # The card the login screen is drawn on, covering the page.
+# TODO: add the logo here too?
 login_card <- function(id, title, ...) {
   div(
     id = id, class = "login-screen",
     div(
       class = "login-card",
-      div(class = "login-brand", span(class = "login-brand-mark"), "MATR Database Admin"),
+      div(class = "login-brand", span(class = "login-brand-mark"), "MATR Metadata Database"),
       h1(class = "login-title", title),
       ...
     )
@@ -103,7 +104,7 @@ login_message <- function(text, kind = "problem") {
   p(class = paste0("login-note is-", kind), if (kind == "problem") app_icon("problem") else app_icon("email"), " ", text)
 }
 
-#' The menu under the signed-in name, in the top right.
+#' The account menu under the signed-in name (top right).
 #'
 #' "Update Password" is the input `change_password` (not for a development sign-in, which has no
 #' password); "Report a problem" is a link to the problem form (`report_problem_url`), opened in a new
@@ -142,7 +143,7 @@ user_menu <- function(me, development = FALSE) {
 #' The site's own address, for a sign-in link to bring the person back to.
 #'
 #' @param session The Shiny session.
-#' @return A string such as `"https://matr.example.edu/admin/"`, or `""` if the browser hasn't said.
+#' @return A string such as `"https://marjoriekohn-matr-admin.share.connect.posit.cloud/"`, or `""` if the browser hasn't said.
 site_address <- function(session) {
   tryCatch(
     {

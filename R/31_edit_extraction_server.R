@@ -1,14 +1,15 @@
 # How many changes Undo can take back.
 undo_depth <- 50
 
-# How long after the last change the draft is saved by itself, in seconds.
-autosave_delay <- 5
+# How long after the last change the draft is saved by itself, in seconds. Long enough that it isn't saved
+# between every two changes: the server does nothing else while it saves, so the page can't be used then.
+autosave_delay <- 30
 
 #' The Edit Extraction page's server, for one extraction draft.
 #'
 #' The whole questionnaire as it was extracted, every block edited where it is
 #' (`extraction_outline_server()`). Other pages open a draft here with the `open` function this
-#' returns. Changes are saved to the draft's reviewed copy in the database by themselves, a few seconds
+#' returns. Changes are saved to the draft's reviewed copy in the database by themselves, half a minute
 #' after the last one (`autosave_delay`), or at once with Save. While its change request is waiting for
 #' approval they are only saved with Save, since each save is a new version for the reviewer; and after a
 #' save is refused, only Save tries again.
@@ -165,7 +166,9 @@ edit_extraction_server <- function(
           saved(draft())
           saved_at(Sys.time())
           autosave_off(FALSE)
-          extractions$changed()
+          # Save reads the list of drafts again at once; a save by itself leaves that to the next page that
+          # lists drafts, so the page isn't held up by it while staff work
+          if (!quietly) extractions$changed()
           if (!quietly) {
             showNotification("Saved. Nothing is added to the MATR metadata database until its change request is approved.", type = "message")
           }

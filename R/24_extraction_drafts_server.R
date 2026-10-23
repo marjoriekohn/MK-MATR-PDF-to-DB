@@ -1,7 +1,8 @@
-#' The Existing Draft mode of the Extraction page: the server.
+#' The Extraction Drafts page's server.
 #'
 #' Every extraction draft still being prepared, newest first. Continue opens a draft that
-#' has been read (or typed by hand) on the Edit Extraction page, and one still being read in AI-Powered mode.
+#' has been read (or typed by hand) on the Edit Extraction page, and one still being read on New Extraction, in
+#' AI-Powered mode.
 #' While someone else is working on a draft its card says so, and offers Take over instead (asking first).
 #'
 #' @param id The module's id.
@@ -13,8 +14,8 @@
 #' @param me Who is using the site: `list(staff_id, name, role)`.
 #' @param open_edit_extraction A function taking a record (and `take_over`, whether to take it from
 #'   whoever is working on it) and opening it on the Edit Extraction page.
-#' @param open_details A function taking a record and opening it in AI-Powered mode.
-#' @param switch_mode A function taking a mode of the Extraction page and showing it.
+#' @param open_details A function taking a record and opening it on New Extraction, in AI-Powered mode.
+#' @param switch_mode A function taking a mode of New Extraction (`"manual"` or `"ai"`) and showing it.
 #' @return Called for its effect.
 extraction_drafts_server <- function(
   id,

@@ -334,7 +334,7 @@ extraction_service_reading_steps <- function(record) {
   steps
 }
 
-#' The steps on each Existing Draft card.
+#' The steps on each Extraction Drafts card.
 #'
 #' How it was read (or that it was typed by hand), and how much of it has been checked on the Edit
 #' Extraction page, as the page's own "N% human-reviewed" counts it.

@@ -2,20 +2,21 @@
 @import "base/reset";
 @import "base/typography";
 
-// Components
+// Components: the plain controls first, then what is built from them (the outline's title boxes are form
+// controls, drawn without the box a form's has), so a later plain rule can't undo what a built one says
 @import "components/buttons";
+@import "components/select-input";
+@import "components/checkbox";
+@import "components/toggle";
+@import "components/type-chip";
+@import "components/tooltip";
+@import "components/progress-dot";
+@import "components/grid-table";
+@import "components/busy";
 @import "components/list-card";
 @import "components/outline";
 @import "components/variable-editor";
 @import "components/pick-boxes";
-@import "components/grid-table";
-@import "components/select-input";
-@import "components/checkbox";
-@import "components/type-chip";
-@import "components/tooltip";
-@import "components/progress-dot";
-@import "components/toggle";
-@import "components/busy";
 
 // Layout
 @import "layout/body";

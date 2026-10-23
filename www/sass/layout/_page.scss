@@ -3,6 +3,8 @@
   width: 100%; // also when the page fills the window (Make an edit), as a flex container's item
   max-width: 1320px;
   margin: 0 auto;
+  // a page of two panels (Make an edit) uses the whole window, as Edit Extraction does
+  &.is-wide { max-width: none; }
 }
 
 .page-header {
@@ -37,8 +39,5 @@
 @include media-breakpoint-down(sm) {
   .page-header-aside { flex: 1 1 100%; }
 }
-
-// Pages are opened from the home page and other pages, not the menu
-.navbar-nav .nav-item:has(> .nav-link[data-bs-toggle="tab"]) { display: none; }
 
 // The signed-in name and its menu are in _login.scss

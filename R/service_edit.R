@@ -931,7 +931,7 @@ edit_service_send <- function(connection, record, me) {
 #' @param connection The MATR database, `list(url, key)`; see `model_database.R`.
 #' @param record A saved proposal record (it has an `id`).
 #' @param me Who applies it: `list(staff_id, name, role)`; it has to be the person who prepared it.
-#' @return The id of its row in the Edit history. An error with the database's own sentence if it
+#' @return The id of its row in the Edit History. An error with the database's own sentence if it
 #'   refused.
 edit_service_apply <- function(connection, record, me) {
   if (change_request_service_needs_approval(me, edit_draft_kind, record$edit_kind)) {

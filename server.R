@@ -243,21 +243,44 @@ function(input, output, session) {
     # Opening a page that lists drafts reads them again, since other staff change them too. (No
     # ignoreInit: the first page shown is Home, which doesn't list them, and with it the first page a
     # test opens would be skipped.)
-    observeEvent(input$nav, if (input$nav %in% c("extraction", "edit_extraction", "change_requests")) extractions$changed())
+    observeEvent(input$nav, if (input$nav %in% c("home", "extraction", "drafts", "edit_extraction", "change_requests")) extractions$changed())
 
     # ------ MODULES -----------------------------------------------------------
 
     # ------ * Home ------------------------------------------------------------
-    home_server("home", database, me, show_page, active = on_page("home"))
+    # Its Continue and Review open a draft or a request where it is worked on (the pages are set up below).
+    home_server(
+      "home", database, me, show_page, extractions, catalog,
+      open_extraction = function(record) open_extraction_draft(record),
+      open_edit = function(record) {
+        make_edit$open(record)
+        show_page("make_edit")
+      },
+      review_request = function(id) {
+        show_page("change_requests")
+        change_requests$review(id)
+      },
+      active = on_page("home")
+    )
     observeEvent(input$to_home, show_page("home"))
 
-    # ------ * Extraction ------------------------------------------------------
+    # ------ * New Extraction --------------------------------------------------
     # Every way of starting an extraction opens its draft on the Edit Extraction
     # page (set up below).
     open_edit_extraction <- function(record, take_over = FALSE) {
       if (edit_extraction$open(record, take_over)) show_page("edit_extraction")
     }
-    extraction_server("extraction", extractions, catalog, database, me, open_edit_extraction)
+    extraction <- extraction_server("extraction", extractions, database, me, open_edit_extraction, show_page)
+
+    # ------ * Extraction Drafts -----------------------------------------------
+    # A draft that has been read (or typed by hand) opens on Edit Extraction; one still being read, on New Extraction.
+    open_extraction_draft <- function(record) {
+      if (extraction_service_is_read(record)) open_edit_extraction(record) else extraction$open_details(record)
+    }
+    extraction_drafts_server(
+      "drafts", extractions, catalog, database, me, open_edit_extraction,
+      open_details = extraction$open_details, switch_mode = extraction$show_mode
+    )
 
     # ------ * Edit Extraction -------------------------------------------------
     edit_extraction <- edit_extraction_server(
@@ -274,7 +297,7 @@ function(input, output, session) {
     # ------ * Change Requests -------------------------------------------------
     # Editing a request opens it where it was made: an edit on Make an edit, an
     # extraction on the Edit Extraction page.
-    change_requests_server(
+    change_requests <- change_requests_server(
       "change_requests", database, me,
       open_edit = function(record) {
         make_edit$open(record)

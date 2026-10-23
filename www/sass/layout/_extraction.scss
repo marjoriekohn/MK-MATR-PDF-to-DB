@@ -1,4 +1,4 @@
-// The Extraction page: its three modes (Manual, AI-Powered, Existing Draft)
+// The New Extraction page (its two modes, Manual and AI-Powered) and the Extraction Drafts page
 
 .extraction-page {
   h2 { margin: 0; font-size: 1.15rem; }
@@ -195,7 +195,7 @@
   @include action-bar;
 }
 
-// ------ Existing Draft ------------------------------------------------------------
+// ------ Extraction Drafts ---------------------------------------------------------
 .progress-key {
   display: flex;
   flex-wrap: wrap;

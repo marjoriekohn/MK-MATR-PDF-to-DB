@@ -1,4 +1,4 @@
-# The Edit history page: the applied changes, newest first, what narrows them, and what "See what changed"
+# The Edit History page: the applied changes, newest first, what narrows them, and what "See what changed"
 # shows. The changes are made by applying them, as Make an edit does, against the real database.
 
 history_args <- function(active = NULL) list(connection = test_connection, active = active)

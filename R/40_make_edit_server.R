@@ -631,9 +631,9 @@ make_edit_server <- function(id, connection, me, show_page, active = NULL) {
           p(strong(outcome$record$summary)),
           p(
             if (isTRUE(outcome$applied) && identical(outcome$verb, "delete")) {
-              "It is gone from the database now, and recorded in the Edit history."
+              "It is gone from the database now, and recorded in the Edit History."
             } else if (isTRUE(outcome$applied)) {
-              "It is in the database now, and recorded in the Edit history."
+              "It is in the database now, and recorded in the Edit History."
             } else if (isTRUE(outcome$resaved)) {
               "This is a new version of the request. It is waiting on Change Requests, where one other staff member has to approve it."
             } else {
@@ -648,7 +648,7 @@ make_edit_server <- function(id, connection, me, show_page, active = NULL) {
           class = "detail-actions",
           review_button("Back", "back", class = "btn btn-outline-dark"),
           if (isTRUE(outcome$applied)) {
-            actionButton(ns("to_history"), "See the Edit history", class = "btn-primary")
+            actionButton(ns("to_history"), "See the Edit History", class = "btn-primary")
           } else {
             actionButton(ns("to_change_requests"), "Go to Change Requests", class = "btn-primary")
           }

@@ -1,5 +1,6 @@
-#' The Home page: a button to each working page, and the newest change requests and applied
-#' changes.
+#' The Home page: what this person has to do. Their work in progress (extraction drafts and saved edits, those
+#' sent back first, each with Continue), the change requests waiting for them (each with Review), and the
+#' newest changes added to the database. New Extraction starts one; the menu leads to every page.
 #'
 #' @param id The module's id.
 #' @return The page's UI.
@@ -8,95 +9,146 @@ home_ui <- function(id) {
   div(
     class = "page home-page",
     `data-ns` = ns(""),
-    div(
-      class = "home-links",
-      home_link(
-        ns("extraction"), "upload", "Extraction",
-        "Extract questionnaire metadata from a PDF."
-      ),
-      home_link(
-        ns("make_edit"), "make_edit", "Make an edit",
-        "Add, update, or delete an item from the database."
-      )
+    page_header(
+      "Home", "What you've started, and what's waiting for you.",
+      actionButton(ns("new_extraction"), icon_label("add", "New Extraction"), class = "btn-primary")
     ),
-    layout_columns(
-      col_widths = c(6, 6),
+    div(
+      class = "home-columns",
       home_box(
-        ns, "change_requests", "change_requests", "Change Requests",
-        "Waiting for a staff member to review and approve.", uiOutput(ns("requests"))
+        ns, "work", "edit", "Your work in progress",
+        "Drafts you started and haven't sent for approval, and any sent back to you.", uiOutput(ns("work"))
       ),
-      home_box(
-        ns, "edit_history", "history", "Edit history",
-        "The newest changes added to the MATR metadata database.", uiOutput(ns("history"))
+      div(
+        class = "home-side",
+        home_box(
+          ns, "change_requests", "change_requests", "Waiting for you",
+          "Change requests you can approve, and your own that need you.", uiOutput(ns("requests"))
+        ),
+        home_box(
+          ns, "edit_history", "history", "Recent changes",
+          "The newest changes added to the MATR metadata database.", uiOutput(ns("history"))
+        )
       )
     )
   )
 }
 
-#' A button to one of the pages: its icon, its name and what it is for.
-#'
-#' @param id The button's input id.
-#' @param icon_name The icon, by its name in `app_icons`.
-#' @param title The page's name.
-#' @param text What the page is for.
-#' @return A UI element.
-home_link <- function(id, icon_name, title, text) {
-  tags$button(
-    id = id, type = "button", class = "action-button home-link",
-    app_icon(icon_name),
-    span(class = "home-link-title", title),
-    span(class = "home-link-text", text)
-  )
-}
-
-# A box that lists the newest few of something, with a button to the page that lists them all.
-home_box <- function(ns, page, icon_name, title, text, list_output) {
+# A box that lists something, with a button under it to the page that lists them all (`<key>_more`).
+home_box <- function(ns, key, icon_name, title, text, list_output) {
   card(
     class = "home-box",
     card_body(
       div(class = "home-box-head", app_icon(icon_name), h2(class = "home-box-title", title), p(class = "home-box-text", text)),
       list_output,
-      div(class = "home-box-more", uiOutput(ns(paste0(page, "_more")), inline = TRUE))
+      div(class = "home-box-more", uiOutput(ns(paste0(key, "_more")), inline = TRUE))
     )
   )
 }
 
-#' One change request, in a line.
+#' One line of a list: badges saying what it is, its title, a line about it, a reviewer's note if it has one,
+#' and its button.
+#'
+#' @param badges Badges, from `row_badge()`.
+#' @param title What it is called.
+#' @param meta A line about it: who, when.
+#' @param note A reviewer's note, or `NULL`.
+#' @param button Its button, or `NULL`.
+#' @return A UI element.
+home_item <- function(badges, title, meta, note = NULL, button = NULL) {
+  div(
+    class = "home-item",
+    div(
+      class = "home-item-body",
+      div(class = "home-item-badges", badges),
+      span(class = "home-item-title", if (has_text(title)) title else "(no description)"),
+      span(class = "home-item-meta", meta),
+      if (!is.null(note)) span(class = "home-item-note", strong(paste0(note$by %||% "A reviewer", ": ")), paste0("“", note$note, "”"))
+    ),
+    button
+  )
+}
+
+#' One of this person's drafts: an extraction or an edit, with Continue.
+#'
+#' A draft still being read says how far it has got, and its button shows the reading.
+#'
+#' @param item From `home_service_my_work()`: `list(kind, record)`.
+#' @param catalog The live tables, from `questionnaire_service_get_catalog()`: an extraction is named by its
+#'   questionnaire and wave once they are picked.
+#' @return A UI element.
+home_work_item <- function(item, catalog) {
+  record <- item$record
+  sent_back <- if (identical(record$status, "Sent Back")) record$sent_back
+  when <- if (!is.null(sent_back)) {
+    paste("Sent back", day_phrase(parse_time(sent_back$date)))
+  } else {
+    paste("Saved", time_ago(parse_time(record$saved)))
+  }
+  if (identical(item$kind, "extraction")) {
+    status <- record$extraction_status
+    reading <- isTRUE(status %in% c("queued", "sent", "received"))
+    return(home_item(
+      tagList(
+        row_badge("Extraction"),
+        if (!is.null(sent_back)) row_badge("Sent back", class = "is-warning"),
+        if (reading) row_badge("Being read"),
+        if (identical(status, "failed")) row_badge("Reading stopped", class = "is-warning")
+      ),
+      extraction_service_title(record, catalog),
+      paste(c(when, record$pdf$name), collapse = " · "),
+      note = sent_back,
+      button = home_button(if (reading) "See progress" else "Continue", "continue", record$id, "extraction")
+    ))
+  }
+  kind <- change_request_service_kind(record)
+  home_item(
+    tagList(
+      row_badge(kind, class = paste0("is-", tolower(kind))),
+      if (!is.null(sent_back)) row_badge("Sent back", class = "is-warning")
+    ),
+    record$summary, when,
+    note = sent_back,
+    button = home_button("Continue", "continue", record$id, "edit")
+  )
+}
+
+#' One change request waiting for this person, with Review.
 #'
 #' @param record A request, from `change_request_service_waiting()`.
 #' @param me Who is using the site: `list(staff_id, name, role)`.
 #' @return A UI element.
 home_request_item <- function(record, me) {
   kind <- change_request_service_kind(record)
-  who <- if (draft_row_service_is_mine(record, me)) "you" else record$prepared_by
-  div(
-    class = "home-item",
-    row_badge(kind, class = paste0("is-", tolower(kind))),
-    div(
-      class = "home-item-body",
-      span(class = "home-item-title", if (nzchar(record$summary %||% "")) record$summary else "(no description)"),
-      span(
-        class = "home-item-meta",
-        paste("Sent by", who, time_ago(parse_time(record$submitted %||% record$saved)))
-      )
-    )
+  state <- change_request_service_state(record, me)
+  who <- if (state$mine) "you" else record$prepared_by
+  home_item(
+    tagList(
+      row_badge(kind, class = paste0("is-", tolower(kind))),
+      if (state$asked_of_me) row_badge("Asked of you", class = "is-mine")
+    ),
+    record$summary,
+    paste("Sent by", who, time_ago(parse_time(record$submitted %||% record$saved))),
+    button = home_button(if (state$mine) "Open" else "Review", "review", record$id)
   )
 }
 
-#' One applied change, in a line.
+#' One applied change.
 #'
 #' @param record An applied change, from `history_service_get_all()`.
 #' @return A UI element.
 home_history_item <- function(record) {
-  div(
-    class = "home-item",
-    row_badge(record$kind %||% "Edit", class = paste0("is-", tolower(record$kind %||% "edit"))),
-    div(
-      class = "home-item-body",
-      span(class = "home-item-title", if (nzchar(record$summary)) record$summary else "(no description)"),
-      span(class = "home-item-meta", paste(c(history_service_when(record), history_service_people(record)), collapse = " · "))
-    )
+  kind <- record$kind %||% "Edit"
+  home_item(
+    row_badge(kind, class = paste0("is-", tolower(kind))),
+    record$summary,
+    paste(c(history_service_when(record), history_service_people(record)), collapse = " · ")
   )
+}
+
+# An item's button; the page script sends what it says (`action`, `id`, `kind`).
+home_button <- function(label, action, id, kind = NULL) {
+  review_button(label, action, `data-id` = id, `data-kind` = kind, class = "btn btn-sm btn-outline-dark home-item-button")
 }
 
 #' A list of items, or a line saying there are none.

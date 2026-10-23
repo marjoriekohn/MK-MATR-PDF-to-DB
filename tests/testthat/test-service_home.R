@@ -1,16 +1,32 @@
-# The Home page's lists: the newest requests and changes.
+# The Home page's lists: this person's work in progress, the requests waiting for them, and the newest changes.
 
-test_that("the newest change requests come first, a few at most, with how many are waiting", {
+test_that("your work in progress is your open drafts of both kinds, those sent back first, then the newest saved", {
+  me <- list(staff_id = 7, name = "Me", role = "STAFF")
+  record <- function(id, status, saved, by = 7) list(id = id, status = status, saved = saved, prepared_by_id = by)
+  extractions <- list(
+    e1 = record("e1", "Draft", "2026-10-01T10:00:00Z"),
+    e2 = record("e2", "Sent Back", "2026-09-01T10:00:00Z"),
+    e3 = record("e3", "Draft", "2026-10-05T10:00:00Z", by = 8), # a colleague's
+    e4 = record("e4", "Awaiting Review", "2026-10-06T10:00:00Z") # sent for approval
+  )
+  edits <- list(
+    d1 = record("d1", "Draft", "2026-10-03T10:00:00Z"),
+    d2 = record("d2", "Awaiting Review", "2026-10-04T10:00:00Z")
+  )
+  work <- home_service_my_work(extractions, edits, me)
+  expect_equal(vapply(work, function(item) item$record$id, ""), c("e2", "d1", "e1"))
+  expect_equal(vapply(work, function(item) item$kind, ""), c("extraction", "edit", "extraction"))
+  expect_equal(home_service_my_work(list(), list(), me), list())
+})
+
+test_that("waiting for you is the Change Requests page's For me, a few at most, with how many there are", {
   me <- local_staff()
-  times <- as.POSIXct("2026-10-01 10:00:00", tz = "UTC") + (1:5) * 3600
-  sent <- character()
-  for (when in as.list(times)) sent <- c(sent, local_edit(me, status = "Awaiting Review", now = when)$id)
-  everything <- home_service_recent_requests(test_connection, n = 1000)
-  ours <- everything$shown[vapply(everything$shown, function(record) record$id %in% sent, logical(1))]
-  expect_equal(vapply(ours, function(record) record$id, character(1)), rev(sent)) # newest first
+  colleague <- local_staff()
+  for (i in 1:5) local_edit(colleague, status = "Awaiting Review")
+  everything <- home_service_waiting_for_me(test_connection, me, n = 1000)
+  expect_equal(everything$total, length(change_request_service_filter(change_request_service_waiting(test_connection), me, "me")))
   expect_gte(everything$total, 5)
-
-  few <- home_service_recent_requests(test_connection)
+  few <- home_service_waiting_for_me(test_connection, me)
   expect_length(few$shown, home_recent_n)
   expect_equal(few$total, everything$total)
 })

@@ -6,18 +6,23 @@
   .navbar-brand a { color: inherit; text-decoration: none; &:hover { color: $vcu-gold; } }
 }
 
-// One row at every width: the title on the left, the signed-in name on the right. The pages' own links are
-// hidden (_page.scss), so the menu holds only the name; Bootstrap would otherwise put it on a line of its own
-// under the title on screens narrower than a desktop. A title too long for a phone ends with "…".
+// The title on the left, the pages' links after it and the signed-in name on the right, on one row. On a
+// narrower window the links and the name fold into the menu button (☰), and open as a list under the bar. A
+// title too long for a phone ends with "…".
 .navbar {
-  flex-wrap: nowrap;
   padding: 0;
-  > .container-fluid { flex-wrap: nowrap; gap: 1rem; padding-block: 0.6rem; }
-  .navbar-header { min-width: 0; }
+  > .container-fluid { gap: 0 1rem; padding-block: 0.6rem; }
+  .navbar-header { display: flex; align-items: center; min-width: 0; }
   .navbar-brand { display: block; margin: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .navbar-nav { flex-direction: row; flex-wrap: nowrap; align-items: center; margin-left: auto; }
+  .navbar-nav { align-items: center; }
+  .nav-link { white-space: nowrap; }
+  .nav-link.active { --bs-nav-underline-link-active-color: #{$vcu-gold}; }
 }
-// on a phone the signed-in name is its icon; the name stays for screen readers, and is in the menu it opens
-@include media-breakpoint-down(sm) {
-  .navbar-user-name { @include visually-hidden; }
+// Home is the title, and Edit Extraction is opened from a draft: neither has a link of its own
+.navbar-nav :is(li, .nav-item):has(> .nav-link:is([data-value="home"], [data-value="edit_extraction"])) { display: none; }
+
+// Folded: the links one under another, the name last
+.navbar .navbar-collapse:is(.collapsing, .show) {
+  .navbar-nav { flex-direction: column; align-items: stretch; padding-block: 0.5rem; }
+  .bslib-nav-spacer { display: none; }
 }

@@ -13,9 +13,9 @@ make_edit_ui <- function(id) {
   ns <- NS(id)
   as_fill_carrier(div(
     id = ns("main"),
-    class = "page edit-page",
+    class = "page edit-page is-wide",
     `data-ns` = ns(""),
-    page_header("Make an edit", "Add, change or delete what is in the MATR metadata database, one item at a time."),
+    page_header("Metadata", "View, add, change or delete what is in the MATR metadata database, one item at a time."),
     uiOutput(ns("drafts")),
     card(
       class = "structure-card",

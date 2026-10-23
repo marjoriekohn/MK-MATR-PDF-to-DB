@@ -1,4 +1,4 @@
-# The Edit history service: which edits to show, who was behind each, and what each changed. The edits are
+# The Edit History service: which edits to show, who was behind each, and what each changed. The edits are
 # made by applying them as Make an edit does, and the history is what the database wrote.
 
 # Three edits by one ADMIN: an add, an update of it and a delete of it, and one a STAFF member's delete

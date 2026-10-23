@@ -1,4 +1,4 @@
-# The Existing Draft mode of the Extraction page: a card for each draft still being prepared, whose it is,
+# The Extraction Drafts page: a card for each draft still being prepared, whose it is,
 # and what its buttons do. The database is the real one.
 
 drafts_page <- function(me, extractions = test_extractions()) {

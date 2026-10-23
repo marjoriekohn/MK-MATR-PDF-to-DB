@@ -1,4 +1,4 @@
-#' The Edit history page's server.
+#' The Edit History page's server.
 #'
 #' The edits applied to the MATR metadata database, newest first, filtered by kind and by words typed.
 #' "See what changed" opens the fields an edit changed, old and new.

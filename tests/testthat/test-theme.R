@@ -2,7 +2,8 @@
 # every page (defaults.scss), the kinds of button and the list cards are drawn in one place (components/), the
 # lines, breakpoints and the page's room from the edge are defaults.scss's, and no page has a copy of its own.
 
-site_css <- function() cached_fixture("site_css", function() as.character(sass::sass(vcu_theme)))
+# Compiled here, not taken from sass's cache, so the tests see the files as they are now.
+site_css <- function() cached_fixture("site_css", function() as.character(sass::sass(vcu_theme, cache = NULL)))
 
 # Each page's and component's stylesheet, as written, named by its file.
 sass_sources <- function() {
@@ -67,12 +68,12 @@ test_that("lines, breakpoints and the page's room from the screen's edge are the
   expect_match(css, "@media \\(max-width: 575.98px\\)\\s*\\{\\s*\\.container-fluid[^{]*\\{\\s*padding:\\s*1rem")
 })
 
-test_that("the menu bar is one row at every width: the title, then the signed-in name (only its icon on a phone)", {
+test_that("the menu bar has the pages' links (not Home's or Edit Extraction's), folded into a list on a narrow window", {
   css <- site_css()
-  expect_match(css_rule(css, ".navbar"), "flex-wrap:\\s*nowrap")
-  expect_match(css_rule(css, ".navbar .navbar-nav"), "flex-direction:\\s*row")
-  expect_match(css_rule(css, ".navbar .navbar-nav"), "flex-wrap:\\s*nowrap")
-  expect_match(css, "@media \\(max-width: 575.98px\\)\\s*\\{\\s*\\.navbar-user-name\\s*\\{[^}]*clip:\\s*rect\\(0, 0, 0, 0\\)") # Bootstrap's visually-hidden
+  expect_match(css, '\\[data-value="?home"?\\]', perl = TRUE)
+  expect_match(css, '\\[data-value="?edit_extraction"?\\][^{]*\\{\\s*display:\\s*none', perl = TRUE)
+  expect_match(css, "\\.navbar-collapse:is\\(\\.collapsing, \\.show\\) \\.navbar-nav \\{[^}]*flex-direction:\\s*column")
+  expect_match(css_rule(css, ".navbar .navbar-brand"), "text-overflow:\\s*ellipsis")
 })
 
 test_that("drafts, edits and change requests are one kind of list card, and no page draws its own", {
@@ -94,4 +95,21 @@ test_that("on a phone a bar of buttons puts its note above them, and never makes
 
 test_that("Edit Extraction's four buttons under a block go two by two when the details beside the list are narrow", {
   expect_match(site_css(), "@container detail \\(max-width: 32rem\\)\\s*\\{\\s*\\.detail-actions\\s*\\{[^}]*grid-template-columns:\\s*repeat\\(2")
+})
+
+test_that("a section's title in the list is plain words, not a white box: its rule comes after the fields' own", {
+  css <- site_css()
+  boxes <- regexpr(".form-control, .form-select, .selectize-input {", css, fixed = TRUE)
+  title <- regexpr("\\.outline-text \\{[^}]*background:\\s*transparent", css)
+  expect_gt(boxes, 0)
+  expect_gt(title, boxes)
+})
+
+test_that("a skip sentence that links to its question has the same size of words as one that doesn't", {
+  expect_match(css_rule(site_css(), ".edit-extraction-page .skip-link"), "--bs-btn-font-size:\\s*inherit")
+})
+
+test_that("the stylesheet carries a fingerprint of every file in www/sass, so a cached copy is never one from before an edit", {
+  # sass caches by the files global.R names; the ones they import are part of the stylesheet too
+  expect_match(site_css(), "/\\* www/sass [0-9a-f]{32} \\*/")
 })

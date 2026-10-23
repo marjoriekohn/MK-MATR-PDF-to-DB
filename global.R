@@ -22,7 +22,9 @@ options(shiny.maxRequestSize = 50 * 1024^2)
 if (file.exists(".env")) readRenviron(".env")
 
 # ------ Global variables ------------------------------------------------------
-# VCU brand theme: Bootstrap variables in defaults.scss, styles in rules.scss.
+# VCU brand theme: Bootstrap variables in defaults.scss, styles in rules.scss. The stylesheet is compiled once and
+# kept (sass's cache) by what it is made of, but sass only looks at the two files named here, not the ones they
+# import: a fingerprint of every file in www/sass goes in too, so an edit to any of them is compiled, not an old copy.
 vcu_theme <- bs_theme(
   version = 5,
   base_font = font_google("Roboto"),
@@ -30,7 +32,12 @@ vcu_theme <- bs_theme(
 ) |>
   bs_bundle(sass_layer(
     defaults = sass_file("www/sass/defaults.scss"),
-    rules = sass_file("www/sass/rules.scss")
+    rules = list(
+      sass_file("www/sass/rules.scss"),
+      sprintf("/* www/sass %s */", digest::digest(lapply(
+        sort(list.files("www/sass", pattern = "\\.scss$", recursive = TRUE, full.names = TRUE)), readLines, warn = FALSE
+      )))
+    )
   ))
 
 # Merriweather (subheads/callouts), loaded in ui.R via head tag

@@ -1,4 +1,4 @@
-#' The Edit history page: every edit that has been applied to the MATR metadata database.
+#' The Edit History page: every edit that has been applied to the MATR metadata database.
 #'
 #' @param id The module's id.
 #' @return The page's UI.
@@ -9,7 +9,7 @@ edit_history_ui <- function(id) {
     class = "page history-page",
     `data-ns` = ns(""),
     page_header(
-      "Edit history",
+      "Edit History",
       "Every change that has been added to the MATR metadata database, newest first.",
       toggle_input(
         ns("kind"), c("All" = "all", "Added" = "Add", "Updated" = "Update", "Deleted" = "Delete"),

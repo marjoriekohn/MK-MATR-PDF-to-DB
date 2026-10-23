@@ -1,6 +1,6 @@
 #' The AI-Powered mode of the Extraction page: the PDF and how reading it is going.
 #'
-#' Reading happens in the background, so staff can leave and find the draft under Existing Draft; once it
+#' Reading happens in the background, so staff can leave and find the draft under Extraction Drafts; once it
 #' has finished, the whole extraction opens on the Edit Extraction page to review and edit before its
 #' change request is submitted.
 #'
@@ -15,7 +15,7 @@ extraction_ai_ui <- function(id) {
       h2("Questionnaire PDF"),
       edit_callout("info", title = "Reading happens in the background",
                    "It takes a few minutes. You can leave this page: the draft
-                   waits under Existing Draft, where you can open it once
+                   waits under Extraction Drafts, where you can open it once
                    reading has finished, review and edit what was extracted,
                    and then submit it as a change request."),
       uiOutput(ns("pdf_card")),
@@ -99,7 +99,7 @@ reading_card <- function(record, ns) {
       p(
         class = "reading-note",
         "You can leave this page. The draft will be waiting under ",
-        actionLink(ns("to_continue"), "Existing Draft"), " until its change request is submitted."
+        actionLink(ns("to_continue"), "Extraction Drafts"), " until its change request is submitted."
       )
     },
     div(actionButton(ns("cancel"), "Cancel extraction", class = "btn-outline-dark"))

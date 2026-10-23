@@ -74,7 +74,7 @@ test_that("Open in Edit Extraction opens once reading has finished, and clears t
   })
 })
 
-test_that("a reading that failed can be tried again, and the note under it points to Existing Draft", {
+test_that("a reading that failed can be tried again, and the note under it points to Extraction Drafts", {
   me <- local_staff()
   tree <- shared_tree()
   seen <- local_browser()
@@ -114,7 +114,7 @@ test_that("the mode is drawn with the drop zone, the note about reading in the b
   expect_match(html, 'id="ai-pdf_card"')
   expect_match(html, 'id="ai-open_extraction"')
   expect_match(html, "Reading happens in the background")
-  expect_match(html, "Existing Draft")
+  expect_match(html, "Extraction Drafts")
   expect_false(grepl('id="ai-info-|About questionnaire|An AI reads it, and while it does', html, ignore.case = TRUE))
   manual <- htmltools::renderTags(extraction_manual_ui("manual"))$html
   expect_match(manual, 'id="manual-start"')

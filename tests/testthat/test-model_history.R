@@ -1,4 +1,4 @@
-# The Edit history model: the applied changes (drafts with the status Applied) and the fields each
+# The Edit History model: the applied changes (drafts with the status Applied) and the fields each
 # changed (applied_item). The edits are made by applying them, as Make an edit does, so the history is
 # what the database wrote.
 

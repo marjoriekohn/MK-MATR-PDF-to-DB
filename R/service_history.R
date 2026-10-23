@@ -1,5 +1,5 @@
-# ------ Edit history ---------------------------------------------------------------
-# What the Edit history page shows: the edits that have been applied, newest first, who
+# ------ Edit History ---------------------------------------------------------------
+# What the Edit History page shows: the edits that have been applied, newest first, who
 # was behind each, and what each changed. Only reads; edits enter the history when the
 # database applies them (service_change_request.R).
 
