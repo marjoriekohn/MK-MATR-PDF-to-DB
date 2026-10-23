@@ -81,6 +81,35 @@
     }
   });
 
+  // When the arrows last picked a block: its details then leave the keyboard in the list (afterDrawing()).
+  let steppedAt = 0;
+
+  // On Edit Extraction the up and down arrows pick the block after or before the one picked, as clicking it
+  // would: sections' and groups' own rows, and blocks in a closed section or filtered out, are passed over.
+  // Not while a field, a drop-down, a menu or a dialog has the keyboard.
+  document.addEventListener('keydown', function (event) {
+    if (event.key !== 'ArrowDown' && event.key !== 'ArrowUp') return;
+    if (event.altKey || event.ctrlKey || event.metaKey || event.shiftKey) return;
+    const target = event.target;
+    if (target.closest && target.closest('input, textarea, select, [contenteditable="true"], .selectize-control, .dropdown-menu, .modal')) return;
+    if (document.querySelector('.modal.show')) return;
+    const tree = document.querySelector('.edit-extraction-page .outline-tree');
+    if (!tree || !tree.offsetParent) return; // the page isn't the one on screen
+    const rows = Array.from(tree.querySelectorAll('.outline-row[data-action="select"]')).filter(function (row) {
+      return row.offsetParent !== null;
+    });
+    if (rows.length === 0) return;
+    const at = rows.indexOf(tree.querySelector('.outline-row.is-selected'));
+    const step = event.key === 'ArrowDown' ? 1 : -1;
+    const next = rows[at === -1 ? (step > 0 ? 0 : rows.length - 1) : at + step];
+    if (!next) return;
+    event.preventDefault(); // not the page scrolling as well
+    steppedAt = Date.now();
+    next.click();
+    next.focus({ preventScroll: true });
+    next.scrollIntoView({ block: 'nearest' });
+  });
+
   // ------ Being active -------------------------------------------------------------
   // The draft open on the Edit Extraction page is kept for this person only while they are doing
   // something on the site (R/31_edit_extraction_server.R). Any key, click, scroll or move of the
@@ -735,8 +764,10 @@
 
   function afterDrawing() {
     applyMarks();
+    // a block without words gets the cursor in them, unless the arrows picked it: they keep stepping through the list
     const emptyWords = document.querySelector('.block-detail [data-autofocus]');
-    if (emptyWords && !emptyWords.value && document.activeElement !== emptyWords) emptyWords.focus();
+    const stepping = Date.now() - steppedAt < 3000;
+    if (emptyWords && !emptyWords.value && document.activeElement !== emptyWords && !stepping) emptyWords.focus();
     // an optional field just added to a variable gets the cursor (on Edit Extraction or Make an edit)
     const added = document.querySelector('[data-focus-now]');
     if (added) {

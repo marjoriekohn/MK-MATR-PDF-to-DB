@@ -290,7 +290,7 @@ test_that("Apply to All? lists the questions with the same choices coded otherwi
   })
 })
 
-test_that("deleting a block takes it out and clears its selection; deleting a variable keeps it", {
+test_that("deleting the block picked takes it out and goes on to the next, as Verify does; deleting a variable keeps it", {
   page <- short_page()
   shiny::testServer(extraction_outline_server, args = outline_args(page), {
     page$selected("c3")
@@ -298,9 +298,20 @@ test_that("deleting a block takes it out and clears its selection; deleting a va
     expect_false("v1" %in% page$draft()$variables$id)
     expect_equal(page$selected(), "c3")
 
-    suppressMessages(session$setInputs(action = list(action = "delete", table = "components", id = "c3")))
+    printed <- draft_service_printed_order(page$draft())
+    blocks <- page$draft()$components
+    following <- printed[seq_along(printed) > match("c3", printed) & !is_container(blocks$component_type[match(printed, blocks$id)])][1]
+    expect_no_message(session$setInputs(action = list(action = "delete", table = "components", id = "c3"))) # no "Deleted" notice
     expect_false("c3" %in% page$draft()$components$id)
-    expect_null(page$selected())
+    expect_equal(page$selected(), following)
+
+    # at the end, the one before
+    printed <- draft_service_printed_order(page$draft())
+    last <- printed[length(printed)]
+    page$selected(last)
+    suppressMessages(session$setInputs(action = list(action = "delete", table = "components", id = last)))
+    expect_false(is.null(page$selected()))
+    expect_true(page$selected() %in% page$draft()$components$id)
 
     page$selected("c5")
     suppressMessages(session$setInputs(action = list(action = "delete", table = "components", id = "c4")))

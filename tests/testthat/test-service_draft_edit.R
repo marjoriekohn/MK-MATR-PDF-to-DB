@@ -56,10 +56,10 @@ test_that("adding something and deleting it again gives back the same draft", {
   expect_identical(suppressMessages(draft_service_delete(with_box, "variables", box)), draft)
 })
 
-test_that("deleting a section takes its blocks, variables and choices with it", {
+test_that("deleting a section takes its blocks, variables and choices with it, and says nothing about it", {
   draft <- gold_draft()
   gone <- c("c1", draft_service_printed_order(draft, "c1"))
-  expect_message(deleted <- draft_service_delete(draft, "components", "c1"), "Undo")
+  expect_no_message(deleted <- draft_service_delete(draft, "components", "c1"))
   expect_false(any(deleted$components$id %in% gone))
   expect_false(any(deleted$variables$component_id %in% gone))
   expect_true(all(deleted$response_options$variable_id %in% deleted$variables$id))
@@ -280,11 +280,15 @@ test_that("Auto Apply keeps the MATR IDs already given, unless told to replace t
   expect_equal(of(replaced, in_order[2]), "id2")
 })
 
-test_that("a MATR ID goes to one variable only, typed or picked, and the drop-downs offer the rest", {
+test_that("a MATR ID goes to one variable only: typed where another has it, it moves there, and the drop-downs offer the rest", {
   draft <- gold_draft()
   boxes <- draft_service_boxes_in_order(draft)
   draft <- draft_service_update(draft, "variables", boxes[1], "matr_id", "AH1")
-  expect_error(draft_service_update(draft, "variables", boxes[2], "matr_id", " AH1 "), "already the MATR ID of variable")
+  of <- function(draft, box) draft$variables$matr_id[draft$variables$id == box]
+  expect_message(moved <- draft_service_update(draft, "variables", boxes[2], "matr_id", " AH1 "), "AH1 moved here from variable 1 of")
+  expect_equal(of(moved, boxes[2]), "AH1")
+  expect_true(is.na(of(moved, boxes[1])))
+  expect_equal(sum(moved$variables$matr_id %in% "AH1"), 1)
   expect_equal(draft_service_update(draft, "variables", boxes[1], "matr_id", "AH1")$variables$matr_id[draft$variables$id == boxes[1]], "AH1")
   expect_equal(draft_service_available_matr_ids(draft, c("AH1", "AH2", "AH2", " ", "AH3")), c("AH2", "AH3"))
   expect_message(draft_service_auto_apply_matr_ids(gold_draft(), c("A", "B", "A")), "lists A more than once")

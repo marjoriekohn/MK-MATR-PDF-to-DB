@@ -194,7 +194,9 @@ test_that("the site is drawn with the login screen over it, and the menu's place
   for (page in c("extraction", "drafts", "make_edit", "change_requests", "edit_history")) {
     expect_match(html, sprintf('data-value="%s"', page), fixed = TRUE, info = page)
   }
-  for (label in c("New Extraction", "Extraction Drafts", "Metadata", "Change Requests", "Edit History")) expect_match(html, label, fixed = TRUE)
+  for (label in c("New Extraction", "Drafts", "Metadata", "Requests", "History")) {
+    expect_match(html, sprintf('data-value="[a-z_]+">%s</a>', label), info = label) # the menu's own link
+  }
   expect_match(html, 'data-bs-toggle="collapse"', fixed = TRUE)
   # while the server works, the page says so with the gold bar across the top and nothing else (no spinners);
   # busy.js holds the pressed button

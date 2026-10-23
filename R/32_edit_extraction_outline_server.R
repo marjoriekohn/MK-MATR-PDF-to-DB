@@ -93,8 +93,10 @@ extraction_outline_server <- function(
                if (ungrouped && identical(state$selected(), event$id)) state$selected(inside[1])
              },
              delete = {
+               # the block picked goes on to the next, as after Verify (or the one before, at the end)
+               following <- block_after(draft, event$id)
                deleted <- state$change(draft_service_delete(draft, "components", event$id))
-               if (deleted && identical(state$selected(), event$id)) state$selected(NULL)
+               if (deleted && identical(state$selected(), event$id)) state$selected(following)
              }
       )
     })
@@ -220,6 +222,20 @@ extraction_outline_server <- function(
         after <- after[!is_container(updated$components$component_type[match(after, updated$components$id)])]
         if (length(after) > 0) state$selected(after[1])
       }
+    }
+
+    # The block to pick once `id` (and whatever is inside it) is gone: the next in printed order that isn't a section or
+    # group, or failing that the one before; NULL when there is none.
+    block_after <- function(draft, id) {
+      blocks <- draft$components
+      printed <- draft_service_printed_order(draft)
+      going <- c(id, draft_service_printed_order(draft, id))
+      place <- match(id, printed)
+      left <- printed[!printed %in% going & !is_container(blocks$component_type[match(printed, blocks$id)])]
+      places <- match(left, printed)
+      after <- left[places > place]
+      before <- left[places < place]
+      if (length(after) > 0) after[1] else if (length(before) > 0) before[length(before)]
     }
 
     # The sections and question groups around a block everything in which is checked.

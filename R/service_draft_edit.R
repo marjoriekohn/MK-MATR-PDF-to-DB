@@ -140,15 +140,16 @@ set_variable_type <- function(draft, row, type) {
   add_blank_choices(draft, box$id, 1)
 }
 
-# A MATR ID names one variable of the questionnaire (BR93), so one another variable has is refused,
-# whether it was typed or picked from the uploaded IDs.
+# A MATR ID names one variable of the questionnaire (BR93). One typed or picked that another variable has moves
+# here: the other is left without one, and staff are told which (Undo puts it back).
 set_matr_id <- function(draft, row, matr_id) {
   boxes <- draft$variables
   taken_by <- which(boxes$matr_id %in% matr_id & seq_len(nrow(boxes)) != row)
   if (!is.na(matr_id) && length(taken_by) > 0) {
     other <- boxes[taken_by[1], ]
-    stop(sprintf(
-      "%s is already the MATR ID of variable %d of %s. Give each variable its own.",
+    draft$variables$matr_id[taken_by] <- NA
+    message(sprintf(
+      "%s moved here from variable %d of %s, which has no MATR ID now.",
       matr_id, as.integer(other$display_order), draft_service_question_name(draft, other$component_id)
     ))
   }
@@ -476,8 +477,8 @@ draft_service_reorder_shared <- function(draft, variable_ids, ids) {
 #' Delete a block, variable or choice.
 #'
 #' A section takes everything inside it, a question its variables, and a variable its
-#' choices. Questions that followed a deleted question lose the link. Says "Deleted. Undo
-#' brings it back." with `message()`.
+#' choices. Questions that followed a deleted question lose the link. Says nothing: what went is gone from
+#' the page at once, and Undo brings it back.
 #'
 #' @param draft A draft: `list(questionnaire, components, variables, response_options)`; see the top of `service_draft.R`.
 #' @param table `"components"`, `"variables"` or `"response_options"`.
@@ -486,7 +487,6 @@ draft_service_reorder_shared <- function(draft, variable_ids, ids) {
 draft_service_delete <- function(draft, table, id) {
   if (table == "components") id <- c(id, draft_service_printed_order(draft, id))
   draft[[table]] <- draft[[table]][!draft[[table]]$id %in% id, ]
-  message("Deleted. Undo brings it back.")
   unlink_skips(unlink_followers(drop_orphans(renumber(draft, table)), id), id)
 }
 
