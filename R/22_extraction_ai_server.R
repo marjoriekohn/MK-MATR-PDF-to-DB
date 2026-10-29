@@ -28,6 +28,7 @@ extraction_ai_server <- function(
 
     # ------ REACTIVE ----------------------------------------------------------
     current_id <- reactiveVal(NULL) # the draft on this page, once a PDF is uploaded
+    supplement_upload <- reactiveVal(NULL) # the file of MATR IDs and codes given before the PDF
 
     record <- reactive({
       if (!is.null(current_id())) extractions$all()[[current_id()]]
@@ -35,11 +36,12 @@ extraction_ai_server <- function(
 
     # What the page shows of the draft, kept apart so the draft's other changes don't redraw it.
     reading <- reactiveVal(NULL)
-    observe(reading(record()[c("method", "pdf", "extraction_status", "error", "reading_started")]))
+    observe(reading(record()[c("method", "pdf", "extraction_status", "error", "reading_started", "supplement")]))
 
     # Shows a draft opened from Extraction Drafts, or with none, an empty drop zone.
     show_draft <- function(opened = NULL) {
       current_id(opened$id)
+      supplement_upload(NULL)
     }
 
     # Service functions explain themselves: their stop() texts are shown to staff.
@@ -55,9 +57,27 @@ extraction_ai_server <- function(
 
     # ------ The PDF -----------------------------------------------------------
     observeEvent(input$pdf, try_to({
-      created <- extraction_service_create(connection, input$pdf, me)
+      created <- extraction_service_create(connection, input$pdf, me, supplement = supplement_upload())
       current_id(created$id)
+      supplement_upload(NULL)
     }))
+
+    # The file of MATR IDs and codes: held here until the PDF starts the draft, then kept with it.
+    observeEvent(input$supplement, {
+      if (is.null(current_id())) {
+        supplement_upload(input$supplement)
+      } else {
+        try_to(extraction_service_add_supplement(connection, current_id(), input$supplement, me))
+      }
+    })
+
+    observeEvent(input$remove_supplement, {
+      if (is.null(current_id())) {
+        supplement_upload(NULL)
+      } else {
+        try_to(extraction_service_remove_supplement(connection, current_id(), me))
+      }
+    })
 
     observeEvent(input$replace_pdf, try_to(
       extraction_service_replace_pdf(connection, current_id(), input$replace_pdf, me)
@@ -68,14 +88,14 @@ extraction_ai_server <- function(
     observeEvent(input$cancel, {
       showModal(confirm_dialog(
         "Cancel this extraction?",
-        "The draft is set aside and won't appear under Extraction Drafts. Nothing has been added to the MATR metadata database.",
+        "The draft is deleted, with its PDF. Nothing has been added to the MATR metadata database.",
         confirm_id = ns("confirm_cancel"), confirm_label = "Cancel extraction"
       ))
     })
 
     observeEvent(input$confirm_cancel, {
       removeModal()
-      try_to(extraction_service_withdraw(connection, current_id(), me))
+      try_to(extraction_service_discard(connection, current_id(), me))
       show_draft(NULL)
       showNotification("Extraction cancelled.", type = "message")
     })
@@ -96,6 +116,11 @@ extraction_ai_server <- function(
     # ------ OUTPUT ------------------------------------------------------------
     output$pdf_card <- renderUI({
       if (is.null(reading())) pdf_drop_zone(ns) else pdf_file(reading(), ns)
+    })
+
+    output$supplement <- renderUI({
+      name <- if (is.null(reading())) supplement_upload()$name else reading()$supplement$name
+      supplement_card(name, extraction_service_is_read(reading()), ns)
     })
 
     output$reading <- renderUI({

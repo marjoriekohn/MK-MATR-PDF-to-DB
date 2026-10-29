@@ -13,12 +13,8 @@ extraction_ai_ui <- function(id) {
     `data-ns` = ns(""),
     card(card_body(
       h2("Questionnaire PDF"),
-      edit_callout("info", title = "Reading happens in the background",
-                   "It takes a few minutes. You can leave this page: the draft
-                   waits under Extraction Drafts, where you can open it once
-                   reading has finished, review and edit what was extracted,
-                   and then submit it as a change request."),
       uiOutput(ns("pdf_card")),
+      uiOutput(ns("supplement")),
       uiOutput(ns("reading")),
       div(class = "extraction-footer",
           uiOutput(ns("footer_note"), inline = TRUE),
@@ -72,8 +68,44 @@ pdf_file <- function(record, ns) {
     div(class = "pdf-file-name", strong(pdf$name), div(class = "form-text", paste(facts, collapse = " · "))),
     if (!extraction_service_is_read(record)) {
       fileInput(ns("replace_pdf"), NULL, accept = c(".pdf", "application/pdf"), buttonLabel = "Replace") |>
-        tagAppendAttributes(class = "file-link")
+        tagAppendAttributes(class = "file-button")
     }
+  )
+}
+
+# ------ The file of Variable Names and Coding (optional) ---------------------------------
+#' Somewhere to give the file of Variable Names and Coding (MATR IDs and codes), or the file given.
+#'
+#' Optional. Gemini applies it once the questionnaire is read and checked, as a step of its own, so it can be
+#' given, changed or taken away until reading has finished; after that the page only says it was applied.
+#'
+#' @param name The file's name, or `NULL` if none is given.
+#' @param finished Whether reading has finished.
+#' @param ns The module's namespace function.
+#' @return A UI element, or `NULL` once reading has finished without one.
+supplement_card <- function(name, finished, ns) {
+  accept <- c(".pdf", ".csv", ".tsv", ".txt")
+  if (finished) {
+    return(if (!is.null(name)) {
+      p(class = "form-text supplement-note", app_icon("matr_id"), " Variable Names and Coding from ", strong(name), ".")
+    })
+  }
+  if (is.null(name)) {
+    return(drop_zone(
+      fileInput(ns("supplement"), NULL, accept = accept, buttonLabel = "Choose file"),
+      strong("Optional: Variable Names and Coding"),
+      div("A codebook or list (PDF, CSV or text) giving each variable its name (MATR ID) and each answer its code.
+          They're applied once the questionnaire is read; the questionnaire itself isn't changed."),
+      icon = "matr_id"
+    ) |> tagAppendAttributes(class = "is-supplement"))
+  }
+  div(
+    class = "pdf-file is-supplement",
+    span(class = "pdf-file-icon", app_icon("matr_id")),
+    div(class = "pdf-file-name", strong(name), div(class = "form-text", "Variable Names and Coding, applied once the questionnaire is read")),
+    fileInput(ns("supplement"), NULL, accept = accept, buttonLabel = "Replace") |>
+      tagAppendAttributes(class = "file-button"),
+    actionButton(ns("remove_supplement"), "Remove", class = "btn-outline-dark")
   )
 }
 

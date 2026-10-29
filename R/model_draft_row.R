@@ -12,10 +12,10 @@
 # extraction_model_* and edit_model_* turn the rows into the records the services work
 # with. Anything that changes several tables at once is a function of the database called
 # through /rpc/ (create_draft, save_draft, send_back_draft, apply_draft, approve_draft;
-# docs/migrations/20261020_split_draft_details.sql), because separate requests can't
+# docs/sql/sql_scripts.sql, section 4c), because separate requests can't
 # share a transaction. Changes to one table (the reading job's progress) are plain requests.
 # Who is working on a draft (editing_by, since editing_at) is claimed and let go through
-# claim_draft and release_draft (docs/migrations/20261020_draft_editing_claim.sql), so two
+# claim_draft and release_draft (docs/sql/2_editing_by.sql), so two
 # people asking at once can't both get it.
 
 draft_table <- "draft"

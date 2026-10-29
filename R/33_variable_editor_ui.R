@@ -184,7 +184,7 @@ variable_line <- function(box, draft, view, lookups, ns, shared = character(), c
 optional_variable_fields <- c(subject = "About", label = "Label", skip = "Skip to")
 
 # A write-in's skip, under its line: the answer that skips, and where it sends respondents (a question, section,
-# question group or the end, picked like a choice's), with the delete button that takes it away.
+# group or the end, picked like a choice's), with the delete button that takes it away.
 write_in_skip <- function(box, view, ns) {
   condition <- field_text(
     "variables", box, "skip_condition",
@@ -224,19 +224,26 @@ shown_optional <- function(row, fields, view) {
   names(fields)[vapply(names(fields), function(field) has(field) || paste0(row$id, ":", field) %in% view$shown, logical(1))]
 }
 
-# A variable's choices in a few words: "1 Yes · 2 No", every one (the box wraps when they don't fit).
+# A variable's choices in a few words, each code = its answer: "1=yes; 0=no", every one (the box wraps when they
+# don't fit). A choice with no code yet is its answer alone.
 choice_summary <- function(choices) {
   if (nrow(choices) == 0) {
     return("No choices yet")
   }
-  codes <- ifelse(is.na(choices$code_value), "", paste0(choices$code_value, " "))
-  paste(paste0(codes, ifelse(is.na(choices$answer_option), "(blank)", choices$answer_option)), collapse = " · ")
+  codes <- ifelse(is.na(choices$code_value), "", paste0(choices$code_value, "="))
+  paste(paste0(codes, ifelse(is.na(choices$answer_option), "(blank)", choices$answer_option)), collapse = "; ")
 }
 
-# The optional fields of a choice, by what its "+" menu calls them: how it is printed and where it skips to
-# (a link to the question or section, and the words printed for it). A choice shows one when it has
-# something in it, or once it is added; most choices have neither.
-optional_choice_fields <- c(printed_label = "Printed as", skip_instruction = "Skip to")
+# The optional fields of a choice, by what its "+" menu calls them: how many of the wave's respondents gave it
+# (the extraction's wave: Edit Extraction only) and where it skips to (a link to the question or section, and the
+# words printed for it). A choice shows one when it has something in it, or once it is added; most choices have
+# neither.
+optional_choice_fields <- c(respondent_count = "Respondents", skip_instruction = "Skip to")
+
+# The optional fields a page's choices offer: Make an edit (`view$counts` FALSE) has no wave to count for.
+choice_fields <- function(view = list()) {
+  if (isFALSE(view$counts)) optional_choice_fields[names(optional_choice_fields) != "respondent_count"] else optional_choice_fields
+}
 
 #' The editor of a variable's choices: one line per choice, then + Choice (a wide gold button). Once a code is
 #' changed, Apply to All? shows over it (the page script shows it): it lists the other questions with the same
@@ -254,8 +261,8 @@ choice_editor <- function(box, draft, view, ns, shared = character(), question =
   choices <- draft_service_children(draft, "response_options", box$id)
   if (any(!is.na(choices$skip_to_id))) view$targets <- skip_targets(draft) # to name where they skip to
   list_id <- ns(paste0("choices-", box$id))
-  # the Printed as and Skip to columns, once one of the choices shows it
-  columns <- intersect(names(optional_choice_fields), unlist(map_rows(choices, choice_showing, view)))
+  # the Respondents and Skip to columns, once one of the choices shows it
+  columns <- intersect(names(choice_fields(view)), unlist(map_rows(choices, choice_showing, view)))
   div(
     class = c("choice-table", if (length(shared) > 0) "is-shared", paste0("has-", columns, recycle0 = TRUE)),
     `data-shared` = paste(shared, collapse = ","),
@@ -293,8 +300,8 @@ choice_editor <- function(box, draft, view, ns, shared = character(), question =
 # Which of a choice's optional fields it shows: those with something in them (a link to where it skips counts),
 # and those added empty.
 choice_showing <- function(choice, view = list()) {
-  showing <- union(shown_optional(choice, optional_choice_fields, view), if (!is.na(choice$skip_to_id)) "skip_instruction")
-  intersect(names(optional_choice_fields), showing)
+  showing <- union(shown_optional(choice, choice_fields(view), view), if (!is.na(choice$skip_to_id)) "skip_instruction")
+  intersect(names(choice_fields(view)), showing)
 }
 
 # Code first, then the response option it codes, then how it is printed and where it skips to, in columns that
@@ -303,34 +310,37 @@ choice_showing <- function(choice, view = list()) {
 # on the form: one that isn't can't be marked, so it isn't a choice (a lone check box has one).
 choice_row <- function(choice, problems, ns, view = list(), columns = character()) {
   key <- function(field) paste0(choice$id, ":", field)
+  fields <- choice_fields(view)
   showing <- choice_showing(choice, view)
   optional <- function(field) {
-    name <- optional_choice_fields[[field]]
+    name <- fields[[field]]
     focus <- identical(view$focus, key(field))
     input <- if (field == "skip_instruction") {
       skip_fields(choice, problems, ns, view$targets, focus, words = isTRUE(view$skip_words))
     } else {
-      field_text("response_options", choice, field, placeholder = name, label = name)
+      # a count of the extraction's wave's respondents: a whole number, 0 or more
+      field_text("response_options", choice, field, placeholder = name, label = name, type = "number", problems = problems) |>
+        tagAppendAttributes(min = 0, step = 1, title = "How many of this wave's respondents gave this answer")
     }
     if (focus && field != "skip_instruction") input <- tagAppendAttributes(input, `data-focus-now` = NA)
-    span(class = c("choice-optional", paste0("is-", field)), input, remove_field_button(choice, field, optional_choice_fields))
+    span(class = c("choice-optional", paste0("is-", field)), input, remove_field_button(choice, field, fields))
   }
-  addable <- setdiff(names(optional_choice_fields), showing)
+  addable <- setdiff(names(fields), showing)
   div(
     class = "choice-row", `data-id` = choice$id,
     span(class = "choice-handle", title = "Drag to reorder", app_icon("drag")),
-    field_text("response_options", choice, "code_value", placeholder = "Code", type = "number", label = "Code", problems = problems) |>
+    field_text("response_options", choice, "code_value", placeholder = "Code", label = "Code", problems = problems) |>
       tagAppendAttributes(class = "choice-code"),
     field_text(
       "response_options", choice, "answer_option",
       placeholder = "Response option", list = ns("answer-options"), label = "Response option", problems = problems
     ) |> tagAppendAttributes(class = "choice-answer"),
     lapply(columns, function(field) {
-      span(class = c("choice-cell", paste0("is-", field)), `data-label` = optional_choice_fields[[field]], if (field %in% showing) optional(field))
+      span(class = c("choice-cell", paste0("is-", field)), `data-label` = fields[[field]], if (field %in% showing) optional(field))
     }),
     span(
       class = "choice-add-field",
-      if (length(addable) > 0) add_field_menu(choice, addable, optional_choice_fields, "Add how it is printed, or where it skips to")
+      if (length(addable) > 0) add_field_menu(choice, addable, fields, "Add how many respondents gave it, or where it skips to")
     ),
     review_button(
       app_icon("delete"), "delete",
@@ -340,7 +350,7 @@ choice_row <- function(choice, problems, ns, view = list(), columns = character(
   )
 }
 
-# Where a choice (or a write-in, `table = "variables"`) skips to: the question, section, question group or the end
+# Where a choice (or a write-in, `table = "variables"`) skips to: the question, section, group or the end
 # of the questionnaire, picked from the list every Skip to field shares (or its number typed). The words printed
 # for it ("Go to Question 32") are kept with it but not shown, except when pointed at. With `words`, where there
 # is nothing to pick from (Make an edit), it is those printed words, typed.

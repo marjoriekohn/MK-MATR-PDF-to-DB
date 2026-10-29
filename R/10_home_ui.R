@@ -87,7 +87,7 @@ home_work_item <- function(item, catalog) {
   }
   if (identical(item$kind, "extraction")) {
     status <- record$extraction_status
-    reading <- isTRUE(status %in% c("queued", "sent", "received"))
+    reading <- isTRUE(status %in% reading_statuses)
     return(home_item(
       tagList(
         row_badge("Extraction"),

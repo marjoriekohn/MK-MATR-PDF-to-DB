@@ -9,7 +9,7 @@
 # editor (variable_editor_server()), which keeps the field's value as JSON: a list of variables in the shape
 # the Edit Extraction page saves (service_draft.R): variable_type, matr_id, subject, label, and for a
 # write-in answer_data_type, skip_condition and skip_instruction, or for choices response_options
-# (code_value, answer_option, printed_label, skip_instruction). Skips are the words printed for them: there is
+# (code_value, answer_option, skip_instruction). Skips are the words printed for them: there is
 # no outline here to link them to. They are added the way an extraction adds them (push_variables(),
 # service_extraction_push.R), so an answer choice or a set of choices that is there already is used again.
 
@@ -28,7 +28,7 @@ edit_question_add_fields <- function(snap, scope) {
   candidate_choices <- stats::setNames(
     key_text(candidates$component_id),
     paste0(
-      edit_component_text(snap, candidates$component_id, 80), " · ",
+      edit_component_text(snap, candidates$component_id), " · ",
       vapply(candidates$component_id, function(id) edit_seen_in(snap, id), character(1)),
       recycle0 = TRUE
     )
@@ -52,9 +52,9 @@ edit_question_add_fields <- function(snap, scope) {
         choices = c("Choose a question" = "", candidate_choices),
         hint = "Questions this questionnaire already asks aren't listed."
       ),
-      edit_field("parent_component_id", "Inside which section or question group?", "select",
+      edit_field("parent_component_id", "Inside which section or group?", "select",
         choices = edit_service_parent_choices(snap, placed), short = "section or group it's in",
-        hint = "Only sections and question groups can hold other blocks."
+        hint = "Only sections and groups can hold other blocks."
       ),
       edit_field(
         "display_order", "Position", "number",
@@ -150,7 +150,7 @@ edit_variables_default <- function(snap) {
   as.character(jsonlite::toJSON(
     list(list(
       variable_type = "closed_ended", matr_id = "", subject = "", label = "",
-      response_options = list(list(code_value = "1", answer_option = "", printed_label = "", skip_instruction = ""))
+      response_options = list(list(code_value = "1", answer_option = "", skip_instruction = ""))
     )),
     auto_unbox = TRUE
   ))
@@ -219,7 +219,8 @@ edit_variables_problem <- function(snap, q) {
       if (length(choices) == 0) {
         return(say("add its choices.")) # BR99: a lone check box has one
       }
-      answers <- vapply(choices, function(choice) edit_variable_text(choice$answer_option), character(1))
+      answers <- vapply(choices, function(choice) normal_answer(edit_variable_text(choice$answer_option)), character(1))
+      answers[is.na(answers)] <- ""
       codes <- vapply(choices, function(choice) edit_variable_text(choice$code_value), character(1))
       if (!all(nzchar(answers))) {
         return(say("fill in the blank choice."))
@@ -258,8 +259,7 @@ edit_variables_draft <- function(variables) {
         lapply(box$response_options %||% list(), function(choice) {
           without_blanks(list(
             answer_option = text_or_null(choice$answer_option),
-            code_value = suppressWarnings(as.integer(edit_variable_text(choice$code_value))),
-            printed_label = text_or_null(choice$printed_label),
+            code_value = text_or_null(choice$code_value),
             skip_instruction = text_or_null(choice$skip_instruction)
           ))
         })
@@ -289,7 +289,7 @@ edit_variables_json <- function(draft) {
     c(about, list(response_options = map_rows(choices, function(choice) {
       list(
         code_value = text(choice$code_value), answer_option = text(choice$answer_option),
-        printed_label = text(choice$printed_label), skip_instruction = text(choice$skip_instruction)
+        skip_instruction = text(choice$skip_instruction)
       )
     })))
   })

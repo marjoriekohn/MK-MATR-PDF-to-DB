@@ -2,17 +2,17 @@
 
 # A small questionnaire: question 1 ("No" goes to question 3), 2a and 2b (skipped by "No"), then 3, and a
 # section headed "Section B" holding question 1 again (printed numbers can repeat).
-skip_json <- function(skip = "Go to Question 3", parent_of_2a = NULL) {
-  question <- function(number, choices = list(list(answer_option = "Yes"), list(answer_option = "No")), parent = NULL) {
+skip_json <- function(skip = "Go to Question 3", parent_of_2a = NULL, condition_of_2a = NULL) {
+  question <- function(number, choices = list(list(answer_option = "Yes"), list(answer_option = "No")), parent = NULL, condition = NULL) {
     list(
       component_type = "Question", text = paste("Question", number), printed_number = number, self_contained = TRUE,
-      parent_question = parent,
+      parent_question = parent, condition = condition,
       variables = list(list(variable_type = "closed_ended", response_options = choices))
     )
   }
   list(components = list(
     question("1", list(list(answer_option = "Yes"), list(answer_option = "No", skip_instruction = skip))),
-    list(component_type = "Question Group", children = list(question("2a", parent = parent_of_2a), question("2b"))),
+    list(component_type = "Group", children = list(question("2a", parent = parent_of_2a, condition = condition_of_2a), question("2b"))),
     question("3"),
     list(component_type = "Section", text = "Section B. Your health", children = list(question("1")))
   ))
@@ -21,7 +21,7 @@ id_of <- function(draft, number, which = 1) {
   questions <- draft$components[draft$components$component_type == "Question", ]
   questions$id[draft_service_question_number(questions) %in% number][which]
 }
-no_choice <- function(draft) draft$response_options$id[draft$response_options$answer_option %in% "No"][1]
+no_choice <- function(draft) draft$response_options$id[draft$response_options$answer_option %in% "no"][1]
 
 test_that("the number a skip instruction names is found however it is printed", {
   expect_equal(
@@ -59,6 +59,18 @@ test_that("the questions a choice skips past follow its question, unless they ha
   expect_false(read$components$parent_from_skip[read$components$id == id_of(read, "2a")])
 })
 
+test_that("a parent the AI read that a skip from the same question also gives is the skip's, without its own answers", {
+  read <- draft_service_from_json(skip_json(parent_of_2a = "1", condition_of_2a = "If yes"))
+  row <- read$components$id == id_of(read, "2a")
+  expect_equal(read$components$parent_question_id[row], id_of(read, "1"))
+  expect_true(read$components$parent_from_skip[row])
+  expect_true(is.na(read$components$condition[row]))
+  # so the details say it once, from the Skip to
+  html <- as.character(skip_logic(read$components[row, , drop = FALSE], read, NS("outline")))
+  expect_equal(lengths(regmatches(html, gregexpr("skip-sentence", html, fixed = TRUE))), 1L)
+  expect_match(html, "from a Skip to in that question")
+})
+
 test_that("a parent worked out from a skip follows the skip, and a parent staff pick is never replaced", {
   draft <- draft_service_from_json(skip_json())
   no <- no_choice(draft)
@@ -82,8 +94,8 @@ test_that("where a choice skips to is picked from the list, or typed as a number
   expect_equal(targets$label[targets$id == id_of(draft, "3")], "3 · Question 3")
   section <- draft$components$id[draft$components$component_type == "Section"]
   expect_equal(targets$label[targets$id == section], "Section · Section B. Your health")
-  # a question group by its first question, and the end of the questionnaire last
-  group <- draft$components$id[draft$components$component_type == "Question Group"]
+  # a group by its first question, and the end of the questionnaire last
+  group <- draft$components$id[draft$components$component_type == "Group"]
   expect_equal(targets$label[targets$id == group], "Group · 2a · Question 2a")
   expect_equal(utils::tail(targets$label, 1), "End of Questionnaire")
   at <- function(d) d$response_options$skip_to_id[d$response_options$id == no]
@@ -104,7 +116,7 @@ test_that("a skip that names a question it can't find, or points back, is a prob
   draft <- draft_service_from_json(skip_json(skip = "Go to Question 9"))
   draft$variables$matr_id <- paste0("m", seq_len(nrow(draft$variables)))
   problems <- draft_service_check(draft, lookups)
-  expect_equal(problems$message, "Variable 1: pick where choice “No” skips to.")
+  expect_equal(problems$message, "Variable 1: pick where choice “no” skips to.")
   expect_equal(problems$field, "skip_to_id")
   back <- draft_service_update(draft, "response_options", no_choice(draft), "skip_to_id", id_of(draft, "1"))
   expect_match(draft_service_check(back, lookups)$message, "skips back to something printed before it")
@@ -183,4 +195,83 @@ test_that("a write-in skips for the answer it names, linked like a choice's, and
   # a variable that gets choices skips by its choices instead
   choices <- draft_service_update(draft, "variables", box$id, "variable_type", "closed_ended")
   expect_true(all(is.na(unlist(choices$variables[choices$variables$id == box$id, c("skip_condition", "skip_instruction", "skip_to_id")]))))
+})
+
+# ------ A group that skips, on the answers to the questions in it -----------------------------------------
+# 22a and 22b in a group: "If you answered No to items 22a-b, go to Question 24", so 23 is skipped.
+group_skip_json <- function(skip_when = "every") {
+  question <- function(number) {
+    list(
+      component_type = "Question", text = paste("Question", number), printed_number = number, self_contained = TRUE,
+      variables = list(list(variable_type = "closed_ended", response_options = list(list(answer_option = "Yes"), list(answer_option = "No"))))
+    )
+  }
+  list(components = list(
+    list(
+      component_type = "Group", skip_condition = "No", skip_when = skip_when, skip_instruction = "Go to Question 24",
+      children = list(question("22a"), question("22b"))
+    ),
+    question("23"),
+    question("24")
+  ))
+}
+
+test_that("a group's skip is linked when it is read, saved with it, and sends respondents past the questions after it", {
+  draft <- draft_service_from_json(group_skip_json())
+  group <- draft$components[draft$components$component_type == "Group", ]
+  expect_equal(group$skip_to_id, id_of(draft, "24"))
+  expect_equal(group$skip_condition, "No")
+  expect_equal(draft_service_group_skipped(draft), data.frame(question = id_of(draft, "23"), group = group$id))
+  # a group isn't a question, so the questions it skips have no parent
+  expect_true(is.na(draft$components$parent_question_id[draft$components$id == id_of(draft, "23")]))
+  # saved and read back the same
+  again <- draft_service_from_json(draft_service_to_json(draft))
+  expect_equal(again$components[, c("skip_condition", "skip_when", "skip_instruction", "skip_to_id")], draft$components[, c("skip_condition", "skip_when", "skip_instruction", "skip_to_id")])
+  # nothing to fix
+  expect_equal(nrow(group_skip_problems(draft)), 0)
+})
+
+test_that("a group's skip is checked: where it goes is picked, past the group, and it says which answer skips", {
+  draft <- draft_service_from_json(group_skip_json())
+  group <- draft$components$id[draft$components$component_type == "Group"]
+  unlinked <- draft
+  unlinked$components$skip_to_id[unlinked$components$id == group] <- NA
+  expect_equal(group_skip_problems(unlinked)$field, "skip_to_id")
+  back <- draft_service_update(draft, "components", group, "skip_to_id", id_of(draft, "22b"))
+  expect_match(group_skip_problems(back)$message, "skips back")
+  no_answer <- draft_service_update(draft, "components", group, "skip_condition", "")
+  expect_equal(group_skip_problems(no_answer)$field, "skip_condition")
+})
+
+test_that("only a group skips: made another kind, its skip goes; ungrouped or deleted targets unlink it", {
+  draft <- draft_service_from_json(group_skip_json())
+  group <- draft$components$id[draft$components$component_type == "Group"]
+  section <- draft_service_update(draft_service_update(draft, "components", group, "component_type", "Section"), "components", group, "text", "Part A")
+  expect_true(all(is.na(unlist(section$components[section$components$id == group, c("skip_condition", "skip_when", "skip_instruction", "skip_to_id")]))))
+  gone <- draft_service_delete(draft, "components", id_of(draft, "24"))
+  expect_true(is.na(gone$components$skip_to_id[gone$components$id == group]))
+})
+
+test_that("a question a group skips says so, and links to the group", {
+  draft <- draft_service_from_json(group_skip_json("any"))
+  attr(draft, "outline_questions") <- outline_questions(draft)
+  q23 <- draft$components[draft$components$id == id_of(draft, "23"), , drop = FALSE]
+  html <- as.character(skip_logic(q23, draft, shiny::NS("x")))
+  expect_match(text_of(html), "Respondents who answer “No” to any question in the group with questions 22a–22b skip this question", fixed = TRUE)
+  expect_match(html, sprintf('data-id="%s"', draft$components$id[draft$components$component_type == "Group"]), fixed = TRUE)
+  # 24, where it lands, is everyone's
+  q24 <- draft$components[draft$components$id == id_of(draft, "24"), , drop = FALSE]
+  expect_match(as.character(skip_logic(q24, draft, shiny::NS("x"))), "Every respondent sees this question.")
+})
+
+test_that("a group's details hold its skip: the answer, every or any, where it goes, and the words printed", {
+  draft <- draft_service_from_json(group_skip_json())
+  group <- draft$components[draft$components$component_type == "Group", , drop = FALSE]
+  view <- list(problems = draft_service_check(draft, test_lookups()))
+  html <- htmltools::renderTags(block_detail(group, draft, view, test_lookups(), shiny::NS("x")))$html
+  expect_match(html, 'data-field="skip_condition"')
+  expect_match(html, 'data-field="skip_when"')
+  expect_match(html, 'data-field="skip_to_id"')
+  expect_match(html, 'data-field="skip_instruction"')
+  expect_match(html, 'value="24 · ', fixed = TRUE) # where it goes, as the list names it
 })

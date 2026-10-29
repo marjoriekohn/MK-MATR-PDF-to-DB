@@ -1,7 +1,7 @@
 # The Extraction Drafts page: a card for each draft still being prepared, whose it is,
 # and what its buttons do. The database is the real one.
 
-drafts_page <- function(me, extractions = test_extractions()) {
+drafts_page <- function(me, extractions = test_extractions(), env = parent.frame()) {
   did <- new.env()
   did$reviews <- list()
   did$details <- list()
@@ -10,7 +10,7 @@ drafts_page <- function(me, extractions = test_extractions()) {
   list(
     did = did,
     args = list(
-      extractions = extractions, catalog = test_live_catalog(), connection = test_connection, me = me,
+      extractions = extractions, catalog = shared_catalog(env), connection = test_connection, me = me,
       open_edit_extraction = function(record, take_over = FALSE) {
         did$reviews[[length(did$reviews) + 1]] <- record
         did$take_over <- c(did$take_over, take_over)
@@ -106,7 +106,7 @@ test_that("a reading that failed offers Try reading again, which queues it", {
   })
 })
 
-test_that("Discard asks first, then sets the draft aside", {
+test_that("Discard asks first, then deletes the draft", {
   me <- local_staff()
   tree <- shared_tree()
   seen <- local_browser()
@@ -116,7 +116,7 @@ test_that("Discard asks first, then sets the draft aside", {
     session$setInputs(action = list(action = "discard", id = mine$id))
     expect_match(seen$modals[[1]], paste("Discard this draft?", card_title(tree)), fixed = TRUE)
     session$setInputs(confirm_discard = 1)
-    expect_equal(extraction_model_get(test_connection, mine$id)$status, "Withdrawn")
+    expect_error(extraction_model_get(test_connection, mine$id), "no longer in the database")
     expect_equal(notice_texts(seen), "Draft discarded.")
     expect_false(mine$id %in% ids_shown(shown()))
   })

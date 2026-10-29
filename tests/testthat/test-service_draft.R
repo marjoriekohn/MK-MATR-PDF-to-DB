@@ -61,7 +61,7 @@ test_that("blocks are flattened in printed order, numbered within their section"
   expect_equal(nrow(draft$response_options), 330) # printed choices only
 
   first_three <- draft$components[1:3, ]
-  expect_equal(first_three$component_type, c("Question Group", "Instruction", "Question"))
+  expect_equal(first_three$component_type, c("Group", "Instruction", "Question"))
   expect_equal(first_three$parent_id, c(NA, "c1", "c1"))
   expect_equal(first_three$display_order, c(1, 1, 2))
 })
@@ -98,7 +98,7 @@ test_that("a draft opens as Gemini read it, then as staff last saved it", {
 
   draft <- gold_draft()
   draft$components$checked[3] <- TRUE
-  draft$response_options$code_value[1:2] <- c(1L, 0L)
+  draft$response_options$code_value[1:2] <- c("1", "a") # codes are text: a letter too
   draft$variables$matr_id[1] <- "q1a"
   draft_service_save(test_connection, record$id, draft, me$staff_id)
   expect_identical(draft_service_load(test_connection, record$id), draft)
@@ -133,7 +133,7 @@ test_that("a draft typed by hand starts empty and can be saved and opened again"
 test_that("choices are coded 1, 2, 3... in each variable", {
   choices <- gold_draft()$response_options
   expect_false(anyNA(choices$code_value))
-  expect_identical(choices$code_value, as.integer(choices$display_order))
+  expect_identical(choices$code_value, as.character(choices$display_order))
 })
 
 test_that("variables are listed question by question in printed order", {
@@ -187,4 +187,11 @@ test_that("a save is refused if someone saved the draft after the person opened 
     draft_service_save(test_connection, record$id, short_gold_draft(), me$staff_id, expected_revision = opened),
     "changed after you opened it"
   )
+})
+
+test_that("a draft saved when groups were called Question Groups opens with them as Groups", {
+  json <- list(components = list(list(component_type = "Question Group", children = list(
+    list(component_type = "Question", text = "Do you smoke?", variables = list(list(variable_type = "closed_ended", response_options = list(list(answer_option = "yes")))))
+  ))))
+  expect_equal(draft_service_from_json(json)$components$component_type, c("Group", "Question"))
 })

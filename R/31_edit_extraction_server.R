@@ -91,7 +91,7 @@ edit_extraction_server <- function(
     # to staff. `typed` is for words typed into a field, which the field already
     # shows; rebuilding it would move the cursor. `redraw` is FALSE for any other change the outline
     # marks without drawing it again (marking a block as checked). A block that was marked as checked and has
-    # been edited is no longer checked, unless `keep_checked`; a section or question group is checked once
+    # been edited is no longer checked, unless `keep_checked`; a section or group is checked once
     # everything in it is (draft_service_check_containers()). The questions are numbered again by
     # their place in the outline, and the questions a choice skips past follow its question
     # (draft_service_skip_parents()). Returns TRUE if it worked.

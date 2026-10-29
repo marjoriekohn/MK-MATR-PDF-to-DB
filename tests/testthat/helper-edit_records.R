@@ -1,31 +1,49 @@
 # ------ Edit proposals for the tests ---------------------------------------------------------------------------
+# The tables an edit of a row the test just made is built from, as edit_service_load() reads them, but in one
+# request: only the kind's own table is read. Nothing points at the test's own row yet, so the tables that would
+# (for a respondent type, its questionnaires and everything they hold) are empty here instead of read, and the
+# edit comes out the same. Fine for a kind whose form picks from no other table, as a respondent type's doesn't.
+test_edit_snap <- function(entity) {
+  tables <- edit_service_tables(entity)
+  stats::setNames(lapply(tables, function(table) {
+    if (identical(table, entity$table)) table_model_get(test_connection, table) else empty_table(table)
+  }), tables)
+}
+
+# A table with no rows, its columns of the kinds table_model_get() gives them.
+empty_table <- function(table) {
+  kinds <- database_tables[[table]]$columns
+  as.data.frame(lapply(kinds, function(kind) switch(kind, id = , number = numeric(), flag = logical(), character())))
+}
+
 # A proposal as the page makes it before saving: staff `staff` delete the respondent type `respondent_type`.
 # A delete is the change a STAFF member can't apply on their own, so it is the one that waits for
 # approval. It has no id until edit_model_save() gives it one.
 sample_edit <- function(staff, respondent_type, status = "Draft", now = Sys.time(), previous = NULL) {
   force(respondent_type) # the row has to exist before the tables are read
   entity <- edit_entities$respondent_type
-  snap <- edit_service_load(test_connection, entity)
+  snap <- test_edit_snap(entity)
   key <- as.character(respondent_type$respondent_type_id)
   built <- edit_service_build(entity, "delete", snap, edit_service_row(entity, snap, key))
   form <- list(action = "delete", entity = "respondent_type", scope = "", target = key, values = list())
   edit_service_record(staff, form, built, status, previous = previous, now = now)
 }
 
-# A proposal saved in the database for the test, as `staff` saved it, and removed when the test ends.
+# A proposal saved in the database for the test, as `staff` saved it, and removed when the test ends with the
+# other drafts of the test's staff (test_clear_drafts()).
 local_edit <- function(staff, respondent_type = local_respondent_type(env = env), status = "Draft", ..., env = parent.frame()) {
   force(respondent_type)
   saved <- edit_model_save(test_connection, sample_edit(staff, respondent_type, status, ...), staff$staff_id)
-  withr::defer(test_delete_draft(saved$id), envir = env)
   saved
 }
 
 # An edit applied by `staff`, the way Make an edit does it: the form for kind `key` in mode `verb`, with
-# these values typed (by field id) and, for an update or a delete, the row `row_key`. Only an ADMIN can apply
-# a delete without approval. Returns the history id; what the edit added is removed when the test ends.
+# these values typed (by field id) and, for an update or a delete, the row `row_key` (one the test made: see
+# test_edit_snap()). Only an ADMIN can apply a delete without approval. Returns the history id; what the edit
+# added is removed when the test ends.
 local_applied_edit <- function(staff, key, verb, row_key = NULL, ..., env = parent.frame()) {
   entity <- edit_entities[[key]]
-  snap <- edit_service_load(test_connection, entity)
+  snap <- test_edit_snap(entity)
   row <- if (!is.null(row_key)) edit_service_row(entity, snap, as.character(row_key))
   if (verb == "delete") {
     built <- edit_service_build(entity, "delete", snap, row)

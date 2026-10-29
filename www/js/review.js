@@ -36,12 +36,19 @@
     // doesn't pick it (or open or close it)
     if (target.matches('.outline-row') &&
       event.target.closest('textarea:not([readonly]), input, .dropdown, [data-edit-words], .drag-handle')) return;
-    // a section or question group opens or closes straight away; the server's marks then say the same
+    // a section or group opens or closes straight away; the server's marks then say the same
     if (target.matches('.outline-row.is-container')) toggleOpen(target);
+    // Make an edit's Collapse All closes its sections here; the server only forgets they were open
+    if (target.matches('[data-collapse-all]')) collapseAll(target.closest('.outline-panel'));
     send(target, 'action', withShared(target, Object.assign({}, target.dataset)));
     // a pick in a dialog of boxes (+ Block, + Variable) closes it
     if (target.matches('.pick-box')) $(target.closest('.modal')).modal('hide');
   });
+
+  function collapseAll(panel) {
+    if (!panel) return;
+    panel.querySelectorAll('.outline-node:not(.is-collapsed) > .outline-row.is-container').forEach(toggleOpen);
+  }
 
   function toggleOpen(row) {
     const node = row.closest('.outline-node');
@@ -466,7 +473,7 @@
 
   // ------ Which blocks are shown ------------------------------------------------------
   // The toolbar's pick (outline_filter() in R): all blocks, those not checked, those with something to fix,
-  // or those changed from what the AI read. A section or question group stays while anything in it is shown,
+  // or those changed from what the AI read. A section or group stays while anything in it is shown,
   // and is open while the filter is on. Blocks are hidden, not taken out, so nothing is drawn again.
   // The toolbar's search narrows it further: blocks whose words, numbers or variables in short have what is typed.
   // Each outline keeps its own (Edit Extraction's and Make an edit's), on its tree: data-filter and data-search.
@@ -783,6 +790,14 @@
     Shiny.addCustomMessageHandler('edit-extraction-assign', function (on) {
       const panel = document.querySelector('.outline-panel[data-ns]');
       if (panel) panel.classList.toggle('is-assigning', !!on);
+    });
+    // Make an edit picked an item itself (the first of a section opened): only it is marked
+    Shiny.addCustomMessageHandler('make-edit-picked', function (id) {
+      document.querySelectorAll('.edit-page .outline-row.is-selected').forEach(function (row) {
+        if (row.dataset.id !== id) row.classList.remove('is-selected');
+      });
+      const row = document.querySelector('.edit-page .outline-row[data-id="' + CSS.escape(id) + '"]');
+      if (row) row.classList.add('is-selected');
     });
     Shiny.addCustomMessageHandler('edit-extraction-marks', function (sent) {
       const set = function (ids) { return ids ? new Set(ids) : null; };

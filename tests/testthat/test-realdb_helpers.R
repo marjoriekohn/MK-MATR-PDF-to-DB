@@ -135,16 +135,13 @@ test_that("a staff member is made for the test, and removed with the drafts and 
   gone <- function(table, column, value) {
     nrow(database_model_get(test_connection, table, column, filters = stats::setNames(list(database_eq(value)), column))) == 0
   }
+  # the database keeps staff and applied drafts for good, but the test project's own functions remove them
   expect_true(gone("staff", "staff_id", made$me$staff_id))
+  expect_true(gone("staff", "staff_id", made$admin$staff_id))
   expect_true(gone("draft", "draft_id", made$record$id))
   expect_true(gone("respondent_type", "name", made$name))
-  # the applied draft is the record of what was done: the database keeps it, and so the ADMIN who prepared it
-  # stays too, set inactive
-  kept <- database_model_get(test_connection, "staff", c("staff_id", "active"), filters = list(staff_id = database_eq(made$admin$staff_id)))
-  expect_equal(nrow(kept), 1)
-  expect_false(kept$active)
-  expect_false(gone("draft", "draft_id", made$added$history_id))
-  expect_equal(nrow(history_model_get_items(test_connection, as.character(made$added$history_id))), 1)
+  expect_true(gone("draft", "draft_id", made$added$history_id))
+  expect_equal(nrow(history_model_get_items(test_connection, as.character(made$added$history_id))), 0)
   expect_true(gone("study", "study_id", made$tree$study$study_id))
   expect_true(gone("registry", "registry_id", made$tree$registry$registry_id))
 })

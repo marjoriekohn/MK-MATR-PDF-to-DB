@@ -163,6 +163,9 @@ change_request_service_send_back <- function(connection, record, me, note) {
 
 #' Withdraw a request, or a draft, the person prepared.
 #'
+#' An edit is kept, as Withdrawn. An extraction is discarded: deleted, with its PDF
+#' (`extraction_service_discard()`).
+#'
 #' @param connection The MATR database, `list(url, key)`; see `model_database.R`.
 #' @param record The request or draft.
 #' @param me Who withdraws it: `list(staff_id, name, role)`; it has to be the person who prepared it.
@@ -170,6 +173,9 @@ change_request_service_send_back <- function(connection, record, me, note) {
 change_request_service_withdraw <- function(connection, record, me) {
   if (!draft_row_service_is_mine(record, me)) {
     stop("Only the person who prepared this can withdraw it.", call. = FALSE)
+  }
+  if (identical(record$kind, extraction_kind)) {
+    return(extraction_service_discard(connection, record$id, me))
   }
   change_request_model_withdraw(connection, record$id, me$staff_id)
 }

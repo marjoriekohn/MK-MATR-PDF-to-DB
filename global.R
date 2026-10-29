@@ -52,7 +52,11 @@ merriweather_link <- tags$link(
 # edit proposals staff are still working on. The server talks to it through
 # Supabase REST API (R/model_database.R). `database` is made once here and
 # passed to the modules as `connection`. If the two variables below are missing
-# the site says so when it starts.
+# the site says so when it starts. MATR_DATABASE=test in .env uses the test
+# project instead of the live one (R/model_database.R); the navbar says so.
+source("R/model_database.R", local = TRUE)
+matr_database <- database_model_choose()
+if (matr_database == "test") message("MATR_DATABASE is test: the site is using the TEST database.")
 database <- list(url = Sys.getenv("SUPABASE_URL"),
                  key = Sys.getenv("SUPABASE_SECRET_KEY"))
 

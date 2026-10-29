@@ -24,7 +24,7 @@ gemini_busy_statuses <- c(429, 500, 502, 503, 504)
 #' One request for each prompt, all about the same PDF, sent at once. A busy Gemini is
 #' asked again (see `gemini_model_perform()`). Errors are sentences staff can act on.
 #'
-#' @param pdf_path The PDF.
+#' @param pdf_path The PDF, or `NULL` to send the prompts alone (what Gemini reads is in them).
 #' @param prompts A character vector, one prompt for each request.
 #' @param model The Gemini model to use.
 #' @param api_key The Gemini API key; defaults to `GEMINI_KEY`.
@@ -42,12 +42,12 @@ gemini_model_generate <- function(pdf_path, prompts, model = "gemini-3.8-flash",
   })
 }
 
-# The PDF first, then the prompt.
+# The PDF first (if there is one), then the prompt.
 gemini_model_request <- function(pdf_path, prompt, model, api_key) {
   body <- list(
-    contents = list(list(role = "user", parts = list(
-      list(inlineData = list(mimeType = "application/pdf", data = base64enc::base64encode(pdf_path))),
-      list(text = prompt)
+    contents = list(list(role = "user", parts = c(
+      if (!is.null(pdf_path)) list(list(inlineData = list(mimeType = "application/pdf", data = base64enc::base64encode(pdf_path)))),
+      list(list(text = prompt))
     ))),
     generationConfig = list(maxOutputTokens = gemini_max_output_tokens)
   )

@@ -13,9 +13,8 @@
 #   date    a day, as YYYY-MM-DD
 #   flag    TRUE or FALSE
 #
-# docs/matr_schema.sql is the design, and the live database differs from it:
-# study has methods and acknowledgements, which that file doesn't, and category
-# has no description column, which it does. These are the live columns.
+# docs/sql/sql_scripts.sql builds the tables, and docs/database_tables.md lists
+# their columns as the live database describes them.
 
 database_tables <- list(
   registry = list(
@@ -70,7 +69,7 @@ database_tables <- list(
     key = c("questionnaire_id", "component_id"), order_by = c("questionnaire_id", "component_id"),
     columns = c(
       questionnaire_id = "id", component_id = "id", parent_component_id = "id",
-      display_order = "number"
+      display_order = "number", skip_to_component_id = "id"
     )
   ),
   question = list(
@@ -135,7 +134,7 @@ database_tables <- list(
     columns = c(
       variable_key = "id", questionnaire_id = "id", component_id = "id",
       matr_id = "text", display_order = "number", label = "text",
-      respondent_count = "number", subject_id = "id"
+      subject_id = "id"
     )
   ),
   open_ended = list(
@@ -150,7 +149,7 @@ database_tables <- list(
     key = c("variable_key", "answer_option_id"), order_by = c("variable_key", "answer_option_id"),
     columns = c(
       variable_key = "id", answer_option_id = "id", display_order = "number",
-      code_value = "text", printed_label = "text",
+      code_value = "text",
       skip_instruction = "text", skip_to_component_id = "id"
     )
   ),

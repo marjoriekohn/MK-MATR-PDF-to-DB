@@ -2,7 +2,7 @@
 # A choice can carry routing printed beside it ("Go to Question 32"), and so can a write-in variable, for
 # an answer it names (`skip_condition`: "If none, go to Question 57" is "None"). The words are kept as
 # printed (`skip_instruction`), and the choice or variable also points at where it sends respondents
-# (`skip_to_id`: a question, a section with a heading, a question group, or the end of the questionnaire,
+# (`skip_to_id`: a question, a section with a heading, a group, or the end of the questionnaire,
 # `skip_to_end_id`), so the link survives renumbering and is saved to the database
 # (response_option.skip_to_component_id and skip_to_end, and the same on open_ended).
 #
@@ -14,8 +14,17 @@
 #
 # Every question a choice or write-in skips past (printed after its question and before where it sends
 # respondents) follows that question: its parent question is filled in, marked as worked out from the skip
-# (`parent_from_skip`). A parent staff picked, or one the AI read, is never replaced; one worked out from a
-# skip follows the skip when it changes, and goes when no skip covers the question any more.
+# (`parent_from_skip`). A parent staff picked, or one the AI read, is never replaced by another question; one
+# worked out from a skip follows the skip when it changes, and goes when no skip covers the question any more.
+# A parent picked or read that is the very question the skip comes from says the same thing twice: it becomes
+# the skip's, and its answers (its condition) go, since the skip says which answers show the question.
+#
+# A group can skip too, on the answers to the questions in it: "If you answered No to items 22a-d, go to
+# Question 28" is the group holding 22a-d, with `skip_condition` "No", `skip_when` "every" (or "any": when
+# any of them gets that answer), `skip_instruction` "Go to Question 28", and `skip_to_id` the question. It is
+# saved where the questionnaire places the group (questionnaire_component, docs/sql/13_group_skips.sql). The
+# questions it skips past (printed after the group and before where it sends respondents) don't get a parent,
+# since a group isn't a question: their skip logic names the group instead (draft_service_group_skipped()).
 
 #' The question number a skip instruction names.
 #'
@@ -44,8 +53,12 @@ skip_section <- function(text) {
 skip_to_end_id <- "end"
 skip_to_end_label <- "End of Questionnaire"
 
-# The question a choice (in `response_options`) or a write-in variable (in `variables`) belongs to.
+# The question a choice (in `response_options`) or a write-in variable (in `variables`) belongs to; a group
+# (in `components`) is its own.
 skip_source <- function(draft, table, ids) {
+  if (table == "components") {
+    return(ids)
+  }
   variable <- if (table == "variables") ids else draft$response_options$variable_id[match(ids, draft$response_options$id)]
   draft$variables$component_id[match(variable, draft$variables$id)]
 }
@@ -53,9 +66,9 @@ skip_source <- function(draft, table, ids) {
 #' What a skip instruction links to: a question by its number, a section by its heading, or the end.
 #'
 #' @param draft A draft: `list(questionnaire, components, variables, response_options)`; see the top of `service_draft.R`.
-#' @param choice_id The choice (or, with `table = "variables"`, the write-in variable).
+#' @param choice_id The choice (or, with `table = "variables"`, the write-in variable; with `"components"`, the group).
 #' @param text What its skip instruction says (its own by default).
-#' @param table `"response_options"` or `"variables"`.
+#' @param table `"response_options"`, `"variables"` or `"components"`.
 #' @return A block's id, `skip_to_end_id`, or `NA` if nothing in the draft fits.
 draft_service_skip_target <- function(draft, choice_id, text = NULL, table = "response_options") {
   rows <- draft[[table]]
@@ -67,7 +80,7 @@ draft_service_skip_target <- function(draft, choice_id, text = NULL, table = "re
   blocks <- draft$components
   printed <- draft_service_printed_order(draft)
   source <- skip_source(draft, table, choice_id)
-  after <- printed[seq_along(printed) > match(source, printed)]
+  after <- printed[seq_along(printed) > skip_from_place(draft, source, printed)]
   number <- skip_number(text)
   if (!is.na(number)) {
     questions <- printed[blocks$component_type[match(printed, blocks$id)] %in% "Question"]
@@ -97,6 +110,15 @@ draft_service_skip_target <- function(draft, choice_id, text = NULL, table = "re
   NA_character_
 }
 
+# Where a skip is made, in printed order: its question's place, or the last place inside a group (whose
+# questions are all answered before it skips).
+skip_from_place <- function(draft, source, printed = draft_service_printed_order(draft)) {
+  vapply(source, function(id) {
+    if (is.na(id)) return(NA_integer_)
+    max(match(c(id, draft_service_printed_order(draft, id)), printed))
+  }, integer(1), USE.NAMES = FALSE)
+}
+
 # Whether printed numbers are parts of `number`: "8a" and "8#2" are parts of "8"; "80" isn't.
 is_part_of <- function(numbers, number) {
   numbers <- tolower(trimws(numbers))
@@ -104,12 +126,13 @@ is_part_of <- function(numbers, number) {
   startsWith(numbers, number) & nchar(numbers) > nchar(number) & !grepl("^[0-9]", substring(numbers, nchar(number) + 1))
 }
 
-#' Link every skip instruction (of a choice or a write-in) that isn't linked yet to where it sends respondents.
+#' Link every skip instruction (of a choice, a write-in or a group) that isn't linked yet to where it sends
+#' respondents.
 #'
 #' @param draft A draft.
 #' @return The changed draft.
 draft_service_link_skips <- function(draft) {
-  for (table in c("response_options", "variables")) {
+  for (table in c("response_options", "variables", "components")) {
     rows <- draft[[table]]
     todo <- which(!is.na(rows$skip_instruction) & is.na(rows$skip_to_id))
     for (row in todo) draft[[table]]$skip_to_id[row] <- draft_service_skip_target(draft, rows$id[row], table = table)
@@ -160,7 +183,10 @@ draft_service_skip_parents <- function(draft) {
     nearer <- covered & (is.na(skipped_from) | match(skipped_from, printed) < from[i])
     skipped_from[nearer] <- sources[i]
   }
-  derived <- blocks$parent_from_skip %in% TRUE
+  # a parent picked or read that the skip also gives is the skip's, without answers of its own
+  same <- !(blocks$parent_from_skip %in% TRUE) & (blocks$parent_question_id == skipped_from) %in% TRUE
+  blocks$condition[same] <- NA_character_
+  derived <- blocks$parent_from_skip %in% TRUE | same
   # a parent worked out from a skip follows the skips; an empty one is filled in
   follows <- derived | (is.na(blocks$parent_question_id) & !is.na(skipped_from))
   blocks$parent_question_id[follows] <- skipped_from[follows]
@@ -199,7 +225,7 @@ set_skip_to <- function(draft, row, value, table = "response_options") {
   draft
 }
 
-# What a section and a question group are called in the list of places a choice can skip to:
+# What a section and a group are called in the list of places a choice can skip to:
 # "Section · Part B. Your habits", "Group · 12 · How often do you…" (by its first question).
 skip_section_prefix <- "Section · "
 skip_group_prefix <- "Group · "
@@ -207,7 +233,7 @@ skip_group_prefix <- "Group · "
 #' The places a choice or write-in can skip to, as the list on the page names them.
 #'
 #' The questions ("32 · Have you smoked…", as the parent-question list names them), the sections with a
-#' heading, and the question groups (by their first question), in printed order, then the end of the
+#' heading, and the groups (by their first question), in printed order, then the end of the
 #' questionnaire.
 #'
 #' @param draft A draft.
@@ -218,7 +244,7 @@ skip_targets <- function(draft) {
   questions <- (attr(draft, "outline_questions") %||% outline_questions(draft))$questions
   # a group goes by the first question inside it
   first_question <- vapply(blocks$id, function(id) {
-    if (!identical(blocks$component_type[blocks$id == id], "Question Group")) return(NA_character_)
+    if (!identical(blocks$component_type[blocks$id == id], "Group")) return(NA_character_)
     inside <- draft_service_printed_order(draft, id)
     inside[blocks$component_type[match(inside, blocks$id)] %in% "Question"][1]
   }, character(1))
@@ -239,7 +265,33 @@ skip_targets <- function(draft) {
 
 # Skip links to blocks that are gone are emptied.
 unlink_skips <- function(draft, ids) {
-  draft$response_options$skip_to_id[draft$response_options$skip_to_id %in% ids] <- NA
-  draft$variables$skip_to_id[draft$variables$skip_to_id %in% ids] <- NA
+  for (table in c("response_options", "variables", "components")) {
+    draft[[table]]$skip_to_id[draft[[table]]$skip_to_id %in% ids] <- NA
+  }
   draft
+}
+
+#' The questions a group's skip sends respondents past.
+#'
+#' Those printed after everything in the group and before where it sends respondents; a question two groups
+#' skip past goes with the nearer one.
+#'
+#' @param draft A draft.
+#' @return A data frame of `question` and the `group` that skips it, in printed order.
+draft_service_group_skipped <- function(draft) {
+  blocks <- draft$components
+  printed <- draft_service_printed_order(draft)
+  groups <- blocks$id[blocks$component_type %in% "Group" & !is.na(blocks$skip_to_id)]
+  questions <- printed[blocks$component_type[match(printed, blocks$id)] %in% "Question"]
+  place <- match(questions, printed)
+  skipped_by <- rep(NA_character_, length(questions))
+  for (group in groups) {
+    to <- blocks$skip_to_id[blocks$id == group]
+    to <- if (to == skip_to_end_id) length(printed) + 1L else match(to, printed)
+    from <- skip_from_place(draft, group, printed)
+    covered <- !is.na(to) & place > from & place < to
+    nearer <- covered & (is.na(skipped_by) | skip_from_place(draft, skipped_by, printed) < from)
+    skipped_by[nearer %in% TRUE] <- group
+  }
+  data.frame(question = questions[!is.na(skipped_by)], group = skipped_by[!is.na(skipped_by)], stringsAsFactors = FALSE)
 }

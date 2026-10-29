@@ -114,9 +114,9 @@ test_that("a delete writes every field of every row that goes, children before p
   variable <- built$items[built$items$entity_name == "variable", ]
   expect_equal(
     variable$attribute_name,
-    c("questionnaire_id", "component_id", "matr_id", "display_order", "label", "respondent_count", "subject_id")
+    c("questionnaire_id", "component_id", "matr_id", "display_order", "label", "subject_id")
   )
-  expect_equal(variable$old_value, c("1", "3", "AH01DB", "1", "Date of birth", "1450", "1"))
+  expect_equal(variable$old_value, c("1", "3", "AH01DB", "1", "Date of birth", "1"))
   expect_equal(unique(variable$record_identifier), '{"variable_key":1}')
 })
 
@@ -626,8 +626,8 @@ test_that("a lone check box is a variable with one choice, and a new answer choi
   )
   expect_length(edit_service_check(form$fields, form$values)$problems, 0)
   lines <- item_lines(form_items(form)$items)
-  expect_true('Insert answer_option {"answer_option_id":"new:answer_option:1"} standardized_label: - -> Always' %in% lines)
-  expect_true('Insert option_set {"option_set_id":"new:option_set:1"} name: - -> Always' %in% lines)
+  expect_true('Insert answer_option {"answer_option_id":"new:answer_option:1"} standardized_label: - -> always' %in% lines)
+  expect_true('Insert option_set {"option_set_id":"new:option_set:1"} name: - -> always' %in% lines)
 })
 
 test_that("a question already in the database can be added, keeping its wording shared", {
@@ -711,8 +711,8 @@ test_that("the variables go from the form's JSON to a draft and back unchanged, 
     list(
       variable_type = "closed_ended", matr_id = "AH10", subject = "", label = "",
       response_options = list(
-        list(code_value = "1", answer_option = "Yes", printed_label = "", skip_instruction = "Go to Question 12"),
-        list(code_value = "2", answer_option = "No", printed_label = "NO", skip_instruction = "")
+        list(code_value = "1", answer_option = "yes", skip_instruction = "Go to Question 12"),
+        list(code_value = "b", answer_option = "no", skip_instruction = "") # a code can be a letter
       )
     )
   )
@@ -724,8 +724,8 @@ test_that("the variables go from the form's JSON to a draft and back unchanged, 
   expect_equal(edit_variables_json(edit_variables_draft(list())), "[]")
 })
 
-test_that("a block goes in a section or question group, but a section never goes inside a group", {
-  # section A (component 1) of AHP as a question group: no words of its own
+test_that("a block goes in a section or group, but a section never goes inside a group", {
+  # section A (component 1) of AHP as a group: no words of its own
   as_group <- function(snap) {
     snap$component$component_type_id[snap$component$component_id == 1] <- 8
     snap$component$text[snap$component$component_id == 1] <- NA
@@ -735,10 +735,10 @@ test_that("a block goes in a section or question group, but a section never goes
   snap <- test_snapshot(edit_service_tables(entity), change = as_group)
   choices <- edit_service_parent_choices(snap, edit_service_placements(snap, 1))
   expect_equal(unname(choices), c("", "1", "6"))
-  expect_match(names(choices)[2], "^\\(question group\\) ")
+  expect_match(names(choices)[2], "^\\(group\\) ")
 
   section_b <- form_for("questionnaire_component", "update", "1|6", scope = "1", snap = snap, questionnaire_component__parent_component_id = "1")
-  expect_match(edit_service_check(section_b$fields, section_b$values)$problems$questionnaire_component__parent_component_id, "can't be inside a question group")
+  expect_match(edit_service_check(section_b$fields, section_b$values)$problems$questionnaire_component__parent_component_id, "can't be inside a group")
   question <- form_for("questionnaire_component", "update", "1|7", scope = "1", snap = snap, questionnaire_component__parent_component_id = "1")
   expect_null(edit_service_check(question$fields, question$values)$problems$questionnaire_component__parent_component_id)
 })

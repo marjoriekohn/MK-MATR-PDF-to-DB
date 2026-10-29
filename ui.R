@@ -13,6 +13,7 @@ page_navbar(
       merriweather_link,
       page_script("js/site.js"),
       page_script("js/review.js"),
+      page_script("js/split.js"),
       page_script("js/extraction.js"),
       page_script("js/busy.js")
     ),
@@ -38,6 +39,9 @@ page_navbar(
   nav_panel("Requests", change_requests_ui("change_requests"), value = "change_requests"),
   nav_panel("History", edit_history_ui("edit_history"), value = "edit_history"),
   nav_spacer(),
+
+  # Running on the test database (MATR_DATABASE=test in .env; global.R) says so, so nobody mistakes it for live.
+  if (identical(matr_database, "test")) nav_item(span(class = "badge navbar-test-database", "Test database")),
 
   # The signed-in name, with the menu that reports a problem and logs out, drawn once someone has signed in.
   nav_item(uiOutput("navbar_user", inline = TRUE))

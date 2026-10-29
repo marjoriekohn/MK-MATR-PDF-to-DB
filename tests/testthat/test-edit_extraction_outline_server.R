@@ -76,7 +76,7 @@ test_that("every block's words are in its row, a section's and a text block's ty
     html <- tree_html(output)
     expect_match(html, 'class="form-control form-control-sm outline-text"')
     expect_match(html, 'data-suggest="[^"]*suggest-Instruction"')
-    expect_match(html, 'class="outline-group-note"') # a question group has no words to type
+    expect_match(html, 'class="outline-group-note"') # a group has no words to type
     expect_match(html, 'data-table="components" data-id="c3" data-field="text"')
     expect_match(html, "Would you call yourself a nervous person?", fixed = TRUE)
     expect_match(html, 'id="[^"]*answer-options"')
@@ -92,7 +92,8 @@ test_that("every block's words are in its row, a section's and a text block's ty
     expect_false(grepl("outline-number\\b|outline-order", html))
     expect_false(grepl('data-field="printed_number"|data-field="parent_question_id"|data-action="check"', html))
     blocks <- short_gold_draft()$components
-    expect_equal(lengths(regmatches(html, gregexpr("btn-open", html))), sum(!is_container(blocks$component_type)))
+    # the arrow that opens a block in the details: every block's but a section's (a group's details hold its skip)
+    expect_equal(lengths(regmatches(html, gregexpr("btn-open", html))), sum(blocks$component_type != "Section"))
     # a section's, group's or text block's row has its buttons (shown when pointed at): change its kind, delete
     others <- blocks$id[blocks$component_type != "Question"]
     expect_equal(lengths(regmatches(html, gregexpr('data-action="delete" data-table="components"', html))), length(others))
@@ -150,7 +151,7 @@ test_that("a question's details have its variables: one line each, with its choi
     expect_match(html, 'data-action="show_field" data-id="v1" data-name="label"')
     expect_false(grepl('data-action="show_field" data-id="v1" data-name="skip"', html)) # a variable with choices skips by its choices
     expect_match(html, 'data-action="choices" data-id="v1"')
-    expect_match(text_of(html), "1 Yes · 2 No", fixed = TRUE)
+    expect_match(text_of(html), "1=yes; 2=no", fixed = TRUE)
     expect_false(grepl('data-field="answer_option"', html))
   })
 })
@@ -184,7 +185,7 @@ test_that("a block with something to fix can't be checked, and a section or grou
     expect_false(component(page$draft(), "c3")$checked)
     expect_equal(page$selected(), "c3")
     expect_match(seen$notifications[[1]]$text, "Fix what's marked first")
-    session$setInputs(action = list(action = "check", id = "c1")) # the question group
+    session$setInputs(action = list(action = "check", id = "c1")) # the group
     expect_false(component(page$draft(), "c1")$checked)
   })
 })
@@ -273,7 +274,7 @@ test_that("Apply to All? lists the questions with the same choices coded otherwi
     expect_match(dialog, "Cancel Apply", fixed = TRUE)
     suppressMessages(session$setInputs(apply_codes = 1))
     options <- page$draft()$response_options
-    expect_equal(options$code_value[options$variable_id == "v2"], c(1L, 0L))
+    expect_equal(options$code_value[options$variable_id == "v2"], c("1", "0"))
     expect_equal(seen$closed, 1L)
 
     # nothing left coded otherwise: it says so, without a dialog
@@ -368,9 +369,9 @@ test_that("+ Block offers every kind the database has, each in a box saying what
     menu <- htmltools::renderTags(add_block_dialog(ns, page$lookups$component_types))$html
     for (kind in page$lookups$component_types) expect_match(menu, sprintf('data-action="add_block" data-type="%s"', kind), fixed = TRUE)
     expect_match(menu, 'class="pick-boxes is-grid"')
-    # Section first, then Question Group and Question, whatever order the database has them in
-    expect_lt(regexpr('data-type="Section"', menu), regexpr('data-type="Question Group"', menu))
-    expect_lt(regexpr('data-type="Question Group"', menu), regexpr('data-type="Question"', menu))
+    # Section first, then Group and Question, whatever order the database has them in
+    expect_lt(regexpr('data-type="Section"', menu), regexpr('data-type="Group"', menu))
+    expect_lt(regexpr('data-type="Group"', menu), regexpr('data-type="Question"', menu))
     expect_equal(text_of(output$to_fix), "1 block to fix")
     html <- tree_html(output)
     expect_true(grepl('outline-problems"[^>]*data-problems="Add the printed words', html)) # c4's badge, shown, listing them when pointed at
@@ -495,7 +496,7 @@ test_that("a field the draft refuses is drawn again as the draft has it", {
   page <- short_page()
   shiny::testServer(extraction_outline_server, args = outline_args(page), {
     tree_html(output)
-    # a question group with blocks in it can't become another kind
+    # a group with blocks in it can't become another kind
     session$setInputs(edit = list(table = "components", id = "c1", field = "component_type", value = "Instruction"))
     expect_match(page$log$errors, "Move the blocks out of it first")
     expect_equal(vapply(patched()$rows, function(row) row$id, character(1)), "c1")
@@ -529,7 +530,7 @@ test_that("the outline grows with the questionnaire, not with its square: every 
   expect_lt(nchar(html), 600000)
 })
 
-test_that("a question group's row can ungroup it, keeping its blocks where it was", {
+test_that("a group's row can ungroup it, keeping its blocks where it was", {
   page <- short_page()
   shiny::testServer(extraction_outline_server, args = outline_args(page), {
     expect_match(tree_html(output), 'data-action="ungroup" data-id="c1"')
@@ -560,16 +561,16 @@ test_that("a variable's choices open under its line, code first and both named, 
     expect_match(html, 'class="btn btn-primary btn-wide choice-add"')
     expect_match(html, 'data-action="pick_codes" data-id="v1" hidden')
     expect_false(grepl("Use these codes everywhere|copy_codes", html))
-    # a choice's printed words and skip instruction show only on a choice that has them; "+" adds them
-    expect_false(grepl('data-field="printed_label"|data-field="skip_instruction"', html))
-    expect_match(html, 'data-action="show_field" data-id="o1" data-name="printed_label"')
+    # a choice's count of respondents and skip instruction show only on a choice that has them; "+" adds them
+    expect_false(grepl('data-field="respondent_count"|data-field="skip_instruction"', html))
+    expect_match(html, 'data-action="show_field" data-id="o1" data-name="respondent_count"')
     session$setInputs(action = list(action = "choices", id = "v1"))
     expect_length(choices_open(), 0)
     expect_false(grepl('data-field="answer_option"', detail_html(output)))
   })
 })
 
-test_that("a choice's printed words or skip are added to that choice only, with the cursor in them, and × takes them away", {
+test_that("a choice's count of respondents or skip are added to that choice only, with the cursor in them, and × takes them away", {
   page <- edit_extraction_state(draft_service_update(short_gold_draft(), "response_options", "o2", "skip_instruction", "Go to 1c"))
   seen <- local_browser()
   shiny::testServer(extraction_outline_server, args = outline_args(page), {
@@ -577,18 +578,18 @@ test_that("a choice's printed words or skip are added to that choice only, with 
     session$setInputs(action = list(action = "choices", id = "v1"))
     html <- detail_html(output)
     expect_equal(lengths(regmatches(html, gregexpr('data-field="skip_to_id"', html))), 1) # o2's, which has one
-    session$setInputs(action = list(action = "show_field", id = "o1", name = "printed_label"))
-    expect_equal(shown(), "o1:printed_label")
+    session$setInputs(action = list(action = "show_field", id = "o1", name = "respondent_count"))
+    expect_equal(shown(), "o1:respondent_count")
     html <- detail_html(output)
-    expect_equal(lengths(regmatches(html, gregexpr('data-field="printed_label"', html))), 1)
-    expect_match(html, 'data-id="o1" data-field="printed_label"[^>]*data-focus-now|data-focus-now[^>]*data-id="o1" data-field="printed_label"')
-    expect_match(html, 'data-action="hide_field" data-id="o1" data-name="printed_label"')
+    expect_equal(lengths(regmatches(html, gregexpr('data-field="respondent_count"', html))), 1)
+    expect_match(html, 'data-id="o1" data-field="respondent_count"[^>]*data-focus-now|data-focus-now[^>]*data-id="o1" data-field="respondent_count"')
+    expect_match(html, 'data-action="hide_field" data-id="o1" data-name="respondent_count"')
     # the × of a field with words empties it, which Undo can take back
     session$setInputs(action = list(action = "hide_field", id = "o2", name = "skip_instruction"))
     expect_true(is.na(component_choice(page$draft(), "o2")$skip_instruction))
-    session$setInputs(action = list(action = "hide_field", id = "o1", name = "printed_label"))
+    session$setInputs(action = list(action = "hide_field", id = "o1", name = "respondent_count"))
     expect_length(shown(), 0)
-    expect_false(grepl('data-field="printed_label"|data-field="skip_instruction"|data-field="skip_to_id"', detail_html(output)))
+    expect_false(grepl('data-field="respondent_count"|data-field="skip_instruction"|data-field="skip_to_id"', detail_html(output)))
     # a field that isn't optional is ignored
     session$setInputs(action = list(action = "show_field", id = "o1", name = "answer_option"))
     expect_length(shown(), 0)
@@ -611,7 +612,7 @@ test_that("variables with the same choices show them once, edited for all of the
     shared <- paste0("v1,", added)
     session$setInputs(edit = list(table = "response_options", id = "o1", field = "answer_option", value = "Yes, often", shared = shared))
     both <- page$draft()$response_options
-    expect_equal(both$answer_option[both$display_order == 1 & both$variable_id %in% c("v1", added)], c("Yes, often", "Yes, often"))
+    expect_equal(both$answer_option[both$display_order == 1 & both$variable_id %in% c("v1", added)], c("yes, often", "yes, often")) # kept in its standard form
     session$setInputs(action = list(action = "add_choice", id = "v1", shared = shared))
     expect_equal(nrow(draft_service_children(page$draft(), "response_options", added)), 3)
     suppressMessages(session$setInputs(action = list(action = "delete", table = "response_options", id = "o1", shared = shared)))
@@ -738,7 +739,7 @@ test_that("each block notes the PDF page it was read from, for Open PDF to open 
   expect_match(html, sprintf('data-id="%s"[^>]*data-page="2"', draft$components$id[2]))
 })
 
-test_that("a question group closes once everything in it is checked, and the first block after it that isn't a section or group is selected", {
+test_that("a group closes once everything in it is checked, and the first block after it that isn't a section or group is selected", {
   draft <- with_matr_ids(short_gold_draft())
   printed <- draft_service_printed_order(draft)
   group <- sections_of(draft)[1]
@@ -777,7 +778,7 @@ test_that("the marks say which blocks differ from what the AI read, for the Chan
   })
   expect_match(as.character(outline_filter()), 'data-outline-filter')
   expect_match(as.character(outline_filter()), '<option value="changed">Changed from AI</option>')
-  expect_match(as.character(outline_filter()), '<option value="all">Add Filter</option>')
+  expect_match(as.character(outline_filter()), '<option value="all">Filter</option>')
 })
 
 # ------ The list, with the picked block's details beside it -----------------------------------------------
@@ -818,13 +819,13 @@ test_that("Add Skip Logic makes a question depend on an answer to an earlier one
     expect_match(seen$modals[[2]], "The earlier question")
     expect_match(text_of(output$logic_answers), "Pick the earlier question first")
     session$setInputs(logic_parent = "c3")
-    expect_match(text_of(output$logic_answers), "Yes")
-    session$setInputs(logic_answer_picks = "Yes", logic_answer_save = 1)
+    expect_match(text_of(output$logic_answers), "yes")
+    session$setInputs(logic_answer_picks = "yes", logic_answer_save = 1)
     expect_equal(of("c4")$parent_question_id, "c3")
-    expect_equal(of("c4")$condition, "Yes")
+    expect_equal(of("c4")$condition, "yes")
     html <- detail_html(output)
     # the earlier question by its words, in full, and no number
-    expect_match(text_of(html), "This question is only shown to respondents if they answered “Yes” to “Would you call yourself a nervous person?”", fixed = TRUE)
+    expect_match(text_of(html), "This question is only shown to respondents if they answered “yes” to “Would you call yourself a nervous person?”", fixed = TRUE)
     expect_match(html, 'data-action="select" data-id="c3"') # the sentence goes to that question
     expect_match(regmatches(html, regexpr('<button[^>]*data-action="remove_logic".*?</button>', html)), "fa-trash") # deleted like everything else
     session$setInputs(action = list(action = "remove_logic", id = "c4", kind = "answer"))
@@ -863,7 +864,7 @@ test_that("a Skip to on a choice or a write-in shows in the skip logic of the qu
   view <- list(problems = draft_service_check(draft, test_lookups()))
   detail_of <- function(draft, id) htmltools::renderTags(block_detail(component(draft, id), draft, view, test_lookups(), shiny::NS("x")))$html
   html <- detail_of(draft, "c4")
-  expect_match(text_of(html), "only shown to respondents if they answered “Yes” to “Would you call yourself a nervous person?”", fixed = TRUE) # No skips past it
+  expect_match(text_of(html), "only shown to respondents if they answered “yes” to “Would you call yourself a nervous person?”", fixed = TRUE) # No skips past it
   expect_match(text_of(html), "from a Skip to in that question")
   expect_match(html, 'data-action="select" data-id="c3"') # the sentence goes to that question
   expect_false(grepl('data-action="remove_logic"', html)) # it goes when the Skip to does
@@ -890,7 +891,7 @@ test_that("a section's or group's details have no variables, and Ungroup in thei
   expect_match(as.character(block_detail(NULL, draft, view, test_lookups(), shiny::NS("x"))), "Pick a block in the list")
 })
 
-test_that("the toolbar is + Block, Add Filter, Search, Expand All, Collapse All and what is to fix, and the details sit beside the list", {
+test_that("the toolbar is + Block, Filter, Search, Expand All, Collapse All and what is to fix, and the details sit beside the list", {
   html <- htmltools::renderTags(extraction_outline_ui("outline"))$html
   expect_match(html, 'class="outline-panel is-split"')
   # each button is its icon and its words (only the icon on a phone), the search and filter each with an icon
@@ -898,7 +899,7 @@ test_that("the toolbar is + Block, Add Filter, Search, Expand All, Collapse All 
   expect_match(html, '<span class="btn-text">Block</span>')
   expect_match(html, "fa-magnifying-glass")
   expect_match(html, "fa-filter")
-  places <- vapply(c('data-action="pick_block"', "Add Filter", "data-outline-search", "Expand All", "Collapse All", "outline-to_fix"), function(x) {
+  places <- vapply(c('data-action="pick_block"', ">Filter<", "data-outline-search", "Expand All", "Collapse All", "outline-to_fix"), function(x) {
     as.integer(regexpr(x, html, fixed = TRUE))
   }, integer(1))
   expect_true(all(places > 0))
@@ -946,19 +947,27 @@ test_that("+ Variable asks for choices or a write-in, each said in a box, and ad
   })
 })
 
-test_that("a link to a section or group (from the list of what is to fix) opens its first question; a draft opens with them all closed", {
+test_that("a link to a group (from the list of what is to fix) opens the group, whose details hold its skip; a draft opens with them all closed", {
   page <- short_page()
   loads <- shiny::reactiveVal(0L)
   page$state$loaded <- loads
-  first <- draft_service_printed_order(short_gold_draft(), "c1")
-  blocks <- short_gold_draft()$components
-  first <- first[blocks$component_type[match(first, blocks$id)] == "Question"][1]
   shiny::testServer(extraction_outline_server, args = outline_args(page), {
     session$flushReact()
     expect_setequal(collapsed(), sections_of(short_gold_draft()))
+    session$setInputs(action = list(action = "select", id = "c1")) # c1 is a group
+    expect_equal(page$selected(), "c1")
+    expect_false("c1" %in% collapsed()) # opened, to show what it holds
+  })
+})
+
+test_that("a link to a section opens its first question", {
+  draft <- short_gold_draft()
+  draft <- draft_service_update(draft, "components", "c1", "component_type", "Section")
+  draft <- draft_service_update(draft, "components", "c1", "text", "Part A")
+  page <- short_page(draft)
+  shiny::testServer(extraction_outline_server, args = outline_args(page), {
     session$setInputs(action = list(action = "select", id = "c1"))
-    expect_equal(page$selected(), first)
-    expect_false("c1" %in% collapsed()) # opened around the question picked
+    expect_equal(page$selected(), "c3")
   })
 })
 
@@ -998,16 +1007,20 @@ test_that("a variable's choices have Printed as and Skip to columns once one of 
   html <- editor(draft)
   expect_match(html, 'class="choice-table"')
   expect_match(text_of(head_of(html)), "Code Response Option", fixed = TRUE)
-  expect_false(grepl("Printed as|Skip to", head_of(html)))
-  printed <- draft_service_update(draft, "response_options", "o1", "printed_label", "YES")
-  html <- editor(printed)
-  expect_match(html, 'class="choice-table has-printed_label"')
-  expect_match(head_of(html), "<span>Printed as</span>")
-  expect_equal(lengths(regmatches(html, gregexpr('class="choice-cell is-printed_label"', html))), 2) # o2's is empty
-  both <- draft_service_skip_parents(draft_service_update(printed, "response_options", "o2", "skip_instruction", "Go to Question 1c"))
+  expect_false(grepl("Respondents|Skip to", head_of(html)))
+  counted <- draft_service_update(draft, "response_options", "o1", "respondent_count", "120")
+  expect_identical(counted$response_options$respondent_count[1], 120L)
+  html <- editor(counted)
+  expect_match(html, 'class="choice-table has-respondent_count"')
+  expect_match(head_of(html), "<span>Respondents</span>")
+  expect_equal(lengths(regmatches(html, gregexpr('class="choice-cell is-respondent_count"', html))), 2) # o2's is empty
+  both <- draft_service_skip_parents(draft_service_update(counted, "response_options", "o2", "skip_instruction", "Go to Question 1c"))
   html <- editor(both)
-  expect_match(html, 'class="choice-table has-printed_label has-skip_instruction"')
-  expect_match(text_of(head_of(html)), "Code Response Option Printed as Skip to", fixed = TRUE)
+  expect_match(html, 'class="choice-table has-respondent_count has-skip_instruction"')
+  expect_match(text_of(head_of(html)), "Code Response Option Respondents Skip to", fixed = TRUE)
+  # Make an edit has no wave to count for, so it doesn't offer one
+  make_edit <- htmltools::renderTags(choice_editor(draft$variables[draft$variables$id == "v1", ], draft, c(view, counts = FALSE), shiny::NS("x")))$html
+  expect_false(grepl('data-name="respondent_count"', make_edit))
 })
 
 test_that("a parent the AI read without saying which answers is said as depending on how they answered", {
@@ -1016,10 +1029,10 @@ test_that("a parent the AI read without saying which answers is said as dependin
   expect_match(text_of(html), "This question is only shown to respondents depending on how they answered “Would you call yourself a nervous person?”", fixed = TRUE)
 })
 
-test_that("a parent the AI read, with a Skip to that passes the question, says the answers that reach it", {
+test_that("a parent the AI read, with a Skip to from it that passes the question, is the skip's, and says the answers that reach it", {
   draft <- draft_service_update(short_gold_draft(), "components", "c4", "parent_question_id", "c3") # read by the AI
   draft <- draft_service_skip_parents(draft_service_update(draft, "response_options", "o2", "skip_instruction", "Go to Question 1c"))
-  expect_false(component(draft, "c4")$parent_from_skip)
+  expect_true(component(draft, "c4")$parent_from_skip) # said once, from the Skip to
   html <- htmltools::renderTags(block_detail(component(draft, "c4"), draft, list(problems = draft_service_check(draft, test_lookups())), test_lookups(), shiny::NS("x")))$html
-  expect_match(text_of(html), "if they answered “Yes” to “Would you call yourself a nervous person?”", fixed = TRUE)
+  expect_match(text_of(html), "if they answered “yes” to “Would you call yourself a nervous person?”", fixed = TRUE)
 })

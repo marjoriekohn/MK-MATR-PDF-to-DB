@@ -4,8 +4,8 @@
 # `first`, `second` and so on. The database is the real one: each test makes the registry, study and
 # questionnaire its draft is about.
 
-edit_page <- function(me, extractions = test_extractions()) {
-  list(extractions = extractions, catalog = test_live_catalog(), connection = test_connection, me = me)
+edit_page <- function(me, extractions = test_extractions(), catalog = shared_catalog(env), env = parent.frame()) {
+  list(extractions = extractions, catalog = catalog, connection = test_connection, me = me)
 }
 
 # A draft that has been read, as a new wave of the tree's questionnaire. What it read is the first two parts
@@ -327,7 +327,7 @@ test_that("a new wave of a recorded questionnaire gets the MATR IDs its question
   second_wave <- do.call(local_manual_extraction, c(list(me), picked_basic_info(tree, pushed$questionnaire_id), list(env = environment())))
   draft_service_save(test_connection, second_wave$id, test_questionnaire_draft(matr = c(NA, NA)), me$staff_id)
   second_wave <- extraction_model_get(test_connection, second_wave$id)
-  shiny::testServer(edit_extraction_server, args = edit_page(me), {
+  shiny::testServer(edit_extraction_server, args = edit_page(me, catalog = test_live_catalog()), {
     errors <- collect_errors(session)
     expect_true(open(second_wave))
     expect_setequal(draft()$variables$matr_id, pushed$draft$variables$matr_id)
@@ -506,8 +506,8 @@ test_that("Continue shows the PDF that was uploaded with the draft, even on a se
 editing_now <- function(record) extraction_model_get(test_connection, record$id)$editing$by_id
 
 # The page's arguments, with where it records the pages it shows and whether it is the one showing.
-claim_page <- function(me, seen, showing = shiny::reactiveVal(TRUE)) {
-  c(edit_page(me), list(show_page = function(page) seen$pages <- c(seen$pages, page), active = showing))
+claim_page <- function(me, seen, showing = shiny::reactiveVal(TRUE), env = parent.frame()) {
+  c(edit_page(me, env = env), list(show_page = function(page) seen$pages <- c(seen$pages, page), active = showing))
 }
 
 test_that("opening a draft claims it, leaving the page with nothing unsaved lets it go, and coming back has it again", {

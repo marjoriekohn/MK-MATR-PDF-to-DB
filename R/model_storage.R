@@ -4,7 +4,7 @@
 # a draft needs later (its PDF) are also kept in a private bucket in the project's Storage, which the
 # site's server reads and writes with the secret key (the same `connection` as the database, in the
 # apikey header). Nobody else can read the bucket: it isn't public, and no policy lets anyone in.
-# The bucket is made by docs/migrations/20261021_pdf_storage.sql.
+# The bucket is made by docs/sql/3_pdf_storage.sql.
 #
 #   curl "$SUPABASE_URL/storage/v1/object/extraction-pdfs/<sha256>.pdf" -H "apikey: $SUPABASE_SECRET_KEY"
 
@@ -41,6 +41,21 @@ storage_model_upload <- function(connection, bucket, name, path, type = "applica
     httr2::req_body_file(path, type) |>
     storage_perform()
   if (httr2::resp_status(response) >= 400) stop(storage_problem(response, bucket), call. = FALSE)
+  invisible()
+}
+
+#' Remove a file from a bucket.
+#'
+#' @param connection The MATR database, `list(url, key)`; see `model_database.R`.
+#' @param bucket The bucket.
+#' @param name The file's name in the bucket.
+#' @return Called for its effect; a file that isn't there is no problem. An error with a sentence if
+#'   Storage refused.
+storage_model_delete <- function(connection, bucket, name) {
+  response <- storage_request(connection, bucket, name) |>
+    httr2::req_method("DELETE") |>
+    storage_perform()
+  if (httr2::resp_status(response) >= 400 && !storage_is_missing(response)) stop(storage_problem(response, bucket), call. = FALSE)
   invisible()
 }
 
@@ -90,7 +105,7 @@ storage_problem <- function(response, bucket) {
   body <- tryCatch(httr2::resp_body_json(response), error = function(problem) list())
   if (identical(body$code, "NoSuchBucket")) {
     return(sprintf(
-      "The file storage has no bucket called %s yet, so the PDF can't be kept. Run docs/migrations/20261021_pdf_storage.sql.",
+      "The file storage has no bucket called %s yet, so the PDF can't be kept. Run docs/sql/3_pdf_storage.sql.",
       bucket
     ))
   }

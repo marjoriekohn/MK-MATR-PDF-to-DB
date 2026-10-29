@@ -7,7 +7,7 @@ mine <- function() list(name = paste0("like.", test_marker, "*"))
 test_that("a table is read with the columns asked for, in the order asked for, and a null is NA", {
   local_registry(name = paste(test_marker, "B registry"), env = environment())
   withr::defer(test_delete("registry", mine()))
-  database_model_insert(test_connection, "registry", list(name = paste(test_marker, "A registry"), abbreviation = "AR", participant_count = 5, description = NULL))
+  database_model_insert(test_connection, "registry", list(name = paste(test_marker, "A registry"), abbreviation = test_abbreviation(), participant_count = 5, description = NULL))
   registries <- database_model_get(
     test_connection, "registry", c("registry_id", "name", "description"), order_by = "name", filters = mine()
   )
@@ -21,7 +21,7 @@ test_that("a table is read with the columns asked for, in the order asked for, a
 test_that("a table longer than a page is read a page at a time", {
   withr::defer(test_delete("registry", mine()))
   for (i in 1:5) {
-    database_model_insert(test_connection, "registry", list(name = sprintf("%s page %d", test_marker, i), abbreviation = "P", participant_count = 1))
+    database_model_insert(test_connection, "registry", list(name = sprintf("%s page %d", test_marker, i), abbreviation = test_abbreviation(), participant_count = 1))
   }
   registries <- database_model_get(test_connection, "registry", c("registry_id", "name"), order_by = "name", filters = mine(), page_size = 2)
   expect_equal(registries$name, sprintf("%s page %d", test_marker, 1:5))
@@ -82,13 +82,13 @@ test_that("a table with jsonb comes back as lists, as it was saved, with the peo
 test_that("a row is added with its nulls, and what the database stored comes back, defaults included", {
   row <- list(name = test_name("Inserted"), email = sprintf("%s-ins@example.test", tolower(test_marker)), active = TRUE)
   created <- database_model_insert(test_connection, "staff", row, select = c("staff_id", "name", "role", "email"))
-  withr::defer(test_delete("staff", list(staff_id = database_eq(created$staff_id))))
+  withr::defer(test_remove_staff(created$staff_id))
   expect_equal(created$name, row$name)
   expect_equal(created$role, "STAFF") # a default the database filled in
   expect_match(as.character(created$staff_id), "^[0-9]+$")
 
   registry <- database_model_insert(
-    test_connection, "registry", list(name = test_name("Nulls"), abbreviation = "N", participant_count = 3, description = NULL)
+    test_connection, "registry", list(name = test_name("Nulls"), abbreviation = test_abbreviation(), participant_count = 3, description = NULL)
   )
   withr::defer(test_delete("registry", list(registry_id = database_eq(registry$registry_id))))
   expect_null(registry$description)
@@ -97,12 +97,13 @@ test_that("a row is added with its nulls, and what the database stored comes bac
 test_that("a change names the rows, says whether anything matched, and never reaches a whole table", {
   registry <- local_registry()
   key <- list(registry_id = database_eq(registry$registry_id))
-  changed <- database_model_update(test_connection, "registry", list(abbreviation = "NEW"), key)
+  new <- test_abbreviation()
+  changed <- database_model_update(test_connection, "registry", list(abbreviation = new), key)
   expect_length(changed, 1)
-  expect_equal(changed[[1]]$abbreviation, "NEW")
+  expect_equal(changed[[1]]$abbreviation, new)
   nothing <- database_model_update(test_connection, "registry", list(abbreviation = "X"), list(registry_id = database_eq(0)))
   expect_length(nothing, 0)
-  expect_equal(database_model_get(test_connection, "registry", "abbreviation", filters = key)$abbreviation, "NEW")
+  expect_equal(database_model_get(test_connection, "registry", "abbreviation", filters = key)$abbreviation, new)
   expect_error(database_model_update(test_connection, "registry", list(abbreviation = "X"), list()), "needs to say which rows")
 })
 
@@ -127,7 +128,7 @@ test_that("a table the key hasn't been granted is not mistaken for a bad key", {
   publishable <- list(url = test_connection$url, key = test_publishable_key())
   expect_error(
     database_model_get(publishable, "staff", "email"),
-    "won't let the site use this table \\(permission denied for table staff\\).*docs/sql_scripts.sql"
+    "won't let the site use this table \\(permission denied for table staff\\).*docs/sql/sql_scripts.sql"
   )
 })
 
@@ -158,4 +159,18 @@ test_that("the database's description of itself is read from the API's root", {
   ) %in% names(description$definitions)))
   expect_true("/rpc/approve_draft" %in% names(description$paths))
   expect_true("/rpc/send_back_draft" %in% names(description$paths))
+})
+
+test_that("MATR_DATABASE picks the live or the test database, and says what's wrong with anything else", {
+  withr::local_envvar(
+    SUPABASE_URL = "https://live.supabase.co", SUPABASE_SECRET_KEY = "live-secret", SUPABASE_PUBLISHABLE_KEY = "live-pub",
+    TEST_SUPABASE_URL = "https://test.supabase.co", TEST_SUPABASE_SECRET_KEY = "test-secret", TEST_SUPABASE_PUBLISHABLE_KEY = "test-pub"
+  )
+  expect_equal(database_model_choose(""), "live")
+  expect_equal(Sys.getenv("SUPABASE_URL"), "https://live.supabase.co")
+  expect_equal(database_model_choose(" Test "), "test")
+  expect_equal(Sys.getenv(c("SUPABASE_URL", "SUPABASE_SECRET_KEY", "SUPABASE_PUBLISHABLE_KEY"), names = FALSE), c("https://test.supabase.co", "test-secret", "test-pub"))
+  expect_error(database_model_choose("staging"), "should be live or test")
+  withr::local_envvar(TEST_SUPABASE_URL = "")
+  expect_error(database_model_choose("test"), "TEST_SUPABASE_URL or TEST_SUPABASE_SECRET_KEY isn't in the .env file")
 })

@@ -68,8 +68,8 @@ test_that("variables and choices are named by where they are, and by their row o
   expect_equal(vapply(edits, function(edit) edit$item, character(1)), c("variable", "choice"))
   expect_equal(vapply(edits, function(edit) edit$ref, character(1)), c(variable, choice))
   expect_equal(edits[[1]]$where, "Question 1a > variable 1")
-  expect_equal(edits[[2]]$where, "Question 1a > variable 1 > choice “Definitely”")
-  expect_equal(c(edits[[2]]$before, edits[[2]]$after), c("Yes", "Definitely"))
+  expect_equal(edits[[2]]$where, "Question 1a > variable 1 > choice “definitely”")
+  expect_equal(c(edits[[2]]$before, edits[[2]]$after), c("yes", "definitely")) # choices are kept in lower case
 })
 
 test_that("a block that was added or deleted is an entry that says what it was; one deleted and typed again is both", {
@@ -114,7 +114,7 @@ test_that("moving one block is one move, wherever it goes; its neighbours that o
   expect_false("moved" %in% changes(edits_of(draft_service_delete(original(), "components", q1a))))
 })
 
-test_that("blocks left where a deleted question group was haven't moved: the deleted group is the difference", {
+test_that("blocks left where a deleted group was haven't moved: the deleted group is the difference", {
   group <- original()$components$parent_id[match(q(original(), "1a"), original()$components$id)]
   inside <- draft_service_children(original(), "components", group)$id
   # move what is inside to where the group is, then delete the group
@@ -132,7 +132,7 @@ test_that("what the site works out isn't a difference: codes, places, the checke
   reviewed <- original()
   reviewed$components$checked[1:5] <- TRUE
   reviewed$variables$matr_id[1:3] <- c("a", "b", "c")
-  reviewed$response_options$code_value[1:2] <- c(0L, 9L)
+  reviewed$response_options$code_value[1:2] <- c("0", "9")
   expect_equal(edits_of(reviewed), list())
   expect_equal(edits_of(draft_service_copy_codes(reviewed, reviewed$variables$id[1])), list())
 })
@@ -179,7 +179,7 @@ test_that("the blocks changed from what the AI read: a field, a variable or choi
   box_1d <- original$variables$id[original$variables$component_id == q1d][1]
   reviewed <- draft_service_update(original, "components", q1a, "text", "Reworded")
   reviewed <- draft_service_update(reviewed, "variables", box_1b, "label", "A label")
-  reviewed <- draft_service_update(reviewed, "response_options", choice_1c, "printed_label", "Y")
+  reviewed <- draft_service_update(reviewed, "response_options", choice_1c, "answer_option", "yes, always")
   reviewed <- suppressMessages(draft_service_delete(reviewed, "variables", box_1d))
   added <- draft_service_next_id(reviewed, "components")
   reviewed <- draft_service_add_block(reviewed, "Instruction", added, near_id = q1a)

@@ -235,7 +235,7 @@ edit_show_value <- function(value, field) {
     return("")
   }
   switch(field$type,
-    date = format(as.Date(value), "%m/%d/%Y"),
+    date = edit_us_date(value),
     number = key_text(value),
     select = key_text(value),
     as.character(value)
@@ -252,6 +252,7 @@ edit_show_value <- function(value, field) {
 #' @return A string, or `NA_character_` for nothing.
 edit_service_normalize <- function(field, value) {
   value <- trimws(value %||% "")
+  if (!is.null(field$normalize)) value <- sub("^NA$", "", paste(field$normalize(value))) # an answer choice, as kept
   if (!nzchar(value)) {
     return(NA_character_)
   }
@@ -436,9 +437,15 @@ edit_display_value <- function(field, value) {
       paste(ifelse(ids %in% unname(field$choices), names(field$choices)[match(ids, unname(field$choices))], ids), collapse = " / ")
     },
     choice = names(field$choices)[match(toupper(value), unname(field$choices))] %||% value,
-    date = format(as.Date(value), "%m/%d/%Y"),
+    date = edit_us_date(value),
     value
   )
+}
+
+# A saved date (YYYY-MM-DD) as MM/DD/YYYY; anything else (a date still being typed) as it is.
+edit_us_date <- function(value) {
+  parsed <- as.Date(as.character(value), format = "%Y-%m-%d") # NA, not an error, for text that isn't a date
+  if (is.na(parsed)) as.character(value) else format(parsed, "%m/%d/%Y")
 }
 
 #' Two texts as runs of words kept, taken out and put in.
@@ -708,14 +715,14 @@ edit_summary_add <- function(entity, snap, fields, values) {
 edit_summary_update <- function(entity, snap, row, fields, values) {
   initial <- edit_service_initial(entity, fields, snap, "update", row)
   changes <- edit_service_changes(fields, initial, values)
-  title <- edit_label(snap, entity$table, row)
+  title <- shorten(edit_label(snap, entity$table, row), 80) # a summary is a line in a list
   paste0(
     "Changed the ", word_list(unique(changes$short)), " of the ", entity$noun, " “", title, "”"
   )
 }
 
 edit_summary_delete <- function(entity, snap, row, plan) {
-  title <- edit_label(snap, entity$table, row)
+  title <- shorten(edit_label(snap, entity$table, row), 80) # a summary is a line in a list
   total <- plan$reach$total
   paste0(
     "Deleted the ", entity$noun, " “", title, "”",

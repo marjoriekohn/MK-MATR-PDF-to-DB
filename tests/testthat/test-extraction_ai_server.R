@@ -91,7 +91,7 @@ test_that("a reading that failed can be tried again, and the note under it point
   })
 })
 
-test_that("Cancel asks first, then sets the draft aside and empties the page", {
+test_that("Cancel asks first, then deletes the draft and empties the page", {
   me <- local_staff()
   tree <- shared_tree()
   seen <- local_browser()
@@ -102,19 +102,18 @@ test_that("Cancel asks first, then sets the draft aside and empties the page", {
     session$setInputs(cancel = 1)
     expect_match(seen$modals[[1]], "Cancel this extraction\\?")
     session$setInputs(confirm_cancel = 1)
-    expect_equal(extraction_model_get(test_connection, first$id)$status, "Withdrawn")
+    expect_error(extraction_model_get(test_connection, first$id), "no longer in the database")
     expect_null(current_id())
     expect_match(notice_texts(seen), "Extraction cancelled.", all = FALSE)
     expect_equal(seen$closed, 1)
   })
 })
 
-test_that("the mode is drawn with the drop zone, the note about reading in the background and the button that opens it", {
+test_that("the mode is drawn with the drop zone and the button that opens it", {
   html <- htmltools::renderTags(extraction_ai_ui("ai"))$html
   expect_match(html, 'id="ai-pdf_card"')
   expect_match(html, 'id="ai-open_extraction"')
-  expect_match(html, "Reading happens in the background")
-  expect_match(html, "Extraction Drafts")
+  expect_false(grepl("Reading happens in the background", html, fixed = TRUE))
   expect_false(grepl('id="ai-info-|About questionnaire|An AI reads it, and while it does', html, ignore.case = TRUE))
   manual <- htmltools::renderTags(extraction_manual_ui("manual"))$html
   expect_match(manual, 'id="manual-start"')

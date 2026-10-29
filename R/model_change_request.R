@@ -8,7 +8,7 @@
 # Approving, applying and sending back are functions of the database, called through /rpc/,
 # because each changes several tables at once (an approval or a send back is a
 # DRAFT_REVIEW_EVENT row) and separate requests can't share a transaction
-# (docs/migrations/20261020_split_draft_details.sql). The functions check the rules
+# (docs/sql/sql_scripts.sql, section 4c). The functions check the rules
 # themselves; the site checks them only to know which buttons to offer.
 
 change_request_waiting_status <- "Awaiting Review"

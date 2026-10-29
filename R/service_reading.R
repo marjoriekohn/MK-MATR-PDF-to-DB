@@ -6,10 +6,17 @@
 # joined. reading_service_tidy() turns the whole into the JSON the Edit Extraction page
 # loads (tests/testthat/fixtures/gna_gold.json is a hand-checked example), and the draft checks
 # look it over. If they find problems, Gemini reads it once more, told what
-# they were, and the reading with fewer problems is kept.
+# they were, and the reading with fewer problems is kept. If the draft has a file of
+# MATR IDs and codes (its `supplement`), Gemini then reads that, in a request of its
+# own (prompts/assign_codes.md), and the variables get their MATR IDs and the choices
+# their codes (reading_service_assign()).
 
 reading_gemini_model <- "gemini-3.8-flash"
 reading_prompt_path <- "prompts/extraction.md"
+reading_assign_prompt_path <- "prompts/assign_codes.md"
+# Variables sent in one assigning request, with the whole file: a long questionnaire's names and codes would
+# be more than Gemini writes in one answer, so its variables go in several requests, sent at once.
+reading_assign_batch <- 80
 reading_pages_at_once <- 2
 
 #' Read a questionnaire PDF into the JSON the Edit Extraction page loads.
@@ -127,7 +134,7 @@ on_pages <- function(part, page) {
 }
 
 # One reading from the readings of each page range. A range that starts by
-# carrying on a section or question group from the pages before it (`continued`) adds its blocks
+# carrying on a section or group from the pages before it (`continued`) adds its blocks
 # to it, and to a section or group inside it that carries on too.
 join_page_ranges <- function(parts) {
   components <- list()
@@ -144,6 +151,10 @@ carry_on <- function(blocks, more) {
     is_container(blocks[[last]]$component_type)
   if (continues_section) {
     blocks[[last]]$children <- carry_on(blocks[[last]]$children, more[[1]]$children)
+    # a group's skip is printed after its questions, so it can come with the pages that finish it
+    for (field in c("skip_condition", "skip_when", "skip_instruction")) {
+      blocks[[last]][[field]] <- blocks[[last]][[field]] %||% more[[1]][[field]]
+    }
     more <- more[-1]
   }
   c(blocks, more)
@@ -185,7 +196,7 @@ reading_service_prompt_version <- function(instructions) {
 # Counts display_order 1, 2, 3... down each list, keeps only the fields each kind
 # of block has (in tests/testthat/fixtures/gna_gold.json's order, leaving out empty ones), and
 # tidies the text: one space between words, straight quotes. A block put inside
-# one that isn't a section or question group moves out to sit straight after it. A variable about the
+# one that isn't a section or group moves out to sit straight after it. A variable about the
 # respondent has no subject.
 reading_service_tidy <- function(reading) {
   list(
@@ -203,8 +214,13 @@ tidy_blocks <- function(blocks) {
     block <- blocks[[i]]
     type <- block$component_type
     if (is_container(type)) {
+      # a group can skip, on the answers to the questions in it (service_draft_skips.R)
+      skips <- type == "Group"
       return(without_blanks(list(
         component_type = type, display_order = i, text = clean_text(block$text), page = block$page,
+        skip_condition = if (skips) clean_text(block$skip_condition),
+        skip_when = if (skips && !is.null(block$skip_condition)) tidy_skip_when(block$skip_when),
+        skip_instruction = if (skips) clean_text(block$skip_instruction),
         children = tidy_blocks(block$children)
       )))
     }
@@ -223,6 +239,11 @@ tidy_blocks <- function(blocks) {
       variables = tidy_boxes(block$variables)
     ))
   })
+}
+
+# Whether a group skips when every question in it gets the answer, or any: "every" unless the AI said "any".
+tidy_skip_when <- function(when) {
+  if (identical(tolower(trimws(as.character(when %||% ""))), "any")) "any" else "every"
 }
 
 lift_misplaced_children <- function(blocks) {
@@ -257,12 +278,9 @@ tidy_choices <- function(choices) {
   choices <- Filter(function(choice) !isFALSE(choice[["printed"]]), choices)
   lapply(seq_along(choices), function(i) {
     choice <- choices[[i]]
-    answer_option <- clean_text(choice$answer_option)
-    printed_label <- clean_text(choice$printed_label)
     without_blanks(list(
       display_order = i,
-      answer_option = answer_option,
-      printed_label = if (!identical(printed_label, answer_option)) printed_label,
+      answer_option = normal_answer(clean_text(choice$answer_option) %||% NA),
       skip_instruction = clean_text(choice$skip_instruction)
     ))
   })
@@ -317,7 +335,7 @@ reading_service_problems <- function(json, lookups) {
   )
 }
 
-# "Question 14a", "Instruction "During the worst time:"", "A question group" or "A section with no heading".
+# "Question 14a", "Instruction "During the worst time:"", "A group" or "A section with no heading".
 block_name <- function(blocks) {
   numbers <- draft_service_question_number(blocks)
   ifelse(
@@ -325,20 +343,131 @@ block_name <- function(blocks) {
     paste(blocks$component_type, numbers),
     ifelse(
       is.na(blocks$text),
-      ifelse(blocks$component_type == "Question Group", "A question group", paste("A", tolower(blocks$component_type), "with no heading")),
+      ifelse(blocks$component_type == "Group", "A group", paste("A", tolower(blocks$component_type), "with no heading")),
       sprintf('%s "%s"', blocks$component_type, substr(blocks$text, 1, 60))
     )
   )
+}
+
+# ------ MATR IDs and codes from a second file -------------------------------------------
+#' Give a reading's variables their MATR IDs, and its choices their codes, from a file that lists them.
+#'
+#' Gemini reads the file (a codebook or a list: a PDF, or text) with the reading's variables, each named by an
+#' id (v1, v2... and o1, o2... for the choices, in printed order), and answers with what the file gives for
+#' each. The variables go `reading_assign_batch` at a time, each batch with the whole file, the requests sent at
+#' once. Only what it gives is filled in. A MATR ID it gives two variables, or codes that repeat within a
+#' variable, are left out, for staff to give on the Edit Extraction page.
+#'
+#' @param json A reading, as `reading_service_tidy()` returns it.
+#' @param supplement The file: `list(name, path)` for a PDF, `list(name, text)` for text
+#'   (`extraction_service_supplement_file()`).
+#' @param generate `gemini_model_generate()` or a stand-in.
+#' @param model The Gemini model to use.
+#' @param prompt_path The prompt's file.
+#' @return The reading, with `matr_id` on the variables and `code_value` on the choices the file gave.
+reading_service_assign <- function(json, supplement, generate = gemini_model_generate, model = reading_gemini_model,
+                                   prompt_path = reading_assign_prompt_path) {
+  variables <- assign_variables(json)
+  if (length(variables) == 0) {
+    return(json)
+  }
+  instructions <- reading_model_prompt(prompt_path)
+  file <- if (!is.null(supplement$text)) paste0("\n\n## The file (", supplement$name, ")\n\n", supplement$text)
+  batches <- split(variables, ceiling(seq_along(variables) / reading_assign_batch))
+  prompts <- vapply(batches, function(batch) {
+    paste0(instructions, "\n\n## The variables\n\n", jsonlite::toJSON(unname(batch), auto_unbox = TRUE), file)
+  }, character(1))
+  answers <- generate(supplement$path, unname(prompts), model = model)
+  given <- unlist(lapply(answers, function(answer) json_in(answer$text)$variables), recursive = FALSE)
+  assign_into(json, list(variables = given))
+}
+
+# Each variable of a reading, in printed order, with the ids the assigning prompt names it and its choices by,
+# and what helps find it in the file: its question's printed number and words, its label, who it is about.
+assign_variables <- function(json) {
+  found <- list()
+  n_box <- 0
+  n_choice <- 0
+  walk <- function(blocks) {
+    for (block in blocks) {
+      for (box in block$variables) {
+        n_box <<- n_box + 1
+        choices <- lapply(box$response_options, function(choice) {
+          n_choice <<- n_choice + 1
+          list(id = paste0("o", n_choice), answer = choice$answer_option)
+        })
+        found[[length(found) + 1]] <<- without_blanks(list(
+          id = paste0("v", n_box), question = block$printed_number, text = block$text, label = box$label,
+          about = box$subject, choices = if (length(choices) > 0) choices
+        ))
+      }
+      walk(block$children)
+    }
+  }
+  walk(json$components)
+  found
+}
+
+# The reading with what Gemini gave (`given$variables`, each `id`, `matr_id` and `choices`, each `id` and
+# `code`) filled in, walking the blocks in the order assign_variables() named them. Only a variable's matr_id and a
+# choice's code_value are set: no block, variable or choice is added, moved, taken away or reworded.
+assign_into <- function(json, given) {
+  matr_ids <- list()
+  codes <- list()
+  for (box in given$variables %||% list()) {
+    matr_id <- clean_text(as.character(box$matr_id %||% ""))
+    if (!is.null(box$id) && !is.null(matr_id)) matr_ids[[box$id]] <- matr_id
+    for (choice in box$choices %||% list()) {
+      code <- clean_text(as.character(choice$code %||% ""))
+      if (!is.null(choice$id) && !is.null(code)) codes[[choice$id]] <- code
+    }
+  }
+  given_twice <- unlist(matr_ids)[duplicated(tolower(unlist(matr_ids)))]
+  n_box <- 0
+  n_choice <- 0
+  fill <- function(blocks) {
+    lapply(blocks, function(block) {
+      if (length(block$variables) > 0) {
+        block$variables <- lapply(block$variables, function(box) {
+          n_box <<- n_box + 1
+          matr_id <- matr_ids[[paste0("v", n_box)]]
+          if (!is.null(matr_id) && !tolower(matr_id) %in% tolower(given_twice)) box$matr_id <- matr_id
+          if (length(box$response_options) > 0) {
+            ids <- paste0("o", n_choice + seq_along(box$response_options))
+            n_choice <<- n_choice + length(box$response_options)
+            mine <- lapply(ids, function(id) codes[[id]])
+            if (!any(duplicated(unlist(mine)))) {
+              box$response_options <- Map(function(choice, code) {
+                if (!is.null(code)) choice$code_value <- code
+                choice
+              }, box$response_options, mine)
+            }
+          }
+          box
+        })
+      }
+      if (length(block$children) > 0) block$children <- fill(block$children)
+      block
+    })
+  }
+  json$components <- fill(json$components)
+  json
 }
 
 # ------ The reading job ---------------------------------------------------------------
 # Reading takes a minute or more, so each draft is read by a background R
 # process (callr) while staff carry on. The job moves the draft's
 # extraction_status along
-#   queued -> sent -> received -> ready      or stops at failed
-# and saves the questionnaire to the draft. A new PDF or "Try reading again"
+#   queued -> sent -> received -> [assigning] -> ready      or stops at failed
+# and saves the questionnaire to the draft. `assigning` is a step of its own, only for a draft with a
+# file of Variable Names and Coding: the questionnaire has been read and checked, and Gemini is giving
+# its variables their MATR IDs and its choices their codes. That adds only those two fields; the
+# questionnaire stays as it was read. A new PDF or "Try reading again"
 # sets it back to queued, which starts a new job. Jobs outlive the session that
 # started them, and the site too.
+
+# The statuses of a draft whose job is still at work.
+reading_statuses <- c("queued", "sent", "received", "assigning")
 
 reading_jobs <- new.env() # the jobs this site started: draft id -> list(process, reading_started)
 
@@ -368,7 +497,7 @@ reading_service_watch <- function(records, connection) {
       job <- NULL
     }
     # A draft typed by hand has no reading to watch.
-    if (!isTRUE(record$extraction_status %in% c("queued", "sent", "received"))) {
+    if (!isTRUE(record$extraction_status %in% reading_statuses)) {
       if (!is.null(job)) rm(list = record$id, envir = reading_jobs)
       next
     }
@@ -399,8 +528,10 @@ reading_service_watch <- function(records, connection) {
 #' @param id The draft's id.
 #' @param reading_started The reading's start time the job was started for.
 #' @param read `reading_service_read()` or a stand-in.
+#' @param assign `reading_service_assign()` or a stand-in.
 #' @return `TRUE` invisibly, or `FALSE` if the reading had already restarted.
-reading_service_run <- function(connection, id, reading_started, read = reading_service_read) {
+reading_service_run <- function(connection, id, reading_started, read = reading_service_read,
+                                assign = reading_service_assign) {
   update <- function(...) extraction_service_reading_update(connection, id, reading_started, list(...))
   record <- extraction_model_get(connection, id)
   if (!identical(record$reading_started, reading_started)) {
@@ -416,9 +547,24 @@ reading_service_run <- function(connection, id, reading_started, read = reading_
         pdf$path, lookup_service_get_all(connection),
         progress = function(status) update(extraction_status = status)
       )
+      # Then, as a step of its own, the Variable Names and Coding: the file may have been added while the
+      # questionnaire was read. Only MATR IDs and codes are added; without the file, or if it can't be read, the
+      # questionnaire stands as it was read (why is kept, to show on the step) and the IDs are given on Edit Extraction.
+      not_applied <- NULL
+      if (!is.null(extraction_model_get(connection, id)$supplement)) {
+        update(extraction_status = "assigning")
+        reading$json <- tryCatch(
+          assign(reading$json, extraction_service_supplement_file(connection, id)),
+          error = function(problem) {
+            not_applied <<- conditionMessage(problem)
+            message("The Variable Names and Coding couldn't be applied: ", not_applied)
+            reading$json
+          }
+        )
+      }
       if (draft_model_save_reading(connection, id, reading$json, reading_started)) {
         update(
-          extraction_status = "ready", error = NULL, model = reading$model,
+          extraction_status = "ready", error = not_applied, model = reading$model,
           prompt_version = reading$prompt_version
         )
       }

@@ -46,11 +46,6 @@ edit_count <- function(n, singular, plural_form = paste0(singular, "s")) {
 # For each of `ids`, how many of `values` are it.
 count_in <- function(values, ids) tabulate(match(values, ids), nbins = length(ids))
 
-# How many characters of a component's words a card, or a line of a questionnaire's
-# outline, shows before it is cut short.
-edit_card_title_chars <- 140
-edit_outline_title_chars <- 120
-
 # A table of cards: what each says, and what staff can type to find it.
 edit_cards <- function(key, title, subtitle = "", facts = NULL, tag = NA_character_, warn = NA_character_) {
   n <- length(key)
@@ -130,11 +125,12 @@ edit_choice_labels <- list(
 edit_field <- function(name, label, type = "text", required = FALSE, choices = NULL, hint = NULL,
                        placeholder = NULL, locked = NULL, min = NULL, rows = NULL, show_when = NULL,
                        problem = NULL, warn = NULL, suggest = NULL, default = NULL, short = NULL,
-                       tooltip = NULL, options = NULL) {
+                       tooltip = NULL, options = NULL, normalize = NULL) {
   list(
     name = name, label = label, type = type, required = required, choices = choices, hint = hint,
     placeholder = placeholder, locked = locked, min = min, rows = rows, show_when = show_when,
     problem = problem, warn = warn, suggest = suggest, default = default, tooltip = tooltip, options = options,
+    normalize = normalize, # a function: what is typed, as it is saved
     short = short %||% tolower_first(label) # what a sentence calls it: "changed the ..."
   )
 }
@@ -522,7 +518,7 @@ component_type_entity <- list(
 )
 
 # Kinds of block the site treats specially (BR42, BR45, BR53).
-edit_core_types <- c("Section", "Question", "Question Group")
+edit_core_types <- c("Section", "Question", "Group")
 
 category_entity <- list(
   label = "MeSH category", noun = "MeSH category", plural = "MeSH categories", article = "a",
@@ -586,13 +582,11 @@ answer_option_entity <- list(
   fields = function(snap, mode, row, scope) {
     list(
       edit_field("standardized_label", "Answer choice",
-        required = TRUE, placeholder = "e.g. Sometimes",
-        hint = if (mode == "update") {
-          paste0(
-            "Every variable that offers this choice shows the new words. Their codes and printed labels ",
-            "stay as they are."
-          )
-        },
+        required = TRUE, placeholder = "e.g. sometimes", normalize = normal_answer,
+        hint = paste0(
+          "Saved in lower case, without a question mark or a full stop or colon at the end.",
+          if (mode == "update") " Every variable that offers this choice shows the new words. Their codes stay as they are."
+        ),
         problem = function(value, values) {
           same <- edit_taken(snap, "answer_option", "standardized_label", value, row)
           if (has_text(value) && nrow(same) > 0) sprintf("“%s” is already in the list.", same$standardized_label[1])
@@ -675,7 +669,7 @@ option_set_entity <- list(
     expected <- count_in(snap$question_scale$expected_option_set_id, rows$option_set_id)
     edit_cards(
       key_text(rows$option_set_id), rows$name,
-      subtitle = shorten(edit_set_words(snap, rows$option_set_id), 90),
+      subtitle = edit_set_words(snap, rows$option_set_id),
       facts = Map(function(v, e) {
         c(
           if (v > 0) paste("offered by", edit_count(v, "variable")) else "offered by no variables",
@@ -826,7 +820,7 @@ question_scale_entity <- list(
     rows <- rows[edit_item_order(rows$item_number), , drop = FALSE]
     expected <- edit_lookup(snap, "option_set", "option_set_id", rows$expected_option_set_id, "name")
     edit_cards(
-      edit_key(rows, c("scale_id", "component_id")), edit_component_text(snap, rows$component_id, edit_card_title_chars),
+      edit_key(rows, c("scale_id", "component_id")), edit_component_text(snap, rows$component_id),
       subtitle = paste("Item", rows$item_number),
       facts = lapply(expected, function(set) if (!is.na(set)) paste0("expects “", set, "”")),
       tag = "Question"
@@ -1010,19 +1004,19 @@ edit_shared_warning <- function(snap, component_ids) {
   ifelse(n >= 2, paste("Shared: changes show in", n, "questionnaires"), NA_character_)
 }
 
-# A component's text field. Every kind has words but a question group, which has none of its own (BR42).
+# A component's text field. Every kind has words but a group, which has none of its own (BR42).
 edit_text_field <- function(snap, mode, row, label = "Printed words", type_field = TRUE) {
-  group <- edit_type_id(snap, "Question Group")
+  group <- edit_type_id(snap, "Group")
   edit_field(
     "text", label, "textarea",
     required = !type_field, rows = 3, short = if (type_field) "words" else "wording",
     problem = function(value, values) {
       is_group <- identical(as.numeric(values$component_type_id %||% NA), group)
       if (type_field && !has_text(value) && !is_group) {
-        return("Add the printed words. Only a question group has none.")
+        return("Add the printed words. Only a group has none.")
       }
       if (type_field && has_text(value) && is_group) {
-        "A question group has no words of its own. Put them in an Instruction inside it."
+        "A group has no words of its own. Put them in an Instruction inside it."
       }
     },
     warn = function(value, values) {
@@ -1050,13 +1044,13 @@ component_entity <- list(
   update_about = "A component is shared. Changing its words changes them in every questionnaire that prints it.",
   delete_about = paste(
     "Deleting a component takes it out of every questionnaire that prints it, and everything inside it if it's a",
-    "section or question group."
+    "section or group."
   ),
   cards = function(snap, scope) {
     rows <- snap$component[!edit_is_question(snap, snap$component$component_id), , drop = FALSE]
     type <- edit_lookup(snap, "component_type", "component_type_id", rows$component_type_id, "name")
     edit_cards(
-      key_text(rows$component_id), edit_component_text(snap, rows$component_id, edit_card_title_chars),
+      key_text(rows$component_id), edit_component_text(snap, rows$component_id),
       subtitle = "",
       facts = lapply(rows$component_id, function(id) edit_seen_in(snap, id)),
       tag = type, warn = edit_shared_warning(snap, rows$component_id)
@@ -1104,7 +1098,7 @@ question_entity <- list(
     rows <- snap$component[edit_is_question(snap, snap$component$component_id), , drop = FALSE]
     boxes <- count_in(snap$variable$component_id, rows$component_id)
     edit_cards(
-      key_text(rows$component_id), edit_component_text(snap, rows$component_id, edit_card_title_chars),
+      key_text(rows$component_id), edit_component_text(snap, rows$component_id),
       subtitle = "",
       facts = Map(
         function(id, n) c(edit_seen_in(snap, id), if (n > 0) edit_count(n, "variable", "variables")),
@@ -1148,7 +1142,7 @@ edit_where_text <- function(snap, placed, rows) {
   section <- edit_lookup(snap, "component", "component_id", rows$parent_component_id, "text")
   ifelse(
     is.na(rows$parent_component_id), paste0("top level · position ", rows$display_order),
-    paste0("in ", shorten(ifelse(is.na(section), "an untitled section", section), 40), " · position ", rows$display_order)
+    paste0("in ", ifelse(is.na(section), "an untitled section", section), " · position ", rows$display_order)
   )
 }
 
@@ -1177,7 +1171,7 @@ questionnaire_component_entity <- list(
     inside <- vapply(placed$component_id, function(id) sum(placed$parent_component_id %in% id), numeric(1))
     edit_cards(
       edit_key(placed, c("questionnaire_id", "component_id")),
-      paste0(strrep("— ", placed$depth), edit_component_text(snap, placed$component_id, edit_outline_title_chars)),
+      paste0(strrep("— ", placed$depth), edit_component_text(snap, placed$component_id)),
       subtitle = edit_where_text(snap, placed, placed),
       facts = Map(function(n_inside, n_other, type) {
         c(
@@ -1241,7 +1235,7 @@ questionnaire_question_entity <- list(
     elsewhere <- edit_service_questionnaire_count(snap, placed$component_id) - 1
     edit_cards(
       edit_key(placed, c("questionnaire_id", "component_id")),
-      edit_component_text(snap, placed$component_id, edit_card_title_chars),
+      edit_component_text(snap, placed$component_id),
       subtitle = vapply(placed$component_id, function(id) {
         mine <- asked[asked$component_id == id, , drop = FALSE]
         if (nrow(mine) == 0) {
@@ -1255,7 +1249,7 @@ questionnaire_question_entity <- list(
       facts = Map(function(id, n_other, self_contained, parent) {
         c(
           edit_count(sum(boxes$component_id == id), "variable", "variables"),
-          if (isFALSE(self_contained)) paste0("follow-up to “", edit_component_text(snap, parent, 40), "”"),
+          if (isFALSE(self_contained)) paste0("follow-up to “", edit_component_text(snap, parent), "”"),
           if (n_other > 0) paste("also asked in", edit_count(n_other, "other questionnaire"))
         )
       }, placed$component_id, elsewhere, questions$self_contained, questions$parent_question_id),
@@ -1291,16 +1285,16 @@ edit_placement_fields <- function(snap, mode, row, scope) {
   parent_choices <- edit_service_parent_choices(snap, placed, if (updating) row$component_id)
 
   where <- list(
-    edit_field("parent_component_id", "Inside which section or question group?", "select",
+    edit_field("parent_component_id", "Inside which section or group?", "select",
       choices = parent_choices, short = "section or group it's in",
-      hint = "Only sections and question groups can hold other blocks.",
+      hint = "Only sections and groups can hold other blocks.",
       problem = function(value, values) {
-        # a section is never inside a question group (BR53)
+        # a section is never inside a group (BR53)
         type <- values$component_type_id %||%
           if (updating) edit_lookup(snap, "component", "component_id", row$component_id, "component_type_id") else NA
         into <- placed$type[match(as.numeric(value), placed$component_id)]
-        if (identical(as.numeric(type), section) && has_text(value) && identical(into, "Question Group")) {
-          "A section can't be inside a question group. Pick a section, or the top level."
+        if (identical(as.numeric(type), section) && has_text(value) && identical(into, "Group")) {
+          "A section can't be inside a group. Pick a section, or the top level."
         }
       }
     ),
@@ -1329,7 +1323,7 @@ edit_placement_fields <- function(snap, mode, row, scope) {
         locked = if (is_question) {
           "A question stays a question. Its settings are under Questionnaire question."
         } else if (has_inside) {
-          "A section or question group with blocks inside can't change kind. Move them out first."
+          "A section or group with blocks inside can't change kind. Move them out first."
         },
         hint = if (!is_question && !has_inside) {
           "Changing the kind, like changing the words, gives this questionnaire its own new component."
@@ -1346,7 +1340,7 @@ edit_placement_fields <- function(snap, mode, row, scope) {
     key_text(candidates$component_id),
     paste0(
       "[", edit_lookup(snap, "component_type", "component_type_id", candidates$component_type_id, "name"), "] ",
-      edit_component_text(snap, candidates$component_id, 80),
+      edit_component_text(snap, candidates$component_id),
       recycle0 = TRUE
     )
   )

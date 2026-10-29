@@ -28,11 +28,14 @@ change_service_row_name <- function(record_identifier) {
 
 #' The rows an edit touches, each with the fields it changes.
 #'
-#' Items for the same row and action go together, in the order the rows first appear.
+#' Items for the same row and action go together, in the order the rows first appear. An applied extraction
+#' is recorded a table at a time (private.apply_draft_items()): an item whose `record_identifier` is a JSON
+#' array of keys stands for every row it added to that table, with no fields.
 #'
 #' @param items The items: a data frame with `entity_name`, `record_identifier`, `action`,
 #'   `attribute_name`, `old_value` and `new_value`.
-#' @return A list with one entry for each row: `table`, `row` (how it is named), `action`
+#' @return A list with one entry for each row (or each table of an extraction): `table`, `row` (how it is
+#'   named, or "287 rows"), `rows` (how many rows it stands for: 1, or a table's count), `action`
 #'   (`"Insert"`, `"Update"` or `"Delete"`) and `fields`, a data frame of `column`, `old`
 #'   and `new` (`NA` for nothing). Empty if there are no items.
 change_service_groups <- function(items) {
@@ -43,9 +46,11 @@ change_service_groups <- function(items) {
   lapply(unique(key), function(one) {
     rows <- items[key == one, , drop = FALSE]
     has_field <- !is.na(rows$attribute_name)
+    n <- change_service_rows_listed(rows$record_identifier[1])
     list(
       table = rows$entity_name[1],
-      row = change_service_row_name(rows$record_identifier[1]),
+      row = if (is.na(n)) change_service_row_name(rows$record_identifier[1]) else plural(n, "row", big_mark = ","),
+      rows = if (is.na(n)) 1L else n,
       action = rows$action[1],
       fields = data.frame(
         column = rows$attribute_name[has_field],
@@ -57,13 +62,25 @@ change_service_groups <- function(items) {
   })
 }
 
+# How many rows an item stands for when it lists their keys (an extraction's table: `[{"variable_key":1},...]`),
+# or NA for an item about one row.
+change_service_rows_listed <- function(record_identifier) {
+  if (!startsWith(trimws(record_identifier %||% ""), "[")) {
+    return(NA_integer_)
+  }
+  keys <- tryCatch(jsonlite::fromJSON(record_identifier, simplifyVector = FALSE), error = function(problem) NULL)
+  if (is.list(keys)) length(keys) else NA_integer_
+}
+
 #' How many rows an edit adds, changes and removes.
 #'
 #' @param groups The rows an edit touches, from `change_service_groups()`.
 #' @return A list: `added`, `changed` and `removed` (counts of rows) and `tables` (how many
 #'   tables they are in).
 change_service_counts <- function(groups) {
-  count <- function(action) sum(vapply(groups, function(group) identical(group$action, action), logical(1)))
+  count <- function(action) {
+    sum(vapply(groups, function(group) if (identical(group$action, action)) group$rows %||% 1L else 0L, integer(1)))
+  }
   list(
     added = count("Insert"), changed = count("Update"), removed = count("Delete"),
     tables = length(unique(vapply(groups, function(group) group$table, character(1))))
@@ -78,7 +95,7 @@ change_service_counts <- function(groups) {
 #' @return A string; empty if the edit touches nothing.
 change_service_counts_text <- function(counts) {
   parts <- c(
-    if (counts$added > 0) paste("adds", plural(counts$added, "row")),
+    if (counts$added > 0) paste("adds", plural(counts$added, "row", big_mark = ",")),
     if (counts$changed > 0) paste("changes", plural(counts$changed, "row")),
     if (counts$removed > 0) paste("removes", plural(counts$removed, "row"))
   )

@@ -38,9 +38,15 @@ make_edit_server <- function(id, connection, me, show_page, active = NULL) {
     # Each kind's tables are read the first time its section is opened (or one of its items is), and kept until a
     # change is made here or the page is opened again, which reads them again for every section that is open.
     tables <- new.env()
+    just_failed <- new.env() # a read that failed as its section opened (pick_first()): what its list then shows
     tables_version <- reactiveVal(0L)
     tables_of <- function(key) {
       tables_version()
+      if (exists(key, envir = just_failed, inherits = FALSE)) {
+        problem <- get(key, envir = just_failed, inherits = FALSE)
+        rm(list = key, envir = just_failed)
+        return(problem)
+      }
       if (!exists(key, envir = tables, inherits = FALSE)) {
         read <- withProgress(message = "Reading the database…", value = 0.5, {
           tryCatch(edit_service_load(connection, edit_entities[[key]]), error = function(problem) problem)
@@ -54,6 +60,7 @@ make_edit_server <- function(id, connection, me, show_page, active = NULL) {
     }
     read_again <- function() {
       rm(list = ls(tables), envir = tables)
+      rm(list = ls(just_failed), envir = just_failed)
       tables_version(tables_version() + 1L)
     }
 
@@ -200,7 +207,9 @@ make_edit_server <- function(id, connection, me, show_page, active = NULL) {
         toggle = {
           is_open <- section_open(event$id)
           is_open(!is_open())
+          if (is_open()) pick_first(event$id)
         },
+        collapse_all = for (id in ls(open_sections)) section_open(id)(FALSE), # the page script closes them at once
         select = go_to(list(kind = event$kind, scope = event$scope %||% "", key = event$key, verb = "view")),
         add = go_to(list(kind = event$kind, scope = event$scope %||% "", key = NULL, verb = "add")),
         edit = verb("update"),
@@ -213,6 +222,34 @@ make_edit_server <- function(id, connection, me, show_page, active = NULL) {
         discard = if (!is.null(record)) confirm_discard(record)
       )
     })
+
+    # Opening a section shows its first item in the details, while they show nothing or an item: not over a form or
+    # what was just done. Not when they already show one of its items, or when it only holds sections (Questions holds
+    # a section for each questionnaire).
+    pick_first <- function(section) {
+      if (!verb() %in% c("", "view")) {
+        return()
+      }
+      parts <- strsplit(section, ":", fixed = TRUE)[[1]]
+      key <- parts[1]
+      q <- if (length(parts) > 1) parts[2] else ""
+      entity <- edit_entities[[key]]
+      if (is.null(entity) || (!is.null(entity$scope) && !nzchar(q))) {
+        return()
+      }
+      read <- tables_of(key)
+      if (inherits(read, "error")) {
+        assign(key, read, envir = just_failed) # its list says so, without reading again at once
+        return()
+      }
+      cards <- edit_service_cards(entity, read, if (nzchar(q)) q)
+      if (nrow(cards) == 0 || (identical(kind(), key) && identical(scope(), q) && any(picked() %in% cards$key))) {
+        return()
+      }
+      show_item(list(kind = key, scope = q, key = cards$key[1], verb = "view"))
+      # the list marks it as it is drawn; the page script unmarks the item picked before, in a section already open
+      session$sendCustomMessage("make-edit-picked", paste(key, q, cards$key[1], sep = "|"))
+    }
 
     # Going to another item, or to + Add, while a form has something typed in it asks first.
     go_to <- function(where) {

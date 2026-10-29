@@ -21,12 +21,23 @@
   > .outline-split { display: flex; flex: 1 1 0; min-height: 0; }
 }
 .outline-body {
-  flex: 0 0 clamp(22rem, 45%, 36rem);
+  flex: 0 0 clamp(22rem, 45%, 36rem); // until the divider is dragged (www/js/split.js sets its width)
   min-width: 0;
   overflow: auto;
   padding: 0.5rem 0.75rem 1rem;
-  border-right: 1px solid $line;
 }
+// The divider between the list and the details: a line, with a wider handle to grab, gold while it is used
+.outline-divider {
+  position: relative;
+  flex: 0 0 1px;
+  background: $line;
+  cursor: col-resize;
+  touch-action: none;
+  &::before { position: absolute; inset: 0 -4px; z-index: 1; content: ""; } // the handle
+  &:hover, &:focus-visible, &.is-dragging { background: $vcu-gold; box-shadow: 0 0 0 1px $vcu-gold; outline: 0; }
+}
+// while dragging, the page's text isn't selected and the cursor stays the same everywhere
+body.is-resizing { cursor: col-resize; user-select: none; }
 // sized by the room the list leaves it, so what is in it goes by its width (container queries), not the screen's
 .detail-panel { display: flex; flex: 1 1 0; flex-direction: column; min-width: 0; container: detail / inline-size; }
 
@@ -67,6 +78,18 @@
 
 }
 .outline-node.is-collapsed > .outline-list { display: none; }
+// A group: a see-through box with a gold border around the blocks it holds, its row a quiet header inside the
+// box (a group has no words), so it reads as "these go together" rather than as another heading
+.outline-node.is-group {
+  padding: 0.15rem 0.35rem 0.35rem;
+  border: 2px solid $vcu-gold;
+  border-radius: $border-radius;
+  background: transparent;
+  > .outline-row { padding-block: 0.1rem; border-color: transparent; }
+  > .outline-row:not(.is-verified):not(:hover) { background-color: transparent; }
+  > .outline-list { margin: 0.15rem 0 0; padding-left: 0; border-left: 0; }
+}
+.outline-node.is-group.is-collapsed { padding-bottom: 0.15rem; }
 // the toolbar's filter: what it leaves out is hidden, and on Edit Extraction sections stay open while it is on (Make an
 // edit's search looks only in the kinds that are open: opening every one would read them all from the database)
 .edit-extraction-page .outline-tree.is-filtered .outline-node.is-collapsed > .outline-list { display: flex; }
@@ -176,7 +199,8 @@
 // panel keeps a screen's height of its own and the page scrolls to it.
 @include media-breakpoint-down(md) {
   .structure-card { min-height: 85vh; }
-  .outline-body { flex: 1 1 0; border-right: 0; }
+  .outline-body { flex: 1 1 0 !important; } // the divider's width is for the side-by-side layout only
+  .outline-divider { display: none; }
   .detail-panel { display: none; }
   .outline-panel.is-detail-open {
     .outline-body { display: none; }

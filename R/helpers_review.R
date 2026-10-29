@@ -8,8 +8,8 @@
 
 #' The colored label for a kind of block.
 #'
-#' Used in outline rows and the details. A question group is the section's gold, outlined so it can
-#' be told from one. Blocks that aren't sections, groups or questions all look like Instruction, at its
+#' Used in outline rows and the details. A group is see-through with a gold border, like the box
+#' drawn around its blocks in the outline, so it can be told from a section. Blocks that aren't sections, groups or questions all look like Instruction, at its
 #' width, so the longer names are shortened.
 #'
 #' @param component_type The kind of block.
@@ -17,14 +17,14 @@
 type_chip <- function(component_type) {
   kind <- switch(component_type,
     Section = "section",
-    `Question Group` = "section is-group",
+    `Group` = "section is-group",
     Question = "question",
     "instruction"
   )
   label <- switch(component_type,
     Introduction = "Intro",
     `Interviewer Script` = "Script",
-    `Question Group` = "Group",
+    `Group` = "Group",
     component_type
   )
   span(
@@ -70,7 +70,7 @@ review_button <- function(label, action, ..., class = "btn btn-sm btn-outline-da
 block_label <- function(block) {
   switch(block$component_type,
     Section = if (is.na(block$text)) "the untitled section" else paste("section", shorten(block$text, 40)),
-    `Question Group` = "the question group",
+    `Group` = "the group",
     Question = {
       number <- draft_service_question_number(block)
       if (is.na(number)) "the unnumbered question" else paste("question", number)
@@ -87,7 +87,8 @@ block_label <- function(block) {
 shorten <- function(text, max_characters) {
   text[is.na(text)] <- ""
   too_long <- nchar(text) > max_characters
-  text[too_long] <- paste0(substr(text[too_long], 1, max_characters - 1), "…")
+  # none is too long when there's no limit (Inf), and substr() can't take Inf
+  if (any(too_long)) text[too_long] <- paste0(substr(text[too_long], 1, max_characters - 1), "…")
   text
 }
 

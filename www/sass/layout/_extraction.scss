@@ -112,19 +112,21 @@
 }
 .pdf-file-name { flex: 1; min-width: 0; overflow-wrap: anywhere; }
 
-// "Replace": a file input drawn as a link
-.pdf-file .file-link.shiny-input-container {
+// "Replace": a file input drawn as the quiet button, like Remove and Cancel extraction beside it (Shiny's file
+// button is .btn-default, which components/_buttons.scss draws as .btn-outline-dark)
+.pdf-file .file-button.shiny-input-container {
   width: auto;
   margin: 0;
   .input-group > .form-control, .shiny-file-input-progress { display: none; }
-  .btn-file {
-    border: 0;
-    background: none;
-    text-decoration: underline;
-    text-decoration-color: $vcu-gold;
-    text-underline-offset: 0.15em;
-  }
 }
+
+// The optional file of MATR IDs and codes: under the PDF, quieter than it
+.pdf-file + .is-supplement, .drop-zone + .is-supplement { margin-top: 0.75rem; }
+.drop-zone.is-supplement { border-width: 1px; }
+.pdf-file.is-supplement {
+  .pdf-file-icon { align-items: center; padding-bottom: 0; font-size: 1.1rem; }
+}
+.supplement-note { margin: 0.75rem 0 0; }
 
 // ------ Reading progress ---------------------------------------------------------------
 .reading-header {

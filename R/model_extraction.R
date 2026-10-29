@@ -20,6 +20,9 @@
 #   model, prompt_version                          ai_extracted_draft (reading_*, model, prompt_version);
 #                                                  NULL for a Manual extraction
 #   info, matr_csv                                 extracted_draft
+#   supplement = list(name, sha256): the optional file of MATR IDs and codes read after the questionnaire
+#                (service_reading.R), only named (sha256 for a PDF); saved as list(name, sha256, bytes) for a PDF
+#                or list(name, text) for a CSV or text file   extracted_draft
 # A save names the columns as if they were one table; the database puts each in its own
 # (draft_row_model_save()). The reading job writes its own columns to ai_extracted_draft directly.
 # The questionnaire itself, what the AI returned and what the reviewer changed aren't in the
@@ -38,7 +41,7 @@ extraction_manual <- "Manual"
 
 # Record field -> column of extracted_draft or ai_extracted_draft, for the fields that are one column each.
 extraction_detail_columns <- c(
-  method = "method", info = "info", matr_csv = "matr_csv", questionnaire = "questionnaire",
+  method = "method", info = "info", matr_csv = "matr_csv", supplement = "supplement", questionnaire = "questionnaire",
   extraction_status = "reading_status", reading_started = "reading_started",
   reading_claimed_at = "reading_claimed_at", reading_pid = "reading_pid", error = "reading_error",
   model = "model", prompt_version = "prompt_version"
@@ -54,8 +57,11 @@ extraction_reading_fields <- c(
 
 # What a list of drafts reads of extracted_draft, with its PDF and reading (not the questionnaire,
 # the AI's answer or the edits).
+# The file of MATR IDs and codes is only named in a list (a CSV's text can be long, and lists are read every few
+# seconds while a draft is read); extraction_model_supplement() reads all of it.
 extraction_list_columns <- c(
-  setdiff(unname(extraction_detail_columns), c("questionnaire", extraction_detail_columns[extraction_reading_fields])),
+  setdiff(unname(extraction_detail_columns), c("questionnaire", "supplement", extraction_detail_columns[extraction_reading_fields])),
+  "supplement_name:supplement->>name", "supplement_sha256:supplement->>sha256",
   "pdf_name", "pdf_sha256", "pdf:pdf_file(pdf_pages,pdf_bytes)",
   sprintf("reading:%s(%s)", ai_extracted_draft_table, paste(extraction_detail_columns[extraction_reading_fields], collapse = ","))
 )
@@ -130,7 +136,8 @@ extraction_model_record <- function(parent, detail) {
     model = reading$model,
     prompt_version = reading$prompt_version,
     info = detail$info,
-    matr_csv = detail$matr_csv
+    matr_csv = detail$matr_csv,
+    supplement = if (!is.null(detail$supplement_name)) list(name = detail$supplement_name, sha256 = detail$supplement_sha256)
   )
 }
 
@@ -228,6 +235,30 @@ extraction_model_claim_reading <- function(connection, id, reading_started, now 
   !is.null(claimed)
 }
 
+#' A draft's whole file of MATR IDs and codes (a record only names it).
+#'
+#' @param connection The MATR database, `list(url, key)`; see `model_database.R`.
+#' @param id The draft's id.
+#' @return `list(name, sha256, bytes)` for a PDF, `list(name, text)` for text, or `NULL` for none.
+extraction_model_supplement <- function(connection, id) {
+  rows <- draft_row_model_details(connection, extracted_draft_table, id, "supplement")
+  rows[[as.character(id)]]$supplement
+}
+
+#' Delete an extraction draft that hasn't been applied, with everything under it.
+#'
+#' `discard_draft()` in the database checks who may (only the person who prepared it) and that it isn't
+#' applied. Its PDF's row (`pdf_file`) goes too when no other draft uses the file.
+#'
+#' @param connection The MATR database, `list(url, key)`; see `model_database.R`.
+#' @param id The draft's id.
+#' @param staff_id Who discards it.
+#' @return Called for its effect. An error with a sentence if the database refused.
+extraction_model_discard <- function(connection, id, staff_id) {
+  database_model_call(connection, "discard_draft", list(p_draft_id = draft_row_number(id), p_staff_id = staff_id))
+  invisible()
+}
+
 # ------ The PDFs --------------------------------------------------------------------
 extraction_model_pdf_dir <- function() getOption("matr.pdf_dir", "uploads/pdfs")
 
@@ -269,6 +300,29 @@ extraction_model_local_pdf <- function(connection, sha256) {
   }
   dir.create(extraction_model_pdf_dir(), recursive = TRUE, showWarnings = FALSE)
   if (storage_model_download(connection, storage_pdf_bucket, paste0(sha256, ".pdf"), path)) path
+}
+
+#' Remove a PDF no draft uses any more: from Storage, and this server's copy.
+#'
+#' The database lets a PDF's row (`pdf_file`) go when the last draft that used it is discarded or applied;
+#' while the row is there, a draft still uses the file and it stays. A PDF of MATR IDs and codes (a draft's
+#' `supplement`) has no row of its own: it stays while another draft's supplement is the same file.
+#'
+#' @param connection The MATR database, `list(url, key)`; see `model_database.R`.
+#' @param sha256 The PDF's SHA-256, or `NULL`.
+#' @return `TRUE` if it was removed, `FALSE` if a draft still uses it (or there is none), invisibly.
+extraction_model_forget_pdf <- function(connection, sha256) {
+  if (length(sha256) != 1 || is.na(sha256) || !nzchar(sha256)) {
+    return(invisible(FALSE))
+  }
+  used <- database_model_count(connection, "pdf_file", list(pdf_sha256 = database_eq(sha256))) +
+    database_model_count(connection, extracted_draft_table, list(`supplement->>sha256` = database_eq(sha256)))
+  if (used > 0) {
+    return(invisible(FALSE))
+  }
+  storage_model_delete(connection, storage_pdf_bucket, paste0(sha256, ".pdf"))
+  unlink(extraction_model_pdf_path(sha256))
+  invisible(TRUE)
 }
 
 #' The SHA-256 of a file.

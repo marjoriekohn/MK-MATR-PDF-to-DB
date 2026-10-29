@@ -217,6 +217,29 @@
 // ------ The list ---------------------------------------------------------------------------------------------
 // An item's row: its name, then a line about it (where it is, what it holds)
 .edit-item-meta { display: block; color: $vcu-gray; font-size: 0.85rem; }
+
+// ------ An item's details ------------------------------------------------------------------------------
+// Each field on a line of its own: what it is on the left, its value beside it, whole (wrapping, never cut short).
+// A narrow panel puts the label above the value.
+.edit-view .detail-grid { display: block; }
+.edit-view .detail-field {
+  display: grid;
+  grid-template-columns: minmax(8rem, 14rem) minmax(0, 1fr);
+  gap: 0 1rem;
+  align-items: baseline;
+  padding: 0.55rem 0;
+  border-bottom: 1px solid $line;
+  &:first-child { padding-top: 0; }
+  .detail-label { margin: 0; font-size: 0.85rem; }
+  .detail-value { padding: 0; white-space: pre-wrap; overflow-wrap: anywhere; }
+}
+@container detail (max-width: 32rem) {
+  .edit-view .detail-field { grid-template-columns: minmax(0, 1fr); }
+  .edit-view .detail-field .detail-label { margin-bottom: 0.15rem; }
+}
+// A drop-down's words wrap too, picked or offered
+.edit-page .selectize-input > .item,
+.edit-page .selectize-dropdown .option { max-width: 100%; white-space: normal; overflow-wrap: anywhere; }
 .edit-list-note { margin: 0.25rem 0.5rem; color: $vcu-gray; font-size: 0.9rem; p { margin: 0 0 0.4rem; } }
 .edit-add { margin-top: 0.15rem; }
 

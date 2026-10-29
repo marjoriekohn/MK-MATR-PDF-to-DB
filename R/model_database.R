@@ -17,6 +17,41 @@
 # Supabase sends at most 1,000 rows per request, so longer tables come in pages.
 database_page_size <- 1000
 
+# ------ Which database -----------------------------------------------------------
+# .env holds two projects' addresses and keys: the live one as SUPABASE_URL, SUPABASE_SECRET_KEY and
+# SUPABASE_PUBLISHABLE_KEY, and the test one as the same names starting TEST_. MATR_DATABASE in .env
+# picks which the site uses when it runs on your own computer: live (the default) or test. The site
+# online has no MATR_DATABASE, so it uses the live one.
+database_test_names <- c(
+  SUPABASE_URL = "TEST_SUPABASE_URL",
+  SUPABASE_SECRET_KEY = "TEST_SUPABASE_SECRET_KEY",
+  SUPABASE_PUBLISHABLE_KEY = "TEST_SUPABASE_PUBLISHABLE_KEY"
+)
+
+#' Point the site at the live or the test database.
+#'
+#' For `"test"`, `SUPABASE_URL` and its keys get the `TEST_SUPABASE_*` values, so everything that reads
+#' them (the connection made in global.R, signing in, the reading jobs) uses the test project.
+#'
+#' @param which `"live"` or `"test"`, from `MATR_DATABASE`; a blank is `"live"`.
+#' @return `"live"` or `"test"`. An error with a sentence for anything else, or for `"test"` without
+#'   the test project's address and secret key in .env.
+database_model_choose <- function(which = Sys.getenv("MATR_DATABASE")) {
+  which <- tolower(trimws(which %||% ""))
+  if (!nzchar(which)) which <- "live"
+  if (!which %in% c("live", "test")) {
+    stop("MATR_DATABASE in the .env file should be live or test, not ", which, ".", call. = FALSE)
+  }
+  if (which == "test") {
+    values <- Sys.getenv(unname(database_test_names), unset = "")
+    if (!all(nzchar(values[1:2]))) {
+      stop("MATR_DATABASE is test, but TEST_SUPABASE_URL or TEST_SUPABASE_SECRET_KEY isn't in the .env file.", call. = FALSE)
+    }
+    do.call(Sys.setenv, as.list(stats::setNames(values, names(database_test_names))))
+  }
+  which
+}
+
 # A request gives up after this long, and is tried up to this many times when
 # Supabase is busy (429 or 503).
 database_timeout_seconds <- 20
@@ -179,13 +214,17 @@ database_model_update <- function(connection, table, changes, filters, select = 
 #' @param connection The MATR database, `list(url, key)`; see `model_database.R`.
 #' @param name The function's name, e.g. `"apply_pending_edit"`.
 #' @param arguments A named list of its arguments.
-#' @return What the function returns, as R values. An error with the function's own sentence if
+#' @return What the function returns, as R values (NULL when it returns nothing). An error with the function's own sentence if
 #'   it refused, e.g. an edit that isn't approved.
 database_model_call <- function(connection, name, arguments = list()) {
   response <- database_request(connection, paste0("rpc/", name)) |>
     httr2::req_method("POST") |>
     database_body(arguments) |>
     database_perform()
+  # a function that returns nothing (void) answers with no body
+  if (!httr2::resp_has_body(response)) {
+    return(invisible())
+  }
   database_rows(response)
 }
 
@@ -243,6 +282,11 @@ database_body <- function(request, data) {
 }
 
 database_perform <- function(request) {
+  # A read that gets no answer at all (the connection dropped or timed out) is asked again, like a busy
+  # Supabase is. A write isn't: it may have gone through, and doing it twice could add a row twice.
+  if (is.null(request$method) || identical(request$method, "GET")) {
+    request <- httr2::req_retry(request, max_tries = database_max_tries, retry_on_failure = TRUE)
+  }
   response <- tryCatch(httr2::req_perform(request), error = function(problem) {
     stop("Couldn't reach the MATR database: ", conditionMessage(problem), call. = FALSE)
   })
@@ -258,16 +302,16 @@ database_problem <- function(response) {
   status <- httr2::resp_status(response)
   body <- tryCatch(httr2::resp_body_json(response), error = function(problem) list())
   message <- body$message %||% ""
-  # P0001 is a function of ours refusing with a sentence for staff (docs/sql_scripts.sql): show it as written.
+  # P0001 is a function of ours refusing with a sentence for staff (docs/sql/sql_scripts.sql): show it as written.
   if (identical(body$code, "P0001") && nzchar(message)) {
     return(message)
   }
   # 42501 is PostgreSQL's "permission denied": the key is fine, but the table
-  # hasn't been granted to it (docs/sql_scripts.sql grants each table).
+  # hasn't been granted to it (docs/sql/sql_scripts.sql grants each table).
   if (identical(body$code, "42501")) {
     return(paste0(
       "The MATR database won't let the site use this table (", message, "). ",
-      "The table needs granting to the service_role; see the grants in docs/sql_scripts.sql and docs/migrations/."
+      "The table needs granting to the service_role; see the grants in docs/sql/sql_scripts.sql and the migrations in docs/sql/."
     ))
   }
   switch(as.character(status),

@@ -2,8 +2,9 @@
 # A draft's questionnaire drawn as a table to read, with nothing to edit, the way a codebook lists it: one
 # row for each variable, with its MATR ID (Variable ID), the words of its question with the variable's label
 # and who it is about in square brackets (Question Text), and its codes and choices, or a write-in's kind of
-# answer (Variable Coding). Blocks that aren't questions (an instruction, a note) have a row each, in printed order.
-# The rows are grouped under the section (and question group) they are printed in. It is a DataTables table
+# answer (Variable Coding). Blocks that aren't questions (an instruction, a note) have a row each, in printed order,
+# and a group that skips has a last row saying where to.
+# The rows are grouped under the section (and group) they are printed in. It is a DataTables table
 # (the DT package): it can be searched, and downloaded as a CSV. A change request shows it before it is
 # submitted and while it waits for a reviewer to approve it.
 
@@ -68,10 +69,11 @@ preview_file_name <- function(draft) {
 #' The rows of the questionnaire's table, in printed order.
 #'
 #' A question has a row for each of its variables (or one, saying it has none); any other block that isn't a
-#' section or question group has one row. Each row names the sections and question groups it is in.
+#' section or group has one row. A group that skips has a last row saying so (kind "Skip"). Each row names
+#' the sections and groups it is in.
 #'
 #' @param draft A draft.
-#' @return A data frame: `section` (e.g. "PART B. YOUR HABITS › Question group", or "" at the top level),
+#' @return A data frame: `section` (e.g. "PART B. YOUR HABITS › Group 1", or "" at the top level),
 #'   `kind`, `matr_id` (NA when there is none), `missing` ("no MATR ID", "no variables" or ""), `text`,
 #'   `tags` ("[Lifetime] [Siblings]", or "") and `coding` (a list of lines: "1 = Yes", or the write-in's kind of
 #'   answer).
@@ -82,12 +84,20 @@ questionnaire_preview_rows <- function(draft) {
       section = section, kind = kind, matr_id = matr_id, missing = missing, text = text, tags = tags, coding = list(coding)
     )
   }
+  targets <- NULL # where groups skip to, worked out once there is one
   walk <- function(parent_id, path) {
     blocks <- draft_service_children(draft, "components", parent_id)
+    groups <- 0L
     for (i in seq_len(nrow(blocks))) {
       block <- blocks[i, , drop = FALSE]
       if (is_container(block$component_type)) {
-        walk(block$id, c(path, preview_container_name(block)))
+        if (block$component_type == "Group") groups <- groups + 1L
+        inside <- c(path, preview_container_name(block, groups))
+        walk(block$id, inside)
+        if (block$component_type == "Group" && (!is.na(block$skip_to_id) || !is.na(block$skip_condition))) {
+          targets <<- targets %||% skip_targets(draft)
+          add(paste(inside, collapse = " \u203a "), "Skip", text = group_skip_text(block, targets), tags = if (is.na(block$skip_instruction)) "" else paste0("(printed: ", block$skip_instruction, ")"))
+        }
         next
       }
       section <- paste(path, collapse = " \u203a ")
@@ -124,10 +134,12 @@ questionnaire_preview_rows <- function(draft) {
   )
 }
 
-# A section by its heading ("(no heading)" for one without), a question group as "Question group".
-preview_container_name <- function(block) {
-  if (block$component_type == "Question Group") {
-    return("Question group")
+# A section by its heading ("(no heading)" for one without), a group as "Group 2" (the second in what holds
+# it). Each group has a name of its own, so where one ends shows as a section's end does: two groups side by
+# side are two headings, not one.
+preview_container_name <- function(block, group_number = 1L) {
+  if (block$component_type == "Group") {
+    return(paste("Group", group_number))
   }
   if (is.na(block$text)) "(no heading)" else block$text
 }

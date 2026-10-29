@@ -2,7 +2,7 @@
 
 test_that("the pick lists come from the lookup tables", {
   subject <- local_row("subject", list(name = test_name("Subject")), "subject_id")
-  option <- local_row("answer_option", list(standardized_label = test_name("Answer")), "answer_option_id")
+  option <- local_row("answer_option", list(standardized_label = tolower(test_name("Answer"))), "answer_option_id") # a choice is in lower case
   lookups <- lookup_service_get_all(test_connection)
   expect_true(all(c("Section", "Question") %in% lookups$component_types))
   expect_true(subject$name %in% lookups$subjects)

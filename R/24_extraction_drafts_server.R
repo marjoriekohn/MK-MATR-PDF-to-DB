@@ -87,16 +87,21 @@ extraction_drafts_server <- function(
       showModal(confirm_dialog(
         "Discard this draft?",
         p(strong(extraction_service_title(record, catalog$get()))),
-        p("It's set aside and won't appear here again. Nothing has been added to the MATR metadata database."),
+        p("It's deleted, with its PDF, and can't be got back. Nothing has been added to the MATR metadata database."),
         confirm_id = ns("confirm_discard"), confirm_label = "Discard"
       ))
     }
 
     observeEvent(input$confirm_discard, {
       removeModal()
-      extraction_service_withdraw(connection, discarding(), me)
+      tryCatch(
+        {
+          extraction_service_discard(connection, discarding(), me)
+          showNotification("Draft discarded.", type = "message")
+        },
+        error = function(problem) show_problem(problem, "Couldn't discard it")
+      )
       extractions$changed()
-      showNotification("Draft discarded.", type = "message")
     })
 
     # ------ OUTPUT ------------------------------------------------------------

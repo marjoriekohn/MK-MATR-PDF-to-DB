@@ -1,6 +1,6 @@
 # What the database does with a change request, called through /rpc/: approve (and so apply), apply at once,
 # send back and withdraw. The database enforces the rules whoever asks, so these are checked against it.
-# The build checks at the end of docs/migrations/sql_scripts.sql check the same rules, and what applying does to
+# The build checks at the end of docs/sql/sql_scripts.sql check the same rules, and what applying does to
 # every table, in SQL.
 
 test_that("a request waits for review with its status, who prepared it and when it was sent", {

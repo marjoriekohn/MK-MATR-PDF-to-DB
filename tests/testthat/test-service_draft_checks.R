@@ -87,7 +87,7 @@ test_that("problems are listed in printed order, and the next one wraps around",
   expect_equal(draft_service_next_problem(draft, problems, after_id = q1c), q1a)
 })
 
-test_that("a section needs its printed heading, a question group has none, and a section isn't inside a group", {
+test_that("a section needs its printed heading, a group has none, and a section isn't inside a group", {
   draft <- with_matr_ids()
   group <- draft$components$parent_id[draft$components$id == block_numbered(draft, "1a")$id]
   problems_of <- function(broken) draft_service_check(broken, test_lookups())
@@ -95,19 +95,28 @@ test_that("a section needs its printed heading, a question group has none, and a
 
   worded <- draft
   worded$components$text[worded$components$id == group] <- "Part A"
-  expect_true(any(grepl("question group has no words of its own", problems_of(worded)$message)))
+  expect_true(any(grepl("group has no words of its own", problems_of(worded)$message)))
 
   as_section <- draft_service_update(draft, "components", group, "component_type", "Section")
   heading <- problems_of(as_section)
-  expect_equal(heading$message[heading$id == group], "Add the section's printed heading. A group with no heading is a question group.")
+  expect_equal(heading$message[heading$id == group], "Add the section's printed heading. Blocks with no printed heading go in a Group instead.")
   expect_equal(heading$field[heading$id == group], "text")
   expect_equal(nrow(problems_of(draft_service_update(as_section, "components", group, "text", "Part A"))), 0)
 
   # a section the AI put inside a group is pointed out
   nested <- draft
   inner <- draft_service_next_id(nested, "components")
-  nested <- draft_service_add_block(nested, "Question Group", inner, near_id = group)
+  nested <- draft_service_add_block(nested, "Group", inner, near_id = group)
   nested$components$component_type[nested$components$id == inner] <- "Section"
   nested$components$text[nested$components$id == inner] <- "Part B"
-  expect_true(any(problems_of(nested)$id == inner & grepl("can't be inside a question group", problems_of(nested)$message)))
+  expect_true(any(problems_of(nested)$id == inner & grepl("can't be inside a group", problems_of(nested)$message)))
+})
+
+test_that("a count of respondents can't be below 0, and a choice without one is fine", {
+  draft <- gold_draft()
+  expect_false(any(grepl("respondents", draft_service_check(draft, test_lookups())$message)))
+  below <- draft_service_update(draft, "response_options", "o1", "respondent_count", "-3")
+  problems <- draft_service_check(below, test_lookups())
+  expect_true(any(grepl("can't be below 0", problems$message)))
+  expect_false(any(grepl("can't be below 0", draft_service_check(draft_service_update(draft, "response_options", "o1", "respondent_count", "0"), test_lookups())$message)))
 })

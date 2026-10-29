@@ -36,7 +36,7 @@ question <- function(number, boxes = list(yes_no_box())) {
 }
 
 yes_no_box <- function() {
-  choice <- function(answer) list(answer_option = answer, printed = TRUE, printed_label = NULL, skip_instruction = NULL)
+  choice <- function(answer) list(answer_option = answer, printed = TRUE, skip_instruction = NULL)
   list(
     variable_type = "closed_ended", label = NULL, subject = NULL, answer_data_type = NULL,
     response_options = list(choice("Yes"), choice("No"))
@@ -51,7 +51,7 @@ answer_with <- function(...) {
 }
 
 group_of <- function(..., continued = NULL) {
-  list(component_type = "Question Group", continued = continued, text = NULL, children = list(...))
+  list(component_type = "Group", continued = continued, text = NULL, children = list(...))
 }
 
 section_of <- function(..., text = "Part A", continued = NULL) {
@@ -104,8 +104,8 @@ test_that("tidying numbers each list, cleans the text and keeps only each block'
     question("12 b.", boxes = list(list(
       variable_type = "closed_ended", label = NULL, subject = "Self", answer_data_type = NULL,
       response_options = list(
-        list(answer_option = "Male", printed = TRUE, printed_label = "M", skip_instruction = NULL),
-        list(answer_option = "Female", printed = TRUE, printed_label = "Female", skip_instruction = NULL)
+        list(answer_option = "Male", printed = TRUE, printed_label = "M", skip_instruction = NULL), # an old field: dropped
+        list(answer_option = "FEMALE.", printed = TRUE, skip_instruction = NULL)
       )
     )))
   ))
@@ -121,8 +121,8 @@ test_that("tidying numbers each list, cleans the text and keeps only each block'
   expect_null(asked$variables[[1]]$subject) # about the respondent: no subject
   choices <- asked$variables[[1]]$response_options
   expect_equal(vapply(choices, function(choice) choice$display_order, integer(1)), 1:2)
-  expect_equal(choices[[1]]$printed_label, "M")
-  expect_null(choices[[2]]$printed_label) # printed as the standard wording
+  expect_null(choices[[1]]$printed_label) # how it was printed isn't kept
+  expect_equal(vapply(choices, function(choice) choice$answer_option, ""), c("male", "female")) # lower case, no full stop
   expect_null(choices[[1]][["printed"]]) # every choice kept is printed, so it isn't said
 })
 
@@ -130,13 +130,13 @@ test_that("a choice the reading says isn't printed is left out: a lone check box
   reading <- list(components = list(question("5", boxes = list(list(
     variable_type = "closed_ended", label = "City", subject = "Self",
     response_options = list(
-      list(answer_option = "Yes", printed = TRUE, printed_label = "CITY"),
+      list(answer_option = "Yes", printed = TRUE),
       list(answer_option = "No", printed = FALSE)
     )
   )))))
   choices <- reading_service_tidy(reading)$components[[1]]$variables[[1]]$response_options
   expect_length(choices, 1)
-  expect_equal(choices[[1]]$answer_option, "Yes")
+  expect_equal(choices[[1]]$answer_option, "yes")
   expect_equal(choices[[1]]$display_order, 1)
   # and the checks take one choice as enough
   expect_false(any(grepl("choices", reading_service_problems(reading_service_tidy(reading), test_lookups()))))
@@ -202,21 +202,21 @@ test_that("a section heading with its blocks after it, not inside it, is a probl
 })
 
 test_that("a reading with no questions is a problem", {
-  empty <- list(component_type = "Question Group", text = NULL, variables = list(), children = list())
+  empty <- list(component_type = "Group", text = NULL, variables = list(), children = list())
   problems <- reading_service_problems(reading_service_tidy(list(components = list(empty))), test_lookups())
   expect_equal(problems[1], "No questions were recorded. Record every page of the questionnaire.")
-  expect_match(problems[2], "^A question group: has nothing in it.")
+  expect_match(problems[2], "^A group: has nothing in it.")
 })
 
-test_that("a section without its heading, a question group with words, and a section inside a group are problems", {
+test_that("a section without its heading, a group with words, and a section inside a group are problems", {
   untitled <- section_of(question("1"), text = NULL)
   worded <- group_of(question("2"))
   worded$text <- "Lead-in"
   nested <- group_of(section_of(question("3"), text = "Part B"))
   problems <- reading_service_problems(reading_service_tidy(list(components = list(untitled, worded, nested))), test_lookups())
   expect_true(any(grepl("^A section with no heading: Add the section's printed heading", problems)))
-  expect_true(any(grepl("question group has no words of its own", problems)))
-  expect_true(any(grepl("can't be inside a question group", problems)))
+  expect_true(any(grepl("group has no words of its own", problems)))
+  expect_true(any(grepl("can't be inside a group", problems)))
 })
 
 test_that("printed numbers can repeat or be missing, and a parent is the nearest earlier question with its number", {
@@ -243,7 +243,7 @@ test_that("a questionnaire is read two pages at a time, and the pieces joined", 
 
   expect_equal(gemini$asked(), "This PDF has 3 pages. Record pages 1-2.\nThis PDF has 3 pages. Record page 3.")
   blocks <- reading$json$components
-  expect_equal(vapply(blocks, function(block) block$component_type, ""), c("Question", "Question Group", "Question"))
+  expect_equal(vapply(blocks, function(block) block$component_type, ""), c("Question", "Group", "Question"))
   expect_equal(vapply(blocks[[2]]$children, function(block) block$printed_number, ""), c("2a", "2b"))
   expect_null(blocks[[2]]$continued)
   # each block notes the first page of the range it was read with; a group carried on keeps its first
@@ -259,7 +259,7 @@ test_that("a section carried on inside a carried-on section joins its first part
   joined <- join_page_ranges(list(list(components = earlier), list(components = later)))$components
   outer <- joined[[1]]$children
   expect_length(joined, 1)
-  expect_equal(vapply(outer, function(block) block$component_type, ""), c("Question", "Question Group", "Question"))
+  expect_equal(vapply(outer, function(block) block$component_type, ""), c("Question", "Group", "Question"))
   expect_equal(vapply(outer[[2]]$children, function(block) block$printed_number, ""), c("2a", "2b"))
 })
 
@@ -335,6 +335,92 @@ test_that("the request sends the PDF and then the prompt, and hides the key", {
   expect_false(any(grepl("secret", capture.output(print(request)))))
 })
 
+test_that("a request about a file given as text sends the prompt alone", {
+  request <- gemini_model_request(NULL, "the prompt and the file", "gemini-3.8-flash", "secret")
+  parts <- request$body$data$contents[[1]]$parts
+  expect_length(parts, 1)
+  expect_equal(parts[[1]]$text, "the prompt and the file")
+})
+
+# ------ MATR IDs and codes from a second file ---------------------------------------------
+assign_prompt <- app_file("prompts", "assign_codes.md")
+
+test_that("the file of MATR IDs and codes gives the variables their IDs and the choices their codes", {
+  json <- reading_service_tidy(gold_json())
+  variables <- assign_variables(json)
+  expect_equal(variables[[1]]$id, "v1")
+  expect_equal(variables[[1]]$choices[[1]]$id, "o1")
+  n_choices <- length(variables[[1]]$choices)
+  expect_equal(variables[[2]]$choices[[1]]$id, paste0("o", n_choices + 1)) # choices count on across variables
+
+  sent <- NULL
+  generate <- function(pdf_path, prompts, model) {
+    sent <<- list(pdf_path = pdf_path, prompt = prompts)
+    list(list(text = jsonlite::toJSON(list(variables = list(
+      list(id = "v1", matr_id = "AH01", choices = lapply(seq_len(n_choices), function(i) list(id = paste0("o", i), code = letters[i]))),
+      list(id = "v2", matr_id = "AH01"), # an ID already given: neither gets it
+      list(id = "v3", matr_id = "AH03"),
+      list(id = "v99", matr_id = "nobody") # no such variable
+    )), auto_unbox = TRUE)))
+  }
+  filled <- reading_service_assign(json, list(name = "codes.csv", text = "AH01,1,yes"), generate = generate, prompt_path = assign_prompt)
+  expect_null(sent$pdf_path) # text goes in the prompt
+  expect_match(sent$prompt, "## The file (codes.csv)", fixed = TRUE)
+  expect_match(sent$prompt, '"id":"v1"', fixed = TRUE)
+
+  # only MATR IDs and codes are added: the questionnaire is otherwise exactly as it was read
+  strip <- function(x) {
+    if (!is.list(x)) return(x)
+    if (!is.null(names(x))) x <- x[setdiff(names(x), c("matr_id", "code_value"))]
+    lapply(x, strip)
+  }
+  expect_identical(strip(filled), strip(json))
+
+  draft <- draft_service_from_json(filled)
+  expect_equal(draft$variables$matr_id[1:3], c(NA, NA, "AH03"))
+  first <- draft_service_children(draft, "response_options", draft$variables$id[1])
+  expect_equal(first$code_value, letters[seq_len(n_choices)]) # codes can be letters
+  # a variable the file didn't code is counted 1, 2, 3... as before
+  second <- draft_service_children(draft, "response_options", draft$variables$id[2])
+  expect_equal(second$code_value, as.character(seq_len(nrow(second))))
+})
+
+test_that("a long questionnaire's variables go in several requests, each with the whole file, and the answers are joined", {
+  local_stub("reading_assign_batch", 2)
+  json <- reading_service_tidy(gold_json())
+  n_variables <- length(assign_variables(json))
+  sent <- NULL
+  generate <- function(pdf_path, prompts, model) {
+    sent <<- prompts
+    lapply(seq_along(prompts), function(i) {
+      first <- 2 * i - 1 # each answer names its own batch's variables
+      list(text = sprintf('{"variables":[{"id":"v%d","matr_id":"ID%d"}]}', first, first))
+    })
+  }
+  filled <- draft_service_from_json(reading_service_assign(json, list(name = "codes.csv", text = "the file"), generate = generate, prompt_path = assign_prompt))
+  expect_length(sent, ceiling(n_variables / 2))
+  expect_true(all(grepl("## The file (codes.csv)", sent, fixed = TRUE)))
+  # (the instructions' own example names v1: only what follows the last "## The variables" is the batch)
+  batch <- sub("(?s).*## The variables", "", sent[2], perl = TRUE)
+  expect_match(batch, '"id":"v3"', fixed = TRUE)
+  expect_false(grepl('"id":"v1"', batch, fixed = TRUE))
+  expect_equal(filled$variables$matr_id[c(1, 3, 5)], c("ID1", "ID3", "ID5"))
+})
+
+test_that("a PDF of MATR IDs and codes is sent as the request's file, and codes that repeat are left out", {
+  json <- reading_service_tidy(gold_json())
+  sent <- NULL
+  generate <- function(pdf_path, prompts, model) {
+    sent <<- pdf_path
+    list(list(text = '{"variables":[{"id":"v1","choices":[{"id":"o1","code":"1"},{"id":"o2","code":"1"}]}]}'))
+  }
+  filled <- reading_service_assign(json, list(name = "codebook.pdf", path = "codebook.pdf"), generate = generate, prompt_path = assign_prompt)
+  expect_equal(sent, "codebook.pdf")
+  first <- draft_service_children(draft_service_from_json(filled), "response_options", "v1")
+  expect_false(anyDuplicated(first$code_value) > 0)
+  expect_equal(first$code_value[1:2], c("1", "2")) # counted, not the repeated "1"
+})
+
 # ------ The job ------------------------------------------------------------------------
 # The watcher is given the drafts of the staff the test made only: the database holds other people's too, and it would
 # start (and stop) jobs for them.
@@ -363,6 +449,47 @@ test_that("the job saves what Gemini read and marks the draft ready", {
   expect_equal(saved$model, "gemini-3.8-flash")
   expect_identical(draft_service_from_json(draft_model_get_both(test_connection, record$id)$original), gold_draft())
   expect_equal(nrow(extraction_service_load_draft(test_connection, saved)$components), nrow(gold_draft()$components))
+})
+
+test_that("the job reads the file of MATR IDs and codes once the questionnaire is read, and carries on without it if it fails", {
+  me <- local_staff()
+  local_pdf_cache()
+  record <- extraction_service_create(test_connection, fake_upload(), me)
+  # given while the questionnaire is being read
+  extraction_service_add_supplement(test_connection, record$id, fake_csv_upload(c("AH01", "AH02"), "codes.csv"), me)
+  read <- function(pdf_path, lookups, progress) list(json = gold_json(), model = "m", prompt_version = "p")
+  given <- NULL
+  assign <- function(json, supplement) {
+    given <<- supplement
+    json$components[[1]]$variables[[1]]$matr_id <- "AH01"
+    json
+  }
+  reading_service_run(test_connection, record$id, record$reading_started, read = read, assign = assign)
+  expect_equal(given, list(name = "codes.csv", text = "AH01\nAH02"))
+  original <- draft_service_from_json(draft_model_get_both(test_connection, record$id)$original)
+  expect_equal(original$variables$matr_id[1], "AH01")
+  expect_error(
+    extraction_service_add_supplement(test_connection, record$id, fake_csv_upload("AH09", "later.csv"), me),
+    "Reading has finished"
+  )
+
+  again <- extraction_service_create(test_connection, fake_upload(), me, supplement = fake_csv_upload("AH01", "codes.csv"))
+  expect_equal(again$supplement$name, "codes.csv")
+  messages <- capture_messages(reading_service_run(
+    test_connection, again$id, again$reading_started, read = read, assign = function(json, supplement) stop("Gemini is busy")
+  ))
+  expect_match(messages, "couldn't be applied: Gemini is busy", all = FALSE)
+  read_anyway <- extraction_model_get(test_connection, again$id)
+  expect_equal(read_anyway$extraction_status, "ready")
+  expect_equal(read_anyway$error, "Gemini is busy") # shown on the step, which says to give the IDs on Edit Extraction
+  extraction_service_remove_supplement(test_connection, again$id, me) # nothing to read once it's read, but it can go
+  expect_null(extraction_model_get(test_connection, again$id)$supplement)
+})
+
+test_that("a file of MATR IDs and codes that isn't a PDF, CSV or text is turned away", {
+  path <- withr::local_tempfile(fileext = ".xlsx")
+  writeLines("not really", path)
+  expect_error(store_supplement(NULL, data.frame(name = "codes.xlsx", size = 10, datapath = path)), "Save a spreadsheet as CSV")
 })
 
 test_that("the job reads the pick lists from the database for Gemini", {
@@ -447,14 +574,14 @@ test_that("a reading whose job has died is marked failed", {
     reading_claimed_at = format_time(Sys.time())
   ))
   withdrawn <- extraction_service_create(test_connection, fake_upload(), colleague, now = Sys.time() - 60)
-  extraction_service_withdraw(test_connection, withdrawn$id, me)
+  extraction_service_discard(test_connection, withdrawn$id, colleague)
 
   still_reading <- reading_service_watch(my_drafts(me, colleague), test_connection)
   expect_true(still_reading)
   saved <- extraction_service_get_all(test_connection)
   expect_equal(saved[[record$id]]$extraction_status, "failed")
   expect_equal(saved[[record$id]]$error, "Reading stopped before it finished.")
-  expect_equal(extraction_model_get(test_connection, withdrawn$id)$extraction_status, "queued") # discarded drafts are left alone
+  expect_error(extraction_model_get(test_connection, withdrawn$id), "no longer in the database") # discarded drafts are gone
 })
 
 test_that("a draft another copy of the site has claimed isn't started again", {
@@ -595,7 +722,7 @@ test_that("the job of a draft that was discarded is stopped, and forgotten", {
   jobs <- local_jobs()
   record <- extraction_service_create(test_connection, fake_upload(), me)
   watch(me)
-  extraction_service_withdraw(test_connection, record$id, me)
+  extraction_service_discard(test_connection, record$id, me)
   expect_false(watch(me))
   expect_equal(jobs$killed, list(1L))
   expect_null(reading_jobs[[record$id]])

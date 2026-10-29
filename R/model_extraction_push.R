@@ -1,7 +1,8 @@
 # ------ What an extraction has to match against -----------------------------------------------
 # An extraction adds rows to the MATR metadata database. Some of what it needs may be there already:
 # an answer choice is kept once for the whole registry (answer_option.standardized_label is
-# unique), a set of choices is kept once (option_set), and a wave of a questionnaire that
+# unique), a set of choices is kept once (option_set), a component is kept once and placed by
+# every questionnaire that prints it, and a wave of a questionnaire that
 # is already recorded finds the questionnaire's blocks, questions, variables and waves in place. These
 # read what is there, so extraction_service_build_items() (service_extraction_push.R) can reuse it.
 # `connection` is the MATR database (model_database.R).
@@ -27,6 +28,17 @@ push_model_options <- function(connection) {
   )
 }
 
+#' The components that have words: what a block of another questionnaire can be (a group has none).
+#'
+#' @param connection The MATR database, `list(url, key)`; see `model_database.R`.
+#' @return A data frame: `component_id`, `component_type_id`, `text`.
+push_model_components <- function(connection) {
+  database_model_get(
+    connection, "component", c("component_id", "component_type_id", "text"),
+    order_by = "component_id", filters = list(text = "not.is.null")
+  )
+}
+
 #' What a recorded questionnaire has printed already.
 #'
 #' @param connection The MATR database, `list(url, key)`; see `model_database.R`.
@@ -44,16 +56,28 @@ push_model_existing <- function(connection, questionnaire_id) {
   components <- push_model_by_ids(
     connection, "component", c("component_id", "component_type_id", "text"), "component_id", placements$component_id
   )
+  # A question is placed before it is a question, and a variable and a wave's question are a question's
+  # (the foreign keys say so), so a questionnaire with nothing placed, a new one, has none to ask for.
+  questions <- if (nrow(placements) > 0) {
+    database_model_get(connection, "questionnaire_question", "component_id", order_by = "component_id", filters = here)
+  } else {
+    no_rows("component_id")
+  }
+  asked <- nrow(questions) > 0
   list(
     placements = placements,
     components = components,
-    questions = database_model_get(connection, "questionnaire_question", "component_id", order_by = "component_id", filters = here),
-    variables = database_model_get(
-      connection, "variable", c("variable_key", "component_id", "matr_id", "display_order"),
-      order_by = "variable_key", filters = here
-    ),
+    questions = questions,
+    variables = if (asked) {
+      database_model_get(
+        connection, "variable", c("variable_key", "component_id", "matr_id", "display_order"),
+        order_by = "variable_key", filters = here
+      )
+    } else {
+      no_rows(c("variable_key", "component_id", "matr_id", "display_order"))
+    },
     waves = database_model_get(connection, "wave", c("wave_id", "name"), order_by = "wave_id", filters = here),
-    wave_questions = wave_question_model_get(connection, questionnaire_id)
+    wave_questions = if (asked) wave_question_model_get(connection, questionnaire_id) else no_rows(c("wave_id", "component_id"))
   )
 }
 

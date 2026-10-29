@@ -53,6 +53,15 @@
   &.is-problem { border-left-color: $vcu-red; background: rgba($vcu-red, 0.08); }
 }
 
+// ------ The test database, when the site runs on it (MATR_DATABASE=test) -----
+.navbar-test-database {
+  background-color: $vcu-gold;
+  color: $vcu-black;
+  font-size: 0.8rem;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+}
+
 // ------ The menu under the signed-in name ------------------------------------
 .navbar-user-button {
   display: inline-flex;

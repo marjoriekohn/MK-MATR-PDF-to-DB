@@ -202,13 +202,13 @@ test_that("a MeSH ID has the right shape and isn't already listed", {
   expect_length(edit_service_check(form$fields, form$values)$problems, 0)
 })
 
-test_that("only a question group has no words, and it has none", {
-  group <- edit_type_id(test_snapshot("component_type"), "Question Group")
+test_that("only a group has no words, and it has none", {
+  group <- edit_type_id(test_snapshot("component_type"), "Group")
   section <- edit_type_id(test_snapshot("component_type"), "Section")
   form <- form_for("component", "add", component__component_type_id = "4", component__text = "")
-  expect_equal(edit_service_check(form$fields, form$values)$problems$component__text, "Add the printed words. Only a question group has none.")
+  expect_equal(edit_service_check(form$fields, form$values)$problems$component__text, "Add the printed words. Only a group has none.")
   form <- form_for("component", "add", component__component_type_id = as.character(section), component__text = "")
-  expect_equal(edit_service_check(form$fields, form$values)$problems$component__text, "Add the printed words. Only a question group has none.")
+  expect_equal(edit_service_check(form$fields, form$values)$problems$component__text, "Add the printed words. Only a group has none.")
   form <- form_for("component", "add", component__component_type_id = as.character(group), component__text = "")
   expect_length(edit_service_check(form$fields, form$values)$problems, 0)
   form <- form_for("component", "add", component__component_type_id = as.character(group), component__text = "Part A")
@@ -270,6 +270,15 @@ test_that("only fields that differ are changes, shown as staff read them", {
   expect_equal(changes$old, c("Wave 2", "04/15/2022"))
   expect_equal(changes$new, c("Round 2", "05/01/2022"))
   expect_equal(changes$new_value, c("Round 2", "2022-05-01"))
+})
+
+test_that("a date still being typed is shown as typed, not an error", {
+  for (typed in c("10/2", "10/28/26", "2022-13-45")) {
+    form <- form_for("wave", "update", "2", wave__administered_date = typed)
+    changes <- edit_service_changes(form$fields, form$initial, form$values)
+    expect_equal(changes$new, typed)
+    expect_match(edit_service_check(form$fields, form$values)$problems$wave__administered_date, "MM/DD/YYYY")
+  }
 })
 
 test_that("clearing a field is a change to empty", {

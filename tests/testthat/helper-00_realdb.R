@@ -30,11 +30,14 @@ use_test_database()
 # Most of a database test's time is its requests, one after another. Each request is counted here, and
 # tests/testthat.R shows how many each test made beside its time. (httr2 asks its mock function about every
 # request first; this one only counts it and lets it go. A test that mocks the replies sets its own.)
+# Each is also listed (its method and address), for finding the requests a test repeats.
 test_requests <- new.env()
 test_requests$count <- 0L
+test_requests$log <- character()
 options(
   httr2_mock = function(req) {
     test_requests$count <- test_requests$count + 1L
+    test_requests$log[test_requests$count] <- paste(req$method %||% "GET", utils::URLdecode(req$url))
     NULL
   },
   matr.test_requests = test_requests
@@ -53,10 +56,11 @@ if (testthat::is_testing()) withr::defer(options(httr2_mock = NULL, matr.test_re
 # test never changes or deletes a row it didn't make. test-zz_leftovers.R, the last test to run, checks
 # that nothing is left behind; tests/database/clean_test_rows.R removes what a crashed run left.
 #
-# One kind of row stays: a draft that was applied is the record of what was done, and the database
-# refuses to delete it (draft_guard). So a test that applies a change (an edit, a pop-up add, a push)
-# leaves the applied draft, its applied_item rows and the staff member who prepared it, marked with the
-# run's marker and the staff member set inactive. The rows the change added to the live tables are removed.
+# The database keeps two kinds of row for good: an applied draft, the record of what was done (draft_guard),
+# and staff (staff_never_deleted). The test project has functions of its own that get past both
+# (tests/database/test_functions.sql, run once in its SQL Editor), so a test's applied drafts, their history
+# (applied_item) and its staff are removed too, and a run leaves nothing behind. The rows an applied change
+# added to the live tables are removed first, from the draft's list of them (test_remove_applied()).
 #
 # `test_connection` is the connection. Looking it up checks the address, so a test that doesn't use the
 # database (the tests of pure functions) runs anywhere.
@@ -140,6 +144,9 @@ test_counter <- local({
 #' @return A string like `"ZZTEST0712ab Study 7"`; different every time.
 test_name <- function(what = "row") paste(test_marker, what, test_counter())
 
+#' An abbreviation no other row has: the marker and a number, e.g. `"ZZTEST0712ab-7"`.
+test_abbreviation <- function() paste0(test_marker, "-", test_counter())
+
 # ------ Removing rows ----------------------------------------------------------------------------------------
 # The app never deletes rows with a plain request, so the tests have their own.
 test_delete <- function(table, filters) {
@@ -150,8 +157,8 @@ test_delete <- function(table, filters) {
   invisible()
 }
 
-# Removes a draft a test made, unless it was applied since: an applied draft is the record of what was done,
-# and the database keeps it (see the top of this file).
+# Removes a draft a test made, unless it was applied since: the database refuses to delete an applied draft,
+# which goes with its staff instead, when the test ends (test_forget_staff()).
 test_delete_draft <- function(id) {
   tryCatch(
     test_delete("draft", list(draft_id = database_eq(id))),
@@ -162,8 +169,8 @@ test_delete_draft <- function(id) {
   invisible()
 }
 
-# Removes a PDF's row (pdf_file) a test made, unless a draft still points at it: an applied one, which the
-# database keeps (see the top of this file). Its file in Storage goes too.
+# Removes a PDF's row (pdf_file) a test made, unless a draft still points at it: an applied one, whose row
+# goes with it when the test ends (extracted_draft_pdf_let_go). Its file in Storage goes now.
 test_delete_pdf <- function(sha256) {
   if (is.null(sha256)) {
     return(invisible())
@@ -210,26 +217,41 @@ test_ids <- function(table, column, filters) {
   rows[[column]]
 }
 
-#' Remove a staff member and everything that points at them.
+#' Remove staff members a test made, and every draft that involves them, applied ones and their history too.
 #'
-#' Drafts they prepared, saved, were asked to review or sent back, unless applied: an applied draft is the
-#' record of what was done and the database keeps it, so a staff member one points at stays too, and is
-#' set inactive instead. Drafts are test data too, whoever else they involve.
+#' One request, to the test project's own function (tests/database/test_functions.sql): the database
+#' otherwise keeps both staff and applied drafts for good.
 #'
-#' @param staff_id The staff member's id.
+#' @param staff_ids The staff members' ids.
 #' @return Called for its effect.
-test_remove_staff <- function(staff_id) {
-  who <- as.character(staff_id)
-  test_clear_drafts(staff_id)
-  kept <- tryCatch(
-    {
-      test_delete("staff", list(staff_id = database_eq(who)))
-      FALSE
-    },
-    error = function(problem) grepl("foreign key", conditionMessage(problem))
+test_remove_staff <- function(staff_ids) test_forget_staff(staff_ids, remove_staff = TRUE)
+
+#' Ask the test project's own function to remove the drafts that involve staff the tests made.
+#'
+#' @param staff_ids The staff members' ids; only those named with a ZZTEST marker are touched.
+#' @param marker Or the start of their names, e.g. the run's marker.
+#' @param remove_staff Whether the staff members go too.
+#' @return What was removed: counts of `staff`, `drafts` and `applied_items`.
+test_forget_staff <- function(staff_ids = NULL, marker = NULL, remove_staff = FALSE) {
+  arguments <- list(p_remove_staff = remove_staff)
+  if (length(staff_ids) > 0) arguments$p_staff_ids <- as.list(as.numeric(staff_ids))
+  if (!is.null(marker)) arguments$p_marker <- marker
+  if (length(arguments) == 1) {
+    return(invisible(list()))
+  }
+  tryCatch(
+    invisible(database_model_call(test_connection, "test_forget_staff", arguments)),
+    error = function(problem) {
+      if (!grepl("test_forget_staff", conditionMessage(problem), fixed = TRUE)) stop(problem)
+      stop(test_functions_missing, call. = FALSE)
+    }
   )
-  if (kept) database_model_update(test_connection, "staff", list(active = FALSE), list(staff_id = database_eq(who)), select = "staff_id")
 }
+
+test_functions_missing <- paste(
+  "The test project doesn't have the tests' own functions yet. Run tests/database/test_functions.sql",
+  "once in its SQL Editor (https://supabase.com/dashboard/project/rqygcjgftmtatzrzcwcf/sql)."
+)
 
 #' Remove the rows an applied change added to the live tables.
 #'
@@ -243,25 +265,40 @@ test_remove_applied <- function(history_id) {
   items <- history_model_get_items(test_connection, as.character(history_id))
   added <- unique(items[items$action == "Insert", c("entity_name", "record_identifier")])
   for (table in test_removal_order(unique(added$entity_name))) {
-    keys <- lapply(added$record_identifier[added$entity_name == table], function(identifier) {
-      jsonlite::fromJSON(identifier, simplifyVector = FALSE)
-    })
+    # an edit's item names one row; an extraction's line for a table lists every row it added there
+    keys <- unlist(lapply(added$record_identifier[added$entity_name == table], function(identifier) {
+      key <- jsonlite::fromJSON(identifier, simplifyVector = FALSE)
+      if (is.null(names(key))) key else list(key)
+    }), recursive = FALSE)
     test_delete_keys(table, keys)
   }
 }
 
 # The tables an edit can add to, children before the rows they point at. A variable's subtype row and its choices
-# are not listed: they go with the variable (on delete cascade), and the database wants a variable and its subtype
-# removed in one statement.
+# (and their counts of respondents) are not listed: they go with the variable (on delete cascade), and the database
+# wants a variable and its subtype removed in one statement. A question row goes with its component the same way.
 test_table_order <- c(
   "variable", "answer_option_set", "option_set", "answer_option",
   "wave_question", "questionnaire_question", "question_category", "question_scale",
-  "questionnaire_component", "question", "component",
+  "questionnaire_component", "component",
   "wave", "questionnaire", "study", "registry", "principal_investigator", "respondent_type", "subject",
   "category", "measurement_scale"
 )
 test_removal_order <- function(tables) {
-  c(intersect(test_table_order, tables), setdiff(tables, c(test_table_order, "open_ended", "closed_ended", "response_option")))
+  c(intersect(test_table_order, tables), setdiff(tables, c(test_table_order, "open_ended", "closed_ended", "response_option", "response_option_count", "question")))
+}
+
+# A test that crashed before its own cleanup ran may have left staff and their drafts: when the run ends, one
+# request removes whatever this run's marker still names (when the run asked the database at all).
+if (testthat::is_testing()) {
+  withr::defer(
+    if (test_requests$count > 0 && nzchar(Sys.getenv("TEST_SUPABASE_URL"))) {
+      tryCatch(test_forget_staff(marker = test_marker, remove_staff = TRUE), error = function(problem) {
+        message("The run's staff couldn't be removed: ", conditionMessage(problem))
+      })
+    },
+    envir = testthat::teardown_env()
+  )
 }
 
 # ------ Making rows ------------------------------------------------------------------------------------------
@@ -305,19 +342,9 @@ file_shared <- function(test_env, name, make) {
   get(key, envir = file_env, inherits = FALSE)
 }
 
-# Removes the drafts (not applied ones) that point at a staff member: what they prepared, saved, were asked to
-# review, or submitted or sent back (their reviews go with the drafts).
-test_clear_drafts <- function(staff_id) {
-  who <- as.character(staff_id)
-  reviewed <- test_ids("draft_review_event", "draft_id", list(staff_id = database_eq(who)))
-  for (chunk in split(unique(reviewed), ceiling(seq_along(unique(reviewed)) / 200))) {
-    test_delete("draft", list(status = paste0("neq.", history_applied_status), draft_id = database_in(chunk)))
-  }
-  test_delete("draft", list(
-    status = paste0("neq.", history_applied_status),
-    or = sprintf("(prepared_by.eq.%s,saved_by.eq.%s,requested_reviewer.eq.%s)", who, who, who)
-  ))
-}
+# Removes the drafts that point at staff members, applied ones too: what they prepared, saved, were asked to
+# review, or submitted or sent back (their reviews and history go with the drafts). One request for them all.
+test_clear_drafts <- function(staff_ids) test_forget_staff(staff_ids)
 
 #' The file's staff members, handed out in turn to each test that asks (see the top of this section).
 #'
@@ -339,7 +366,13 @@ pooled_staff <- function(role, test_env) {
     pool[[role]] <- people
   }
   person <- people[[n]]
-  withr::defer(test_clear_drafts(person$staff_id), envir = test_env)
+  # one request when the test ends clears the drafts of all the staff it was given
+  used_ids <- ".matr_staff_used_ids"
+  if (!exists(used_ids, envir = test_env, inherits = FALSE)) {
+    assign(used_ids, integer(), envir = test_env)
+    withr::defer(test_clear_drafts(get(used_ids, envir = test_env)), envir = test_env)
+  }
+  assign(used_ids, union(get(used_ids, envir = test_env), person$staff_id), envir = test_env)
   person
 }
 
@@ -383,8 +416,9 @@ new_staff <- function(role, active, name, env) {
   list(staff_id = stored$staff_id, name = stored$name, role = stored$role, email = stored$email)
 }
 
+# A registry's abbreviation is its own (registry_abbreviation_unique), so each one is numbered too.
 local_registry <- function(name = test_name("Registry"), env = parent.frame()) {
-  local_row("registry", list(name = name, abbreviation = "ZZ", participant_count = 100), "registry_id", env)
+  local_row("registry", list(name = name, abbreviation = test_abbreviation(), participant_count = 100), "registry_id", env)
 }
 
 local_investigator <- function(name = test_name("Investigator"), env = parent.frame()) {
@@ -415,19 +449,20 @@ local_wave <- function(questionnaire, name = test_name("Wave"), env = parent.fra
 
 #' A registry with a study, a questionnaire and a wave: what an extraction is added to.
 #'
+#' Made in one request and removed in one, by the test project's own functions (tests/database/test_functions.sql).
+#'
 #' @param env The test's environment, where it is removed again.
 #' @return A list of the rows: `registry`, `investigator`, `study`, `respondent_type`, `questionnaire`, `wave`.
 local_tree <- function(env = parent.frame()) {
-  registry <- local_registry(env = env)
-  investigator <- local_investigator(env = env)
-  respondent_type <- local_respondent_type(env = env)
-  study <- local_study(registry, investigator, env = env)
-  questionnaire <- local_questionnaire(study, respondent_type, env = env)
-  wave <- local_wave(questionnaire, env = env)
-  list(
-    registry = registry, investigator = investigator, respondent_type = respondent_type,
-    study = study, questionnaire = questionnaire, wave = wave
+  tree <- tryCatch(
+    database_model_call(test_connection, "test_make_tree", list(p_marker = test_marker)),
+    error = function(problem) {
+      if (grepl("test_make_tree", conditionMessage(problem), fixed = TRUE)) stop(test_functions_missing, call. = FALSE)
+      stop(problem)
+    }
   )
+  withr::defer(database_model_call(test_connection, "test_forget_tree", list(p_tree = tree)), envir = env)
+  tree
 }
 
 # Removes what an applied edit added when the test ends. Call it as soon as the edit is applied.

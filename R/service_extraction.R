@@ -1,12 +1,14 @@
 # ------ Extraction drafts --------------------------------------------------------
 # An extraction starts one of two ways. AI-Powered: staff upload a questionnaire PDF, and the
 # reading job (Gemini; service_reading.R) moves `extraction_status` along
-#   queued -> sent -> received -> ready      or stops at failed
+#   queued -> sent -> received -> [assigning] -> ready      or stops at failed
 # and saves the questionnaire it read. Manual: staff type the questionnaire themselves, with or
 # without a PDF to look at, and there is no reading. Either way staff edit a copy on the Edit
 # Extraction page (see draft_service_load()). `status` belongs to the draft: Draft until its
 # change request is submitted, Awaiting Review while it waits for approval, Sent Back when a
-# reviewer returns it, Withdrawn if discarded, Applied once it is in the MATR metadata database.
+# reviewer returns it, Applied once it is in the MATR metadata database. A draft that is discarded is
+# deleted. An applied one is kept whole, with its PDF and reading (what the AI read and how staff changed
+# it, for analysis); Edit History lists the rows it added.
 # `info` is where it goes in the database (its Basic Info): a recorded registry, study,
 # questionnaire and one of that questionnaire's waves that asks no questions yet, each saved as
 # its ID (text). It is picked on Change Requests, after the change request is submitted, so a draft
@@ -40,7 +42,7 @@ extraction_service_get_all <- function(connection) {
 #' @return `TRUE` or `FALSE`.
 extraction_service_is_reading <- function(records, me) {
   mine <- extraction_service_open_drafts(records, prepared_by_id = me$staff_id)
-  any(vapply(mine, function(record) isTRUE(record$extraction_status %in% c("queued", "sent", "received")), logical(1)))
+  any(vapply(mine, function(record) isTRUE(record$extraction_status %in% reading_statuses), logical(1)))
 }
 
 #' The drafts still being prepared: not yet submitted, or sent back.
@@ -124,7 +126,7 @@ extraction_service_is_read <- function(record) {
 #' @param now The time to record.
 #' @return The record as saved, with its id.
 extraction_service_create <- function(connection, upload, staff,
-                                      info = extraction_service_info(), now = Sys.time()) {
+                                      info = extraction_service_info(), now = Sys.time(), supplement = NULL) {
   record <- list(
     status = "Draft",
     method = extraction_ai,
@@ -139,7 +141,8 @@ extraction_service_create <- function(connection, upload, staff,
     reading_pid = NULL,
     error = NULL,
     info = info,
-    matr_csv = NULL
+    matr_csv = NULL,
+    supplement = if (!is.null(supplement)) store_supplement(connection, supplement)
   )
   extraction_model_create(connection, record)
 }
@@ -233,19 +236,101 @@ extraction_service_reading_update <- function(connection, id, reading_started, c
   extraction_model_save_reading(connection, id, changes, reading_started)
 }
 
-#' Discard a draft.
+#' Discard a draft: it is deleted from the database, with its PDF when no other draft uses the file.
 #'
-#' The record is kept, as Withdrawn, so it stays in the history.
+#' Nobody has to approve it, but only the person who prepared it can, and not once it is applied.
 #'
 #' @param connection The MATR database, `list(url, key)`; see `model_database.R`.
 #' @param id The draft's id.
 #' @param me Who discards it: `list(staff_id, name, role)`.
-#' @return The record as saved.
-extraction_service_withdraw <- function(connection, id, me) {
+#' @return Called for its effect. An error with a sentence if the database refused.
+extraction_service_discard <- function(connection, id, me) {
+  record <- extraction_model_get(connection, id)
+  extraction_model_discard(connection, id, me$staff_id)
+  extraction_service_forget_pdf(connection, record)
+  invisible()
+}
+
+#' Remove a draft's PDF from Storage once the draft is gone (discarded, or applied) and no other draft
+#' uses the file.
+#'
+#' The draft is already gone, so a file that can't be removed only stays behind in Storage: that is a
+#' warning in the log, not an error.
+#'
+#' @param connection The MATR database, `list(url, key)`; see `model_database.R`.
+#' @param record The draft's record, as it was.
+#' @return Called for its effect.
+extraction_service_forget_pdf <- function(connection, record) {
+  for (sha256 in c(record$pdf$sha256, record$supplement$sha256)) {
+    tryCatch(
+      extraction_model_forget_pdf(connection, sha256),
+      error = function(problem) warning("The PDF ", sha256, " stays in Storage: ", conditionMessage(problem), call. = FALSE)
+    )
+  }
+  invisible()
+}
+
+# ------ The file of MATR IDs and codes --------------------------------------------------
+# An AI-Powered draft can have a second, optional file: a codebook or list that gives each variable its
+# MATR ID and each choice its code. Once Gemini has read the questionnaire, it reads this file in a
+# separate request and fills them in (reading_service_assign()). A PDF is kept like the questionnaire's
+# (Storage and this server, by its SHA-256); a CSV or text file is kept as its text, on the draft.
+
+# What the file can be, by its name's ending: a PDF, or text.
+supplement_text_types <- c("csv", "tsv", "txt")
+
+#' Give a draft its file of MATR IDs and codes, or a different one.
+#'
+#' Only before reading has finished: the reading job reads it once the questionnaire is read.
+#'
+#' @param connection The MATR database, `list(url, key)`; see `model_database.R`.
+#' @param id The draft's id.
+#' @param upload One row of a `fileInput`'s value.
+#' @param me Who is saving: `list(staff_id, name, role)`.
+#' @return The record as saved. An error with a sentence if reading has finished, or the file isn't a
+#'   PDF, CSV or text file.
+extraction_service_add_supplement <- function(connection, id, upload, me) {
+  supplement <- store_supplement(connection, upload)
   change_record(connection, id, me, function(record) {
-    record$status <- "Withdrawn"
+    if (extraction_service_is_read(record)) {
+      stop("Reading has finished, so this file can't be read now. Give the MATR IDs on the Edit Extraction page.", call. = FALSE)
+    }
+    record["supplement"] <- list(supplement)
     record
   }, new_revision = FALSE)
+}
+
+#' Take a draft's file of MATR IDs and codes away, before reading has finished.
+#'
+#' @inheritParams extraction_service_add_supplement
+#' @return The record as saved.
+extraction_service_remove_supplement <- function(connection, id, me) {
+  before <- extraction_model_get(connection, id)
+  saved <- change_record(connection, id, me, function(record) {
+    record["supplement"] <- list(NULL)
+    record
+  }, new_revision = FALSE)
+  extraction_service_forget_pdf(connection, list(supplement = before$supplement))
+  saved
+}
+
+#' A draft's file of MATR IDs and codes, ready to send to Gemini.
+#'
+#' @param connection The MATR database, `list(url, key)`; see `model_database.R`.
+#' @param id The draft's id.
+#' @return `list(name, path)` for a PDF (on this server, fetched from Storage if need be), `list(name, text)`
+#'   for text, or `NULL` for none. An error with a sentence if the PDF can't be found.
+extraction_service_supplement_file <- function(connection, id) {
+  supplement <- extraction_model_supplement(connection, id)
+  if (is.null(supplement)) {
+    return(NULL)
+  }
+  if (!is.null(supplement$text)) {
+    return(list(name = supplement$name, text = supplement$text))
+  }
+  path <- extraction_model_local_pdf(connection, supplement$sha256)
+  if (is.null(path)) stop("The file of Variable Names and Coding (", supplement$name, ") isn't on this site any more.", call. = FALSE)
+  list(name = supplement$name, path = path)
 }
 
 # ------ The questionnaire it read ----------------------------------------------------
@@ -317,20 +402,34 @@ reading_steps <- data.frame(
 #'   `not_started` or `attention`), one row per step.
 extraction_service_reading_steps <- function(record) {
   status <- record$extraction_status
+  steps <- reading_steps
+  # A file of Variable Names and Coding is a step of its own, once the questionnaire is read and checked.
+  coding <- !is.null(record$supplement)
+  if (coding) {
+    steps <- rbind(steps[1:4, ], data.frame(
+      label = "Applying Variable Names and Coding",
+      detail = paste("Applies the Variable Names and Coding in", record$supplement$name)
+    ), steps[5, ], make.row.names = FALSE)
+  }
   n_done <- switch(status,
     queued = 1,
     sent = 2,
     received = 3,
-    ready = 5,
+    assigning = 4,
+    ready = nrow(steps),
     failed = 2
   )
-  steps <- reading_steps
   steps$state <- ifelse(seq_len(nrow(steps)) <= n_done, "done", "not_started")
   if (n_done < nrow(steps)) {
     steps$state[n_done + 1] <- if (status == "failed") "attention" else "in_progress"
   }
   if (status == "queued") steps$detail[2] <- "Waiting to start"
   if (status == "failed") steps$detail[3] <- record$error %||% "Gemini stopped before the end."
+  # read, but the Variable Names and Coding couldn't be applied: the draft is ready without them
+  if (status == "ready" && coding && !is.null(record$error)) {
+    steps$state[5] <- "attention"
+    steps$detail[5] <- paste0("Couldn't apply them (", record$error, "). Give the MATR IDs on the Edit Extraction page.")
+  }
   steps
 }
 
@@ -648,6 +747,20 @@ restart_reading <- function(record) {
   record["reading_pid"] <- list(NULL)
   record["reading_claimed_at"] <- list(NULL)
   record
+}
+
+# A file of MATR IDs and codes: a PDF is kept like the questionnaire's, text as its text.
+store_supplement <- function(connection, upload) {
+  ending <- tolower(tools::file_ext(upload$name))
+  if (extraction_model_is_pdf(upload$datapath)) {
+    sha256 <- extraction_model_sha256(upload$datapath)
+    extraction_model_save_pdf(connection, upload$datapath, sha256)
+    return(list(name = upload$name, sha256 = sha256, bytes = upload$size))
+  }
+  if (!ending %in% supplement_text_types) {
+    stop(upload$name, " isn't a PDF, CSV or text file. Save a spreadsheet as CSV first.", call. = FALSE)
+  }
+  list(name = upload$name, text = extraction_model_read_csv(upload$datapath))
 }
 
 store_pdf <- function(connection, upload) {

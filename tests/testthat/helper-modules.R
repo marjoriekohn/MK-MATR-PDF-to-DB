@@ -10,6 +10,27 @@ test_live_catalog <- function(connection = test_connection) {
   list(get = tables, refresh = function() tables(questionnaire_service_get_catalog(connection)))
 }
 
+# The same, read once for a test file and shared by its tests, for tests that don't add to the tables (the
+# file's shared tree is in them). Each test gets the tables as the file last read them; `refresh()` reads them
+# again, for the tests after it too. A test that adds to the tables (with local_tree(), say) reads its own,
+# with test_live_catalog().
+shared_catalog <- function(env = parent.frame()) {
+  if (!is_test_body(env)) {
+    return(test_live_catalog())
+  }
+  cache <- file_shared(env, "catalog", function(file_env) {
+    shared_tree(env) # made first, so it is in the tables
+    cache <- new.env()
+    cache$tables <- questionnaire_service_get_catalog(test_connection)
+    cache
+  })
+  tables <- shiny::reactiveVal(cache$tables)
+  list(get = tables, refresh = function() {
+    cache$tables <- questionnaire_service_get_catalog(test_connection)
+    tables(cache$tables)
+  })
+}
+
 # The same for a catalog that is given (the sample tables), for a page that never touches the database.
 fixed_catalog <- function(catalog = test_catalog()) {
   list(get = shiny::reactiveVal(catalog), refresh = function() invisible())

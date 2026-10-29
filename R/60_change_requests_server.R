@@ -300,7 +300,11 @@ change_requests_server <- function(
       showModal(confirm_dialog(
         "Withdraw this request?",
         p(strong(opened$summary)),
-        p("It is set aside and won't be asked of anyone. Nothing has been added to the MATR metadata database."),
+        p(if (identical(opened$kind, extraction_kind)) {
+          "The extraction is deleted, with its PDF, and can't be got back. Nothing has been added to the MATR metadata database."
+        } else {
+          "It is set aside and won't be asked of anyone. Nothing has been added to the MATR metadata database."
+        }),
         confirm_id = ns("confirm_withdraw"), confirm_label = "Withdraw it", easy_close = TRUE
       ))
     })

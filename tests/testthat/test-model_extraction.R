@@ -168,6 +168,6 @@ test_that("Storage's answers are read as found, missing, or a sentence that says
   expect_true(storage_is_missing(missing))
   expect_true(storage_is_missing(answer(404, "{}")))
   expect_false(storage_is_missing(no_bucket)) # the bucket is missing, not the file: that is a problem to report
-  expect_match(storage_problem(no_bucket, "extraction-pdfs"), "Run docs/migrations/20261021_pdf_storage.sql")
+  expect_match(storage_problem(no_bucket, "extraction-pdfs"), "Run docs/sql/3_pdf_storage.sql")
   expect_match(storage_problem(answer(403, '{"message":"denied"}'), "extraction-pdfs"), "\\(403\\): denied")
 })

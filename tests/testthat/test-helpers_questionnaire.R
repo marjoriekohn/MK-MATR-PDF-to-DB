@@ -7,9 +7,9 @@ test_that("the questionnaire is a table: a row for each variable with its MATR I
   questions <- draft$components[draft$components$component_type == "Question", ]
   expect_equal(sum(rows$kind == "Question"), nrow(draft$variables))
   # blocks that aren't questions have a row each, with their kind; sections and groups head the rows instead
-  others <- draft$components[!draft$components$component_type %in% c("Question", "Section", "Question Group"), ]
+  others <- draft$components[!draft$components$component_type %in% c("Question", "Section", "Group"), ]
   expect_equal(sum(rows$kind != "Question"), nrow(others))
-  expect_false(any(rows$kind %in% c("Section", "Question Group")))
+  expect_false(any(rows$kind %in% c("Section", "Group")))
   # the question's words, without its number, then who the variable is about in square brackets (nothing
   # for the respondent)
   first <- draft$variables[draft$variables$component_id == questions$id[1], ][1, ]
@@ -20,10 +20,31 @@ test_that("the questionnaire is a table: a row for each variable with its MATR I
   expect_equal(row$coding[[1]], paste(choices$code_value, "=", choices$answer_option)) # each choice on its own line
   children <- draft$variables[draft$variables$subject %in% "Respondent's Children", ][1, ]
   expect_match(rows$tags[rows$matr_id %in% children$matr_id][1], "[Respondent's Children]", fixed = TRUE)
-  # each row names the sections and question groups it is in
+  # each row names the sections and groups it is in
   around <- draft$components[draft$components$id %in% draft_service_ancestors(draft, questions$id[1]), , drop = FALSE]
   expect_gt(nrow(around), 0)
-  for (i in seq_len(nrow(around))) expect_match(row$section, preview_container_name(around[i, , drop = FALSE]), fixed = TRUE)
+  for (i in seq_len(nrow(around))) {
+    name <- if (around$component_type[i] == "Group") "Group " else preview_container_name(around[i, , drop = FALSE])
+    expect_match(row$section, name, fixed = TRUE)
+  }
+})
+
+test_that("each group is named apart from the others, so where one ends shows as a section's end does", {
+  question <- function(number) {
+    list(
+      component_type = "Question", text = paste("Question", number), printed_number = number,
+      variables = list(list(variable_type = "closed_ended", response_options = list(list(answer_option = "Yes"))))
+    )
+  }
+  draft <- draft_service_from_json(list(components = list(list(
+    component_type = "Section", text = "Part A", children = list(
+      list(component_type = "Group", children = list(question("1a"), question("1b"))),
+      list(component_type = "Group", children = list(question("2a"), question("2b"))),
+      question("3")
+    )
+  ))))
+  rows <- questionnaire_preview_rows(draft)
+  expect_equal(rows$section, c(rep("Part A \u203a Group 1", 2), rep("Part A \u203a Group 2", 2), "Part A"))
 })
 
 test_that("the table is a DataTables table, with no No. column, grouped by section, with Download CSV", {
@@ -153,4 +174,23 @@ test_that("an extraction's request card has Preview, which shows its questionnai
   expect_match(mine, 'id="cr-withdraw"')
   unread <- htmltools::renderTags(change_request_preview_dialog(record, me, shiny::NS("cr"), NULL))$html
   expect_match(unread, "couldn't be read")
+})
+
+test_that("a group that skips has a last row saying where to", {
+  question <- function(number) {
+    list(
+      component_type = "Question", text = paste("Question", number), printed_number = number,
+      variables = list(list(variable_type = "closed_ended", response_options = list(list(answer_option = "No"))))
+    )
+  }
+  draft <- draft_service_from_json(list(components = list(
+    list(component_type = "Group", skip_condition = "No", skip_when = "every", skip_instruction = "Go to Question 24", children = list(question("22a"), question("22b"))),
+    question("23"),
+    question("24")
+  )))
+  rows <- questionnaire_preview_rows(draft)
+  expect_equal(rows$kind, c("Question", "Question", "Skip", "Question", "Question"))
+  expect_equal(rows$section[3], "Group 1") # the group's last row
+  expect_equal(rows$text[3], "If they answer “No” to every question in this group, they skip to 24 · Question 24")
+  expect_equal(rows$tags[3], "(printed: Go to Question 24)")
 })

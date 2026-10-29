@@ -33,7 +33,7 @@ ids_of <- function(table, key, column) {
 }
 
 like <- function(column) {
-  stats::setNames(list("like.ZZTEST*"), column)
+  stats::setNames(list("ilike.ZZTEST*"), column)
 }
 
 start_time <- Sys.time()
@@ -80,16 +80,13 @@ log_info("  Test database connection established and validated")
 
 # --- Step 3: Remove staff ---------------------------------------------------
 
-log_step(3, total_steps, "Cleaning up staff and associated records")
+log_step(3, total_steps, "Removing the tests' staff, with their drafts (applied ones too) and history")
 
-staff <- ids_of("staff", "staff_id", "name")
-
-for (i in seq_along(staff)) {
-  log_info(sprintf("  Deleting staff %d/%d...", i, length(staff)))
-  test_remove_staff(staff[[i]])
-}
-
-removed("staff members (with their drafts and history)", length(staff))
+# one request, to the test project's own function (tests/database/test_functions.sql)
+forgot <- test_forget_staff(marker = "ZZTEST", remove_staff = TRUE)
+removed("staff members", forgot$staff %||% 0L)
+removed("drafts", forgot$drafts %||% 0L)
+removed("rows of history (applied_item)", forgot$applied_items %||% 0L)
 
 # --- Step 4: Remove questionnaires -----------------------------------------
 
@@ -189,14 +186,15 @@ log_step(7, total_steps, "Cleaning up components and dependencies")
 
 components <- ids_of("component", "component_id", "text")
 
+# What points at a component, before what it points at. Its question row goes with it (on delete cascade):
+# the database removes a Question's two rows together or not at all.
 component_tables <- c(
+  "wave_question",
+  "variable",
   "question_category",
   "question_scale",
   "questionnaire_question",
-  "questionnaire_component",
-  "wave_question",
-  "variable",
-  "question"
+  "questionnaire_component"
 )
 
 for (i in seq_along(component_tables)) {

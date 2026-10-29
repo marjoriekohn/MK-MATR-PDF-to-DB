@@ -28,7 +28,7 @@ test_that("Make an edit's editor draws the variables it is given, and gives back
     session$setInputs(edit = list(table = "response_options", id = "o2", field = "answer_option", value = "No", typed = TRUE))
     variables <- jsonlite::fromJSON(session$returned$value(), simplifyVector = FALSE)
     expect_equal(variables[[1]]$matr_id, "AH6")
-    expect_equal(vapply(variables[[1]]$response_options, function(choice) choice$answer_option, ""), c("", "No"))
+    expect_equal(vapply(variables[[1]]$response_options, function(choice) choice$answer_option, ""), c("", "no"))
     expect_equal(vapply(variables[[1]]$response_options, function(choice) choice$code_value, ""), c("1", "2"))
 
     # + Variable asks Choices or Write-in; the new one is like the one above (who it's about, its choices)
@@ -52,7 +52,7 @@ test_that("on Make an edit Skip to is the words printed for it, a write-in can s
       skip_condition = "None", skip_instruction = "Go to Question 57"
     ), list(
       variable_type = "closed_ended", matr_id = "AH10", subject = "", label = "",
-      response_options = list(list(code_value = "1", answer_option = "Yes", printed_label = "", skip_instruction = "Go to 12"))
+      response_options = list(list(code_value = "1", answer_option = "yes", skip_instruction = "Go to 12"))
     )), editor_options)
     session$setInputs(action = list(action = "choices", id = "v2"))
     html <- cards_html(output)

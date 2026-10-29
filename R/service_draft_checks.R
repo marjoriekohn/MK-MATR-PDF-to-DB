@@ -16,6 +16,7 @@
 draft_service_check <- function(draft, lookups, matr_ids = TRUE) {
   problems <- rbind(
     block_problems(draft, lookups),
+    group_skip_problems(draft),
     question_problems(draft),
     variable_problems(draft, matr_ids)
   )
@@ -38,7 +39,7 @@ draft_service_next_problem <- function(draft, problems, after_id) {
   if (length(later) > 0) later[1] else ids[1]
 }
 
-#' Problems with blocks themselves: their kind, the words a block must have (and a question group mustn't),
+#' Problems with blocks themselves: their kind, the words a block must have (and a group mustn't),
 #' and where a section can be.
 #'
 #' @param draft A draft: `list(questionnaire, components, variables, response_options)`; see the top of `service_draft.R`.
@@ -46,7 +47,7 @@ draft_service_next_problem <- function(draft, problems, after_id) {
 #' @return A data frame of `id` and `message`.
 block_problems <- function(draft, lookups) {
   blocks <- draft$components
-  is_group <- blocks$component_type == "Question Group"
+  is_group <- blocks$component_type == "Group"
   parent_type <- blocks$component_type[match(blocks$parent_id, blocks$id)]
   text_problem <- function(condition, message) {
     problems_where(blocks$id, condition, message, table = "components", rows = blocks$id, field = "text")
@@ -58,16 +59,41 @@ block_problems <- function(draft, lookups) {
     ),
     text_problem(
       is.na(blocks$text) & blocks$component_type == "Section",
-      "Add the section's printed heading. A group with no heading is a question group." # BR42
+      "Add the section's printed heading. Blocks with no printed heading go in a Group instead." # BR42
     ),
     text_problem(is.na(blocks$text) & !is_container(blocks$component_type), "Add the printed words."), # BR42
     text_problem(
       !is.na(blocks$text) & is_group,
-      "A question group has no words of its own. Put them in an Instruction inside it."
+      "A group has no words of its own. Put them in an Instruction inside it."
     ),
     problems_where(
-      blocks$id, blocks$component_type == "Section" & parent_type %in% "Question Group",
-      "A section can't be inside a question group. Move it out, or make it a question group." # BR53
+      blocks$id, blocks$component_type == "Section" & parent_type %in% "Group",
+      "A section can't be inside a group. Move it out, or make it a group." # BR53
+    )
+  )
+}
+
+# A group's skip (service_draft_skips.R), as a write-in's is checked: printed words that name a question or
+# section have to be linked to it, the link has to point past the group, and it says which answer skips.
+group_skip_problems <- function(draft) {
+  blocks <- draft$components
+  groups <- blocks[blocks$component_type %in% "Group", , drop = FALSE]
+  printed <- draft_service_printed_order(draft)
+  words <- groups$skip_instruction
+  names_a_place <- !is.na(words) & (!is.na(skip_number(words)) | !is.na(skip_section(words)))
+  skip_field <- function(condition, message, field) {
+    problems_where(groups$id, condition, message, table = "components", rows = groups$id, field = field)
+  }
+  rbind(
+    skip_field(names_a_place & is.na(groups$skip_to_id), "Pick where the group skips to.", "skip_to_id"),
+    skip_field(
+      match(groups$skip_to_id, printed) <= skip_from_place(draft, groups$id, printed),
+      "The group skips back to something printed before it ends. Pick where it skips to.", "skip_to_id"
+    ),
+    skip_field(!is.na(groups$skip_to_id) & is.na(groups$skip_condition), "Say which answer makes the group skip.", "skip_condition"),
+    skip_field(
+      !is.na(groups$skip_condition) & is.na(groups$skip_to_id) & !names_a_place,
+      "Pick where the group skips to, or take its answer away.", "skip_to_id"
     )
   )
 }
@@ -152,6 +178,7 @@ variable_problems <- function(draft, matr_ids = TRUE) {
       duplicated_within(choices$code_value, choices$variable_id),
       "give each choice its own code.", "code_value" # BR103
     ),
+    choice_problem(!is.na(choices$respondent_count) & choices$respondent_count < 0, "a count of respondents can't be below 0.", "respondent_count"),
     box_problem(!is_choice_box & is.na(boxes$answer_data_type), "pick the kind of answer it takes.", "answer_data_type"), # BR95
     # About isn't checked: blank is the respondent, and a new subject is added when the extraction is applied
     if (matr_ids) box_problem(is.na(boxes$matr_id), "fill in its MATR ID.", "matr_id"), # every variable needs one before it is sent

@@ -116,7 +116,7 @@ block_numbered <- function(draft, number) {
   draft$components[draft_service_question_number(draft$components) %in% number, ]
 }
 
-# The numbers of the questions inside a section or question group, as they are called (printed, or their place).
+# The numbers of the questions inside a section or group, as they are called (printed, or their place).
 numbers_in <- function(draft, section_id) {
   numbers <- draft_service_question_number(draft_service_children(draft, "components", section_id))
   numbers[!is.na(numbers)]

@@ -3,7 +3,7 @@
 #' One for every page that edits a question's variables: Edit Extraction's outline (in the picked question's
 #' details) and Make an edit (`variable_editor_server()`). The page keeps the draft and says how a change is
 #' made; this keeps how the editor shows it: which variables' choices are open (`choices_open`), which optional
-#' fields were added empty (`shown`, as "v3:subject" or "o12:printed_label"), the questions whose shared
+#' fields were added empty (`shown`, as "v3:subject" or "o12:respondent_count"), the questions whose shared
 #' choices are edited one by one (`split`), and the field just added, which gets the cursor when it is drawn.
 #'
 #' Its buttons add variables (from a dialog: Choices or Write-in) and choices, give a variable's codes to the
@@ -43,7 +43,7 @@ variable_editor <- function(draft, change, redraw, ns) {
   }
 
   # Which table an optional field is in: a variable's About, label and (a write-in's) skip, or a choice's
-  # printed words and skip.
+  # count of respondents and skip.
   optional_table <- function(name) {
     if (name %in% names(optional_variable_fields)) "variables" else if (name %in% names(optional_choice_fields)) "response_options"
   }
@@ -233,7 +233,7 @@ variable_editor_server <- function(id) {
       version()
       isolate({
         now <- req(draft())
-        view <- c(editor$view(), list(focus = editor$take_focus(), skip_words = TRUE, apply_codes = FALSE))
+        view <- c(editor$view(), list(focus = editor$take_focus(), skip_words = TRUE, apply_codes = FALSE, counts = FALSE))
         variable_editor_body(now$components[1, , drop = FALSE], now, view, lookups, ns)
       })
     })

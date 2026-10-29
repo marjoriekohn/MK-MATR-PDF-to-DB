@@ -23,7 +23,14 @@ make_edit_ui <- function(id) {
         class = "structure-body", padding = 0,
         div(
           class = "outline-panel", `data-ns` = ns(""),
-          div(class = "outline-toolbar", outline_search("Search the lists that are open")),
+          div(
+            class = "outline-toolbar",
+            outline_search("Search the lists that are open"),
+            review_button(
+              icon_label("collapse", "Collapse All"), "collapse_all",
+              class = "btn btn-outline-dark", title = "Close every section", `data-collapse-all` = NA
+            )
+          ),
           div(
             class = "outline-split",
             div(
@@ -33,6 +40,7 @@ make_edit_ui <- function(id) {
               }))),
               p(class = "outline-filter-empty", "Nothing in the open lists matches.")
             ),
+            outline_divider(),
             div(
               class = "detail-panel", role = "region", `aria-label` = "The item picked",
               uiOutput(ns("detail"), class = "detail-body")

@@ -2,7 +2,7 @@
 # their buttons open. The database is the real one.
 
 home_args <- function(me, active = NULL, connection = test_connection, extractions = test_extractions(connection),
-                      catalog = test_live_catalog(connection)) {
+                      catalog = shared_catalog(env), env = parent.frame()) {
   did <- new.env()
   did$pages <- character()
   did$extractions <- list()

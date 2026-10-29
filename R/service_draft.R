@@ -1,10 +1,10 @@
 # ------ Extraction drafts ------------------------------------------------------
-# The extraction pipeline returns a questionnaire as nested JSON: sections and question groups hold
+# The extraction pipeline returns a questionnaire as nested JSON: sections and groups hold
 # blocks, questions hold variables, and variables hold choices (response options). The Edit
 # Extraction page edits three flat tables instead, so moving a block only changes its parent_id and
 # display_order, the same way QUESTIONNAIRE_COMPONENT stores it:
 #
-#   components        one row per block, pointing at its section or question group (parent_id)
+#   components        one row per block, pointing at its section or group (parent_id)
 #   variables         one row per variable, pointing at its question
 #   response_options  one row per choice, pointing at its variable
 #
@@ -24,7 +24,7 @@
 # number the wave records (`wave_question.question_number`). `printed_number` is the number printed
 # beside it ("1a", "12"), read off the PDF and corrected by staff; it can repeat (each section can
 # start again at 1) or be missing, and the wave keeps it too (`wave_question.printed_number`).
-# Sections and question groups aren't counted.
+# Sections and groups aren't counted.
 #
 # Each block also notes the PDF page it was read from (`page`: the first page of the range the reading
 # job sent with it), so the page can open the PDF at it. Blocks staff add take the page
@@ -33,10 +33,35 @@
 # The version of the reviewed copy's JSON. A copy without one is what the reading job returned.
 draft_schema_version <- 2L
 
-# The kinds of block that hold others. A section has a printed heading; a question group is only a
+# The kinds of block that hold others. A section has a printed heading; a group is only a
 # container (a battery, a definition with its question, a question with its follow-up) and has no words
-# of its own. A section sits at the top level or inside another section, never inside a question group.
-container_types <- c("Section", "Question Group")
+# of its own. A section sits at the top level or inside another section, never inside a group.
+container_types <- c("Section", "Group")
+
+# An answer choice as the database keeps it (answer_option.standardized_label): lower case, with straight quotes,
+# one space between words, and no question mark, or full stop or colon at the end ("Yes." and "YES" are "yes").
+# The printed words aren't kept: a choice is its standard wording.
+normal_answer <- function(text) {
+  text <- as.character(text)
+  text <- gsub("[\u2018\u2019]", "'", text)
+  text <- gsub("[\u201c\u201d]", '"', text)
+  text <- gsub("?", "", text, fixed = TRUE)
+  text <- tolower(trimws(gsub("[[:space:]]+", " ", text)))
+  text <- sub("[.:[:space:]]+$", "", text)
+  text[!is.na(text) & !nzchar(text)] <- NA
+  text
+}
+
+# Kinds of block that were called something else when older drafts were saved (docs/sql/9_integrity_rules.sql
+# renamed Question Group to Group).
+old_type_names <- c(`Question Group` = "Group")
+
+# The kinds of block as they are called now.
+renamed_types <- function(component_types) {
+  old <- component_types %in% names(old_type_names)
+  component_types[old] <- old_type_names[component_types[old]]
+  component_types
+}
 
 #' Whether blocks of these kinds hold other blocks.
 #'
@@ -78,7 +103,8 @@ new_row_defaults <- list(
     component_type = NA_character_, text = NA_character_,
     question_number = NA_character_, printed_number = NA_character_, self_contained = NA,
     condition = NA_character_, parent_question_id = NA_character_, checked = FALSE, ref = NA_character_,
-    parent_from_skip = FALSE, page = NA_integer_
+    parent_from_skip = FALSE, page = NA_integer_,
+    skip_condition = NA_character_, skip_when = NA_character_, skip_instruction = NA_character_, skip_to_id = NA_character_
   ),
   variables = data.frame(
     id = NA_character_, component_id = NA_character_, display_order = Inf,
@@ -88,8 +114,8 @@ new_row_defaults <- list(
   ),
   response_options = data.frame(
     id = NA_character_, variable_id = NA_character_, display_order = Inf,
-    answer_option = NA_character_, code_value = NA_integer_,
-    printed_label = NA_character_, skip_instruction = NA_character_, ref = NA_character_,
+    answer_option = NA_character_, code_value = NA_character_, respondent_count = NA_integer_,
+    skip_instruction = NA_character_, ref = NA_character_,
     skip_to_id = NA_character_
   )
 )
@@ -184,7 +210,7 @@ draft_service_from_json <- function(json) {
       id = block_ids,
       parent_id = ids_for("c", pluck(blocks, ".parent", NA_integer_)),
       display_order = as.numeric(seq_along(blocks)),
-      component_type = pluck(blocks, "component_type"),
+      component_type = renamed_types(pluck(blocks, "component_type")),
       text = pluck(blocks, "text"),
       question_number = rep(NA_character_, length(blocks)),
       printed_number = pluck(blocks, "printed_number"),
@@ -194,7 +220,13 @@ draft_service_from_json <- function(json) {
       checked = pluck(blocks, "checked", FALSE),
       ref = refs(blocks, block_ids),
       parent_from_skip = pluck(blocks, "parent_from_skip", FALSE),
-      page = pluck(blocks, "page", NA_integer_)
+      page = pluck(blocks, "page", NA_integer_),
+      # a group's skip, on the answers to the questions in it: the answer, whether every question or any has
+      # to get it, the words printed for it, and where it sends respondents (service_draft_skips.R)
+      skip_condition = pluck(blocks, "skip_condition"),
+      skip_when = pluck(blocks, "skip_when"),
+      skip_instruction = pluck(blocks, "skip_instruction"),
+      skip_to_id = skip_ids(blocks)
     ),
     variables = data.frame(
       id = ids_for("v", seq_along(boxes)),
@@ -215,9 +247,9 @@ draft_service_from_json <- function(json) {
       id = ids_for("o", seq_along(choices)),
       variable_id = ids_for("v", pluck(choices, ".parent", NA_integer_)),
       display_order = as.numeric(seq_along(choices)),
-      answer_option = pluck(choices, "answer_option"),
-      code_value = pluck(choices, "code_value", NA_integer_),
-      printed_label = pluck(choices, "printed_label"),
+      answer_option = normal_answer(pluck(choices, "answer_option")),
+      code_value = pluck(choices, "code_value"), # text: a code can be a letter (a, b, c)
+      respondent_count = pluck(choices, "respondent_count", NA_integer_),
       skip_instruction = pluck(choices, "skip_instruction"),
       ref = refs(choices, ids_for("o", seq_along(choices))),
       # a reviewed copy names where a choice skips to by the block's place in printed order, which is its id
@@ -302,7 +334,7 @@ same_number <- function(numbers, number) {
 # ------ Tables to JSON ---------------------------------------------------------
 # The reviewed copy: the same shape the pipeline returns, plus `schema_version`, and what review adds:
 # `question_number` (its place) and `checked` on each block, `matr_id` on each variable, `code_value` on
-# each choice, `ref` on each row the AI returned, where a choice or write-in skips to (`skip_to`: the
+# each choice, `ref` on each row the AI returned, where a choice, write-in or group skips to (`skip_to`: the
 # block's place in printed order, or `skip_to_end`) and whether a question's parent was worked out from a skip. A question names its parent
 # by the parent's place among the questions.
 # Fields with nothing in them are left out, as in tests/testthat/fixtures/gna_gold.json.
@@ -325,6 +357,12 @@ blocks_json <- function(draft, parent_id) {
     )
     if (is_container(block$component_type)) {
       json$children <- blocks_json(draft, block$id)
+    }
+    if (block$component_type == "Group") {
+      json$skip_condition <- block$skip_condition
+      json$skip_when <- block$skip_when
+      json$skip_instruction <- block$skip_instruction
+      json <- c(json, skip_json(block$skip_to_id, attr(draft, "printed")))
     }
     if (block$component_type == "Question") {
       json$question_number <- block$question_number
@@ -369,7 +407,7 @@ choices_json <- function(draft, variable_id) {
       display_order = as.integer(choice$display_order),
       answer_option = choice$answer_option,
       code_value = choice$code_value,
-      printed_label = choice$printed_label,
+      respondent_count = choice$respondent_count,
       skip_instruction = choice$skip_instruction,
       skip_to = skip_json(choice$skip_to_id, attr(draft, "printed"))$skip_to,
       skip_to_end = skip_json(choice$skip_to_id, attr(draft, "printed"))$skip_to_end,

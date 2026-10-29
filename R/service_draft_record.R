@@ -27,9 +27,12 @@
 
 # The fields that are compared, for each table of a draft.
 review_edit_fields <- list(
-  components = c("component_type", "text", "printed_number", "self_contained", "condition", "parent_question_id"),
+  components = c(
+    "component_type", "text", "printed_number", "self_contained", "condition", "parent_question_id",
+    "skip_condition", "skip_when", "skip_instruction" # a group's skip
+  ),
   variables = c("variable_type", "label", "subject", "answer_data_type", "skip_condition", "skip_instruction"),
-  response_options = c("answer_option", "printed_label", "skip_instruction")
+  response_options = c("answer_option", "skip_instruction")
 )
 review_edit_items <- c(components = "block", variables = "variable", response_options = "choice")
 
@@ -188,7 +191,7 @@ review_edit_keys <- function(draft, table, rows, field) {
 if_missing <- function(value, otherwise) if (length(value) == 0 || is.na(value)) otherwise else value
 
 # The rows of the AI's answer that the reviewed copy has somewhere else. A row has moved when it is in
-# another section, question group, question or variable than its place in the AI's answer says, or
+# another section, group, question or variable than its place in the AI's answer says, or
 # when, among the rows that stayed together in one place, it is out of their order. A row whose section
 # was deleted, and that now sits where the section did, hasn't moved: the deleted section is the
 # difference. Of rows put in a new order, only the fewest that account for it count (those outside the

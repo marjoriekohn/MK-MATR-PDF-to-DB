@@ -75,14 +75,24 @@ test_that("giving a draft typed by hand a PDF keeps it with the draft and doesn'
   expect_false(identical(replaced$reading_started, ai$reading_started))
 })
 
-test_that("discarding keeps the draft but takes it off the open list", {
+test_that("discarding deletes the draft, and its PDF once no other draft uses it; only its preparer can", {
   local_pdf_cache()
   me <- local_staff()
+  colleague <- local_staff()
   record <- extraction_service_create(test_connection, fake_upload(), me)
-  extraction_service_withdraw(test_connection, record$id, me)
+  same_pdf <- extraction_service_create(test_connection, fake_upload(), me)
+  sha256 <- record$pdf$sha256
+  pdf_rows <- function() database_model_count(test_connection, "pdf_file", list(pdf_sha256 = database_eq(sha256)))
 
-  expect_equal(extraction_model_get(test_connection, record$id)$status, "Withdrawn")
-  expect_false(record$id %in% names(extraction_service_get_all(test_connection))) # a list leaves it out
+  expect_error(extraction_service_discard(test_connection, record$id, colleague), "prepared")
+  extraction_service_discard(test_connection, record$id, me)
+  expect_error(extraction_model_get(test_connection, record$id), "no longer in the database")
+  expect_false(record$id %in% names(extraction_service_get_all(test_connection)))
+  expect_equal(pdf_rows(), 1) # the other draft still uses the file
+
+  extraction_service_discard(test_connection, same_pdf$id, me)
+  expect_equal(pdf_rows(), 0)
+  expect_false(file.exists(extraction_model_pdf_path(sha256)))
 })
 
 test_that("Mine lists only the drafts I started", {
@@ -174,6 +184,22 @@ test_that("reading steps follow the reading job's status", {
   failed <- extraction_service_reading_steps(list(extraction_status = "failed", error = "Stopped on page 6 of 18"))
   expect_equal(failed$state[3], "attention")
   expect_equal(failed$detail[3], "Stopped on page 6 of 18")
+})
+
+test_that("a file of Variable Names and Coding is a step of its own, after the questionnaire is read and checked", {
+  coded <- function(status, error = NULL) {
+    extraction_service_reading_steps(list(extraction_status = status, error = error, supplement = list(name = "KQ codebook.csv")))
+  }
+  steps <- coded("received")
+  expect_equal(steps$label[4:6], c("Checking the result", "Applying Variable Names and Coding", "Saved as a draft"))
+  expect_equal(steps$detail[4], "Makes sure every question has at least one variable") # checking is only checking
+  expect_equal(steps$detail[5], "Applies the Variable Names and Coding in KQ codebook.csv")
+  expect_equal(steps$state, c("done", "done", "done", "in_progress", "not_started", "not_started"))
+  expect_equal(coded("assigning")$state, c(rep("done", 4), "in_progress", "not_started"))
+  expect_equal(coded("ready")$state, rep("done", 6))
+  not_applied <- coded("ready", error = "Gemini is busy")
+  expect_equal(not_applied$state[5], "attention")
+  expect_match(not_applied$detail[5], "Couldn't apply them \\(Gemini is busy\\)")
 })
 
 test_that("the progress on each card is how it was read and how much of it is checked, as the Edit Extraction page counts it", {
@@ -296,6 +322,22 @@ test_that("a new wave of a recorded questionnaire knows the blocks it prints and
   smoke <- recorded$matr_ids[recorded$matr_ids$matr_id == pushed$draft$variables$matr_id[1], ]
   expect_equal(smoke$text, paste(test_marker, "Do you smoke?"))
   expect_equal(smoke$display_order, 1)
+})
+
+test_that("an applied extraction keeps its draft, and its history has a line for each table it added to", {
+  admin <- local_staff("ADMIN")
+  tree <- local_tree()
+  pushed <- local_pushed_questionnaire(admin, tree)
+  kept <- extraction_model_get(test_connection, pushed$id) # what was read and reviewed stays, for analysis
+  expect_equal(kept$status, history_applied_status)
+  items <- history_model_get_items(test_connection, pushed$history_id)
+  expect_equal(anyDuplicated(items$entity_name), 0)
+  expect_true(all(startsWith(items$record_identifier, "[")))
+  variables <- jsonlite::fromJSON(items$record_identifier[items$entity_name == "variable"], simplifyVector = FALSE)
+  expect_length(variables, nrow(pushed$draft$variables))
+  changes <- history_service_changes(test_connection, pushed$history_id)
+  expect_equal(changes$counts$tables, nrow(items))
+  expect_gt(changes$counts$added, nrow(items))
 })
 
 test_that("a draft with no questionnaire picked has nothing recorded", {

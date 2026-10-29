@@ -170,20 +170,20 @@ edit_change_server <- function(
       )
     })
 
-    # The row's fields as text (a field that only matters while another has a value is left out when it doesn't),
-    # and where the row is used.
+    # The row's fields as text, each on a line of its own and whole (a field that only matters while another has a
+    # value is left out when it doesn't), and where the row is used.
     view_ui <- function(ctx) {
       start <- initial()
       shown <- Filter(function(field) field$type != "variables" && edit_service_visible(field, start), fields())
       tagList(
-        detail_section(NULL, lapply(shown, function(field) {
+        div(class = "edit-view", detail_section(NULL, lapply(shown, function(field) {
           value <- start[[field$id]]
           detail_field(
             field$label,
             span(class = "detail-value", edit_display_value(field, if (is.null(value) || !nzchar(value)) NA else value)),
             wide = field$type == "textarea"
           )
-        })),
+        }))),
         div(class = "edit-usage", edit_usage_ui(ctx$entity, edit_label(ctx$snap, ctx$entity$table, ctx$row), usage()))
       )
     }

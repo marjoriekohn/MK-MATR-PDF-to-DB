@@ -56,13 +56,22 @@ test_that("a kind's section lists its items and + Add; a kind that belongs to a 
     expect_match(text_of(registries), tree$registry$name, fixed = TRUE)
     expect_match(registries, sprintf('data-action="select" data-id="registry||%s"', tree$registry$registry_id), fixed = TRUE)
     expect_match(text_of(registries), "Add Registry")
+    # opening it showed its first item, marked in the list
+    expect_equal(c(kind(), verb()), c("registry", "view"))
+    expect_match(registries, sprintf('is-selected" tabindex="0" data-action="select" data-id="registry||%s"', picked()), fixed = TRUE)
     # Questions: a section for each questionnaire, its questions read once it is opened
     open_section(session, "questionnaire_question")
     questions <- paste(output$items_questionnaire_question$html, collapse = "")
     expect_match(questions, sprintf('data-id="questionnaire_question:%s"', tree$questionnaire$questionnaire_id), fixed = TRUE)
+    expect_equal(kind(), "registry") # a section of sections picks nothing
     open_section(session, paste0("questionnaire_question:", tree$questionnaire$questionnaire_id))
     inside <- paste(output[[paste0("items_questionnaire_question_", tree$questionnaire$questionnaire_id)]]$html, collapse = "")
     expect_match(text_of(inside), "Add Question")
+    expect_equal(kind(), "registry") # nor does one with nothing in it
+    # Collapse All closes every section
+    session$setInputs(action = list(action = "collapse_all"))
+    expect_error(output$items_registry)
+    expect_error(output$items_questionnaire_question)
     expect_length(errors(), 0)
   })
 })
@@ -291,12 +300,15 @@ test_that("a database that can't be read says so, and Try again reads it again",
 test_that("Scale Items have a section for each measurement scale, and an item added there is applied", {
   me <- local_staff()
   scale <- local_row("measurement_scale", list(name = test_name("Scale"), abbreviation = test_name("SC")), "scale_id")
-  question_type <- database_model_get(
-    test_connection, "component_type", "component_type_id", order_by = "component_type_id",
-    filters = list(name = database_eq("Question"))
+  # a question for the scale: a component and its question row are only added together, as a push adds them
+  admin <- local_staff("ADMIN")
+  tree <- local_tree()
+  pushed <- local_pushed_questionnaire(admin, tree)
+  asked <- database_model_get(
+    test_connection, "questionnaire_question", "component_id", order_by = "component_id",
+    filters = list(questionnaire_id = database_eq(pushed$questionnaire_id))
   )
-  component <- local_row("component", list(component_type_id = question_type$component_type_id, text = test_name("Scale question")), "component_id")
-  local_row("question", list(component_id = component$component_id), "component_id")
+  component <- list(component_id = asked$component_id[1])
   made <- local_outcomes() # (after the rows above, so the item it added goes before them)
   page <- page_args(me)
   shiny::testServer(make_edit_server, args = page$args, {
@@ -352,7 +364,7 @@ test_that("a PDF is only shown: listed without + Add, its details without Edit o
 
 test_that("an option set is added with its choices (once docs/sql/8_option_sets_editable.sql has run)", {
   me <- local_staff()
-  choice <- local_row("answer_option", list(standardized_label = test_name("Choice")), "answer_option_id")
+  choice <- local_row("answer_option", list(standardized_label = tolower(test_name("Choice"))), "answer_option_id") # a choice is in lower case
   made <- local_outcomes()
   page <- page_args(me)
   name <- test_name("Option set")

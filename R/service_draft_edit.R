@@ -7,10 +7,11 @@
 editable_fields <- list(
   components = c(
     "component_type", "text", "printed_number", "self_contained",
-    "condition", "parent_question_id", "checked"
+    "condition", "parent_question_id", "checked",
+    "skip_condition", "skip_when", "skip_instruction", "skip_to_id" # a group's skip
   ),
   variables = c("variable_type", "label", "subject", "answer_data_type", "matr_id", "skip_condition", "skip_instruction", "skip_to_id"),
-  response_options = c("answer_option", "code_value", "printed_label", "skip_instruction", "skip_to_id")
+  response_options = c("answer_option", "code_value", "respondent_count", "skip_instruction", "skip_to_id")
 )
 
 #' Change one field of one row.
@@ -47,6 +48,10 @@ draft_service_update <- function(draft, table, id, field, value) {
       draft$variables$subject[row] <- blank_respondent(value)
       draft
     },
+    answer_option = {
+      draft$response_options$answer_option[row] <- normal_answer(value)
+      draft
+    },
     {
       draft[[table]][row, field] <- value
       draft
@@ -61,8 +66,8 @@ as_field_value <- function(value, type) {
   suppressWarnings(as.vector(value, type))
 }
 
-# A block's kind decides what else it holds: only sections and question groups hold blocks (BR53), a
-# section is never inside a question group, a question group has no words of its own, and only a
+# A block's kind decides what else it holds: only sections and groups hold blocks (BR53), a
+# section is never inside a group, a group has no words of its own, and only a
 # Question has a number and variables (BR45).
 set_component_type <- function(draft, row, type) {
   blocks <- draft$components
@@ -72,16 +77,18 @@ set_component_type <- function(draft, row, type) {
   if (!is_container(type) && length(inside) > 0) {
     stop("Move the blocks out of it first, then change its kind.")
   }
-  if (type == "Question Group" && !is.na(block$text)) {
-    stop("A question group has no words of its own. Move these words into an Instruction first, then make it a question group.")
+  if (type == "Group" && !is.na(block$text)) {
+    stop("A group has no words of its own. Move these words into an Instruction first, then make it a group.")
   }
-  if (type == "Question Group" && "Section" %in% inside) {
-    stop("A section can't be inside a question group. Move the sections out of it first.")
+  if (type == "Group" && "Section" %in% inside) {
+    stop("A section can't be inside a group. Move the sections out of it first.")
   }
   if (type == "Section" && !is.na(block$parent_id) && !blocks$component_type[match(block$parent_id, blocks$id)] %in% "Section") {
-    stop("A section can't be inside a question group. Move it out of the group first.")
+    stop("A section can't be inside a group. Move it out of the group first.")
   }
   draft$components$component_type[row] <- type
+  # only a group skips on the answers to the questions in it
+  if (type != "Group") draft$components[row, c("skip_condition", "skip_when", "skip_instruction", "skip_to_id")] <- NA
   if (type == "Question") {
     if (is.na(block$self_contained)) draft$components$self_contained[row] <- TRUE
     return(draft)
@@ -200,7 +207,7 @@ draft_service_uncheck_edited <- function(before, after) {
   after
 }
 
-#' Sections and question groups are checked once everything in them is.
+#' Sections and groups are checked once everything in them is.
 #'
 #' Staff verify questions and the other blocks; a section or group counts as checked (for the progress bar,
 #' the list's colours and what is left to check before submitting) once every block inside it is, and stops
@@ -225,9 +232,9 @@ draft_service_check_containers <- function(draft) {
 #'
 #' @param draft A draft: `list(questionnaire, components, variables, response_options)`; see the top of `service_draft.R`.
 #' @param ids All the block ids in printed order.
-#' @param parent_ids The section or question group each block is in; `NA` for the top level.
+#' @param parent_ids The section or group each block is in; `NA` for the top level.
 #' @return The changed draft. An error if the outline was out of date, a block that isn't a section or
-#'   question group would hold blocks, or a section would be inside a question group.
+#'   group would hold blocks, or a section would be inside a group.
 draft_service_apply_order <- function(draft, ids, parent_ids) {
   blocks <- draft$components
   if (length(ids) != nrow(blocks) || !setequal(ids, blocks$id)) {
@@ -235,11 +242,11 @@ draft_service_apply_order <- function(draft, ids, parent_ids) {
   }
   parent_types <- blocks$component_type[match(parent_ids, blocks$id)]
   if (any(!is.na(parent_ids) & !is_container(parent_types))) {
-    stop("Only sections and question groups can hold other blocks.")
+    stop("Only sections and groups can hold other blocks.")
   }
   moved_types <- blocks$component_type[match(ids, blocks$id)]
   if (any(moved_types == "Section" & !is.na(parent_ids) & !parent_types %in% "Section")) {
-    stop("A section can't go inside a question group.")
+    stop("A section can't go inside a group.")
   }
   rows <- match(ids, blocks$id)
   blocks$parent_id[rows] <- parent_ids
@@ -268,8 +275,8 @@ draft_service_reorder <- function(draft, table, ids) {
 # ------ Adding and deleting ----------------------------------------------------
 #' Add a block.
 #'
-#' It goes right after the selected one, or inside it if that is a section or question group (unless
-#' the new block is a section), or at the very end. A new section never lands inside a question group:
+#' It goes right after the selected one, or inside it if that is a section or group (unless
+#' the new block is a section), or at the very end. A new section never lands inside a group:
 #' it goes after the group.
 #'
 #' @param draft A draft: `list(questionnaire, components, variables, response_options)`; see the top of `service_draft.R`.
@@ -282,7 +289,7 @@ draft_service_add_block <- function(draft, component_type, id, near_id = NULL) {
   near <- blocks[blocks$id %in% near_id, ]
   has_near <- nrow(near) == 1
   if (has_near && component_type == "Section") {
-    # climb out of question groups, so the section lands at the top level or in a section
+    # climb out of groups, so the section lands at the top level or in a section
     while (!is.na(near$parent_id) && !blocks$component_type[match(near$parent_id, blocks$id)] %in% "Section") {
       near <- blocks[blocks$id == near$parent_id, ]
     }
@@ -361,19 +368,19 @@ add_blank_choices <- function(draft, variable_id, n) {
   default_codes(draft, variable_id)
 }
 
-#' Take away a section or question group but keep what is inside it.
+#' Take away a section or group but keep what is inside it.
 #'
 #' The blocks inside move up to where it was, in the same order, and it is deleted. Says so with
 #' `message()`, since Undo puts it back.
 #'
 #' @param draft A draft: `list(questionnaire, components, variables, response_options)`; see the top of `service_draft.R`.
-#' @param id The section's or question group's id.
+#' @param id The section's or group's id.
 #' @return The changed draft. An error if the block holds nothing it could keep.
 draft_service_ungroup <- function(draft, id) {
   blocks <- draft$components
   row <- match(id, blocks$id)
   if (is.na(row) || !is_container(blocks$component_type[row])) {
-    stop("Only a section or question group can be taken away and its blocks kept.")
+    stop("Only a section or group can be taken away and its blocks kept.")
   }
   inside <- draft_service_children(draft, "components", id)
   # what is inside takes its place: between it and the block after it
@@ -412,7 +419,7 @@ draft_service_shared_choices <- function(draft, component_id) {
   lists <- vapply(ids, function(id) {
     mine <- choices[choices$variable_id %in% id, , drop = FALSE]
     mine <- mine[order(mine$display_order), , drop = FALSE]
-    paste(mine$answer_option, mine$code_value, mine$printed_label, mine$skip_instruction, mine$skip_to_id, sep = "\r", collapse = "\n")
+    paste(mine$answer_option, mine$code_value, mine$skip_instruction, mine$skip_to_id, sep = "\r", collapse = "\n")
   }, character(1))
   if (length(unique(lists)) == 1 && nzchar(lists[1])) ids else character()
 }
@@ -494,7 +501,8 @@ draft_service_delete <- function(draft, table, id) {
 #' Give choices their default codes.
 #'
 #' Codes count 1, 2, 3... down a variable's choices until staff change them: a choice without a
-#' code gets the next one after the highest in its variable.
+#' code gets the next one after the highest in its variable. Codes are text, so a variable coded with
+#' letters (a, b, c) carries on with the next letter.
 #'
 #' @param draft A draft: `list(questionnaire, components, variables, response_options)`; see the top of `service_draft.R`.
 #' @param variable_ids Only these variables; `NULL` for all.
@@ -510,12 +518,28 @@ default_codes <- function(draft, variable_ids = NULL) {
     choices$code_value[rows], choices$variable_id[rows],
     FUN = function(codes) {
       blank <- is.na(codes)
-      codes[blank] <- max(c(0L, codes), na.rm = TRUE) + seq_len(sum(blank))
+      codes[blank] <- next_codes(codes[!blank], sum(blank))
       codes
     }
   )
   draft$response_options <- choices
   draft
+}
+
+# The next `n` codes after those a variable's choices have: letters after the last letter when every code is
+# one letter ("a", "b" -> "c"), otherwise whole numbers after the highest number (none -> 1, 2, 3...).
+next_codes <- function(codes, n) {
+  if (n == 0) {
+    return(character())
+  }
+  if (length(codes) > 0 && all(grepl("^[A-Za-z]$", codes))) {
+    alphabet <- if (all(codes == toupper(codes))) LETTERS else letters
+    after <- max(match(tolower(codes), letters))
+    return(alphabet[pmin(after + seq_len(n), length(alphabet))])
+  }
+  numbers <- suppressWarnings(as.numeric(codes))
+  numbers <- numbers[!is.na(numbers) & numbers == round(numbers)]
+  as.character(max(c(0, numbers)) + seq_len(n))
 }
 
 #' Give every variable that offers the same choices the codes this variable uses.
@@ -694,7 +718,7 @@ draft_service_text_suggestions <- function(draft, recorded_texts = NULL) {
 #' Number the questions 1, 2, 3... in the order they are printed.
 #'
 #' A question's place follows its place in the questionnaire, so moving, adding or deleting a question
-#' renumbers the ones after it. Blocks that aren't questions (sections and question groups included) have
+#' renumbers the ones after it. Blocks that aren't questions (sections and groups included) have
 #' no number and aren't counted. The number printed beside a question (`printed_number`) is left as it is.
 #'
 #' @param draft A draft: `list(questionnaire, components, variables, response_options)`; see the top of `service_draft.R`.

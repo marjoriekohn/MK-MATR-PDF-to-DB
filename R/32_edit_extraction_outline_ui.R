@@ -3,13 +3,13 @@
 #'
 #' The list is for finding and ordering blocks: each row is its kind, its words, how many variables a question
 #' has (pointing at the number lists their MATR IDs), what there is to fix, and an arrow that opens it.
-#' Clicking a section or question group opens it, or closes it when it is open. A section's or text block's
+#' Clicking a section or group opens it, or closes it when it is open. A section's or text block's
 #' words are typed in the list once its edit button is pressed, and pointing at its row offers that, to change
 #' its kind, and to delete it. A block verified is green, and a section or group once everything in it is. The
 #' block picked is edited in the panel beside it (`block_detail()`). On a phone the list and the details take
-#' turns, with Back. A question group's row has no words: it only holds blocks.
+#' turns, with Back. A group's row has no words: it only holds blocks.
 #'
-#' The toolbar, in order: + Block (a dialog of the kinds of block), Add Filter (which blocks the list shows),
+#' The toolbar, in order: + Block (a dialog of the kinds of block), Filter (which blocks the list shows),
 #' Search, Expand All, Collapse All, and how many blocks have something to fix. Its buttons are only their
 #' icons on a phone.
 #'
@@ -36,11 +36,23 @@ extraction_outline_ui <- function(id) {
         uiOutput(ns("tree")),
         p(class = "outline-filter-empty", "No blocks to show.")
       ),
+      outline_divider(),
       div(
         class = "detail-panel", role = "region", `aria-label` = "The block picked",
         uiOutput(ns("detail"), class = "detail-body")
       )
     )
+  )
+}
+
+#' The divider between the list and the picked row's details: dragging it (or the arrow keys, while it has focus)
+#' makes the list wider or narrower, and a double click puts it back (www/js/split.js). Make an edit has one too.
+#'
+#' @return A UI element.
+outline_divider <- function() {
+  div(
+    class = "outline-divider", role = "separator", tabindex = "0", `aria-orientation` = "vertical",
+    `aria-label` = "Resize the list", title = "Drag to resize the list; double-click to put it back"
   )
 }
 
@@ -61,9 +73,9 @@ outline_search <- function(label = "Search the blocks' words and MATR IDs") {
   )
 }
 
-#' Add Filter: which blocks the list shows: all of them, those not checked yet, those with something to fix,
+#' Filter: which blocks the list shows: all of them, those not checked yet, those with something to fix,
 #' or those staff changed from what the AI read. The page script hides the others, keeping the sections and
-#' question groups they are in (www/js/review.js); it isn't a Shiny input.
+#' groups they are in (www/js/review.js); it isn't a Shiny input.
 #'
 #' @return A UI element.
 outline_filter <- function() {
@@ -71,9 +83,9 @@ outline_filter <- function() {
     class = "toolbar-field",
     app_icon("filter"),
     tags$select(
-      class = "form-select outline-filter", `data-outline-filter` = NA, `aria-label` = "Add a filter",
+      class = "form-select outline-filter", `data-outline-filter` = NA, `aria-label` = "Filter",
       title = "Which blocks the list shows",
-      tags$option(value = "all", "Add Filter"),
+      tags$option(value = "all", "Filter"),
       tags$option(value = "unchecked", "Not checked"),
       tags$option(value = "problems", "To fix"),
       tags$option(value = "changed", "Changed from AI")
@@ -90,7 +102,7 @@ outline_filter <- function() {
 # database has that isn't here is "Any other printed text".
 block_kind_descriptions <- c(
   Section = "A part of the questionnaire under a printed heading, holding the blocks printed under it.",
-  `Question Group` = "Sets apart blocks that belong together and have no heading: questions under a lead-in only they share, or a question with its follow-up.",
+  `Group` = "Sets apart blocks that belong together and have no heading: questions under a lead-in only they share, or a question with its follow-up.",
   Question = "Asks for one or more answers, each recorded by a variable.",
   Introduction = "Opening words that say what the questionnaire or study is about.",
   Instruction = "Tells respondents how to answer, or is the lead-in the items after it share.",
@@ -145,8 +157,8 @@ add_block_dialog <- function(ns, component_types) {
 }
 
 # ------ Outline tree -----------------------------------------------------------
-# Each block is a row. A section's (or question group's) row sits above its own list, and dropping a
-# block into that list puts the block inside it. Only sections and question groups have a list, so
+# Each block is a row. A section's (or group's) row sits above its own list, and dropping a
+# block into that list puts the block inside it. Only sections and groups have a list, so
 # only they can hold blocks (BR53). `view` holds what's selected, which sections and groups are
 # collapsed, the problems the checks found, the words to suggest, the uploaded MATR IDs no variable has
 # yet, the optional fields staff have added to variables, and the kinds of block there are.
@@ -366,7 +378,8 @@ outline_list <- function(draft, section, view, lookups, ns) {
 
 outline_node <- function(block, draft, view, lookups, ns) {
   div(
-    class = c("outline-node", if (block$id %in% view$collapsed) "is-collapsed"),
+    # a group is drawn as a gold box around the blocks it holds (_outline.scss)
+    class = c("outline-node", if (block$component_type == "Group") "is-group", if (block$id %in% view$collapsed) "is-collapsed"),
     `data-id` = block$id,
     `data-label` = block_label(block),
     `data-page` = if (isTRUE(block$page > 0)) block$page, # Open PDF opens at it (review.js)
@@ -376,7 +389,8 @@ outline_node <- function(block, draft, view, lookups, ns) {
 }
 
 # A row: its kind, its words, how many variables a question has and what there is to fix, and the arrow that
-# opens it in the details. Clicking a section's or question group's row opens or closes it. A section's and a
+# opens it in the details (a question's or text block's, and a group's, whose details hold its skip). Clicking a
+# section's or group's row opens or closes it. A section's and a
 # text block's words are typed in the row once its edit button is pressed (a question's in its details), and
 # pointing at the row puts its buttons at its end: edit, change its kind, ungroup, delete. A question's
 # variables in short are under its row only while MATR IDs are given out by hand (review.js). The numbers the
@@ -387,17 +401,17 @@ outline_row <- function(block, draft, view, ns) {
   div(
     class = c(
       "outline-row", if (identical(block$id, view$selected)) "is-selected", if (block$checked) "is-verified",
-      if (is_section) "is-container", if (type != "Question" && type != "Question Group") "is-editable"
+      if (is_section) "is-container", if (type != "Question" && type != "Group") "is-editable"
     ),
     tabindex = "0", `data-action` = if (is_section) "toggle" else "select", `data-id` = block$id,
     `aria-expanded` = if (is_section) if (block$id %in% view$collapsed) "false" else "true",
     span(class = "drag-handle", title = "Drag to move", app_icon("drag")),
     type_chip(type),
     # typed in once the row's edit button is pressed (review.js)
-    if (type == "Question Group") span(class = "outline-group-note") else outline_text_field(block, view$problems, ns) |> tagAppendAttributes(readonly = NA),
+    if (type == "Group") span(class = "outline-group-note") else outline_text_field(block, view$problems, ns) |> tagAppendAttributes(readonly = NA),
     outline_badges(block, draft, view$problems),
     if (type != "Question") row_actions(block, view$component_types),
-    if (!is_section) {
+    if (!is_section || type == "Group") {
       review_button(
         app_icon("open"), "select",
         `data-id` = block$id, class = "btn btn-sm btn-icon btn-open", title = "Open in the editor", `aria-label` = "Open in the editor"
@@ -441,9 +455,9 @@ variable_summary <- function(block, draft, view, ns) {
         strong(plural(nrow(boxes), "variable")), ": ",
         paste(
           paste0(ifelse(is.na(shown$matr_id), "no MATR ID", shown$matr_id), " (", variable_summary_text(draft, shown$id), ")"),
-          collapse = "; "
+          collapse = " · " # (a variable's choices are joined by "; ")
         ),
-        if (nrow(boxes) > 3) paste0("; +", nrow(boxes) - 3, " more")
+        if (nrow(boxes) > 3) paste0(" · +", nrow(boxes) - 3, " more")
       )
     }
   )
@@ -472,7 +486,7 @@ outline_text_field <- function(block, problems, ns) {
   placeholder <- switch(block$component_type,
                         Section = paste(
                           "Section heading, as printed (e.g. ‘Section 1: About You’).",
-                          "A group with no heading is a question group."
+                          "Blocks with no printed heading go in a Group instead."
                         ),
                         Question = "The question's words only. Introductions, instructions and definitions go in their own block.",
                         paste("The", tolower(block$component_type), "as printed")
@@ -527,7 +541,7 @@ outline_check_titles <- c(
 )
 
 # The buttons a section's, group's or text block's row shows when it is pointed at, at its end: edit its words
-# in the list (not a question group's, which has none: the page script does it), change its kind (to any kind
+# in the list (not a group's, which has none: the page script does it), change its kind (to any kind
 # but a question), ungroup a section or group keeping what's inside, and delete. A block is verified in its
 # details; a section or group is checked once everything in it is (draft_service_check_containers()).
 row_actions <- function(block, component_types = NULL) {
@@ -535,7 +549,7 @@ row_actions <- function(block, component_types = NULL) {
   ungroup <- if (block$component_type == "Section") "Remove this heading and keep what's inside" else "Ungroup: keep what's inside"
   span(
     class = "outline-actions",
-    if (block$component_type != "Question Group") {
+    if (block$component_type != "Group") {
       tags$button(
         type = "button", class = "btn btn-sm btn-icon", `data-edit-words` = NA,
         title = paste("Edit the", what, "words"), `aria-label` = paste("Edit the", what, "words"),
@@ -597,10 +611,10 @@ question_panel <- function(block, draft, view, lookups, ns) {
 
 #' The details of the block picked in the list, edited beside it.
 #'
-#' The header is one row: the block's kind, its words (typed there; a question group has none) and what there
+#' The header is one row: the block's kind, its words (typed there; a group has none) and what there
 #' is to fix. Then, for a question, the number printed beside it, its skip conditions and logic
 #' (`skip_logic()`), and its variables and their choices (`question_panel()`); for a section or group, how many
-#' blocks it holds. Its buttons are along the bottom (`detail_actions()`). Fields have a small label above
+#' blocks it holds, and for a group its skip (`group_skip()`). Its buttons are along the bottom (`detail_actions()`). Fields have a small label above
 #' them. They are the list's own (the same `data-field`s), so the page script keeps the row and the details in
 #' step as words are typed.
 #'
@@ -624,8 +638,8 @@ block_detail <- function(block, draft, view, lookups, ns) {
       class = "detail-head",
       tags$button(type = "button", class = "btn btn-sm btn-link detail-back", `data-detail-back` = NA, app_icon("back"), " List"),
       type_chip(type),
-      if (type == "Question Group") {
-        h2(class = "detail-group-title", "Question group")
+      if (type == "Group") {
+        h2(class = "detail-group-title", "Group")
       } else {
         outline_text_field(block, problems, ns) |> tagAppendAttributes(class = "detail-words")
       },
@@ -646,7 +660,10 @@ block_detail <- function(block, draft, view, lookups, ns) {
           detail_section("Variables", question_panel(block, draft, view, lookups, ns))
         )
       } else if (is_container(type)) {
-        detail_section(NULL, detail_field("Holds", span(class = "detail-value", plural(sum(draft$components$parent_id %in% block$id), "block"))))
+        tagList(
+          detail_section(NULL, detail_field("Holds", span(class = "detail-value", plural(sum(draft$components$parent_id %in% block$id), "block")))),
+          if (type == "Group") detail_section("Skip", group_skip(block, draft, problems, ns))
+        )
       }
     ),
     detail_actions(block, block_problems)
@@ -662,6 +679,8 @@ block_detail <- function(block, draft, view, lookups, ns) {
 #'   "depending on how they answered".
 #' - Shown only to some respondents: "This question is only shown to respondents who are:
 #'   **Twins**" (its condition, when it has no parent picked).
+#' - Skipped by a group's skip: "Respondents who answer **“No”** to every question in **the group with
+#'   questions 22a–22d** skip this question", a link to the group (`draft_service_group_skipped()`).
 #'
 #' The question is named by its words, in full, and they and the answers are in quotes. A sentence staff added
 #' has a delete button that takes it away; one worked out from a Skip to goes when the Skip to does. More is
@@ -701,6 +720,22 @@ skip_logic <- function(block, draft, ns) {
       )
     }
   )
+  # skipped by a group's skip, on the answers to the questions in it
+  by <- draft_service_group_skipped(draft)
+  group <- blocks[blocks$id %in% by$group[by$question == block$id], , drop = FALSE]
+  if (nrow(group) == 1) {
+    sentences[[length(sentences) + 1]] <- skip_sentence(
+      review_button(
+        tagList(
+          "Respondents who answer ", strong(if (is.na(group$skip_condition)) "as it says" else quoted(group$skip_condition)),
+          " to ", if (identical(group$skip_when, "any")) "any" else "every", " question in ", strong(group_name(draft, group$id)),
+          " skip this question"
+        ),
+        "select", `data-id` = group$id, class = "btn btn-link skip-link", title = "Go to that group"
+      ),
+      span(class = "detail-note", "from the Skip in that group")
+    )
+  }
   sentences <- Filter(Negate(is.null), sentences)
   div(
     class = "skip-logic is-wide",
@@ -709,6 +744,70 @@ skip_logic <- function(block, draft, ns) {
 }
 
 skip_sentence <- function(...) div(class = "skip-sentence", ...)
+
+#' A group's skip, on the answers to the questions in it, in its details: "If they answer [No] to [every
+#' question] in this group, skip to [28 · …]", then the routing as printed. Left empty, the group doesn't skip.
+#' Where it skips to is picked like a choice's (`skip_fields()`); "every question" is what an empty
+#' `skip_when` means.
+#'
+#' @param block One row of a draft's `components`: a group.
+#' @param draft A draft, with its `outline_questions` attribute.
+#' @param problems The checks' problems, to outline a field at fault.
+#' @param ns The module's namespace function.
+#' @return A UI element.
+group_skip <- function(block, draft, problems, ns) {
+  tagList(
+    detail_field(
+      "Skips when", wide = TRUE,
+      div(
+        class = "variable-skip group-skip",
+        span(class = "variable-skip-words", "If they answer"),
+        field_text(
+          "components", block, "skip_condition",
+          placeholder = "e.g. No", list = ns("answer-options"), label = "The answer that skips, e.g. No", problems = problems
+        ),
+        span(class = "variable-skip-words", "to"),
+        field_select(
+          "components", block, "skip_when", c(`any question` = "any", `every question` = "every"),
+          blank = "every question", label = "Every question in the group, or any", problems = problems
+        ),
+        span(class = "variable-skip-words", "in this group, skip to"),
+        skip_fields(block, problems, ns, skip_targets(draft), table = "components")
+      )
+    ),
+    detail_field(
+      "As printed", wide = TRUE,
+      field_text(
+        "components", block, "skip_instruction",
+        placeholder = "e.g. If you answered No to items 22a-d, go to Question 28", label = "The skip as printed", problems = problems
+      )
+    )
+  )
+}
+
+# A group by the questions in it: "the group with questions 22a–22d", "the group with question 5", or "the group".
+group_name <- function(draft, id) {
+  inside <- draft_service_printed_order(draft, id)
+  questions <- draft$components[match(inside, draft$components$id), , drop = FALSE]
+  numbers <- draft_service_question_number(questions[questions$component_type %in% "Question", , drop = FALSE])
+  numbers <- numbers[!is.na(numbers) & nzchar(numbers)]
+  if (length(numbers) == 0) {
+    return("the group")
+  }
+  if (length(numbers) == 1) paste("the group with question", numbers) else paste0("the group with questions ", numbers[1], "\u2013", numbers[length(numbers)])
+}
+
+# What a group's skip says, in a sentence: "If they answer “no” to every question in this group, they skip to
+# 28 · Have you…". `targets` names where it goes (`skip_targets()`).
+group_skip_text <- function(block, targets) {
+  answer <- if (is.na(block$skip_condition)) "the answer that skips" else quoted(block$skip_condition)
+  when <- if (identical(block$skip_when, "any")) "any" else "every"
+  to <- targets$label[match(block$skip_to_id, targets$id)]
+  paste0(
+    "If they answer ", answer, " to ", when, " question in this group, they skip to ",
+    if (is.na(to)) "(where isn't picked yet)" else to
+  )
+}
 
 # Words in curly quotes: “Yes”. None gives none (recycle0), not an empty pair of quotes.
 quoted <- function(words) paste0("“", words, "”", recycle0 = TRUE)

@@ -134,7 +134,7 @@ button.review-pill:hover { background: rgba($vcu-gold, 0.2); }
   &:hover, &:focus-visible { color: $vcu-black; text-decoration: underline; }
 }
 
-// A question group has no words: the space they would take
+// A group has no words: the space they would take
 .outline-group-note { flex: 1; min-width: 4rem; }
 
 .outline-badges { display: flex; flex-shrink: 0; align-items: center; gap: 0.35rem; }
@@ -153,10 +153,16 @@ button.review-pill:hover { background: rgba($vcu-gold, 0.2); }
   background-color: inherit;
   transform: translateY(-50%);
 }
-.outline-row:not(.is-container) > .outline-actions { right: 2.6rem; } // the arrow that opens it stays
+.outline-row:has(> .btn-open) > .outline-actions { right: 2.6rem; } // the arrow that opens it stays
 .outline-row:hover > .outline-actions,
 .outline-row:focus-within > .outline-actions { display: flex; }
 .kind-menu .dropdown-toggle::after { display: none; }
+// The buttons are drawn in a layer of their own (the transform), so a kind menu opened from them would go under the
+// rows after it: the row whose menu is open goes above them, and keeps its buttons shown while it is
+.outline-row:has(.kind-menu .dropdown-menu.show) {
+  z-index: 5;
+  > .outline-actions { display: flex; }
+}
 
 // The words offered as a block's words are typed (review.js)
 .suggest-box {
@@ -247,8 +253,10 @@ button.review-pill:hover { background: rgba($vcu-gold, 0.2); }
   background: rgba($vcu-gold, 0.06);
   .detail-note { flex-shrink: 0; margin-left: auto; align-self: center; }
 }
-// the same size of words whichever kind of sentence it is: the link isn't drawn as a button's words
+// the same size of words whichever kind of sentence it is: the link isn't drawn as a button's words, and its
+// words run on from the left as a sentence does (a button lays them out centred, as a row of pieces)
 .edit-extraction-page .skip-link {
+  display: block;
   --bs-btn-font-size: inherit;
   --bs-btn-line-height: inherit;
   --bs-btn-font-weight: inherit;
@@ -260,6 +268,11 @@ button.review-pill:hover { background: rgba($vcu-gold, 0.2); }
   white-space: normal;
 }
 .skip-text { flex: 1; }
+// A group's skip, in its details: "If they answer [No] to [every question] in this group, skip to [...]"
+.variable-skip.group-skip {
+  padding: 0;
+  > .form-select { flex: 0 1 10rem; width: auto; }
+}
 
 // ------ Buttons on this page ------------------------------------------------------------------------------
 // Drawn as on every page (components/_buttons.scss); a verified block's Verify is green.

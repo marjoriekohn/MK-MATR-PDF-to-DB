@@ -204,8 +204,9 @@ rows_of <- function(catalog, kind, name = NULL) {
   Filter(function(row) is.null(name) || identical(row$tbl, name), catalog[[kind]])
 }
 
-# A definition on one line, in backticks, without the table it is on.
-code <- function(text) paste0("`", gsub("`", "'", gsub("\\s+", " ", text)), "`")
+# A definition on one line, in backticks, without the table it is on. (Not named code(), which would hide
+# shiny::code() in an R session this script was sourced into.)
+sql_code <- function(text) paste0("`", gsub("`", "'", gsub("\\s+", " ", text)), "`")
 
 # What the catalog says about one table's rules: checks and unique constraints,
 # foreign keys over several columns, triggers and indexes. Primary keys and
@@ -220,13 +221,13 @@ rules_text <- function(name, catalog) {
   indexes <- Filter(function(row) !row$indexname %in% own_indexes, rows_of(catalog, "indexes", name))
   section <- function(title, lines) if (length(lines) > 0) c(sprintf("**%s**", title), "", lines, "")
   c(
-    section("Checks and unique constraints", vapply(checks, function(row) sprintf("- `%s`: %s", row$conname, code(row$def)), character(1))),
-    section("Foreign keys over several columns", vapply(several, function(row) sprintf("- %s", code(row$def)), character(1))),
+    section("Checks and unique constraints", vapply(checks, function(row) sprintf("- `%s`: %s", row$conname, sql_code(row$def)), character(1))),
+    section("Foreign keys over several columns", vapply(several, function(row) sprintf("- %s", sql_code(row$def)), character(1))),
     section("Triggers", vapply(triggers, function(row) {
       sprintf(
         "- `%s`: %s",
         row$tgname,
-        code(sub(sprintf(" ON public\\.%s ", name), " ", sub("^CREATE (CONSTRAINT )?TRIGGER \\S+ ", "", row$def)))
+        sql_code(sub(sprintf(" ON public\\.%s ", name), " ", sub("^CREATE (CONSTRAINT )?TRIGGER \\S+ ", "", row$def)))
       )
     }, character(1))),
     section("Other indexes", vapply(indexes, function(row) {
@@ -234,7 +235,7 @@ rules_text <- function(name, catalog) {
         "- `%s`: %s%s",
         row$indexname,
         if (grepl("UNIQUE INDEX", row$indexdef)) "unique " else "",
-        code(sub("^.* USING \\w+ ", "", row$indexdef))
+        sql_code(sub("^.* USING \\w+ ", "", row$indexdef))
       )
     }, character(1)))
   )
@@ -253,7 +254,7 @@ functions_text <- function(catalog) {
       if (isTRUE(row$security_definer)) "Runs with its owner's rights."
     )
     sprintf(
-      "| `%s` | %s | %s | %s |", row$proname, if (nzchar(row$args)) code(row$args) else "none", code(row$result), paste(
+      "| `%s` | %s | %s | %s |", row$proname, if (nzchar(row$args)) sql_code(row$args) else "none", sql_code(row$result), paste(
         notes,
         collapse = " "
       )
@@ -266,7 +267,7 @@ security_text <- function(catalog) {
   tables <- catalog$rls
   off <- vapply(Filter(function(row) !isTRUE(row$rls_on), tables), function(row) row$tbl, character(1))
   policies <- vapply(catalog$policies, function(row) {
-    sprintf("| `%s` | %s | %s | %s | %s |", row$tbl, cell(row$policyname), row$cmd, cell(row$roles), code(row$qual %||% ""))
+    sprintf("| `%s` | %s | %s | %s | %s |", row$tbl, cell(row$policyname), row$cmd, cell(row$roles), sql_code(row$qual %||% ""))
   }, character(1))
   events <- Filter(function(row) identical(row$fn, "rls_auto_enable"), catalog$event_triggers)
   c(
@@ -327,7 +328,7 @@ describe <- function(connection, catalog = NULL, source = "the live database's o
     },
     "",
     paste(
-      "[database.md](database.md) explains the model. \"Required?\" is \"yes\" for a column with no",
+      "[sql/sql_scripts.sql](sql/sql_scripts.sql) builds the database. \"Required?\" is \"yes\" for a column with no",
       "default that can't be left empty; a column that isn't marked can be left out when a row is added."
     ), "",
     body,

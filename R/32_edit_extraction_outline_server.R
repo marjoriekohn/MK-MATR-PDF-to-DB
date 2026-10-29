@@ -2,7 +2,7 @@
 #'
 #' Blocks as a list, with the picked block's details beside it (`block_detail()`): type a section's or a text
 #' block's words in the list, or any block's in its details, change a block's kind, open and close sections and
-#' question groups (by clicking them), add skip logic to a question (the answer to an earlier question it
+#' groups (by clicking them), add skip logic to a question (the answer to an earlier question it
 #' depends on, or who the respondent is), verify a block, add blocks (from a dialog of the kinds there are),
 #' delete them, take a section or group away but keep what is inside, and drag any of them into a new order. A
 #' question's variables and choices are the variable editor's (`variable_editor()`), as on Make an edit. Every
@@ -101,10 +101,11 @@ extraction_outline_server <- function(
       )
     })
 
-    # Picking a section or question group opens its first question (it opens itself when it holds none).
+    # Picking a section opens its first question (it opens itself when it holds none). A group opens itself:
+    # its details are where its skip is.
     select_block <- function(draft, id) {
       blocks <- draft$components
-      if (is_container(blocks$component_type[match(id, blocks$id)])) {
+      if (blocks$component_type[match(id, blocks$id)] %in% "Section") {
         inside <- draft_service_printed_order(draft, id)
         first <- inside[blocks$component_type[match(inside, blocks$id)] %in% "Question"][1]
         if (!is.na(first)) id <- first
@@ -195,7 +196,7 @@ extraction_outline_server <- function(
 
     # Marking a block as checked moves on to the next one, so a reviewer can
     # work down the outline.
-    # A section or question group closes once everything in it is checked, and the next block selected is
+    # A section or group closes once everything in it is checked, and the next block selected is
     # the first after it (never a section or group itself).
     # A block is only verified once nothing is left to fix in it; a section or group is checked once
     # everything in it is, so it has no check of its own.
@@ -238,7 +239,7 @@ extraction_outline_server <- function(
       if (length(after) > 0) after[1] else if (length(before) > 0) before[length(before)]
     }
 
-    # The sections and question groups around a block everything in which is checked.
+    # The sections and groups around a block everything in which is checked.
     finished_containers <- function(draft, id) {
       blocks <- draft$components
       around <- draft_service_ancestors(draft, id)
@@ -299,7 +300,7 @@ extraction_outline_server <- function(
       }, ignoreInit = TRUE)
     }
 
-    # A draft opens with every section and question group closed, and the MATR IDs in the list put away.
+    # A draft opens with every section and group closed, and the MATR IDs in the list put away.
     if (!is.null(state$loaded)) {
       observeEvent(state$loaded(), {
         blocks <- state$draft()$components
@@ -308,9 +309,9 @@ extraction_outline_server <- function(
       })
     }
 
-    # Open the sections around the selected block, so it can be seen.
+    # Open the sections around the selected block, so it can be seen (and a group picked, so what it holds can).
     observeEvent(state$selected(), {
-      collapsed(setdiff(collapsed(), draft_service_ancestors(state$draft(), state$selected())))
+      collapsed(setdiff(collapsed(), c(draft_service_ancestors(state$draft(), state$selected()), state$selected())))
     })
 
     # What changes without the layout changing, marked on the tree already drawn (outline_marks()).

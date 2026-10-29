@@ -112,6 +112,8 @@ edit_relations <- list(
   relation("response_option", "closed_ended", c(variable_key = "variable_key"), "remove"),
   # a choice that skips to a component that goes no longer skips anywhere; its printed words stay
   relation("response_option", "component", c(skip_to_component_id = "component_id"), "clear", clears = "question it skips to"),
+  # the same for a group that skips (docs/sql/13_group_skips.sql)
+  relation("questionnaire_component", "component", c(skip_to_component_id = "component_id"), "clear", clears = "question its group skips to"),
   relation(
     "response_option", "answer_option", c(answer_option_id = "answer_option_id"), "block",
     why = "Variables already offer this answer choice.",
@@ -477,9 +479,10 @@ edit_questionnaire_short <- function(snap, ids) {
 #'
 #' @param snap The tables the kind needs, as `edit_service_load()` reads them: a list of data frames named after the tables.
 #' @param ids Component ids.
-#' @param max_characters Where to cut the words short.
+#' @param max_characters Where to cut the words short: only in a sentence (a summary, a warning). The page shows
+#'   them whole, since it has the room.
 #' @return A character vector.
-edit_component_text <- function(snap, ids, max_characters = 70) {
+edit_component_text <- function(snap, ids, max_characters = Inf) {
   text <- edit_lookup(snap, "component", "component_id", ids, "text")
   type <- edit_lookup(
     snap, "component_type", "component_type_id",
@@ -504,22 +507,22 @@ edit_labels <- list(
   component = function(snap, rows) edit_component_text(snap, rows$component_id),
   question = function(snap, rows) edit_component_text(snap, rows$component_id),
   questionnaire_component = function(snap, rows) {
-    paste0(edit_questionnaire_short(snap, rows$questionnaire_id), " · ", edit_component_text(snap, rows$component_id, 50))
+    paste0(edit_questionnaire_short(snap, rows$questionnaire_id), " · ", edit_component_text(snap, rows$component_id))
   },
   questionnaire_question = function(snap, rows) {
-    paste0(edit_questionnaire_short(snap, rows$questionnaire_id), " · ", edit_component_text(snap, rows$component_id, 50))
+    paste0(edit_questionnaire_short(snap, rows$questionnaire_id), " · ", edit_component_text(snap, rows$component_id))
   },
   wave_question = function(snap, rows) {
     waves <- edit_lookup(snap, "wave", "wave_id", rows$wave_id, "name")
     paste0(
       edit_questionnaire_short(snap, rows$questionnaire_id), " ", waves, " · question ", edit_called_number(rows),
-      " · ", edit_component_text(snap, rows$component_id, 40)
+      " · ", edit_component_text(snap, rows$component_id)
     )
   },
   category = function(snap, rows) paste0(rows$term, " (", rows$mesh_id, ")"),
   question_category = function(snap, rows) {
     term <- edit_lookup(snap, "category", "mesh_id", rows$mesh_id, "term")
-    paste0(ifelse(is.na(term), rows$mesh_id, term), " on “", edit_component_text(snap, rows$component_id, 40), "”")
+    paste0(ifelse(is.na(term), rows$mesh_id, term), " on “", edit_component_text(snap, rows$component_id), "”")
   },
   answer_option = function(snap, rows) rows$standardized_label,
   subject = function(snap, rows) rows$name,
@@ -540,7 +543,7 @@ edit_labels <- list(
   measurement_scale = function(snap, rows) rows$name,
   question_scale = function(snap, rows) {
     scale <- edit_lookup(snap, "measurement_scale", "scale_id", rows$scale_id, "name")
-    paste0(ifelse(is.na(scale), "Scale", scale), " item ", rows$item_number, " · ", edit_component_text(snap, rows$component_id, 40))
+    paste0(ifelse(is.na(scale), "Scale", scale), " item ", rows$item_number, " · ", edit_component_text(snap, rows$component_id))
   },
   variable = function(snap, rows) {
     paste0(rows$matr_id, ifelse(is.na(rows$label) | !nzchar(rows$label), "", paste0(" · ", rows$label)))
@@ -549,11 +552,7 @@ edit_labels <- list(
   closed_ended = function(snap, rows) edit_lookup(snap, "variable", "variable_key", rows$variable_key, "matr_id"),
   response_option = function(snap, rows) {
     matr_id <- edit_lookup(snap, "variable", "variable_key", rows$variable_key, "matr_id")
-    shown <- ifelse(
-      is.na(rows$printed_label) | !nzchar(rows$printed_label),
-      edit_lookup(snap, "answer_option", "answer_option_id", rows$answer_option_id, "standardized_label"),
-      rows$printed_label
-    )
+    shown <- edit_lookup(snap, "answer_option", "answer_option_id", rows$answer_option_id, "standardized_label")
     paste0(matr_id, " · ", shown, " (code ", rows$code_value, ")")
   }
 )

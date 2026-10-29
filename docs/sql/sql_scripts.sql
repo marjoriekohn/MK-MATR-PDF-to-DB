@@ -156,6 +156,24 @@ begin
 end;
 $$;
 
+-- An answer choice as it is kept (answer_option_label_normal): lower case, straight quotes, one space between
+-- words, no question mark, and no full stop or colon at the end. The site's normal_answer() (R/service_draft.R)
+-- does the same.
+create function private.normal_answer(p_text text)
+returns text
+language sql
+immutable
+set search_path = ''
+as $$
+  select nullif(btrim(regexp_replace(
+    lower(btrim(regexp_replace(
+      translate(replace(p_text, '?', ''), E'‘’“”', '''''""'),
+      '\s+', ' ', 'g'
+    ))),
+    '[.:[:space:]]+$', ''
+  )), '');
+$$;
+
 
 -- =====================================================================================================
 -- 1. CREATE TABLES
@@ -240,7 +258,7 @@ create table public.component_type (
 create table public.component (
   component_id      bigint primary key default private.random_id('component', 'component_id'),
   component_type_id bigint not null,                                     -- BR39, BR40
-  text              text                                                 -- empty only for Question Groups (BR42, site)
+  text              text                                                 -- empty only for Groups (BR42: component_kind_rules)
 );
 
 -- QUESTION is a subtype of COMPONENT with no attributes of its own (BR43, BR44).
@@ -254,6 +272,14 @@ create table public.questionnaire_component (
   parent_component_id bigint,
   display_order       integer not null
     constraint questionnaire_component_display_order_check check (display_order > 0),
+  -- a Group can skip on the answers to the questions in it ("If you answered No to items 22a-d, go to Question 28")
+  skip_condition      text,              -- the answer that skips ("No")
+  skip_when           text               -- every question in the group gets it, or any
+    constraint questionnaire_component_skip_when_check check (skip_when in ('every', 'any')),
+  skip_instruction    text,              -- the routing printed for it
+  skip_to_component_id bigint,           -- where it sends respondents
+  skip_to_end         boolean not null default false, -- or to the end of the questionnaire
+  constraint questionnaire_component_skip_to_one_place check (not (skip_to_end and skip_to_component_id is not null)),
   primary key (questionnaire_id, component_id),
   -- BR54, the direct case (a trigger catches longer cycles)
   constraint questionnaire_component_not_own_parent check (parent_component_id <> component_id),
@@ -305,8 +331,6 @@ create table public.variable (
   display_order    integer not null
     constraint variable_display_order_check check (display_order > 0),
   label            text,
-  respondent_count integer
-    constraint variable_respondent_count_check check (respondent_count >= 0),
   subject_id       bigint,
   -- BR93: matr_id unique within its questionnaire, may repeat across questionnaires
   constraint variable_matr_id_unique_in_questionnaire unique (questionnaire_id, matr_id),
@@ -342,6 +366,7 @@ create table public.answer_option (
   answer_option_id   bigint primary key default private.random_id('answer_option', 'answer_option_id'),
   standardized_label text   not null
     constraint answer_option_label_unique unique                         -- BR110
+    constraint answer_option_label_normal check (standardized_label = private.normal_answer(standardized_label))
 );
 
 create table public.answer_option_set (
@@ -356,7 +381,6 @@ create table public.response_option (
   display_order    integer not null
     constraint response_option_display_order_check check (display_order > 0),
   code_value       text    not null,     -- text: codes may be 1, 0, -9, A ...
-  printed_label    text,
   skip_instruction text,
   skip_to_component_id bigint,           -- where the skip instruction sends respondents
   skip_to_end      boolean not null default false, -- or to the end of the questionnaire
@@ -367,6 +391,16 @@ create table public.response_option (
     unique (variable_key, display_order) deferrable initially immediate,
   constraint response_option_code_value_unique
     unique (variable_key, code_value) deferrable initially immediate
+);
+
+-- How many of a wave's respondents gave each answer, typed on Edit Extraction for the extraction's wave.
+create table public.response_option_count (
+  wave_id          bigint  not null,
+  variable_key     bigint  not null,
+  answer_option_id bigint  not null,
+  respondent_count integer not null
+    constraint response_option_count_not_negative check (respondent_count >= 0),
+  primary key (wave_id, variable_key, answer_option_id)
 );
 
 -- ------ Classifying questions ------------------------------------------------------------------------
@@ -471,7 +505,9 @@ create table public.extracted_draft (
   questionnaire      jsonb,
   pdf_name           text,
   pdf_sha256         text,
+  supplement         jsonb,  -- the optional file of MATR IDs and codes: {name, sha256, bytes} or {name, text}
   constraint extracted_draft_info_is_an_object check (jsonb_typeof(info) = 'object'),
+  constraint extracted_draft_supplement_is_an_object check (supplement is null or jsonb_typeof(supplement) = 'object'),
   -- the target of ai_extracted_draft's foreign key, so its row can only join an AI-Powered extraction
   constraint extracted_draft_id_method_unique unique (draft_id, method),
   -- an AI-Powered extraction always has a PDF to read (and its reading: extracted_draft_has_reading)
@@ -489,7 +525,7 @@ create table public.ai_extracted_draft (
   review_edits       jsonb  not null default '[]'::jsonb,
   reading_status     text   not null
     constraint ai_extracted_draft_reading_status_check
-    check (reading_status in ('queued', 'sent', 'received', 'ready', 'failed')),
+    check (reading_status in ('queued', 'sent', 'received', 'assigning', 'ready', 'failed')),   -- assigning: 10_assigning_status.sql
   reading_started    timestamptz,
   reading_claimed_at timestamptz,
   reading_pid        integer,
@@ -571,8 +607,8 @@ alter table public.component
     foreign key (component_type_id) references public.component_type (component_type_id);
 
 alter table public.question
-  add constraint question_component_id_fkey
-    foreign key (component_id) references public.component (component_id);
+  add constraint question_component_id_fkey                               -- goes with its component (M2)
+    foreign key (component_id) references public.component (component_id) on delete cascade;
 
 alter table public.questionnaire_component
   add constraint questionnaire_component_questionnaire_id_fkey
@@ -582,7 +618,9 @@ alter table public.questionnaire_component
   -- BR50-BR52: the parent is in the SAME questionnaire, because questionnaire_id is half of the key
   add constraint questionnaire_component_parent_fk
     foreign key (questionnaire_id, parent_component_id)
-    references public.questionnaire_component (questionnaire_id, component_id);
+    references public.questionnaire_component (questionnaire_id, component_id),
+  add constraint questionnaire_component_skip_to_component_id_fkey
+    foreign key (skip_to_component_id) references public.component (component_id);
 
 alter table public.questionnaire_question
   add constraint questionnaire_question_component_id_fkey                -- BR58, BR59
@@ -637,6 +675,12 @@ alter table public.response_option
     foreign key (answer_option_id) references public.answer_option (answer_option_id),
   add constraint response_option_skip_to_component_id_fkey
     foreign key (skip_to_component_id) references public.component (component_id);
+
+alter table public.response_option_count
+  add constraint response_option_count_wave_id_fkey
+    foreign key (wave_id) references public.wave (wave_id) on delete cascade,
+  add constraint response_option_count_response_option_fkey
+    foreign key (variable_key, answer_option_id) references public.response_option (variable_key, answer_option_id) on delete cascade;
 
 alter table public.question_category
   add constraint question_category_component_id_fkey
@@ -703,6 +747,7 @@ create index questionnaire_study_id_idx            on public.questionnaire (stud
 create index questionnaire_respondent_type_idx     on public.questionnaire (respondent_type_id);
 create index component_component_type_id_idx       on public.component (component_type_id);
 create index questionnaire_component_component_idx on public.questionnaire_component (component_id);
+create index questionnaire_component_skip_to_idx  on public.questionnaire_component (skip_to_component_id);
 create index questionnaire_question_component_idx  on public.questionnaire_question (component_id);
 create index questionnaire_question_parent_idx     on public.questionnaire_question (questionnaire_id, parent_question_id);
 create index wave_question_question_idx            on public.wave_question (questionnaire_id, component_id);
@@ -711,6 +756,7 @@ create index closed_ended_option_set_id_idx        on public.closed_ended (optio
 create index answer_option_set_answer_option_idx   on public.answer_option_set (answer_option_id);
 create index response_option_answer_option_idx     on public.response_option (answer_option_id);
 create index response_option_skip_to_idx           on public.response_option (skip_to_component_id);
+create index response_option_count_choice_idx      on public.response_option_count (variable_key, answer_option_id);
 create index open_ended_skip_to_idx                on public.open_ended (skip_to_component_id);
 create index question_category_mesh_id_idx         on public.question_category (mesh_id);
 create index question_scale_component_id_idx       on public.question_scale (component_id);
@@ -927,7 +973,8 @@ create trigger draft_guard
   before update or delete on public.draft
   for each row execute function public.draft_guard();
 
--- The details of an applied draft stay as they were applied.
+-- The details of an applied draft stay as they were applied: an extraction's too, with what the AI read
+-- (ai_original) and how staff changed it (review_edits), kept for analysis.
 create function public.draft_detail_guard()
 returns trigger
 language plpgsql
@@ -1337,12 +1384,12 @@ declare
     'registry', 'principal_investigator', 'study', 'respondent_type', 'questionnaire', 'wave',
     'component_type', 'component', 'questionnaire_component', 'question', 'questionnaire_question',
     'wave_question', 'category', 'question_category', 'answer_option', 'subject', 'option_set', 'answer_option_set',
-    'measurement_scale', 'question_scale', 'variable', 'open_ended', 'closed_ended', 'response_option'
+    'measurement_scale', 'question_scale', 'variable', 'open_ended', 'closed_ended', 'response_option', 'response_option_count'
   ];
   loadable constant text[] := array[
     'questionnaire', 'wave', 'component', 'questionnaire_component', 'question', 'questionnaire_question',
     'wave_question', 'variable', 'open_ended', 'closed_ended', 'option_set', 'answer_option',
-    'answer_option_set', 'response_option', 'subject'
+    'answer_option_set', 'response_option', 'response_option_count', 'subject'
   ];
   token_pattern constant text := '^new:[a-z_]+:[0-9]+$';
 
@@ -1368,6 +1415,8 @@ declare
   recorded_id  text;
   recorded_val text;
   token        text;
+  added_tables text[] := array[]::text[]; -- an extraction's rows, as added: their tables ...
+  added_ids    text[] := array[]::text[]; -- ... and their keys
 begin
   if jsonb_typeof(p_items) is distinct from 'array' or jsonb_array_length(p_items) = 0 then
     raise exception 'There is nothing in this to apply.';
@@ -1555,6 +1604,13 @@ begin
     for token in select jsonb_object_keys(new_ids) loop
       recorded_id := replace(recorded_id, '"' || token || '"', new_ids ->> token);
     end loop;
+    if d.kind = 'Extraction' then
+      -- an extraction is recorded by the rows it added, one line for each table (below), not field by field:
+      -- what it put in them is in its extraction draft, which is kept
+      added_tables := added_tables || grp.entity_name;
+      added_ids := added_ids || recorded_id;
+      continue;
+    end if;
     for attr in select value from jsonb_array_elements(grp.attrs) loop
       key := attr ->> 'attribute';
       recorded_val := attr ->> 'new';
@@ -1568,6 +1624,19 @@ begin
         (d.draft_id, (attr ->> 'n')::integer, grp.entity_name, recorded_id, grp.action, key, attr ->> 'old', recorded_val);
     end loop;
   end loop;
+
+  -- An extraction's line for each table it added to: the keys of its rows there, as a JSON array, in the order
+  -- they were added (the tables in the order it first added to them).
+  if d.kind = 'Extraction' then
+    insert into public.applied_item (draft_id, item_number, entity_name, record_identifier, action)
+    select d.draft_id, row_number() over (order by min(first_at)), t, '[' || string_agg(id, ',' order by first_at) || ']', 'Insert'
+    from (
+      select a.t, a.id, min(a.n) as first_at
+      from unnest(added_tables, added_ids) with ordinality as a(t, id, n)
+      group by a.t, a.id
+    ) as added
+    group by t;
+  end if;
 
   -- the approval, if it needed one, is recorded with the change (before it is Applied, which takes no more)
   if p_approved_by is not null then
@@ -1927,6 +1996,361 @@ as $$
 $$;
 
 
+-- ------ 4d. Respondents' counts, extraction drafts that go, and the audit's rules ----------------------
+-- (docs/sql/9_integrity_rules.sql, parts D to F)
+
+-- The wave asks the variable's question: it is in the variable's questionnaire, and asks that question.
+-- Checked when the transaction ends, so an extraction can add the count before or after the wave's question.
+create function public.response_option_count_in_wave()
+returns trigger
+language plpgsql
+set search_path = public, pg_temp
+as $$
+begin
+  if not exists (select 1 from public.response_option_count where wave_id = new.wave_id
+                 and variable_key = new.variable_key and answer_option_id = new.answer_option_id) then
+    return null; -- added and removed in the same change
+  end if;
+  if not exists (
+    select 1 from public.variable v
+    join public.wave_question wq
+      on wq.questionnaire_id = v.questionnaire_id and wq.component_id = v.component_id and wq.wave_id = new.wave_id
+    where v.variable_key = new.variable_key
+  ) then
+    raise exception 'A count of respondents is for a wave that asks the variable''s question.';
+  end if;
+  return null;
+end;
+$$;
+
+create constraint trigger response_option_count_in_wave
+  after insert or update on public.response_option_count
+  deferrable initially deferred
+  for each row execute function public.response_option_count_in_wave();
+
+-- A PDF no draft uses any more (its draft was discarded) goes too (its file in Storage is removed by the site).
+create function public.extracted_draft_pdf_let_go()
+returns trigger
+language plpgsql
+set search_path = public, pg_temp
+as $$
+begin
+  if old.pdf_sha256 is not null
+     and not exists (select 1 from public.extracted_draft where pdf_sha256 = old.pdf_sha256) then
+    delete from public.pdf_file where pdf_sha256 = old.pdf_sha256;
+  end if;
+  return null;
+end;
+$$;
+
+create trigger extracted_draft_pdf_let_go
+  after delete on public.extracted_draft
+  for each row execute function public.extracted_draft_pdf_let_go();
+
+-- Discarding an extraction deletes it, with its details and review events. Nobody approves it; only the
+-- person who prepared it can, and not once it is applied.
+create function public.discard_draft(p_draft_id bigint, p_staff_id bigint)
+returns void
+language plpgsql
+set search_path = public, pg_temp
+as $$
+declare
+  d public.draft%rowtype;
+begin
+  select * into d from public.draft where draft_id = p_draft_id for update;
+  if not found then
+    raise exception 'That is no longer in the database.';
+  end if;
+  if d.kind <> 'Extraction' then
+    raise exception 'Only an extraction is discarded this way; an edit is withdrawn.';
+  end if;
+  if d.status = 'Applied' then
+    raise exception 'That has been applied, so it can''t be discarded.';
+  end if;
+  if p_staff_id is distinct from d.prepared_by then
+    raise exception 'Only the person who prepared this draft can discard it.';
+  end if;
+  delete from public.draft where draft_id = p_draft_id;
+end;
+$$;
+
+revoke all on function public.discard_draft(bigint, bigint) from public;
+
+-- Each is checked when the transaction ends (a deferred constraint trigger), so a change can add or move
+-- rows in any order; private.apply_draft_items() defers constraints already. A broken rule refuses the
+-- whole change with a sentence.
+
+-- M1 (BR102): a closed-ended variable's choices (response_option) are exactly its option set's
+-- (answer_option_set).
+create function private.choices_match_set(p_variable_keys bigint[])
+returns void
+language plpgsql
+set search_path = public, pg_temp
+as $$
+declare
+  v_matr text;
+begin
+  select v.matr_id into v_matr
+  from public.closed_ended c
+  join public.variable v using (variable_key)
+  where c.variable_key = any (p_variable_keys)
+    and (
+      exists (select 1 from public.response_option r where r.variable_key = c.variable_key
+              and not exists (select 1 from public.answer_option_set s
+                              where s.option_set_id = c.option_set_id and s.answer_option_id = r.answer_option_id))
+      or exists (select 1 from public.answer_option_set s where s.option_set_id = c.option_set_id
+                 and not exists (select 1 from public.response_option r
+                                 where r.variable_key = c.variable_key and r.answer_option_id = s.answer_option_id))
+    )
+  limit 1;
+  if found then
+    raise exception 'The choices of variable % aren''t the same as its option set''s. A variable offers exactly its set''s choices.', v_matr;
+  end if;
+end;
+$$;
+
+create function public.choices_match_set_check()
+returns trigger
+language plpgsql
+set search_path = public, pg_temp
+as $$
+declare
+  v_keys bigint[];
+begin
+  if tg_table_name = 'answer_option_set' then
+    select array_agg(c.variable_key) into v_keys from public.closed_ended c
+    where (tg_op <> 'DELETE' and c.option_set_id = new.option_set_id)
+       or (tg_op <> 'INSERT' and c.option_set_id = old.option_set_id);
+  elsif tg_op = 'DELETE' then
+    v_keys := array[old.variable_key];
+  elsif tg_op = 'UPDATE' then
+    v_keys := array[new.variable_key, old.variable_key];
+  else
+    v_keys := array[new.variable_key];
+  end if;
+  if v_keys is not null then
+    perform private.choices_match_set(v_keys);
+  end if;
+  return null;
+end;
+$$;
+
+create constraint trigger response_option_matches_set
+  after insert or update or delete on public.response_option
+  deferrable initially deferred
+  for each row execute function public.choices_match_set_check();
+create constraint trigger closed_ended_matches_set
+  after insert or update on public.closed_ended
+  deferrable initially deferred
+  for each row execute function public.choices_match_set_check();
+create constraint trigger answer_option_set_matches_variables
+  after insert or update or delete on public.answer_option_set
+  deferrable initially deferred
+  for each row execute function public.choices_match_set_check();
+
+-- M2 (BR45), M3 (BR53) and M4 (BR42): what a block of each kind may be, by the kind's name. The site relies on
+-- the same three names (Section, Question, Group) and Make an edit won't rename or delete them.
+create function private.component_kind(p_component_id bigint)
+returns text
+language sql
+stable
+set search_path = public, pg_temp
+as $$
+  select t.name from public.component c join public.component_type t using (component_type_id)
+  where c.component_id = p_component_id;
+$$;
+
+-- M2: a component is a Question exactly when it has a question row. M4: its words are empty exactly when it
+-- is a Group.
+create function public.component_kind_check()
+returns trigger
+language plpgsql
+set search_path = public, pg_temp
+as $$
+declare
+  v_id   bigint := case when tg_op = 'DELETE' then old.component_id else new.component_id end;
+  v_kind text   := private.component_kind(v_id);
+  v_text text;
+begin
+  if v_kind is null then
+    return null; -- the component is gone (a question row can't outlive it: its foreign key)
+  end if;
+  if (v_kind = 'Question') <> exists (select 1 from public.question where component_id = v_id) then
+    raise exception 'Component % is %: a component has a question row exactly when it is a Question.', v_id, v_kind;
+  end if;
+  select text into v_text from public.component where component_id = v_id;
+  if (v_kind = 'Group') <> (coalesce(btrim(v_text), '') = '') then
+    raise exception 'Component % is %: only a Group has no words, and a Group has none.', v_id, v_kind;
+  end if;
+  return null;
+end;
+$$;
+
+create constraint trigger component_kind_rules
+  after insert or update on public.component
+  deferrable initially deferred
+  for each row execute function public.component_kind_check();
+create constraint trigger question_is_a_question
+  after insert or delete on public.question
+  deferrable initially deferred
+  for each row execute function public.component_kind_check();
+
+-- M3: where a questionnaire places a block, its parent is a Section or a Group, and a Section is never inside
+-- a Group. Only a Group skips (on the answers to the questions in it).
+create function private.placement_check(p_questionnaire_id bigint, p_component_id bigint)
+returns void
+language plpgsql
+set search_path = public, pg_temp
+as $$
+declare
+  v_parent      bigint;
+  v_parent_kind text;
+  v_skips       boolean;
+begin
+  select parent_component_id,
+         skip_condition is not null or skip_when is not null or skip_instruction is not null
+           or skip_to_component_id is not null or skip_to_end
+    into v_parent, v_skips
+  from public.questionnaire_component
+  where questionnaire_id = p_questionnaire_id and component_id = p_component_id;
+  if not found then
+    return;
+  end if;
+  if v_skips and private.component_kind(p_component_id) is distinct from 'Group' then
+    raise exception 'Component % skips, but only a Group skips on the answers to the questions in it.', p_component_id;
+  end if;
+  if v_parent is null then
+    return;
+  end if;
+  v_parent_kind := private.component_kind(v_parent);
+  if v_parent_kind is distinct from 'Section' and v_parent_kind is distinct from 'Group' then
+    raise exception 'Component % is inside a %: only a Section or a Group holds other blocks.', p_component_id, coalesce(v_parent_kind, 'block that is gone');
+  end if;
+  if v_parent_kind = 'Group' and private.component_kind(p_component_id) = 'Section' then
+    raise exception 'Section % is inside a Group: a Section is never inside a Group.', p_component_id;
+  end if;
+end;
+$$;
+
+create function public.questionnaire_component_parent_check()
+returns trigger
+language plpgsql
+set search_path = public, pg_temp
+as $$
+begin
+  perform private.placement_check(new.questionnaire_id, new.component_id);
+  return null;
+end;
+$$;
+
+create constraint trigger questionnaire_component_parent_kind
+  after insert or update on public.questionnaire_component
+  deferrable initially deferred
+  for each row execute function public.questionnaire_component_parent_check();
+
+-- ... and a block whose kind changes is checked where it is placed, and where blocks sit inside it.
+create function public.component_placements_check()
+returns trigger
+language plpgsql
+set search_path = public, pg_temp
+as $$
+declare
+  p record;
+begin
+  for p in
+    select questionnaire_id, component_id from public.questionnaire_component
+    where component_id = new.component_id or parent_component_id = new.component_id
+  loop
+    perform private.placement_check(p.questionnaire_id, p.component_id);
+  end loop;
+  return null;
+end;
+$$;
+
+create constraint trigger component_kind_placements
+  after update of component_type_id on public.component
+  deferrable initially deferred
+  for each row execute function public.component_placements_check();
+
+-- M5 and D1: one row per person, respondent type and registry abbreviation, ignoring case and outer spaces.
+create unique index principal_investigator_email_unique on public.principal_investigator (lower(btrim(email)));
+create unique index respondent_type_name_unique         on public.respondent_type (lower(btrim(name)));
+create unique index registry_abbreviation_unique        on public.registry (lower(btrim(abbreviation)));
+
+-- M6: required names can't be blank (not null lets '' and '   ' through).
+alter table public.registry               add constraint registry_name_not_blank                 check (btrim(name) <> ''),
+                                          add constraint registry_abbreviation_not_blank         check (btrim(abbreviation) <> '');
+alter table public.principal_investigator add constraint principal_investigator_name_not_blank   check (btrim(name) <> ''),
+                                          add constraint principal_investigator_email_not_blank  check (btrim(email) <> '');
+alter table public.study                  add constraint study_name_not_blank                    check (btrim(name) <> '');
+alter table public.respondent_type        add constraint respondent_type_name_not_blank          check (btrim(name) <> '');
+alter table public.questionnaire          add constraint questionnaire_name_not_blank            check (btrim(name) <> ''),
+                                          add constraint questionnaire_abbreviation_not_blank    check (btrim(abbreviation) <> '');
+alter table public.wave                   add constraint wave_name_not_blank                     check (btrim(name) <> '');
+alter table public.component_type         add constraint component_type_name_not_blank          check (btrim(name) <> '');
+alter table public.option_set             add constraint option_set_name_not_blank               check (btrim(name) <> '');
+alter table public.measurement_scale      add constraint measurement_scale_name_not_blank        check (btrim(name) <> ''),
+                                          add constraint measurement_scale_abbreviation_not_blank check (btrim(abbreviation) <> '');
+alter table public.category               add constraint category_term_not_blank                 check (btrim(term) <> '');
+alter table public.question_scale         add constraint question_scale_item_number_not_blank    check (btrim(item_number) <> '');
+alter table public.variable               add constraint variable_matr_id_not_blank              check (btrim(matr_id) <> '');
+alter table public.staff                  add constraint staff_name_not_blank                    check (btrim(name) <> ''),
+                                          add constraint staff_email_not_blank                   check (btrim(email) <> '');
+-- (answer_option.standardized_label: answer_option_label_normal, part B, refuses a blank too)
+
+-- M7 (BR5): a study's lead investigator never changes.
+create function public.study_principal_investigator_immutable()
+returns trigger
+language plpgsql
+set search_path = public, pg_temp
+as $$
+begin
+  if new.principal_investigator_id <> old.principal_investigator_id then
+    raise exception 'A study''s lead investigator can''t be changed. The contact investigator can.';
+  end if;
+  return new;
+end;
+$$;
+
+create trigger study_principal_investigator_immutable
+  before update of principal_investigator_id on public.study
+  for each row execute function public.study_principal_investigator_immutable();
+
+-- M7 (BR23): staff are never deleted; someone who leaves is set inactive.
+create function public.staff_never_deleted()
+returns trigger
+language plpgsql
+set search_path = public, pg_temp
+as $$
+begin
+  raise exception 'Staff are never deleted: set % inactive instead.', old.name;
+end;
+$$;
+
+create trigger staff_never_deleted
+  before delete on public.staff
+  for each row execute function public.staff_never_deleted();
+
+-- The trigger functions above are for the database itself; nobody calls them over /rpc/.
+revoke all on function public.response_option_count_in_wave()         from public, anon, authenticated;
+revoke all on function public.extracted_draft_pdf_let_go()            from public, anon, authenticated;
+revoke all on function public.choices_match_set_check()               from public, anon, authenticated;
+revoke all on function public.component_kind_check()                  from public, anon, authenticated;
+revoke all on function public.questionnaire_component_parent_check()  from public, anon, authenticated;
+revoke all on function public.component_placements_check()            from public, anon, authenticated;
+revoke all on function public.study_principal_investigator_immutable() from public, anon, authenticated;
+revoke all on function public.staff_never_deleted()                   from public, anon, authenticated;
+revoke all on function private.normal_answer(text)                     from public, anon, authenticated;
+revoke all on function private.choices_match_set(bigint[])             from public, anon, authenticated;
+revoke all on function private.component_kind(bigint)                  from public, anon, authenticated;
+revoke all on function private.placement_check(bigint, bigint)         from public, anon, authenticated;
+-- the site's server runs apply_draft_items() as itself, and it fires these
+grant execute on function private.normal_answer(text)          to service_role;
+grant execute on function private.choices_match_set(bigint[])  to service_role;
+grant execute on function private.component_kind(bigint)       to service_role;
+grant execute on function private.placement_check(bigint, bigint) to service_role;
+
+
 -- =====================================================================================================
 -- 5. SECURITY & PERMISSIONS
 -- =====================================================================================================
@@ -1974,7 +2398,7 @@ declare
     'registry', 'principal_investigator', 'study', 'respondent_type', 'questionnaire', 'wave',
     'component_type', 'component', 'question', 'questionnaire_component', 'questionnaire_question',
     'wave_question', 'subject', 'variable', 'open_ended', 'closed_ended', 'option_set',
-    'answer_option', 'answer_option_set', 'response_option', 'category', 'question_category',
+    'answer_option', 'answer_option_set', 'response_option', 'response_option_count', 'category', 'question_category',
     'measurement_scale', 'question_scale'
   ];
 begin
@@ -2001,6 +2425,7 @@ grant execute on function public.approve_draft(bigint, integer, bigint, jsonb)  
 grant execute on function public.send_back_draft(bigint, integer, bigint, text)              to service_role;
 grant execute on function public.claim_draft(bigint, bigint, boolean, integer)               to service_role;
 grant execute on function public.release_draft(bigint, bigint)                               to service_role;
+grant execute on function public.discard_draft(bigint, bigint)                               to service_role;
 revoke all on function public.claim_draft(bigint, bigint, boolean, integer) from public;
 revoke all on function public.release_draft(bigint, bigint)                 from public;
 grant execute on function public.upvote_questionnaire(bigint)                                to service_role;
@@ -2039,6 +2464,7 @@ comment on table public.open_ended              is 'Variable the respondent writ
 comment on table public.closed_ended            is 'Variable chosen from an option set.';
 comment on table public.option_set              is 'Named collection of answer options, independent of order and coding.';
 comment on table public.answer_option           is 'One answer choice, stored once for the whole registry.';
+comment on table public.response_option_count   is 'How many of a wave''s respondents gave one answer (response option) of one variable. Typed on Edit Extraction for the extraction''s wave.';
 comment on table public.answer_option_set       is 'Links answer options to option sets.';
 comment on table public.response_option         is 'One answer option as it was printed for one closed-ended variable. A closed-ended variable has one or more (a lone check box has one).';
 comment on table public.category                is 'One MeSH term, keyed by its NLM unique identifier.';
@@ -2050,13 +2476,27 @@ comment on table public.draft                   is 'A change to the MATR data: a
 comment on table public.edit_draft              is 'The details of a draft that is an edit made on Make an edit.';
 comment on table public.extracted_draft         is 'The details of a draft that is an extraction of a questionnaire: typed by hand (Manual) or read from a PDF by an AI (AI-Powered, with its ai_extracted_draft).';
 comment on table public.ai_extracted_draft      is 'What an AI-Powered extraction has and a Manual one doesn''t: the reading of its PDF, what the AI returned, and what the reviewer changed in it.';
-comment on table public.pdf_file                is 'A PDF uploaded for an extraction, once per file (by its SHA-256): its pages and size. The file is kept in uploads/pdfs/<hash>.pdf until Storage is used.';
+comment on table public.pdf_file                is 'A PDF uploaded for an extraction, once per file (by its SHA-256): its pages and size. The file itself is in Storage, bucket extraction-pdfs, as <hash>.pdf (docs/sql/3_pdf_storage.sql). It goes when no extraction draft uses it any more.';
+comment on column public.answer_option.standardized_label is
+  'The answer in standard wording, kept normalized: lower case, straight quotes, one space between words, no question mark, no full stop or colon at the end.';
+comment on column public.extracted_draft.supplement is
+  'The optional file of MATR IDs and codes Gemini reads after the questionnaire: {name, sha256, bytes} for a PDF (in Storage as <sha256>.pdf), or {name, text} for a CSV or text file.';
 comment on table public.draft_review_event      is 'Each time a draft was submitted for review, sent back, or approved: by whom, at which revision, and when.';
-comment on table public.applied_item            is 'One field an applied draft changed, with its old and new value.';
+comment on table public.applied_item            is 'What an applied draft did: for an edit, one field it changed, with its old and new value; for an extraction, one table it added rows to.';
 
 -- ------ Columns --------------------------------------------------------------------------------------
 comment on column public.study.status is 'Active: the study is ongoing. Ended: all data collections are finished.';
 comment on column public.questionnaire_component.display_order is 'Position among components sharing the same parent, counting from 1.';
+comment on column public.questionnaire_component.skip_condition is
+  'For a Group that skips: the answer that skips, e.g. No for "If you answered No to items 22a-d, go to Question 28". Empty when it doesn''t skip.';
+comment on column public.questionnaire_component.skip_when is
+  'For a Group that skips: every (the skip happens when every question in the group gets the answer) or any (when any of them does).';
+comment on column public.questionnaire_component.skip_instruction is
+  'For a Group that skips: the routing as printed, e.g. "Go to Question 28".';
+comment on column public.questionnaire_component.skip_to_component_id is
+  'For a Group that skips: where it sends respondents, the question, section or group it names. Empty when nothing is linked, or when it ends the questionnaire (skip_to_end).';
+comment on column public.questionnaire_component.skip_to_end is
+  'For a Group that skips: it sends respondents to the end of the questionnaire.';
 comment on column public.variable.variable_key is 'System key. Deliberately not "variable_id"; see matr_id.';
 comment on column public.variable.matr_id is 'What MATR staff call the variable ID, e.g. AH25LF. Unique within a questionnaire; never changes.';
 comment on column public.variable.subject_id is 'Who the variable is about (public.subject). Null when not known.';
@@ -2109,7 +2549,7 @@ comment on column public.ai_extracted_draft.ai_original is
   'The questionnaire as the AI returned it, tidied by the reading job (spaces, quotes, trailing full stops on numbers). Written by the reading job before anyone saves the draft, and never changed after, so what the reviewer changed can be measured.';
 comment on column public.ai_extracted_draft.review_edits is
   'How the reviewed copy differs from ai_original, worked out again (not added to) each time staff save: [{change, item, ref, where, field, before, after}]. A value changed back is no difference.';
-comment on column public.component.text is 'The printed words. Empty only for a Question Group, which has none (BR42, site).';
+comment on column public.component.text is 'The printed words. Empty only for a Group, which has none (BR42).';
 comment on column public.wave_question.question_number is
   'The question''s place among the questions the wave asks (1, 2, 3...), in printed order; sections and question groups aren''t counted. Unique in a wave. Worked out by the site, not typed.';
 comment on column public.wave_question.printed_number is
@@ -2137,7 +2577,7 @@ comment on column public.draft.editing_by is
   'Who has it open on the Edit Extraction page, if anyone (claim_draft()). Empty when nobody does.';
 comment on column public.draft.editing_at is
   'When their page last renewed the claim. One not renewed for a few minutes has lapsed, and anyone may claim the draft.';
-comment on column public.applied_item.record_identifier is 'The row''s key as JSON, with the numbers the database gave rows the draft added.';
+comment on column public.applied_item.record_identifier is 'The row''s key as JSON, with the numbers the database gave rows the draft added. For an extraction, a JSON array of the keys of every row it added to the table.';
 comment on column public.applied_item.action is 'What happened to this one row: Insert, Update or Delete.';
 
 -- ------ Functions ------------------------------------------------------------------------------------
@@ -2186,7 +2626,7 @@ insert into public.component_type (name, description) values
   ('Definition',         'Printed explanation of a term used in the questionnaire.'),
   ('Interviewer Script', 'Text an interviewer reads aloud or follows.'),
   ('Note',               'Any other printed remark.'),
-  ('Question Group',     'Holds blocks that belong together but have no printed heading: a battery, a definition with its question, a question with its follow-up. Has no text.');
+  ('Group',              'Holds blocks that belong together but have no printed heading: a battery, a definition with its question, a question with its follow-up. Has no text.');
 
 -- Who a variable can be about; staff keep this list on Make an edit.
 insert into public.subject (name) values
@@ -2196,18 +2636,14 @@ commit;
 
 -- =====================================================================================================
 -- Rules the site and the dashboard enforce, not this script:
---   BR5  lead PI never changes          BR17 one upvote per session
---   BR23 staff never deleted            BR38 every write recorded (true of changes made through
+--   BR17 one upvote per session         BR38 every write recorded (true of changes made through
 --                                            drafts: an applied draft and its applied_item rows)
---   BR42 only Question Groups have no text, and they have none
---   BR45 Question-type components have a QUESTION row
---   BR53 a parent is a Section or Question Group; a Section is never inside a Question Group
 --   BR64 non-self-contained question names a parent
 --   BR65 non-self-contained hidden from standalone search
 --   BR69 questionnaire question asked in >= 1 wave
 --   BR80 scale has >= 1 question        BR87 questionnaire question has >= 1 variable
---   BR99 closed-ended has >= 1 option   BR102 response options match the option set
---   BR106 option set has >= 1 answer option
+--   BR99 closed-ended has >= 1 option   BR106 option set has >= 1 answer option
+-- BR5, BR23, BR42, BR45, BR53 and BR102 are the database's too since docs/sql/9_integrity_rules.sql (section 4d).
 -- BR11 (a study has a questionnaire) and BR19 (a questionnaire has a wave) are no longer enforced:
 -- a study's last questionnaire and a questionnaire's last wave can be deleted.
 -- BR28, BR29, BR32, BR35 and BR36 described the old Wave Load / two-approver design; the draft
@@ -2323,7 +2759,8 @@ begin
         or (table_name = 'extracted_draft' and column_name in ('ai_original', 'review_edits', 'reading_status',
               'reading_started', 'reading_claimed_at', 'reading_pid', 'reading_error', 'model', 'prompt_version',
               'pdf_pages', 'pdf_bytes'))
-        or (table_name = 'response_option' and column_name = 'printed'))), 'no column the migrations removed';
+        or (table_name = 'response_option' and column_name in ('printed', 'printed_label'))
+        or (table_name = 'variable' and column_name = 'respondent_count'))), 'no column the migrations removed';
   assert to_regclass('public.pending_draft') is null and to_regclass('public.pending_draft_approval') is null, 'pending_draft is gone';
   assert to_regclass('public.draft_approval') is null and to_regclass('public.write_history') is null
      and to_regclass('public.write_history_item') is null, 'the applied draft is the history: no separate tables';
@@ -2376,13 +2813,13 @@ begin
   foreach t in array array['registry', 'principal_investigator', 'study', 'respondent_type', 'questionnaire', 'wave',
     'component_type', 'component', 'question', 'questionnaire_component', 'questionnaire_question', 'wave_question',
     'subject', 'variable', 'open_ended', 'closed_ended', 'option_set', 'answer_option', 'answer_option_set',
-    'response_option', 'category', 'question_category', 'measurement_scale', 'question_scale'] loop
+    'response_option', 'response_option_count', 'category', 'question_category', 'measurement_scale', 'question_scale'] loop
     assert has_table_privilege('anon', 'public.' || t, 'select'), t || ' is readable by the dashboard';
     assert not has_table_privilege('anon', 'public.' || t, 'insert, update, delete, truncate'), t || ' is read-only to the dashboard';
     assert (select count(*) from pg_policies where schemaname = 'public' and tablename = t) = 1, t || ' has its one policy';
     assert has_table_privilege('service_role', 'public.' || t, 'select, insert, update, delete'), t || ' is the site''s to change';
   end loop;
-  assert (select count(*) from pg_class where relnamespace = 'public'::regnamespace and relkind = 'r') = 32, 'thirty-two tables';
+  assert (select count(*) from pg_class where relnamespace = 'public'::regnamespace and relkind = 'r') = 33, 'thirty-three tables';
   assert not exists (select 1 from pg_class where relnamespace = 'public'::regnamespace and relkind = 'r' and not relrowsecurity), 'RLS on all of them';
   assert has_function_privilege('anon', 'public.upvote_questionnaire(bigint)', 'execute'), 'the dashboard may upvote';
   assert not has_function_privilege('anon', 'public.draft_needs_approval(bigint)', 'execute'), 'but not ask about drafts';
@@ -2854,9 +3291,19 @@ begin
   assert v is not null and exists (select 1 from public.open_ended where variable_key = v and answer_data_type = 'TEXT'), 'the variable is write-in';
   assert (select kind from public.draft where draft_id = made) = 'Extraction', 'the history shows an extraction';
   assert (select staff_id from public.draft_review_event where draft_id = made and event = 'Approved') = pg_temp.id('ben'), 'approved by Ben';
-  assert (select count(*) from public.applied_item where draft_id = made) = 21, 'every field is in the history';
-  assert not exists (select 1 from public.applied_item where draft_id = made and (record_identifier like '%new:%' or new_value like 'new:%')), 'with the real numbers';
+  -- the history has a line for each table it added to, with the keys of the rows it added there
+  assert (select count(*) from public.applied_item where draft_id = made) = 9, 'a line for each table';
+  assert (select string_agg(entity_name, ',' order by item_number) from public.applied_item where draft_id = made)
+    = 'questionnaire,wave,component,questionnaire_component,question,questionnaire_question,wave_question,variable,open_ended',
+    'in the order it added to them';
+  assert (select jsonb_array_length(record_identifier::jsonb) from public.applied_item where draft_id = made and entity_name = 'component') = 2,
+    'each row once';
+  assert (select record_identifier::jsonb -> 0 ->> 'variable_key' from public.applied_item where draft_id = made and entity_name = 'variable') = v::text,
+    'with the numbers the database gave';
+  assert not exists (select 1 from public.applied_item where draft_id = made and record_identifier like '%new:%'), 'no placeholder is left';
   assert (select status from public.draft where draft_id = e) = 'Applied', 'the extraction is applied';
+  assert exists (select 1 from public.extracted_draft where draft_id = e), 'and its extraction draft is kept, for analysis';
+  perform pg_temp.expect_error(format('delete from public.extracted_draft where draft_id = %s', e), 'already been applied');
 
   -- an ADMIN pushes without approval (the same rows again would repeat the wave's name: use other names)
   e := public.create_draft('Extraction', pg_temp.id('ada'), jsonb_build_object('summary', 'Push ZZP2'), jsonb_build_object('method', 'Manual'));
@@ -3048,6 +3495,7 @@ begin
       from matr_keep.component_type;
       get diagnostics n = row_count;
       raise notice 'Put back % component type(s).', n;
+      update public.component_type set name = 'Group' where name = 'Question Group'; -- renamed by 9_integrity_rules.sql
     end if;
   end if;
 

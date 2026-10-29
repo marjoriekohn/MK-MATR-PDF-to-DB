@@ -122,7 +122,7 @@ edit_service_room <- function(placed, parent) {
 }
 
 # ------ Parents --------------------------------------------------------------------------
-#' The sections and question groups a placement can go in.
+#' The sections and groups a placement can go in.
 #'
 #' Any in the same questionnaire, except itself and what is inside it (a section can't be
 #' inside itself).
@@ -138,15 +138,15 @@ edit_service_parent_choices <- function(snap, placed, component_id = NULL) {
   outline <- edit_service_outline(placed)
   sections <- sections[order(match(sections$component_id, outline$component_id)), , drop = FALSE]
   depth <- outline$depth[match(sections$component_id, outline$component_id)]
-  # a question group has no words: it is named by the words of the first block inside it
+  # a group has no words: it is named by the words of the first block inside it
   first_inside <- vapply(sections$component_id, function(id) {
     inside <- placed[placed$parent_component_id %in% id, , drop = FALSE]
-    if (nrow(inside) == 0) "empty" else shorten(inside$text[which.min(inside$display_order)], 40)
+    if (nrow(inside) == 0) "empty" else inside$text[which.min(inside$display_order)]
   }, character(1))
-  words <- shorten(ifelse(
-    sections$type == "Question Group", paste0("(question group) ", first_inside),
+  words <- ifelse(
+    sections$type == "Group", paste0("(group) ", first_inside),
     ifelse(is.na(sections$text) | !nzchar(sections$text), "(untitled section)", sections$text)
-  ), 60)
+  )
   c("Top level (not inside a section or group)" = "", stats::setNames(
     key_text(sections$component_id), paste0(strrep("— ", depth), words)
   ))
@@ -170,7 +170,7 @@ edit_service_parent_question_choices <- function(snap, questionnaire_id, compone
   }
   followers <- if (!is.null(component_id)) edit_service_descendants(questions, component_id, parent = "parent_question_id")
   asked <- asked[!asked$component_id %in% followers, , drop = FALSE]
-  stats::setNames(key_text(asked$component_id), shorten(asked$text, 70))
+  stats::setNames(key_text(asked$component_id), asked$text)
 }
 
 # ------ Where a component is used ----------------------------------------------------------
@@ -197,7 +197,7 @@ edit_service_uses <- function(snap, component_id) {
     list(
       questionnaire_id = q_id,
       questionnaire = edit_label(snap, "questionnaire", snap$questionnaire[snap$questionnaire$questionnaire_id == q_id, ]),
-      section = if (is.na(row$parent_component_id)) NA_character_ else shorten(section, 50),
+      section = if (is.na(row$parent_component_id)) NA_character_ else section,
       position = row$display_order,
       numbers = stats::setNames(edit_called_number(waves), wave_names),
       waves = wave_names,
@@ -548,7 +548,7 @@ edit_new_question_items <- function(snap, text) {
 
 # ------ Question numbers in a wave ------------------------------------------------------------------------
 # A wave numbers the questions it asks 1, 2, 3... in the order the questionnaire prints them
-# (wave_question.question_number); sections and question groups aren't counted, and staff never type it.
+# (wave_question.question_number); sections and groups aren't counted, and staff never type it.
 # The number printed beside a question is kept apart (wave_question.printed_number) and can repeat. So a
 # change that adds, moves or removes a question numbers the wave's questions again.
 
