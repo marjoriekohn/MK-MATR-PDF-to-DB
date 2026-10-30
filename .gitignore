@@ -8,3 +8,5 @@
 .env
 logs/
 docs/audit.*
+uploads/*
+tests/testthat/uploads/*

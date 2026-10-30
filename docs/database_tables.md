@@ -511,7 +511,7 @@ A change to the MATR data: an extraction of a questionnaire (extracted_draft) or
 | `status` | text | yes | `Draft` | Draft (being prepared), Awaiting Review (a change request), Sent Back (a reviewer returned it), Applied (in the MATR data) or Withdrawn (the preparer pulled it). When it was submitted, sent back or approved is in draft_review_event. |
 | `prepared_by` | int64 | yes |  | Points at `staff.staff_id`. Who started it. Never changes. |
 | `saved_by` | int64 | yes |  | Points at `staff.staff_id`. Who saved it last (or sent it back). An approver can't be this person. |
-| `requested_reviewer` | int64 |  |  | Points at `staff.staff_id`. The staff member the preparer asked to review it (they are emailed a link once there is a login). Any other eligible staff member may still approve. |
+| `requested_reviewer` | int64 |  |  | Points at `staff.staff_id`. The staff member the preparer asked to review it. Any other eligible staff member may still approve. |
 | `revision` | int32 | yes | `1` | Rises every time the content is saved. An approval is of the revision the approver read. |
 | `summary` | text |  |  | One line saying what it comes to; a change request is listed by it. |
 | `created_at` | timestamp with time zone | yes | `now()` |  |
