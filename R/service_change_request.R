@@ -40,7 +40,7 @@ change_request_service_needs_approval <- function(me, kind, edit_kind = NULL) {
 #' @return A list of requests named by id; empty if nothing is waiting.
 change_request_service_waiting <- function(connection) {
   records <- change_request_model_waiting(connection)
-  waited <- vapply(records, function(record) as.numeric(parse_time(record$submitted %||% record$saved)), numeric(1))
+  waited <- vapply(records, function(record) record$submitted_exact %||% as.numeric(parse_time(record$submitted %||% record$saved)), numeric(1))
   records[order(waited)]
 }
 

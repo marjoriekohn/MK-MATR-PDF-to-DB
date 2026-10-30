@@ -132,7 +132,11 @@ test_that("a delete's reach is saved with the proposal", {
   expect_equal(record$reach$rows_removed, built$plan$reach$total)
   saved <- edit_model_save(test_connection, record, me$staff_id)
   withr::defer(test_delete("draft", list(draft_id = database_eq(saved$id))))
-  expect_equal(edit_model_get(test_connection, saved$id)$reach$rows_removed, built$plan$reach$total)
+  back <- edit_model_get(test_connection, saved$id)
+  expect_equal(back$reach$rows_removed, built$plan$reach$total)
+  # the row picked, which is all the history keeps once it is applied
+  expect_equal(back$reach$deleted[c("table", "row")], list(table = "questionnaire", row = sprintf('{"questionnaire_id":%s}', key)))
+  expect_equal(back$reach$deleted$name, edit_label(snap, "questionnaire", edit_service_row(entity, snap, key)))
   expect_equal(saved$edit_kind, "Delete")
 })
 

@@ -750,6 +750,7 @@
   // Text boxes not sized yet are sized all at once. One in a closed section has no height to read, so it waits
   // until its section opens (applyMarks() comes back here).
   function sizeFreshBoxes() {
+    watchListWidths();
     sizeBoxes(document.querySelectorAll('textarea.outline-text:not([style*="height"])'));
   }
   function sizeBoxes(fields) {
@@ -759,15 +760,38 @@
     shown.forEach(function (field, i) { field.style.height = heights[i] + 'px'; });
   }
 
-  // A window made wider or narrower wraps the words differently, so the boxes shown are sized again once it stops.
-  let resizeTimer = null;
-  let lastWidth = window.innerWidth;
-  window.addEventListener('resize', function () {
-    if (window.innerWidth === lastWidth) return;
-    lastWidth = window.innerWidth;
-    clearTimeout(resizeTimer);
-    resizeTimer = setTimeout(function () { sizeBoxes(document.querySelectorAll('textarea.outline-text')); }, 200);
+  // A list (or the details beside it) made wider or narrower wraps the words differently: by the window, by the
+  // divider between them (split.js), or by the page settling into its width after the boxes were first sized,
+  // which left a box a line of words tall with room for several and its words at its top. So the boxes of a
+  // list are sized again whenever its width changes, once a frame at most.
+  const listWidths = new WeakMap(); // list -> the width its boxes were sized at
+  const listsToSize = new Set();
+  let sizeFrame = null;
+  const widthWatcher = window.ResizeObserver && new ResizeObserver(function (entries) {
+    entries.forEach(function (entry) {
+      const width = Math.round(entry.contentRect.width);
+      if (listWidths.get(entry.target) === width) return;
+      listWidths.set(entry.target, width);
+      listsToSize.add(entry.target);
+    });
+    if (listsToSize.size === 0 || sizeFrame) return;
+    sizeFrame = requestAnimationFrame(function () {
+      sizeFrame = null;
+      const fields = [];
+      listsToSize.forEach(function (list) { fields.push.apply(fields, list.querySelectorAll('textarea.outline-text')); });
+      listsToSize.clear();
+      sizeBoxes(fields);
+    });
   });
+  const watchedLists = new WeakSet();
+  function watchListWidths() {
+    if (!widthWatcher) return;
+    document.querySelectorAll('.outline-body, .detail-panel').forEach(function (list) {
+      if (watchedLists.has(list)) return;
+      watchedLists.add(list);
+      widthWatcher.observe(list);
+    });
+  }
 
   function afterDrawing() {
     applyMarks();

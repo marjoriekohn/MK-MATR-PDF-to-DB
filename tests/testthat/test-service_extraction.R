@@ -58,23 +58,6 @@ test_that("a draft is ready to review when it has been read, or was typed by han
   expect_false(extraction_service_is_read(list(method = extraction_ai, extraction_status = "failed")))
 })
 
-test_that("giving a draft typed by hand a PDF keeps it with the draft and doesn't start a reading; an AI draft starts again", {
-  local_pdf_cache()
-  me <- local_staff()
-  manual <- extraction_service_create_manual(test_connection, me, picked_info())
-  added <- extraction_service_replace_pdf(test_connection, manual$id, fake_upload("later.pdf"), me)
-  expect_equal(added$pdf$name, "later.pdf")
-  expect_null(added$extraction_status)
-
-  ai <- extraction_service_create(test_connection, fake_upload(), me, picked_info())
-  extraction_service_reading_update(test_connection, ai$id, ai$reading_started, list(extraction_status = "failed", error = "Stopped"))
-  replaced <- extraction_service_replace_pdf(test_connection, ai$id, fake_upload("again.pdf", "%PDF-1.4\n<< /Type /Page >>\n"), me)
-  expect_equal(replaced$pdf$name, "again.pdf")
-  expect_equal(replaced$extraction_status, "queued")
-  expect_null(replaced$error)
-  expect_false(identical(replaced$reading_started, ai$reading_started))
-})
-
 test_that("discarding deletes the draft, and its PDF once no other draft uses it; only its preparer can", {
   local_pdf_cache()
   me <- local_staff()
@@ -115,15 +98,6 @@ test_that("news from a reading that has since started again is ignored", {
   record <- extraction_service_create(test_connection, fake_upload(), me)
   expect_false(extraction_service_reading_update(test_connection, record$id, "2026-01-01T00:00:00Z", list(extraction_status = "ready")))
   expect_equal(extraction_model_get(test_connection, record$id)$extraction_status, "queued")
-})
-
-test_that("a MATR ID CSV is kept with the draft", {
-  me <- local_staff()
-  record <- local_manual_extraction(me)
-  csv <- fake_csv_upload(c("q1a", "q1b"), "ids.csv")
-  saved <- extraction_service_add_matr_csv(test_connection, record$id, csv, me)
-  expect_equal(saved$matr_csv, list(name = "ids.csv", text = "q1a\nq1b"))
-  expect_equal(extraction_model_get(test_connection, record$id)$matr_csv$name, "ids.csv")
 })
 
 test_that("saving a reviewed copy keeps how it differs from what the AI returned, for an AI draft only", {
@@ -293,18 +267,6 @@ test_that("the Edit Extraction page is headed by where it goes, else the PDF's n
   )
   expect_equal(extraction_service_heading(list(pdf = list(name = "AHP_Redacted.pdf"), info = list()), catalog, read), list(title = "AHP_Redacted.pdf", subtitle = ""))
   expect_equal(extraction_service_heading(list(info = list()), catalog, read)$title, "Unnamed questionnaire")
-})
-
-test_that("MATR IDs are read from the CSV's ID column, with or without a heading", {
-  expect_equal(extraction_service_matr_ids("q1a\nq1b\n q1c \n"), c("q1a", "q1b", "q1c"))
-  expect_equal(extraction_service_matr_ids("\ufeffMATR ID\nAH1A\n\nAH1B"), c("AH1A", "AH1B"))
-  expect_equal(extraction_service_matr_ids("question,matr_id\n1a,AH1A\n1b,AH1B"), c("AH1A", "AH1B"))
-  expect_equal(extraction_service_matr_ids("NA\nAH2"), c("NA", "AH2"))
-  expect_equal(extraction_service_matr_ids(""), character())
-
-  gna <- extraction_model_read_csv(fixture_path("gna_matr_ids.csv")) # CRLF, no heading
-  expect_length(extraction_service_matr_ids(gna), 251)
-  expect_equal(head(extraction_service_matr_ids(gna), 1), "q1a")
 })
 
 # ------ What a recorded questionnaire has already ----------------------------------------------------------

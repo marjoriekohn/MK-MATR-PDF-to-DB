@@ -348,8 +348,7 @@ make_edit_server <- function(id, connection, me, show_page, active = NULL) {
               if (needs_approval() && !editing_request() && length(reviewers()) > 0) {
                 div(
                   class = "edit-reviewer",
-                  reviewer_select(ns("reviewer"), reviewers(), selected = draft()$requested_reviewer$id %||% ""),
-                  p(class = "form-text", "They are emailed a link once sign-in is set up. Until then, any staff member can approve it.")
+                  reviewer_select(ns("reviewer"), reviewers(), selected = draft()$requested_reviewer$id %||% "")
                 )
               },
               uiOutput(ns("footer_note"), class = "edit-footer-note")

@@ -174,7 +174,13 @@ registry_entity <- list(
   },
   fields = function(snap, mode, row, scope) {
     list(
-      edit_field("name", "Name", required = TRUE, placeholder = "e.g. Mid-Atlantic Twin Registry"),
+      edit_field("name", "Name",
+        required = TRUE, placeholder = "e.g. Mid-Atlantic Twin Registry",
+        problem = function(value, values) {
+          same <- edit_taken(snap, "registry", "name", value, row)
+          if (has_text(value) && nrow(same) > 0) sprintf("There's already a registry called “%s”.", same$name[1])
+        }
+      ),
       edit_field("abbreviation", "Abbreviation", required = TRUE, placeholder = "e.g. MATR"),
       edit_field("participant_count", "Participants", "number",
         required = TRUE, min = 0, placeholder = "e.g. 50,000",
@@ -273,7 +279,16 @@ study_entity <- list(
         required = TRUE, choices = investigators,
         hint = "Who to contact about this study."
       ),
-      edit_field("name", "Name", required = TRUE, placeholder = "e.g. Adult Health Study"),
+      edit_field("name", "Name",
+        required = TRUE, placeholder = "e.g. Adult Health Study",
+        problem = function(value, values) {
+          if (!has_text(value) || !has_text(values$registry_id)) {
+            return(NULL)
+          }
+          same <- edit_taken(snap, "study", "name", value, row, within = list(registry_id = as.numeric(values$registry_id)))
+          if (nrow(same) > 0) sprintf("This registry already has a study called “%s”.", same$name[1])
+        }
+      ),
       edit_field("status", "Status", "select",
         required = TRUE, choices = c("Choose a status" = "", study_statuses), tooltip = study_status_tooltip
       ),
@@ -374,12 +389,7 @@ questionnaire_entity <- list(
         }
         same <- edit_taken(snap, "questionnaire", column, value, row, within = list(study_id = as.numeric(values$study_id)))
         if (nrow(same) > 0) {
-          sprintf(
-            "This study already has a questionnaire with %s “%s”. Two with the same %s are hard to tell apart.",
-            what,
-            trimws(value),
-            what
-          )
+          sprintf("This study already has a questionnaire with %s “%s”.", what, same[[column]][1])
         }
       }
     }
@@ -397,14 +407,14 @@ questionnaire_entity <- list(
         "Name",
         required = TRUE,
         placeholder = "e.g. Adult Health and Personality",
-        warn = study_taken("name", "the name")
+        problem = study_taken("name", "the name")
       ),
       edit_field(
         "abbreviation",
         "Abbreviation",
         required = TRUE,
         placeholder = "e.g. AHP",
-        warn = study_taken("abbreviation", "the abbreviation")
+        problem = study_taken("abbreviation", "the abbreviation")
       ),
       edit_field("description", "Description", "textarea")
     )
@@ -657,7 +667,7 @@ option_set_entity <- list(
     "A named set of answer choices, kept once. A closed-ended variable offers exactly one set's choices, in its ",
     "own order and with its own codes. An extraction uses the set that has the same choices, or adds one."
   ),
-  update_about = "The name and description can always change. The choices can only change while no variable offers them.",
+  update_about = "The name can always change. The choices can only change while no variable offers them.",
   delete_about = paste0(
     "An option set can only be deleted once no variable offers it. Scale items that expected its choices stay in ",
     "their scale, expecting none."
@@ -688,14 +698,13 @@ option_set_entity <- list(
           if (has_text(value) && nrow(same) > 0) sprintf("There's already an option set called “%s”.", same$name[1])
         }
       ),
-      edit_field("description", "Description", "textarea"),
       edit_field("answer_option_ids", "Answer choices", "several",
         required = TRUE, short = "choices",
         choices = edit_choices(snap, "answer_option"),
         hint = "Their order and codes are each variable's own. Missing one? Add it under Answer Choices first.",
         locked = if (offered > 0) {
           sprintf(
-            "%s %s exactly these choices, so they can't change. The name and description can.",
+            "%s %s exactly these choices, so they can't change. The name can.",
             edit_count(offered, "variable"), if (offered == 1) "offers" else "offer"
           )
         },

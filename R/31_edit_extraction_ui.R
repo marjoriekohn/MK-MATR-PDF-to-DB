@@ -3,7 +3,7 @@
 #'
 #' One panel: the whole questionnaire as it was extracted, as a list with the picked block's details
 #' beside it (`extraction_outline_ui()`). The header's buttons: Undo, Save, Open PDF (if the file is here:
-#' it opens in its own tab, at the page of the block picked), MATR IDs and Preview (of the change request).
+#' it opens in its own tab, at the page of the block picked) and Preview (of the change request).
 #' On a phone the buttons are only their icons, sharing a row of their own evenly under the progress bar.
 #'
 #' (It was called the review page. Change Requests has its own review, of requests waiting for approval.)
@@ -30,10 +30,6 @@ edit_extraction_ui <- function(id) {
           actionButton(ns("undo"), icon_label("undo", "Undo"), class = "btn-outline-dark", disabled = TRUE, title = "Undo"),
           actionButton(ns("save"), icon_label("save", "Save"), class = "btn-outline-dark", disabled = TRUE, title = "Save"),
           uiOutput(ns("pdf_link"), inline = TRUE),
-          review_button(
-            icon_label("matr_id", "MATR IDs"), "matr_ids",
-            class = "btn btn-outline-dark", title = "Give the variables their MATR IDs: from a CSV, or from a questionnaire that asks the same questions"
-          ),
           uiOutput(ns("request_button"), inline = TRUE)
         )
       ),
@@ -138,74 +134,6 @@ edit_extraction_claim_banner <- function(ns, claim, unsaved = FALSE) {
   ))
 }
 
-#' The MATR IDs dialog: three ways to give the variables their MATR IDs.
-#'
-#' From a CSV, uploaded here: Auto Apply gives them out in the order the variables appear; Manual
-#' Assignment leaves each variable's MATR ID to be picked, from the uploaded IDs no other variable has, or
-#' typed. From a questionnaire: a question worded the same as one a recorded questionnaire asks gets the
-#' MATR IDs that question's variables have.
-#'
-#' @param ns The module's namespace function.
-#' @param can_apply Whether there are uploaded IDs to give out.
-#' @param questionnaires The recorded questionnaires to pick from (`questionnaire_service_all_choices()`).
-#' @param picked The questionnaire picked to start with: the one the extraction goes into, if it is known.
-#' @return A `modalDialog()`, for `showModal()`.
-matr_ids_dialog <- function(ns, can_apply, questionnaires = character(), picked = "") {
-  modalDialog(
-    title = "MATR IDs",
-    size = "l",
-    easyClose = TRUE,
-    p("Upload a CSV that lists the MATR IDs in the order the variables appear on the questionnaire."),
-    drop_zone(
-      fileInput(ns("matr_csv"), NULL, accept = c(".csv", "text/csv"), buttonLabel = "Choose file") |>
-        tagAppendAttributes(class = "quiet-upload"),
-      uiOutput(ns("matr_csv_status")),
-      icon = "csv"
-    ),
-    uiOutput(ns("matr_fill_note")),
-    div(
-      class = "matr-modes",
-      div(
-        class = "matr-mode",
-        h3("Auto Apply"),
-        p(
-          class = "form-text",
-          "Gives the uploaded IDs out in the order the variables appear: the first variable without a MATR ID ",
-          "gets the first ID no variable has, and so on."
-        ),
-        checkboxInput(ns("matr_replace"), "Replace the MATR IDs the variables already have", value = FALSE),
-        actionButton(ns("auto_apply"), "Auto Apply", class = "btn-primary", disabled = !can_apply)
-      ),
-      div(
-        class = "matr-mode",
-        h3("Manual Assignment"),
-        p(
-          class = "form-text",
-          "Pick each variable's MATR ID from the uploaded IDs no other variable has, or type one. ",
-          "Open a question's variables in the outline to do it."
-        ),
-        actionButton(ns("manual_assign"), "Assign by hand", class = "btn-outline-dark", disabled = !can_apply)
-      ),
-      div(
-        class = "matr-mode",
-        h3("From a questionnaire"),
-        p(
-          class = "form-text",
-          "A question worded the same as one the questionnaire asks gets the MATR IDs that question's ",
-          "variables have, first to first. Only variables without a MATR ID are filled in."
-        ),
-        selectInput(
-          ns("matr_questionnaire"), NULL,
-          c(if (length(questionnaires) == 0) c("No questionnaires recorded yet" = "") else c("Select questionnaire" = ""), questionnaires),
-          selected = picked, width = "100%", selectize = length(questionnaires) > 30
-        ) |> tag_input_attributes("select", `aria-label` = "Questionnaire to take MATR IDs from"),
-        actionButton(ns("import_matr_ids"), "Import MATR IDs", class = "btn-outline-dark", disabled = !has_text(picked))
-      )
-    ),
-    footer = modalButton("Close")
-  )
-}
-
 #' The Preview Change Request dialog: the questionnaire as its change request shows it.
 #'
 #' Nothing is written while it is open. Submit Change Request goes on to sending it. Where it goes
@@ -267,10 +195,7 @@ submit_request_dialog <- function(ns, summary, unchecked, approval, reviewers) {
       )
     },
     if (approval && length(reviewers) > 0) {
-      tagList(
-        reviewer_select(ns("request_reviewer"), reviewers),
-        p(class = "form-text", "They are emailed a link once sign-in is set up. Until then, any other staff member can approve it.")
-      )
+      reviewer_select(ns("request_reviewer"), reviewers)
     },
     footer = tagList(
       actionButton(ns("back_to_preview"), "Back", class = "btn-outline-dark"),

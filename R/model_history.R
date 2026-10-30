@@ -2,7 +2,7 @@
 # An applied change is a DRAFT row with the status Applied (model_draft_row.R): what it was in a
 # sentence, who prepared it, the one person who approved it (its Approved DRAFT_REVIEW_EVENT, or
 # none: an add or an update, or anything an ADMIN did, needs no approval), and when it was
-# applied. APPLIED_ITEM has
+# applied. APPLIED_ITEM has, for an add or an update,
 # one row for each field it changed, with the old and new value (the same items the draft held,
 # with the numbers the database gave new rows). Only apply_draft() and approve_draft() in the
 # database write them; the site only reads. (Until 2026-10-09 these were the write_history and
@@ -16,6 +16,7 @@
 #   prepared_by        the preparer's name (NA if they are no longer listed)
 #   approved_by        the approver's name; NA if it needed no approval
 #   approval_required  whether someone had to approve it
+#   deleted            a delete's row, as it was named when it was deleted ("Kid Questionnaire Wave 1"); NA otherwise
 #   prepared, approved, applied   times as the app writes them (`approved` is NULL if nobody did)
 
 history_table <- "draft"
@@ -27,7 +28,7 @@ history_columns <- c(
   "created_at", "applied_at",
   "preparer:staff!prepared_by(name)",
   "reviews:draft_review_event(event,occurred_at,person:staff(name))",
-  "edit:edit_draft(edit_kind)"
+  "edit:edit_draft(edit_kind,reach)"
 )
 
 #' Every applied change, newest first.
@@ -79,6 +80,7 @@ history_model_record <- function(row) {
     prepared_by = as.character(row$preparer$name %||% NA),
     approved_by = as.character(approver %||% NA),
     approval_required = !is.null(approval),
+    deleted = as.character(edit$reach$deleted$name %||% NA),
     prepared = database_time(row$created_at),
     approved = database_time(approval$occurred_at),
     applied = database_time(row$applied_at)

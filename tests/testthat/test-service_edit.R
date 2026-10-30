@@ -224,7 +224,7 @@ test_that("wording that exists already is a warning, not a problem", {
   expect_match(check$warnings$question__text, "already has exactly these words \\(seen in 2 questionnaires: AHP, MQ\\)")
 })
 
-test_that("a questionnaire with the same name in its study is a warning", {
+test_that("a questionnaire with the same name or abbreviation in its study can't be added", {
   form <- form_for(
     "questionnaire",
     "add",
@@ -233,8 +233,23 @@ test_that("a questionnaire with the same name in its study is a warning", {
     questionnaire__abbreviation = "AHP"
   )
   check <- edit_service_check(form$fields, form$values)
-  expect_match(check$warnings$questionnaire__name, "already has a questionnaire with the name")
-  expect_match(check$warnings$questionnaire__abbreviation, "the abbreviation “AHP”")
+  expect_match(check$problems$questionnaire__name, "already has a questionnaire with the name")
+  expect_match(check$problems$questionnaire__abbreviation, "the abbreviation “AHP”")
+  # another study may have one by that name
+  form <- form_for("questionnaire", "add", questionnaire__study_id = "3", questionnaire__name = "adult health and personality ")
+  expect_null(edit_service_check(form$fields, form$values)$problems$questionnaire__name)
+})
+
+test_that("a registry's name, and a study's name in its registry, can't be added twice", {
+  form <- form_for("registry", "add", registry__name = " mid-atlantic twin registry")
+  expect_match(edit_service_check(form$fields, form$values)$problems$registry__name, "already a registry called “Mid-Atlantic Twin Registry”")
+  form <- form_for("registry", "update", "1")
+  expect_null(edit_service_check(form$fields, form$values)$problems$registry__name)
+
+  form <- form_for("study", "add", study__registry_id = "1", study__name = "ADULT HEALTH STUDY")
+  expect_match(edit_service_check(form$fields, form$values)$problems$study__name, "already has a study called “Adult Health Study”")
+  form <- form_for("study", "add", study__registry_id = "2", study__name = "Adult Health Study")
+  expect_null(edit_service_check(form$fields, form$values)$problems$study__name)
 })
 
 test_that("a field that isn't shown isn't required or checked", {

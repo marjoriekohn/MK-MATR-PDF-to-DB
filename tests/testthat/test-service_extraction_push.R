@@ -150,6 +150,7 @@ test_that("an answer choice and a set of choices that are there already are used
 
   # a different set of the same choices needs its own name if the first is taken
   expect_equal(push_option_set_name(c("Yes", "No"), "Yes / No"), "Yes / No (2)")
+  expect_equal(push_option_set_name(c("yes", "no"), " Yes / No"), "yes / no (2)")
   expect_equal(nchar(push_option_set_name(paste("choice", 1:60), character())), 150)
 })
 
@@ -222,6 +223,22 @@ test_that("a block another questionnaire prints with the same kind and words is 
 
   expect_match(extraction_service_push_summary(built$summary), "^Adds 3 new blocks, 1 block other questionnaires print, ")
   expect_equal(extraction_service_what_cards(built$summary)[[1]]$facts, c("3 new", "1 shared with other questionnaires"))
+  # each block is listed, the shared one by where it is used already
+  blocks <- built$rows$blocks
+  expect_equal(nrow(blocks), 4)
+  expect_equal(sum(blocks$is_new), 3)
+  expect_equal(blocks$status[!blocks$is_new], "Printed by another questionnaire") # where isn't known here
+  expect_equal(blocks$text[!blocks$is_new], paste(test_marker, "Do you smoke?"))
+  where <- list(
+    placed = data.frame(component_id = c(150, 150, 300), questionnaire_id = c(2, 3, 2)),
+    questionnaires = data.frame(questionnaire_id = c(2, 3), name = c("Kid Questionnaire", "Mother Questionnaire"), abbreviation = c("KQ", NA))
+  )
+  expect_equal(push_shared_status(where, 300), "Used in KQ")
+  expect_equal(push_shared_status(where, 150), "Used by 2 questionnaires")
+  where$placed$questionnaire_id[3] <- 3
+  expect_equal(push_shared_status(where, 300), "Used in Mother Questionnaire") # no abbreviation: its name
+  shared <- build_for(small_draft(), options = c(options, where))
+  expect_equal(shared$rows$blocks$status[!shared$rows$blocks$is_new], "Used by 2 questionnaires") # 150, the oldest
 })
 
 test_that("a MATR ID that another question already has, or nothing to add, is a sentence", {
@@ -283,14 +300,34 @@ test_that("repeated choices are new response options, but each answer choice and
     list(answer_options = 0L, answer_options_found = 2L, option_sets = 0L, option_sets_found = 1L))
   expect_equal(reused$summary$choices, 6L) # still one per variable and choice: the links are new
 
-  cards <- extraction_service_what_cards(reused$summary)
+  # each answer choice and set is listed once, with how often it is used: the space kept once saves
+  expect_equal(reused$rows$answer_options$text, c("yes", "no"))
+  expect_equal(reused$rows$answer_options$uses, c(3L, 3L))
+  expect_equal(reused$rows$answer_options$status, rep("Already in the database", 2))
+  expect_equal(reused$rows$option_sets[c("text", "uses", "is_new")], data.frame(text = "Yes / No", uses = 3L, is_new = FALSE))
+  expect_equal(added$rows$answer_options$is_new, c(TRUE, TRUE))
+  expect_equal(added$rows$answer_options$uses, c(3L, 3L)) # a set's members aren't uses
+  expect_equal(added$rows$option_sets[c("text", "uses", "is_new")], data.frame(text = "yes / no", uses = 3L, is_new = TRUE))
+
+  cards <- extraction_service_what_cards(reused$summary, reused$rows)
   kinds <- vapply(cards, function(card) card$kind, character(1))
+  # a wave's questions and its response options are new for every question and choice: no card of their own
+  expect_equal(kinds, c("Blocks", "Variables", "Answer choices", "Sets of choices"))
   answer_card <- cards[[which(kinds == "Answer choices")]]
   expect_false(answer_card$is_new)
-  expect_equal(answer_card$facts, "2 already in the database, used again")
-  links <- cards[[which(kinds == "Response options")]]
-  expect_true(links$is_new)
-  expect_equal(links$title, "6 response options")
+  expect_equal(answer_card$facts, "2 already in the database")
+  expect_equal(answer_card$subtitle, "")
+  expect_equal(cards[[which(kinds == "Sets of choices")]]$facts, "1 already in the database")
+  expect_equal(nrow(answer_card$rows), 2)
+
+  html <- htmltools::renderTags(request_rows_ui(cards))$html
+  expect_lt(regexpr(">no<", html), regexpr(">yes<", html)) # each list in the order of its words
+  expect_match(html, "<details class=\"request-rows-list\">")
+  expect_match(html, "Answer choices")
+  expect_match(html, "0 new rows, 2 already there")
+  expect_match(html, "Already in the database")
+  expect_match(html, "Response options</th>")
+  expect_null(request_rows_ui(extraction_service_what_cards(reused$summary))) # no rows given, no lists
 })
 
 test_that("the preview says where it goes and what it adds, without writing anything", {
@@ -427,7 +464,9 @@ test_that("a group that skips says so where it is placed, pointing at a question
     question("23"),
     question("24")
   )))
-  items <- build_for(draft)$items
+  built <- build_for(draft)
+  expect_equal(built$rows$blocks$detail, rep("Question", 4)) # the group has no words, so the list leaves it out
+  items <- built$items
   placed <- items[items$entity_name == "questionnaire_component" & grepl('"new:component:1"', items$record_identifier), ]
   value_of <- function(attribute) placed$new_value[placed$attribute_name == attribute]
   expect_equal(value_of("skip_condition"), "No")

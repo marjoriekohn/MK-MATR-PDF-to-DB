@@ -222,7 +222,8 @@ create table public.respondent_type (
   constraint respondent_type_age_range check (minimum_age <= maximum_age)   -- BR15
 );
 
--- BR14: no uniqueness on name or abbreviation; questionnaire_id is the only identifier.
+-- A name and an abbreviation are each unique within a study, ignoring case and outer spaces
+-- (questionnaire_name_unique_in_study, questionnaire_abbreviation_unique_in_study, section 3).
 create table public.questionnaire (
   questionnaire_id   bigint  primary key default private.random_id('questionnaire', 'questionnaire_id'),
   study_id           bigint  not null,                                   -- BR10
@@ -352,9 +353,7 @@ create table public.open_ended (
 
 create table public.option_set (
   option_set_id bigint primary key default private.random_id('option_set', 'option_set_id'),
-  name          text   not null
-    constraint option_set_name_unique unique,                            -- BR109
-  description   text
+  name          text   not null                                          -- unique, ignoring case and outer spaces (BR109): option_set_name_unique, section 3
 );
 
 create table public.closed_ended (
@@ -420,10 +419,8 @@ create table public.question_category (
 
 create table public.measurement_scale (
   scale_id     bigint primary key default private.random_id('measurement_scale', 'scale_id'),
-  name         text   not null
-    constraint measurement_scale_name_unique unique,                     -- BR78
-  abbreviation text   not null
-    constraint measurement_scale_abbreviation_unique unique,             -- BR78
+  name         text   not null,                                         -- unique, ignoring case and outer spaces (BR78): section 3
+  abbreviation text   not null,                                         -- the same
   version      text,
   description  text,
   citation     text
@@ -546,7 +543,7 @@ create table public.pdf_file (
     constraint pdf_file_pdf_bytes_check check (pdf_bytes >= 0)
 );
 
--- Each time a draft is submitted for review, sent back, or approved: who, which revision, when, and the
+-- Each time a draft is submitted for review, sent back, or approved: who, when, and the
 -- reviewer's note for a send back. draft itself says only where it is now (status, requested_reviewer).
 create table public.draft_review_event (
   draft_review_event_id bigint      primary key default private.random_id('draft_review_event', 'draft_review_event_id'),
@@ -554,8 +551,6 @@ create table public.draft_review_event (
   event                 text        not null
     constraint draft_review_event_event_check check (event in ('Submitted', 'Sent Back', 'Approved')),
   staff_id              bigint      not null,
-  revision              integer     not null
-    constraint draft_review_event_revision_check check (revision > 0),
   note                  text,
   occurred_at           timestamptz not null default now(),
   -- only a send back has a note: what the reviewer asks to be changed
@@ -738,6 +733,13 @@ alter table public.applied_item
 -- Uniqueness that ignores case or spaces (an index, as a unique constraint can't hold an expression)
 create unique index staff_email_unique  on public.staff   (lower(email));          -- BR22
 create unique index subject_name_unique on public.subject (lower(btrim(name)));
+create unique index option_set_name_unique                 on public.option_set (lower(btrim(name)));              -- BR109
+create unique index measurement_scale_name_unique          on public.measurement_scale (lower(btrim(name)));       -- BR78
+create unique index measurement_scale_abbreviation_unique  on public.measurement_scale (lower(btrim(abbreviation)));
+create unique index registry_name_unique                   on public.registry (lower(btrim(name)));
+create unique index study_name_unique_in_registry          on public.study (registry_id, lower(btrim(name)));
+create unique index questionnaire_name_unique_in_study     on public.questionnaire (study_id, lower(btrim(name)));
+create unique index questionnaire_abbreviation_unique_in_study on public.questionnaire (study_id, lower(btrim(abbreviation)));
 
 -- Foreign keys
 create index study_registry_id_idx                 on public.study (registry_id);
@@ -1331,7 +1333,7 @@ end;
 $$;
 
 -- A draft that has just gone to Awaiting Review (from p_was: Draft, Sent Back, or nothing for a new one)
--- was submitted, by p_staff_id, at its current revision.
+-- was submitted, by p_staff_id.
 create function private.draft_record_submission(p_draft_id bigint, p_was text, p_staff_id bigint)
 returns void
 language plpgsql
@@ -1342,13 +1344,13 @@ declare
 begin
   select * into d from public.draft where draft_id = p_draft_id;
   if d.status = 'Awaiting Review' and p_was is distinct from 'Awaiting Review' then
-    insert into public.draft_review_event (draft_id, event, staff_id, revision)
-    values (d.draft_id, 'Submitted', p_staff_id, d.revision);
+    insert into public.draft_review_event (draft_id, event, staff_id)
+    values (d.draft_id, 'Submitted', p_staff_id);
   end if;
 end;
 $$;
 
--- Applies a draft's items to the live tables, records each field in applied_item, records the approval
+-- Applies a draft's items to the live tables, records what was done in applied_item, records the approval
 -- (if it had one) as a draft_review_event, and marks the draft Applied. One transaction: if anything is
 -- refused, nothing changes. Called only by apply_draft() and approve_draft(), after they have checked
 -- who may.
@@ -1364,6 +1366,11 @@ $$;
 -- A row the change adds has no number yet and is named new:<table>:<n> (e.g. new:component:1)
 -- wherever it is mentioned. It is swapped for the number the database gave when the row was inserted.
 -- applied_item records the real numbers.
+--
+-- What applied_item keeps: an edit that adds or updates, each field, with its old and new value; an extraction, a
+-- line for each table it added to; an edit that deletes, one line for the row staff picked to delete (named in
+-- edit_draft.reach as "deleted"), and nothing of what it or the rows that went with it held. The delete's own list
+-- of items is emptied too, so what was deleted is gone for good.
 --
 -- Constraints that can be deferred are deferred to the end, so rows can be put in order (display
 -- orders) and the answer-format check (BR92) looks at the finished change.
@@ -1417,12 +1424,22 @@ declare
   token        text;
   added_tables text[] := array[]::text[]; -- an extraction's rows, as added: their tables ...
   added_ids    text[] := array[]::text[]; -- ... and their keys
+  deleting     boolean := false;          -- an edit that deletes: recorded as the one row picked ...
+  picked       jsonb;                     -- ... {"table", "row"}, from edit_draft.reach ...
+  last_table   text;                      -- ... or, if the draft doesn't say, the last row deleted
+  last_id      text;
 begin
   if jsonb_typeof(p_items) is distinct from 'array' or jsonb_array_length(p_items) = 0 then
     raise exception 'There is nothing in this to apply.';
   end if;
 
   set constraints all deferred;
+
+  if d.kind = 'Edit' then
+    select e.edit_kind = 'Delete', e.reach -> 'deleted' into deleting, picked
+    from public.edit_draft e where e.draft_id = d.draft_id;
+    deleting := coalesce(deleting, false);
+  end if;
 
   -- Runs of items on the same row and action, in order.
   for grp in
@@ -1611,6 +1628,14 @@ begin
       added_ids := added_ids || recorded_id;
       continue;
     end if;
+    if deleting then
+      -- a delete is recorded by the row picked (below), not field by field
+      if grp.action = 'Delete' then
+        last_table := grp.entity_name;
+        last_id := recorded_id;
+      end if;
+      continue;
+    end if;
     for attr in select value from jsonb_array_elements(grp.attrs) loop
       key := attr ->> 'attribute';
       recorded_val := attr ->> 'new';
@@ -1638,10 +1663,20 @@ begin
     group by t;
   end if;
 
+  -- A delete's one line: the row staff picked (the wave, the questionnaire), with nothing it held. The list of
+  -- items it was applied from goes too.
+  if deleting then
+    if coalesce(picked ->> 'table', last_table) is not null then
+      insert into public.applied_item (draft_id, item_number, entity_name, record_identifier, action)
+      values (d.draft_id, 1, coalesce(picked ->> 'table', last_table), coalesce(picked ->> 'row', last_id), 'Delete');
+    end if;
+    update public.edit_draft set items = '[]'::jsonb where draft_id = d.draft_id;
+  end if;
+
   -- the approval, if it needed one, is recorded with the change (before it is Applied, which takes no more)
   if p_approved_by is not null then
-    insert into public.draft_review_event (draft_id, event, staff_id, revision)
-    values (d.draft_id, 'Approved', p_approved_by, d.revision);
+    insert into public.draft_review_event (draft_id, event, staff_id)
+    values (d.draft_id, 'Approved', p_approved_by);
   end if;
 
   update public.draft
@@ -1813,8 +1848,8 @@ begin
     raise exception 'That was changed after you opened it. Open it again to see the new version.';
   end if;
 
-  insert into public.draft_review_event (draft_id, event, staff_id, revision, note)
-  values (d.draft_id, 'Sent Back', p_staff_id, d.revision, p_note);
+  insert into public.draft_review_event (draft_id, event, staff_id, note)
+  values (d.draft_id, 'Sent Back', p_staff_id, p_note);
   update public.draft
   set status = 'Sent Back', saved_by = p_staff_id, saved_at = now()
   where draft_id = p_draft_id;
@@ -2481,8 +2516,8 @@ comment on column public.answer_option.standardized_label is
   'The answer in standard wording, kept normalized: lower case, straight quotes, one space between words, no question mark, no full stop or colon at the end.';
 comment on column public.extracted_draft.supplement is
   'The optional file of MATR IDs and codes Gemini reads after the questionnaire: {name, sha256, bytes} for a PDF (in Storage as <sha256>.pdf), or {name, text} for a CSV or text file.';
-comment on table public.draft_review_event      is 'Each time a draft was submitted for review, sent back, or approved: by whom, at which revision, and when.';
-comment on table public.applied_item            is 'What an applied draft did: for an edit, one field it changed, with its old and new value; for an extraction, one table it added rows to.';
+comment on table public.draft_review_event      is 'Each time a draft was submitted for review, sent back, or approved: by whom and when. An approval is of the draft''s revision the approver read (approve_draft checks it).';
+comment on table public.applied_item            is 'What an applied draft did: for an edit that adds or updates, one field it changed, with its old and new value; for an extraction, one table it added rows to; for an edit that deletes, the one row staff picked to delete (what it and the rows that went with it held isn''t kept).';
 
 -- ------ Columns --------------------------------------------------------------------------------------
 comment on column public.study.status is 'Active: the study is ongoing. Ended: all data collections are finished.';
@@ -2523,16 +2558,16 @@ comment on column public.draft.status is
 comment on column public.draft.prepared_by is 'Who started it. Never changes.';
 comment on column public.draft.saved_by is 'Who saved it last (or sent it back). An approver can''t be this person.';
 comment on column public.draft.requested_reviewer is
-  'The staff member the preparer asked to review it (they are emailed a link once there is a login). Any other eligible staff member may still approve.';
+  'The staff member the preparer asked to review it. Any other eligible staff member may still approve.';
 comment on column public.draft.revision is 'Rises every time the content is saved. An approval is of the revision the approver read.';
 comment on column public.draft.summary is 'One line saying what it comes to; a change request is listed by it.';
 comment on column public.draft.saved_at is 'When staff last saved it. The reading job''s progress does not change it.';
 
 comment on column public.edit_draft.edit_kind is 'What the preparer chose: Add, Update or Delete.';
 comment on column public.edit_draft.form is 'The sentence and the form as typed, to open it again: {action, entity, scope, target, values}.';
-comment on column public.edit_draft.reach is 'For a delete: how many rows go with it, and how many are emptied.';
+comment on column public.edit_draft.reach is 'For a delete: how many rows go with it (rows_removed), how many are emptied (rows_emptied), and the row staff picked to delete (deleted: {table, row, name}: its key as JSON, and its name as the Edit History shows it), which is all that is kept of it.';
 comment on column public.edit_draft.items is
-  'The rows and fields it changes, in the order to apply them: item_number, entity_name, record_identifier, action, attribute_name, old_value, new_value.';
+  'The rows and fields it changes, in the order to apply them: item_number, entity_name, record_identifier, action, attribute_name, old_value, new_value. Emptied once a delete is applied.';
 
 comment on column public.extracted_draft.method is
   'AI-Powered: Gemini read the PDF (its reading is in ai_extracted_draft). Manual: staff typed it.';
@@ -2568,8 +2603,6 @@ comment on column public.pdf_file.pdf_bytes is 'Once known, never changes.';
 
 comment on column public.draft_review_event.event is
   'Submitted (sent for review, by the person who saved it then), Sent Back (a reviewer returned it, with a note) or Approved (and applied, in the same step; at most one).';
-comment on column public.draft_review_event.revision is
-  'The revision submitted, sent back or approved.';
 comment on column public.draft_review_event.note is 'Sent Back only: what the reviewer asks to be changed.';
 
 comment on column public.draft.applied_at is 'When it was applied to the MATR data. Empty until then.';
@@ -2904,7 +2937,7 @@ begin
 
   -- one made as a change request was submitted, by whoever made it
   e := pg_temp.edit(pg_temp.id('ana'), 'delete', '[]'::jsonb);
-  assert (select count(*) from public.draft_review_event where draft_id = e and event = 'Submitted' and staff_id = pg_temp.id('ana') and revision = 1) = 1, 'a Submitted event';
+  assert (select count(*) from public.draft_review_event where draft_id = e and event = 'Submitted' and staff_id = pg_temp.id('ana')) = 1, 'a Submitted event';
   e := pg_temp.edit(pg_temp.id('ana'), 'add', '[]'::jsonb, 'Draft');
   assert not exists (select 1 from public.draft_review_event where draft_id = e), 'a plain draft has none';
 
@@ -2980,7 +3013,7 @@ begin
   assert (select saved_by from public.draft where draft_id = e) = pg_temp.id('ben'), 'the reviewer saved it last';
   assert (select revision from public.draft where draft_id = e) = 1, 'sending back is not a change to the content';
   -- only a send back has a note
-  perform pg_temp.expect_error(format('insert into public.draft_review_event (draft_id, event, staff_id, revision, note) values (%s, ''Submitted'', %s, 1, ''x'')', e, pg_temp.id('ana')), 'draft_review_event_note_is_a_send_back');
+  perform pg_temp.expect_error(format('insert into public.draft_review_event (draft_id, event, staff_id, note) values (%s, ''Submitted'', %s, ''x'')', e, pg_temp.id('ana')), 'draft_review_event_note_is_a_send_back');
   -- and a draft can't be marked Sent Back without one (checked when the transaction ends, so it is run here as that would)
   declare
     other bigint := pg_temp.edit(pg_temp.id('ana'), 'delete', '[]'::jsonb);
@@ -2998,8 +3031,8 @@ begin
   -- the preparer fixes it and sends it again
   perform public.save_draft(e, pg_temp.id('ana'), jsonb_build_object('status', 'Awaiting Review'), '{}'::jsonb, 1);
   assert (select status from public.draft where draft_id = e) = 'Awaiting Review' and (select revision from public.draft where draft_id = e) = 2, 'sent again, as a new revision';
-  assert (select array_agg(event || ' ' || revision order by event || ' ' || revision) from public.draft_review_event where draft_id = e)
-       = array['Sent Back 1', 'Submitted 1', 'Submitted 2'], 'every submission and send back is kept';
+  assert (select array_agg(event order by event) from public.draft_review_event where draft_id = e)
+       = array['Sent Back', 'Submitted', 'Submitted'], 'every submission and send back is kept';
   -- the preparer pulls it
   perform public.save_draft(e, pg_temp.id('ana'), jsonb_build_object('status', 'Withdrawn'), '{}'::jsonb, null, false);
   perform pg_temp.expect_error(format('select public.save_draft(%s, %s, ''{"status":"Awaiting Review"}''::jsonb)', e, pg_temp.id('ana')), 'withdrawn, so it can''t be changed');
@@ -3153,11 +3186,15 @@ begin
   assert (select revision from public.draft where draft_id = e) = 2, 'the draft keeps the revision that was approved';
   assert made = e, 'approve_draft returns the draft';
   assert (select staff_id from public.draft_review_event where draft_id = made and event = 'Approved') = pg_temp.id('cy'), 'history: the approver';
-  assert (select revision from public.draft_review_event where draft_id = made and event = 'Approved') = 2, 'of the revision read';
   assert (select prepared_by from public.draft where draft_id = made) = pg_temp.id('ana'), 'history: the preparer';
   assert (select applied_at is not null from public.draft where draft_id = made)
      and exists (select 1 from public.draft_review_event where draft_id = made and event = 'Approved'), 'history: when';
-  assert (select count(*) from public.applied_item where draft_id = made) = 4, 'history: every field';
+  -- a delete keeps one line, the row deleted, and nothing it held: not even the items it was applied from
+  assert (select count(*) from public.applied_item where draft_id = made) = 1, 'history: one line for a delete';
+  assert (select entity_name || ' ' || record_identifier || ' ' || action || ' ' || coalesce(attribute_name, old_value, '(nothing)')
+          from public.applied_item where draft_id = made) = format('wave {"wave_id":%s} Delete (nothing)', pg_temp.id('wave1')),
+    'history: the wave, and nothing it held';
+  assert (select items from public.edit_draft where draft_id = made) = '[]'::jsonb, 'the delete''s items are let go';
   perform pg_temp.expect_error(format('select public.approve_draft(%s, 2, %s)', e, pg_temp.id('ben')), 'not waiting for approval \(it is applied\)');
 end;
 $$;
@@ -3172,8 +3209,13 @@ begin
   insert into public.wave (questionnaire_id, name) values (pg_temp.id('questionnaire'), 'Wave 3') returning wave_id into wid;
   e := pg_temp.edit(pg_temp.id('ada'), 'delete', jsonb_build_array(
     pg_temp.item(1, 'wave', jsonb_build_object('wave_id', wid), 'Delete', 'name', 'Wave 3', null)), 'Draft');
+  -- the row picked, as the site names it
+  update public.edit_draft set reach = jsonb_build_object('rows_removed', 0, 'rows_emptied', 0,
+    'deleted', jsonb_build_object('table', 'wave', 'row', format('{"wave_id":%s}', wid))) where draft_id = e;
   made := public.apply_draft(e, pg_temp.id('ada'));
   assert not exists (select 1 from public.wave where wave_id = wid), 'the ADMIN deleted it at once';
+  assert (select entity_name || ' ' || record_identifier from public.applied_item where draft_id = made) = format('wave {"wave_id":%s}', wid),
+    'history: the row picked';
   assert not exists (select 1 from public.draft_review_event where draft_id = made and event = 'Approved'), 'with no approver';
 
   insert into public.wave (questionnaire_id, name) values (pg_temp.id('questionnaire'), 'Wave 4') returning wave_id into wid;
@@ -3347,7 +3389,7 @@ begin
   perform pg_temp.expect_error(format('delete from public.edit_draft where draft_id = %s', e), 'already been applied');
   perform pg_temp.expect_error(format('update public.draft set summary = ''x'' where draft_id = %s', e), 'already been applied');
   -- nor can its reviews, and it gets no more
-  perform pg_temp.expect_error(format('insert into public.draft_review_event (draft_id, event, staff_id, revision) values (%s, ''Submitted'', %s, 1)', e, pg_temp.id('ana')), 'already been applied');
+  perform pg_temp.expect_error(format('insert into public.draft_review_event (draft_id, event, staff_id) values (%s, ''Submitted'', %s)', e, pg_temp.id('ana')), 'already been applied');
   assert (select count(*) from public.applied_item where draft_id = e) = 1, 'its items are still there';
 
   -- a draft that was never applied can be deleted, with its details
@@ -3361,19 +3403,19 @@ begin
   perform pg_temp.expect_error(format('update public.draft set status = ''Applied'' where draft_id = %s', ap), 'draft_applied_says_when');
   perform pg_temp.expect_error(format('update public.draft set applied_at = now() where draft_id = %s', ap), 'draft_applied_says_when');
   -- an approval is from someone other than the preparer and whoever saved it last (BR27)
-  perform pg_temp.expect_error(format('insert into public.draft_review_event (draft_id, event, staff_id, revision) values (%s, ''Approved'', %s, 1)', ap, pg_temp.id('ana')), 'someone other than');
+  perform pg_temp.expect_error(format('insert into public.draft_review_event (draft_id, event, staff_id) values (%s, ''Approved'', %s)', ap, pg_temp.id('ana')), 'someone other than');
   perform public.save_draft(ap, pg_temp.id('cy'));
-  perform pg_temp.expect_error(format('insert into public.draft_review_event (draft_id, event, staff_id, revision) values (%s, ''Approved'', %s, 2)', ap, pg_temp.id('cy')), 'someone other than');
+  perform pg_temp.expect_error(format('insert into public.draft_review_event (draft_id, event, staff_id) values (%s, ''Approved'', %s)', ap, pg_temp.id('cy')), 'someone other than');
   -- and goes with applying the change (checked when the transaction ends, so it is run here as that would)
   begin
-    insert into public.draft_review_event (draft_id, event, staff_id, revision) values (ap, 'Approved', pg_temp.id('ben'), 2);
+    insert into public.draft_review_event (draft_id, event, staff_id) values (ap, 'Approved', pg_temp.id('ben'));
     set constraints draft_approval_applies immediate;
     raise exception 'went through';
   exception when others then
     assert sqlerrm like '%goes with applying the change%', 'an approval of a draft that isn''t applied is refused: ' || sqlerrm;
   end;
   -- a review is the record of what happened: never changed, and deleted only with its draft
-  insert into public.draft_review_event (draft_id, event, staff_id, revision) values (ap, 'Submitted', pg_temp.id('cy'), 2);
+  insert into public.draft_review_event (draft_id, event, staff_id) values (ap, 'Submitted', pg_temp.id('cy'));
   perform pg_temp.expect_error(format('update public.draft_review_event set note = null where draft_id = %s', ap), 'can''t be changed');
   perform pg_temp.expect_error(format('delete from public.draft_review_event where draft_id = %s', ap), 'goes only with its draft');
   delete from public.draft where draft_id = ap;

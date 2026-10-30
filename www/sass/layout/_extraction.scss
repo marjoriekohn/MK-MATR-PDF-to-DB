@@ -79,8 +79,6 @@
   .shiny-file-input-progress { position: absolute; top: 100%; right: 0; left: 0; margin: 0.3rem 0 0; }
 }
 .drop-zone-icon { color: $vcu-gray; font-size: 1.5rem; }
-// Small files: what's shown beside the button says it arrived
-.quiet-upload .shiny-file-input-progress { display: none; }
 .drop-zone-text { flex: 1 1 14rem; font-size: 0.9rem; }
 
 // Shiny's file buttons are drawn as the quiet button (components/_buttons.scss); the input group would square

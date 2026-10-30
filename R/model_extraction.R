@@ -11,6 +11,7 @@
 #   prepared_by (name), prepared_by_id, started    draft (created_at)
 #   saved, saved_by (name), saved_by_id, revision  draft
 #   submitted                                      draft_review_event (the latest Submitted)
+#   submitted_exact (seconds, with their fractions)  the same, to order requests sent in the same second
 #   requested_reviewer = list(id, name)            draft (requested_reviewer)
 #   sent_back = list(by, by_id, date, note)        draft_review_event (the latest Sent Back), only while Sent Back
 #   editing = list(by_id, by, at)                  draft (editing_by, editing_at), while someone has claimed it
@@ -117,6 +118,7 @@ extraction_model_record <- function(parent, detail) {
     saved_by_id = parent$saved_by,
     revision = parent$revision,
     submitted = draft_row_submitted(parent),
+    submitted_exact = draft_row_submitted_exact(parent),
     requested_reviewer = draft_row_person(parent$requested_reviewer, parent$reviewer),
     sent_back = draft_row_sent_back(parent),
     editing = draft_row_editing(parent),
@@ -180,7 +182,7 @@ extraction_model_save <- function(connection, record, changed, staff_id, expecte
 #'
 #' Only the reading's own columns (ai_extracted_draft), and only while the draft is still being
 #' read for the reading it was started for, so what the job and staff change at the same moment doesn't
-#' undo each other, and a job that was overtaken by a new PDF saves nothing.
+#' undo each other, and a job that was overtaken by "Try reading again" saves nothing.
 #'
 #' @param connection The MATR database, `list(url, key)`; see `model_database.R`.
 #' @param id The draft's id.

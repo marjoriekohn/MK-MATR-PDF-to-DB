@@ -454,9 +454,8 @@ test_that("the job saves what Gemini read and marks the draft ready", {
 test_that("the job reads the file of MATR IDs and codes once the questionnaire is read, and carries on without it if it fails", {
   me <- local_staff()
   local_pdf_cache()
-  record <- extraction_service_create(test_connection, fake_upload(), me)
-  # given while the questionnaire is being read
-  extraction_service_add_supplement(test_connection, record$id, fake_csv_upload(c("AH01", "AH02"), "codes.csv"), me)
+  record <- extraction_service_create(test_connection, fake_upload(), me, supplement = fake_csv_upload(c("AH01", "AH02"), "codes.csv"))
+  expect_equal(record$supplement$name, "codes.csv")
   read <- function(pdf_path, lookups, progress) list(json = gold_json(), model = "m", prompt_version = "p")
   given <- NULL
   assign <- function(json, supplement) {
@@ -468,22 +467,15 @@ test_that("the job reads the file of MATR IDs and codes once the questionnaire i
   expect_equal(given, list(name = "codes.csv", text = "AH01\nAH02"))
   original <- draft_service_from_json(draft_model_get_both(test_connection, record$id)$original)
   expect_equal(original$variables$matr_id[1], "AH01")
-  expect_error(
-    extraction_service_add_supplement(test_connection, record$id, fake_csv_upload("AH09", "later.csv"), me),
-    "Reading has finished"
-  )
 
   again <- extraction_service_create(test_connection, fake_upload(), me, supplement = fake_csv_upload("AH01", "codes.csv"))
-  expect_equal(again$supplement$name, "codes.csv")
   messages <- capture_messages(reading_service_run(
     test_connection, again$id, again$reading_started, read = read, assign = function(json, supplement) stop("Gemini is busy")
   ))
   expect_match(messages, "couldn't be applied: Gemini is busy", all = FALSE)
   read_anyway <- extraction_model_get(test_connection, again$id)
   expect_equal(read_anyway$extraction_status, "ready")
-  expect_equal(read_anyway$error, "Gemini is busy") # shown on the step, which says to give the IDs on Edit Extraction
-  extraction_service_remove_supplement(test_connection, again$id, me) # nothing to read once it's read, but it can go
-  expect_null(extraction_model_get(test_connection, again$id)$supplement)
+  expect_equal(read_anyway$error, "Gemini is busy") # shown on the step, which says to type the IDs on Edit Extraction
 })
 
 test_that("a file of MATR IDs and codes that isn't a PDF, CSV or text is turned away", {

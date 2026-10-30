@@ -1,6 +1,8 @@
 #' The AI-Powered mode of the Extraction page: the server.
 #'
-#' Upload a questionnaire PDF and watch it being read, in the background. Once reading has finished
+#' Choose a questionnaire PDF (and the optional file of Variable Names and Coding), click Begin Extraction, and
+#' watch it being read, in the background. The draft starts then, with both files, which can't be changed
+#' after: to read other files, cancel the extraction and begin again. Once reading has finished
 #' the draft opens on the Edit Extraction page. Where it goes in the database (its Basic Info) is filled in
 #' later, on Change Requests, once its change request is submitted. Drafts are kept in the database but nothing here adds to the MATR
 #' metadata database itself.
@@ -27,8 +29,9 @@ extraction_ai_server <- function(
     ns <- session$ns
 
     # ------ REACTIVE ----------------------------------------------------------
-    current_id <- reactiveVal(NULL) # the draft on this page, once a PDF is uploaded
-    supplement_upload <- reactiveVal(NULL) # the file of MATR IDs and codes given before the PDF
+    current_id <- reactiveVal(NULL) # the draft on this page, once the extraction has begun
+    pdf_upload <- reactiveVal(NULL) # the PDF chosen, until the extraction begins
+    supplement_upload <- reactiveVal(NULL) # the file of MATR IDs and codes chosen, until the extraction begins
 
     record <- reactive({
       if (!is.null(current_id())) extractions$all()[[current_id()]]
@@ -41,6 +44,7 @@ extraction_ai_server <- function(
     # Shows a draft opened from Extraction Drafts, or with none, an empty drop zone.
     show_draft <- function(opened = NULL) {
       current_id(opened$id)
+      pdf_upload(NULL)
       supplement_upload(NULL)
     }
 
@@ -55,33 +59,20 @@ extraction_ai_server <- function(
       )
     }
 
-    # ------ The PDF -----------------------------------------------------------
-    observeEvent(input$pdf, try_to({
-      created <- extraction_service_create(connection, input$pdf, me, supplement = supplement_upload())
-      current_id(created$id)
-      supplement_upload(NULL)
-    }))
+    # ------ The files, then Begin Extraction -----------------------------------
+    # Both are held here until the extraction begins; then the draft starts with them, and reading with it.
+    observeEvent(input$pdf, pdf_upload(input$pdf))
+    observeEvent(input$replace_pdf, pdf_upload(input$replace_pdf))
+    observeEvent(input$supplement, supplement_upload(input$supplement))
+    observeEvent(input$remove_supplement, supplement_upload(NULL))
 
-    # The file of MATR IDs and codes: held here until the PDF starts the draft, then kept with it.
-    observeEvent(input$supplement, {
-      if (is.null(current_id())) {
-        supplement_upload(input$supplement)
-      } else {
-        try_to(extraction_service_add_supplement(connection, current_id(), input$supplement, me))
-      }
+    observeEvent(input$begin, {
+      req(is.null(current_id()), pdf_upload())
+      try_to({
+        created <- extraction_service_create(connection, pdf_upload(), me, supplement = supplement_upload())
+        show_draft(created)
+      })
     })
-
-    observeEvent(input$remove_supplement, {
-      if (is.null(current_id())) {
-        supplement_upload(NULL)
-      } else {
-        try_to(extraction_service_remove_supplement(connection, current_id(), me))
-      }
-    })
-
-    observeEvent(input$replace_pdf, try_to(
-      extraction_service_replace_pdf(connection, current_id(), input$replace_pdf, me)
-    ))
 
     observeEvent(input$retry, try_to(extraction_service_retry(connection, current_id(), me)))
 
@@ -108,19 +99,29 @@ extraction_ai_server <- function(
       show_draft(NULL)
     })
 
-    # The Edit Extraction page opens once reading has finished.
-    observe({
-      updateActionButton(session, "open_extraction", disabled = !extraction_service_is_read(reading()))
-    })
-
     # ------ OUTPUT ------------------------------------------------------------
     output$pdf_card <- renderUI({
-      if (is.null(reading())) pdf_drop_zone(ns) else pdf_file(reading(), ns)
+      if (!is.null(reading())) {
+        return(pdf_file(reading()$pdf, ns))
+      }
+      chosen <- pdf_upload()
+      if (is.null(chosen)) pdf_drop_zone(ns) else pdf_file(list(name = chosen$name, bytes = chosen$size), ns, begun = FALSE)
     })
 
     output$supplement <- renderUI({
-      name <- if (is.null(reading())) supplement_upload()$name else reading()$supplement$name
-      supplement_card(name, extraction_service_is_read(reading()), ns)
+      begun <- !is.null(reading())
+      name <- if (begun) reading()$supplement$name else supplement_upload()$name
+      supplement_card(name, begun, ns)
+    })
+
+    # Begin Extraction until it has begun, once a PDF is chosen; then Open in Edit Extraction, once reading has finished.
+    output$footer_button <- renderUI({
+      if (is.null(reading())) {
+        return(actionButton(ns("begin"), "Begin Extraction", class = "btn-primary", disabled = is.null(pdf_upload())))
+      }
+      actionButton(ns("open_extraction"), "Open in Edit Extraction",
+        class = "btn-primary", disabled = !extraction_service_is_read(reading())
+      )
     })
 
     output$reading <- renderUI({
@@ -132,10 +133,10 @@ extraction_ai_server <- function(
     output$footer_note <- renderUI({
       status <- reading()$extraction_status
       if (is.null(status)) {
-        return("Upload the PDF to start the draft.")
+        return(if (is.null(pdf_upload())) "Choose the questionnaire PDF to begin." else "The files can't be changed once the extraction begins.")
       }
       if (status == "failed") {
-        return("Reading stopped. Try reading again, or replace the PDF.")
+        return("Reading stopped. Try reading again, or cancel the extraction and begin again with another PDF.")
       }
       if (status == "ready") {
         return("Reading has finished. Open the whole extraction to review it, and edit it if you need to.")

@@ -126,7 +126,8 @@ extraction_service_unchecked <- function(draft) {
 #' @param draft The questionnaire, if not the saved one (the Edit Extraction page's, before it is saved).
 #' @param info Where it goes, as `extraction_service_info()` returns it; the record's by default.
 #' @return A list: `items` (a data frame in the shape of `edit_item()`, numbered, in the order to
-#'   add them) and `summary` (what they come to; see `extraction_service_push_summary()`). An
+#'   add them), `summary` (what they come to; see `extraction_service_push_summary()`) and `rows` (each
+#'   block, variable, answer choice and set of choices, new or already there; see `push_start()`). An
 #'   error with a sentence if it can't be added as it is.
 extraction_service_push_build <- function(connection, record, draft = NULL, info = extraction_service_info(record)) {
   # the questions are numbered by their place in the questionnaire, as the Edit Extraction page shows them
@@ -143,14 +144,15 @@ extraction_service_push_build <- function(connection, record, draft = NULL, info
 #'
 #' @param connection The MATR database, `list(url, key)`; see `model_database.R`.
 #' @return A list: `ids` (`component_types` and `subjects`, as data frames with their ids) and
-#'   `options` (from `push_model_options()`, with `components` from `push_model_components()`).
+#'   `options` (from `push_model_options()`, with `components` from `push_model_components()`, and `placed` and
+#'   `questionnaires` from `push_model_placed()`).
 extraction_service_push_context <- function(connection) {
   list(
     ids = list(
       component_types = lookup_model_get_component_types(connection),
       subjects = lookup_model_get_subjects(connection)
     ),
-    options = c(push_model_options(connection), list(components = push_model_components(connection)))
+    options = c(push_model_options(connection), list(components = push_model_components(connection)), push_model_placed(connection))
   )
 }
 
@@ -183,7 +185,7 @@ extraction_service_push_items <- function(connection, record) {
 #' @param existing What the questionnaire has printed already, from `push_model_existing()`.
 #' @param options The answer choices and option sets there are, from `push_model_options()`, and the
 #'   components with words (`components`, from `push_model_components()`; without it, no block is shared).
-#' @return A list: `items` and `summary`; see `extraction_service_push_build()`.
+#' @return A list: `items`, `summary` and `rows`; see `extraction_service_push_build()`.
 extraction_service_build_items <- function(draft, info, ids, existing, options) {
   if (nrow(draft$components) == 0) stop("There is nothing in this questionnaire to add yet.", call. = FALSE)
   push <- push_start(ids, existing, options)
@@ -201,6 +203,7 @@ extraction_service_build_items <- function(draft, info, ids, existing, options) 
     if (id %in% names(found)) {
       component_of[[id]] <- found[[id]]
       push$summary$blocks_found <- push$summary$blocks_found + 1L
+      push$note_block(block, "Already in the questionnaire")
       next
     }
     placed_here <- c(existing$placements$component_id, unlist(Filter(is.numeric, component_of)))
@@ -209,6 +212,7 @@ extraction_service_build_items <- function(draft, info, ids, existing, options) 
     component_of[[id]] <- component
     if (!is.null(shared)) {
       push$summary$blocks_shared <- push$summary$blocks_shared + 1L
+      push$note_block(block, push_shared_status(push$options, shared)) # placed here, not copied
       next
     }
     push$insert("component", list(component_id = component), list(
@@ -216,6 +220,7 @@ extraction_service_build_items <- function(draft, info, ids, existing, options) 
     ))
     if (block$component_type == "Question") push$insert("question", list(component_id = component))
     push$summary$blocks <- push$summary$blocks + 1L
+    push$note_block(block, "New", is_new = TRUE)
   }
   # ---- ... then where the questionnaire places each new one, parents before what is inside them
   push$component_of <- component_of
@@ -251,14 +256,17 @@ extraction_service_build_items <- function(draft, info, ids, existing, options) 
     block <- blocks[blocks$id == id, ]
     if (block$component_type == "Question") push_variables(push, draft, block, component_of[[id]], questionnaire)
   }
-  list(items = edit_number_items(do.call(rbind, push$items())), summary = push$summary)
+  list(items = edit_number_items(do.call(rbind, push$items())), summary = push$summary, rows = push$rows())
 }
 
 # The tools a push uses while it works: names for rows that don't exist yet (`token`), a way to add a
-# row (`insert`), the ids of kinds of block and subjects, and the count of what it has done so far.
+# row (`insert`), the ids of kinds of block and subjects, the count of what it has done so far, and each
+# block, variable, answer choice and set of choices it has come to (`note`; `rows()` gives them as
+# data frames of `text`, `detail`, `status`, `is_new` and `uses`, by kind, in the order they came).
 push_start <- function(ids, existing, options) {
   items <- list()
   counts <- integer()
+  listed <- list(blocks = list(), variables = list(), answer_options = list(), option_sets = list())
   made <- new.env() # answer choices and option sets this push has already added
   push <- new.env()
   push$summary <- list(
@@ -295,6 +303,31 @@ push_start <- function(ids, existing, options) {
     items <<- c(items, rows)
   }
   push$items <- function() items
+  # A row of the kind, by `key`: the first time it is come to, what it is; `uses` are added each time.
+  push$note <- function(kind, key, text = NULL, detail = NULL, status = NULL, is_new = NULL, uses = 0L) {
+    key <- paste0("k", key) # never empty, so it names its entry
+    entry <- listed[[kind]][[key]] %||%
+      list(text = text, detail = detail, status = status, is_new = is_new, uses = 0L)
+    entry$uses <- entry$uses + uses
+    listed[[kind]][[key]] <<- entry
+  }
+  push$note_block <- function(block, status, is_new = FALSE) {
+    # a group has no words of its own: nothing to list
+    if (block$component_type != "Group") push$note("blocks", block$id, block$text, block$component_type, status, is_new)
+  }
+  push$rows <- function() {
+    words <- function(value) if (length(value) == 0 || is.na(value)) "" else as.character(value)
+    lapply(listed, function(entries) {
+      data.frame(
+        text = vapply(entries, function(entry) words(entry$text), character(1), USE.NAMES = FALSE),
+        detail = vapply(entries, function(entry) words(entry$detail), character(1), USE.NAMES = FALSE),
+        status = vapply(entries, function(entry) entry$status, character(1), USE.NAMES = FALSE),
+        is_new = vapply(entries, function(entry) entry$is_new, logical(1), USE.NAMES = FALSE),
+        uses = vapply(entries, function(entry) entry$uses, integer(1), USE.NAMES = FALSE),
+        stringsAsFactors = FALSE
+      )
+    })
+  }
   push$type_id <- function(name) ids$component_types$component_type_id[match(name, ids$component_types$name)]
   # Who a variable is about: a blank is the respondent; a name the database doesn't have yet is added once.
   push$subject_id <- function(name) {
@@ -336,6 +369,7 @@ push_variables <- function(push, draft, block, component, questionnaire) {
         ), call. = FALSE)
       }
       push$summary$variables_found <- push$summary$variables_found + 1L
+      push$note("variables", box$id, box$matr_id, box$label, "Already recorded", FALSE)
       next
     }
     order_so_far <- order_so_far + 1
@@ -345,6 +379,7 @@ push_variables <- function(push, draft, block, component, questionnaire) {
       display_order = order_so_far, label = box$label, subject_id = push$subject_id(box$subject)
     ))
     push$summary$variables <- push$summary$variables + 1L
+    push$note("variables", box$id, box$matr_id, box$label, "New", TRUE)
     if (box$variable_type == "open_ended") {
       push$insert("open_ended", list(variable_key = variable), c(
         list(answer_data_type = box$answer_data_type, skip_condition = box$skip_condition, skip_instruction = box$skip_instruction),
@@ -356,7 +391,7 @@ push_variables <- function(push, draft, block, component, questionnaire) {
     push$insert("closed_ended", list(variable_key = variable), list(option_set_id = push_option_set(push, choices$answer_option)))
     for (j in seq_len(nrow(choices))) {
       choice <- choices[j, ]
-      answer_option <- push_answer_option(push, choice$answer_option)
+      answer_option <- push_answer_option(push, choice$answer_option, uses = 1L)
       push$insert("response_option", list(variable_key = variable, answer_option_id = answer_option), c(
         list(
           display_order = j, code_value = if (is.na(choice$code_value)) NA else as.character(choice$code_value),
@@ -402,11 +437,13 @@ push_skip_to <- function(push, skip_to_id) {
   )
 }
 
-# The id (or the name) of an answer choice with these words: the one that is there, or a new one.
-push_answer_option <- function(push, label) {
+# The id (or the name) of an answer choice with these words: the one that is there, or a new one. `uses` is 1 for
+# a variable's choice (a response option points at it) and 0 for a member of a set of choices.
+push_answer_option <- function(push, label, uses = 0L) {
   label <- normal_answer(label)
   answer_options <- push$options$answer_options
   there <- answer_options$answer_option_id[normal_answer(answer_options$standardized_label) %in% label]
+  push$note("answer_options", label, label, "", if (length(there) == 1) "Already in the database" else "New", length(there) != 1, uses)
   if (length(there) == 1) {
     found_key <- paste0("found choice:", label) # counted once, however many variables use it
     if (is.null(push$made[[found_key]])) {
@@ -438,6 +475,20 @@ push_option_set <- function(push, labels) {
   )]
   keys <- vapply(split(member_labels, options$members$option_set_id), function(m) paste(sort(m), collapse = "\r"), character(1))
   there <- names(keys)[keys == key]
+  if (is.null(push$made[[paste0("noted set:", key)]])) { # its name and choices, the first time it is come to
+    push$made[[paste0("noted set:", key)]] <- TRUE
+    name <- if (length(there) > 0) {
+      options$option_sets$name[match(there[1], as.character(options$option_sets$option_set_id))]
+    } else {
+      push_option_set_name(labels, c(options$option_sets$name, push$made$set_names))
+    }
+    choices <- paste(labels, collapse = " / ")
+    push$note(
+      "option_sets", key, name, if (identical(tolower(trimws(name)), choices)) "" else choices,
+      if (length(there) > 0) "Already in the database" else "New", length(there) == 0
+    )
+  }
+  push$note("option_sets", key, uses = 1L)
   if (length(there) > 0) {
     found_key <- paste0("found set:", there[1]) # counted once, however many variables use it
     if (is.null(push$made[[found_key]])) {
@@ -462,13 +513,15 @@ push_option_set <- function(push, labels) {
   name
 }
 
-# "Yes / No", "Never / Sometimes / Often", with a number after it if the name is taken.
+# "Yes / No", "Never / Sometimes / Often", with a number after it if the name is taken. A name is taken
+# whatever its capitals and outer spaces, as the database compares them (option_set_name_unique).
 push_option_set_name <- function(labels, taken) {
   name <- paste(labels, collapse = " / ")
   if (nchar(name) > 150) name <- paste0(substr(name, 1, 147), "...")
   candidate <- name
+  taken <- tolower(trimws(taken))
   n <- 1
-  while (candidate %in% taken) {
+  while (tolower(trimws(candidate)) %in% taken) {
     n <- n + 1
     candidate <- paste0(name, " (", n, ")")
   }
@@ -531,6 +584,21 @@ push_shared_component <- function(push, block, placed_here) {
       components$words == push_words(block$text) & !components$component_id %in% placed_here
   ]
   if (length(same) == 0) NULL else min(same)
+}
+
+# Where a block another questionnaire prints is used already: "Used in KQ" (the questionnaire's abbreviation, or its
+# name), or "Used by 3 questionnaires".
+push_shared_status <- function(options, component_id) {
+  questionnaires <- unique(options$placed$questionnaire_id[options$placed$component_id %in% component_id])
+  if (length(questionnaires) == 0) {
+    return("Printed by another questionnaire")
+  }
+  if (length(questionnaires) > 1) {
+    return(paste("Used by", plural(length(questionnaires), "questionnaire")))
+  }
+  row <- options$questionnaires[options$questionnaires$questionnaire_id %in% questionnaires, , drop = FALSE]
+  called <- if (nrow(row) == 1 && !is.na(row$abbreviation) && nzchar(row$abbreviation)) row$abbreviation else row$name[1] %||% NA
+  if (is.na(called)) "Printed by another questionnaire" else paste("Used in", called)
 }
 
 # The recorded wave an extraction goes into: one of the questionnaire's waves, asking no questions yet.
@@ -614,7 +682,7 @@ extraction_service_request_preview <- function(draft, info, catalog, context, ex
     return(preview)
   }
   preview$summary <- extraction_service_push_summary(built$summary)
-  preview$what <- extraction_service_what_cards(built$summary)
+  preview$what <- extraction_service_what_cards(built$summary, built$rows)
   preview
 }
 
@@ -671,53 +739,55 @@ extraction_service_where_cards <- function(info, catalog) {
   )
 }
 
-#' The cards for what an extraction adds: for each kind of row, how many are new, how many are already
-#' in the database and are used again, and which rows only link the two.
+#' The cards for what an extraction adds: for each kind of row that can be kept once and used again, how many
+#' are new and how many are already in the database. How often each is used is in its list (`request_rows_ui()`). A wave's
+#' questions and a variable's response options aren't among them: there is a new one for each question and
+#' each choice, so they only say how long the questionnaire is (the sentence above the cards counts them).
 #'
 #' @param summary From `extraction_service_push_build()`.
-#' @return A list of cards (see `request_card_ui()`); a card is NEW when its rows are added.
-extraction_service_what_cards <- function(summary) {
+#' @param rows Each row the cards count, from `extraction_service_push_build()`, to list under them; `NULL` for none.
+#' @return A list of cards (see `request_card_ui()`); a card is NEW when its rows are added. Each has `rows` (a
+#'   data frame of `text`, `detail`, `status`, `is_new` and `uses`, or `NULL`) and `columns`, what its rows'
+#'   `text`, `detail` and `uses` are called.
+extraction_service_what_cards <- function(summary, rows = NULL) {
   count <- function(n) format(n, big.mark = ",")
-  card <- function(kind, n_new, n_found, title, found_note, subtitle = "") {
+  card <- function(kind, n_new, n_found, title, found_note, subtitle = "", listed = NULL, columns = character()) {
     list(
       kind = kind, title = title, subtitle = subtitle,
       facts = c(if (n_new > 0) paste(count(n_new), "new"), if (n_found > 0) paste(count(n_found), found_note)),
-      is_new = n_new > 0
+      is_new = n_new > 0, rows = listed, columns = columns
     )
   }
   blocks <- card(
     "Blocks", summary$blocks, summary$blocks_found,
-    plural(summary$blocks + summary$blocks_found + summary$blocks_shared, "block", big_mark = ","), "already in the questionnaire"
+    plural(summary$blocks + summary$blocks_found + summary$blocks_shared, "block", big_mark = ","), "already in the questionnaire",
+    listed = rows$blocks, columns = c(text = "Words", detail = "Kind")
   )
   if (summary$blocks_shared > 0) {
     blocks$facts <- c(blocks$facts, paste(count(summary$blocks_shared), "shared with other questionnaires"))
     blocks$is_new <- TRUE # each is placed in the questionnaire
   }
+  answers <- card(
+    "Answer choices", summary$answer_options, summary$answer_options_found,
+    plural(summary$answer_options + summary$answer_options_found, "different answer choice", big_mark = ","),
+    "already in the database",
+    listed = rows$answer_options, columns = c(text = "Words", uses = "Response options")
+  )
+  sets <- card(
+    "Sets of choices", summary$option_sets, summary$option_sets_found,
+    plural(summary$option_sets + summary$option_sets_found, "set of choices", plural_form = "sets of choices", big_mark = ","),
+    "already in the database",
+    listed = rows$option_sets, columns = c(text = "Name", detail = "Choices", uses = "Variables")
+  )
   list(
     blocks,
     card(
-      "Questions in the wave", summary$questions, 0L, plural(summary$questions, "question", big_mark = ","), "",
-      subtitle = "Each question the wave asks, with its number"
-    ),
-    card(
       "Variables", summary$variables, summary$variables_found,
-      plural(summary$variables + summary$variables_found, "variable", big_mark = ","), "already recorded"
+      plural(summary$variables + summary$variables_found, "variable", big_mark = ","), "already recorded",
+      listed = rows$variables, columns = c(text = "MATR ID", detail = "Label")
     ),
-    card(
-      "Answer choices", summary$answer_options, summary$answer_options_found,
-      plural(summary$answer_options + summary$answer_options_found, "different answer choice", big_mark = ","),
-      "already in the database, used again",
-      subtitle = "Each worded choice is kept once for the whole registry"
-    ),
-    card(
-      "Sets of choices", summary$option_sets, summary$option_sets_found,
-      plural(summary$option_sets + summary$option_sets_found, "set of choices", plural_form = "sets of choices", big_mark = ","),
-      "already in the database, used again"
-    ),
-    card(
-      "Response options", summary$choices, 0L, plural(summary$choices, "response option", big_mark = ","), "",
-      subtitle = "Links between a variable and an answer choice, with its code: one per variable for each of its choices"
-    )
+    answers,
+    sets
   )
 }
 

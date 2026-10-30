@@ -207,20 +207,6 @@ button.review-pill:hover { background: rgba($vcu-gold, 0.2); }
   &:focus { box-shadow: 0 0 0 0.2rem rgba($field-problem-red, 0.35); }
 }
 
-// ------ The MATR IDs dialog: two ways to give the uploaded IDs out --------------------------
-.matr-modes {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(14rem, 1fr));
-  gap: 1rem;
-  margin-top: 1rem;
-}
-.matr-mode {
-  padding: 0.9rem 1rem;
-  border: 1px solid $line;
-  border-radius: $border-radius;
-  h3 { margin: 0 0 0.35rem; font-size: 1rem; }
-}
-
 .block-detail .detail-words.outline-text {
   flex: 1 1 14rem;
   min-height: 2.25rem;

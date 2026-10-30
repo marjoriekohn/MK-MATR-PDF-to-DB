@@ -23,10 +23,12 @@ reworded <- function(draft, words = "Do you worry a lot?", id = "c3") {
 # The draft read_draft() makes as the page shows it: its questions numbered by their place.
 numbered_gold <- function() draft_service_renumber_questions(short_gold_draft())
 
-# Fills in the MATR IDs of the draft on the page, as a CSV would, so nothing is left to fix. Called
+# Fills in the MATR IDs of the draft on the page, as staff would type them, so nothing is left to fix. Called
 # inside testServer(), where `draft` and `change_draft` are the page's.
 fill_all_matr_ids <- function(draft, change_draft) {
-  change_draft(suppressMessages(draft_service_auto_apply_matr_ids(draft(), sprintf("m%03d", seq_len(nrow(draft()$variables))))), keep_checked = TRUE)
+  filled <- draft()
+  filled$variables$matr_id <- sprintf("m%03d", seq_len(nrow(filled$variables)))
+  change_draft(filled, keep_checked = TRUE)
 }
 
 test_that("opening a draft loads its questionnaire, numbers its questions by their place, and heads the page", {
@@ -262,62 +264,7 @@ test_that("a draft that can't be opened is a sentence, and what was on screen st
   })
 })
 
-test_that("the MATR IDs dialog explains itself, Auto Apply is off until there is a CSV, and it fills from the top", {
-  me <- local_staff()
-  tree <- shared_tree()
-  seen <- local_browser()
-  first <- read_draft(me, tree)
-  n_boxes <- nrow(short_gold_draft()$variables)
-  ids <- sprintf("m%03d", seq_len(n_boxes))
-  shiny::testServer(edit_extraction_server, args = edit_page(me), {
-    errors <- collect_errors(session)
-    open(first)
-    session$setInputs(action = list(action = "matr_ids"))
-    expect_match(seen$modals[[1]], "MATR IDs Upload a CSV that lists the MATR IDs in the order the variables appear")
-    expect_false(grepl("earlier waves", seen$modals[[1]])) # the questionnaire prints nothing yet
-    expect_match(text_of(output$matr_csv_status), "Drop the CSV of MATR IDs here")
-    expect_equal(text_of(output$matr_fill_note), "")
-
-    session$setInputs(matr_csv = fake_csv_upload(c("matr_id", ids), "ahp_ids.csv"))
-    expect_equal(matr_ids(), ids)
-    expect_equal(extraction_model_get(test_connection, first$id)$matr_csv$name, "ahp_ids.csv")
-    expect_match(text_of(output$matr_csv_status), sprintf("ahp_ids.csv %d MATR IDs · m001 to m%03d", n_boxes, n_boxes))
-    expect_match(text_of(output$matr_fill_note), sprintf("One MATR ID for each of the %d variables.", n_boxes))
-    expect_false(last_update(seen, "auto_apply")$disabled)
-
-    session$setInputs(auto_apply = 1)
-    expect_equal(draft()$variables$matr_id[1:2], c("m001", "m002"))
-    expect_true(has_unsaved_changes())
-    expect_equal(seen$closed, 1)
-    expect_length(errors(), 0)
-    session$setInputs(undo = 1)
-    expect_true(all(is.na(draft()$variables$matr_id) | draft()$variables$matr_id == short_gold_draft()$variables$matr_id))
-  })
-})
-
-test_that("a CSV with the wrong number of IDs says so, and a CSV that can't be kept is a sentence", {
-  me <- local_staff()
-  tree <- shared_tree()
-  seen <- local_browser()
-  first <- read_draft(me, tree)
-  shiny::testServer(edit_extraction_server, args = edit_page(me), {
-    errors <- collect_errors(session)
-    open(first)
-    session$setInputs(matr_csv = fake_csv_upload(c("matr_id", "m001", "m002", "m003")))
-    expect_length(matr_ids(), 3)
-    expect_match(text_of(output$matr_fill_note), "Nothing is lost")
-    change_draft(draft_service_update(draft(), "variables", "v1", "matr_id", "typed1"))
-    session$flushReact()
-    expect_match(text_of(output$matr_fill_note), "1 of the variables have a MATR ID")
-
-    test_delete_draft(first$id)
-    session$setInputs(matr_csv = fake_csv_upload(c("matr_id", "m001")))
-    expect_match(notice_texts(seen), "Couldn't add the CSV: .*no longer in the database", all = FALSE)
-    expect_length(errors(), 0)
-  })
-})
-
-test_that("a new wave of a recorded questionnaire gets the MATR IDs its questions have, and can ask again", {
+test_that("a new wave of a recorded questionnaire gets the MATR IDs its questions have", {
   me <- local_staff()
   admin <- local_staff("ADMIN")
   tree <- local_tree()
@@ -336,17 +283,6 @@ test_that("a new wave of a recorded questionnaire gets the MATR IDs its question
     expect_length(undo_stack(), 1)
     # the recorded blocks' words are offered while typing
     expect_true(paste(test_marker, "Part A") %in% suggestions()$Section)
-
-    # the dialog starts on the questionnaire it goes into; nothing is left to fill, and it says so
-    session$setInputs(action = list(action = "matr_ids"))
-    expect_match(utils::tail(seen$modals, 1)[[1]], "From a questionnaire")
-    session$setInputs(matr_questionnaire = pushed$questionnaire_id, import_matr_ids = 1)
-    expect_match(utils::tail(notice_texts(seen), 1), "Nothing to fill in")
-
-    # a blank one filled again finds it
-    change_draft(draft_service_update(draft(), "variables", "v1", "matr_id", ""))
-    session$setInputs(import_matr_ids = 2)
-    expect_equal(draft()$variables$matr_id[1], pushed$draft$variables$matr_id[1])
     expect_length(errors(), 0)
   })
 })
@@ -388,12 +324,11 @@ test_that("editing a checked block takes the check off, and Undo brings it back"
   })
 })
 
-test_that("a change to a checked block's variable or choices takes its check off; marking and filling a CSV don't", {
+test_that("a change to a checked block's variable or choices takes its check off; marking and filling MATR IDs don't", {
   me <- local_staff()
   tree <- shared_tree()
   seen <- local_browser()
   first <- read_draft(me, tree)
-  ids <- sprintf("m%03d", seq_len(nrow(short_gold_draft()$variables)))
   shiny::testServer(edit_extraction_server, args = edit_page(me), {
     open(first)
     change_draft(with_checked(draft(), c("c3", "c4", "c5")), keep_checked = TRUE)
@@ -408,8 +343,7 @@ test_that("a change to a checked block's variable or choices takes its check off
     expect_length(checked_blocks(draft()), 0)
 
     change_draft(with_checked(draft(), c("c3", "c4")), keep_checked = TRUE)
-    session$setInputs(matr_csv = fake_csv_upload(c("matr_id", ids)))
-    session$setInputs(auto_apply = 1)
+    fill_all_matr_ids(draft, change_draft) # as the earlier waves' are filled in
     expect_equal(draft()$variables$matr_id[1], "m001")
     expect_equal(checked_blocks(draft()), c("c3", "c4"))
     session$setInputs(`outline-edit` = list(table = "variables", id = "v1", field = "matr_id", value = "typed"))
@@ -454,8 +388,7 @@ test_that("the header is the title and its buttons on one row, with the progress
   expect_false(grepl("btn-sm|form-control-sm|form-select-sm", toolbar))
   # each button is its icon and its words; on a phone only the icon shows (components/_buttons.scss)
   expect_match(html, '<span class="btn-text">Undo</span>')
-  expect_match(html, '<span class="btn-text">MATR IDs</span>')
-  expect_match(html, "fa-fingerprint")
+  expect_false(grepl('<span class="btn-text">MATR IDs</span>', html, fixed = TRUE)) # reading gives them out
   expect_match(as.character(pdf_open_button("http://x/pdf")), '<span class="btn-text">Open PDF</span>')
 })
 

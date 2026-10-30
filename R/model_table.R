@@ -109,7 +109,7 @@ database_tables <- list(
   ),
   option_set = list(
     key = "option_set_id", order_by = "name",
-    columns = c(option_set_id = "id", name = "text", description = "text")
+    columns = c(option_set_id = "id", name = "text")
   ),
   answer_option_set = list(
     key = c("option_set_id", "answer_option_id"), order_by = c("option_set_id", "answer_option_id"),

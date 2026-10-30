@@ -94,7 +94,7 @@ delete_items_for <- function(key, row_key, scope = NULL) {
   edit_service_build(entity, "delete", snap, edit_service_row(entity, snap, row_key), scope)
 }
 
-test_that("a delete writes every field of every row that goes, children before parents", {
+test_that("a delete lists every field of every row that goes, children before parents, to check them when it is applied", {
   built <- delete_items_for("question", "3")
   tables <- unique(built$items$entity_name)
   expect_equal(
@@ -118,6 +118,16 @@ test_that("a delete writes every field of every row that goes, children before p
   )
   expect_equal(variable$old_value, c("1", "3", "AH01DB", "1", "Date of birth", "1"))
   expect_equal(unique(variable$record_identifier), '{"variable_key":1}')
+})
+
+test_that("a delete names the row picked, the one line the history keeps of it", {
+  expect_equal(
+    delete_items_for("investigator", "4")$plan$deleted,
+    list(table = "principal_investigator", row = '{"principal_investigator_id":4}', name = "Jo Park")
+  )
+  # a wave by its questionnaire's name and its own, as the Edit History says it
+  expect_equal(delete_items_for("wave", "1")$plan$deleted$name, "Adult Health and Personality Wave 1")
+  expect_equal(delete_items_for("questionnaire_component", "1|1", scope = "1")$plan$deleted$table, "questionnaire_component")
 })
 
 test_that("a row with nothing but a key is still deleted", {

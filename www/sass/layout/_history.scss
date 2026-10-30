@@ -51,6 +51,39 @@
   .new-badge-text { position: relative; color: $vcu-gold; font-size: 0.7rem; font-weight: 900; letter-spacing: 0.04em; }
 }
 
+// Under the cards, each row they count, a list for each card to open
+.request-rows {
+  margin-top: 1rem;
+  > .form-text { margin: 0 0 0.4rem; }
+}
+.request-rows-list {
+  border: 1px solid $line;
+  border-radius: $border-radius;
+  & + & { margin-top: 0.4rem; }
+  > summary {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 0.25rem 0.75rem;
+    padding: 0.5rem 0.75rem;
+    cursor: pointer;
+    &:hover { background: mix($vcu-gold, $vcu-white, 8%); }
+  }
+  &[open] > summary { border-bottom: 1px solid $line; }
+}
+.request-rows-kind { font-weight: 700; }
+.request-rows-count { color: $vcu-gray; font-size: 0.9rem; }
+.request-rows-table {
+  max-height: 22rem;
+  overflow-y: auto;
+  font-size: 0.9rem;
+  .table { margin: 0; }
+  th { position: sticky; top: 0; z-index: 1; } // black, as every table's (components/_grid-table.scss)
+  th, td { padding: 0.35rem 0.75rem; vertical-align: top; }
+  .is-status { white-space: nowrap; }
+  .is-count { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+}
+
 // ------ An extraction's questionnaire, laid out to read ---------------------------------------
 .change-request-questionnaire-head {
   display: flex;

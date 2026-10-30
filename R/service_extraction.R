@@ -175,39 +175,6 @@ extraction_service_create_manual <- function(connection, staff, info = extractio
   extraction_model_create(connection, record)
 }
 
-#' Keep an uploaded CSV of MATR IDs with the draft.
-#'
-#' @param connection The MATR database, `list(url, key)`; see `model_database.R`.
-#' @param id The draft's id.
-#' @param upload One row of a `fileInput`'s value.
-#' @param me Who is saving: `list(staff_id, name, role)`.
-#' @param expected_revision The revision the person was looking at, or `NULL` not to check.
-#' @return The record as saved.
-extraction_service_add_matr_csv <- function(connection, id, upload, me, expected_revision = NULL) {
-  matr_csv <- list(name = upload$name, text = extraction_model_read_csv(upload$datapath))
-  change_record(connection, id, me, function(record) {
-    record["matr_csv"] <- list(matr_csv)
-    record
-  }, expected_revision = expected_revision)
-}
-
-#' Give a draft a different PDF.
-#'
-#' Reading starts again.
-#'
-#' @param connection The MATR database, `list(url, key)`; see `model_database.R`.
-#' @param id The draft's id.
-#' @param upload One row of a `fileInput`'s value.
-#' @param me Who is saving: `list(staff_id, name, role)`.
-#' @return The record as saved.
-extraction_service_replace_pdf <- function(connection, id, upload, me) {
-  pdf <- store_pdf(connection, upload)
-  change_record(connection, id, me, function(record) {
-    record$pdf <- pdf
-    if (identical(record$method, extraction_manual)) record else restart_reading(record)
-  })
-}
-
 #' Read a draft again.
 #'
 #' @param connection The MATR database, `list(url, key)`; see `model_database.R`.
@@ -220,7 +187,7 @@ extraction_service_retry <- function(connection, id, me) {
 
 #' The reading job saying how far it has got.
 #'
-#' If reading has started again since the job began (a new PDF, or "Try reading again"),
+#' If reading has started again since the job began ("Try reading again"),
 #' its news is stale and nothing is saved.
 #'
 #' @param connection The MATR database, `list(url, key)`; see `model_database.R`.
@@ -278,41 +245,6 @@ extraction_service_forget_pdf <- function(connection, record) {
 
 # What the file can be, by its name's ending: a PDF, or text.
 supplement_text_types <- c("csv", "tsv", "txt")
-
-#' Give a draft its file of MATR IDs and codes, or a different one.
-#'
-#' Only before reading has finished: the reading job reads it once the questionnaire is read.
-#'
-#' @param connection The MATR database, `list(url, key)`; see `model_database.R`.
-#' @param id The draft's id.
-#' @param upload One row of a `fileInput`'s value.
-#' @param me Who is saving: `list(staff_id, name, role)`.
-#' @return The record as saved. An error with a sentence if reading has finished, or the file isn't a
-#'   PDF, CSV or text file.
-extraction_service_add_supplement <- function(connection, id, upload, me) {
-  supplement <- store_supplement(connection, upload)
-  change_record(connection, id, me, function(record) {
-    if (extraction_service_is_read(record)) {
-      stop("Reading has finished, so this file can't be read now. Give the MATR IDs on the Edit Extraction page.", call. = FALSE)
-    }
-    record["supplement"] <- list(supplement)
-    record
-  }, new_revision = FALSE)
-}
-
-#' Take a draft's file of MATR IDs and codes away, before reading has finished.
-#'
-#' @inheritParams extraction_service_add_supplement
-#' @return The record as saved.
-extraction_service_remove_supplement <- function(connection, id, me) {
-  before <- extraction_model_get(connection, id)
-  saved <- change_record(connection, id, me, function(record) {
-    record["supplement"] <- list(NULL)
-    record
-  }, new_revision = FALSE)
-  extraction_service_forget_pdf(connection, list(supplement = before$supplement))
-  saved
-}
 
 #' A draft's file of MATR IDs and codes, ready to send to Gemini.
 #'
@@ -428,7 +360,7 @@ extraction_service_reading_steps <- function(record) {
   # read, but the Variable Names and Coding couldn't be applied: the draft is ready without them
   if (status == "ready" && coding && !is.null(record$error)) {
     steps$state[5] <- "attention"
-    steps$detail[5] <- paste0("Couldn't apply them (", record$error, "). Give the MATR IDs on the Edit Extraction page.")
+    steps$detail[5] <- paste0("Couldn't apply them (", record$error, "). Type the MATR IDs on the Edit Extraction page.")
   }
   steps
 }
@@ -609,33 +541,6 @@ extraction_service_recorded_wave_problem <- function(info, catalog, question_cou
   NULL
 }
 
-#' The MATR IDs in a CSV, in order.
-#'
-#' A first row naming a column `matr_id`, `variable_id` or the like is its heading, and
-#' the IDs are in that column; without one, every row is an ID and they are in the first
-#' column. Spaces are trimmed and blank rows dropped.
-#'
-#' @param csv_text The CSV's text.
-#' @return A character vector; empty if there are none.
-extraction_service_matr_ids <- function(csv_text) {
-  csv_text <- sub("^\ufeff", "", csv_text) # the byte order mark Excel starts a CSV with
-  rows <- tryCatch(
-    utils::read.csv(
-      text = csv_text, header = FALSE, colClasses = "character",
-      na.strings = character(), blank.lines.skip = TRUE
-    ),
-    error = function(problem) data.frame()
-  )
-  if (nrow(rows) == 0) {
-    return(character())
-  }
-  is_heading <- grepl(matr_id_headings, trimws(unlist(rows[1, ])), ignore.case = TRUE)
-  column <- if (any(is_heading)) which(is_heading)[1] else 1
-  ids <- trimws(rows[[column]])
-  if (any(is_heading)) ids <- ids[-1]
-  ids[nzchar(ids)]
-}
-
 # Headings like matr_id, MATR ID, variable_id, variable, Variable name or id.
 matr_id_headings <- "^((matr|variable)[ _.]?(ids?|names?)?|ids?)$"
 
@@ -662,22 +567,6 @@ extraction_service_recorded <- function(connection, record, component_types = NU
   existing <- push_model_existing(connection, info$questionnaire_id)
   if (is.null(component_types)) component_types <- lookup_model_get_component_types(connection)
   extraction_service_printed(existing, component_types)
-}
-
-#' The MATR IDs of any recorded questionnaire's questions, to give a draft's questions worded the same.
-#'
-#' The MATR IDs dialog's "From a questionnaire": a questionnaire asked the same questions before (an
-#' earlier version, or another respondent's), so its MATR IDs are used again where the words match.
-#'
-#' @param connection The MATR database, `list(url, key)`; see `model_database.R`.
-#' @param questionnaire_id The questionnaire's id.
-#' @return A data frame with `text`, `matr_id` and `display_order`: one row per variable, with its
-#'   question's words and its place in the question; no rows if it has none.
-extraction_service_questionnaire_matr_ids <- function(connection, questionnaire_id) {
-  if (!grepl("^[0-9]+$", questionnaire_id %||% "")) {
-    stop("Pick a questionnaire first.", call. = FALSE)
-  }
-  extraction_service_printed(push_model_existing(connection, questionnaire_id))$matr_ids
 }
 
 #' What a recorded questionnaire prints: its blocks' words, and its variables' MATR IDs by question.

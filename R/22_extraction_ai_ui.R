@@ -1,6 +1,8 @@
 #' The AI-Powered mode of the Extraction page: the PDF and how reading it is going.
 #'
-#' Reading happens in the background, so staff can leave and find the draft under Extraction Drafts; once it
+#' Staff choose the questionnaire PDF (and, if they have one, the file of Variable Names and Coding), and
+#' reading starts when they click Begin Extraction. From then on the files are the draft's and can't be
+#' changed. Reading happens in the background, so staff can leave and find the draft under Extraction Drafts; once it
 #' has finished, the whole extraction opens on the Edit Extraction page to review and edit before its
 #' change request is submitted.
 #'
@@ -18,7 +20,7 @@ extraction_ai_ui <- function(id) {
       uiOutput(ns("reading")),
       div(class = "extraction-footer",
           uiOutput(ns("footer_note"), inline = TRUE),
-          actionButton(ns("open_extraction"), "Open in Edit Extraction", class = "btn-primary", disabled = TRUE)
+          uiOutput(ns("footer_button"), inline = TRUE) # Begin Extraction, then Open in Edit Extraction
       )
     ))
   )
@@ -42,7 +44,7 @@ drop_zone <- function(file_input, ..., icon = "pdf") {
 }
 
 # ------ Step 1: the PDF -------------------------------------------------------------
-#' Somewhere to drop the PDF, before one is uploaded.
+#' Somewhere to drop the PDF, before one is chosen.
 #'
 #' @param ns The module's namespace function.
 #' @return A UI element.
@@ -50,23 +52,23 @@ pdf_drop_zone <- function(ns) {
   drop_zone(
     fileInput(ns("pdf"), NULL, accept = c(".pdf", "application/pdf"), buttonLabel = "Choose PDF"),
     strong("Drop the questionnaire PDF here"),
-    div("Reading starts as soon as it's uploaded.")
+    div("Reading starts when you click Begin Extraction.")
   )
 }
 
-#' The uploaded file, and a way to swap it while it is being read.
+#' The PDF: the one chosen, which can be swapped until the extraction begins, or the draft's.
 #'
-#' @param record An extraction record; only `pdf` is used.
+#' @param pdf `list(name, bytes)`, and `pages` once the draft has it.
 #' @param ns The module's namespace function.
+#' @param begun Whether the extraction has begun: the draft has the file, so it can't be swapped.
 #' @return A UI element.
-pdf_file <- function(record, ns) {
-  pdf <- record$pdf
+pdf_file <- function(pdf, ns, begun = TRUE) {
   facts <- c(if (!is.null(pdf$pages)) plural(pdf$pages, "page"), file_size(pdf$bytes))
   div(
     class = "pdf-file",
     span(class = "pdf-file-icon", "PDF"),
     div(class = "pdf-file-name", strong(pdf$name), div(class = "form-text", paste(facts, collapse = " · "))),
-    if (!extraction_service_is_read(record)) {
+    if (!begun) {
       fileInput(ns("replace_pdf"), NULL, accept = c(".pdf", "application/pdf"), buttonLabel = "Replace") |>
         tagAppendAttributes(class = "file-button")
     }
@@ -76,18 +78,18 @@ pdf_file <- function(record, ns) {
 # ------ The file of Variable Names and Coding (optional) ---------------------------------
 #' Somewhere to give the file of Variable Names and Coding (MATR IDs and codes), or the file given.
 #'
-#' Optional. Gemini applies it once the questionnaire is read and checked, as a step of its own, so it can be
-#' given, changed or taken away until reading has finished; after that the page only says it was applied.
+#' Optional. Gemini applies it once the questionnaire is read and checked, as a step of its own. It can be
+#' given, changed or taken away until the extraction begins; after that the page only says which file it is.
 #'
 #' @param name The file's name, or `NULL` if none is given.
-#' @param finished Whether reading has finished.
+#' @param begun Whether the extraction has begun.
 #' @param ns The module's namespace function.
-#' @return A UI element, or `NULL` once reading has finished without one.
-supplement_card <- function(name, finished, ns) {
+#' @return A UI element, or `NULL` once the extraction has begun without one.
+supplement_card <- function(name, begun, ns) {
   accept <- c(".pdf", ".csv", ".tsv", ".txt")
-  if (finished) {
+  if (begun) {
     return(if (!is.null(name)) {
-      p(class = "form-text supplement-note", app_icon("matr_id"), " Variable Names and Coding from ", strong(name), ".")
+      p(class = "form-text supplement-note", app_icon("matr_id"), " Variable Names and Coding from ", strong(name, .noWS = "after"), ".")
     })
   }
   if (is.null(name)) {
@@ -128,13 +130,16 @@ reading_card <- function(record, ns) {
     tags$ol(class = "reading-steps", map_rows(steps, reading_step)),
     if (failed) actionButton(ns("retry"), "Try reading again", class = "btn-outline-dark"),
     if (!finished) {
-      p(
-        class = "reading-note",
-        "You can leave this page. The draft will be waiting under ",
-        actionLink(ns("to_continue"), "Extraction Drafts"), " until its change request is submitted."
+      tagList(
+        p(
+          class = "reading-note",
+          "You can leave this page. The draft will be waiting under ",
+          actionLink(ns("to_continue"), "Extraction Drafts"), " until its change request is submitted."
+        ),
+        # once it is read, the draft is discarded from Extraction Drafts instead
+        div(actionButton(ns("cancel"), "Cancel extraction", class = "btn-outline-dark"))
       )
-    },
-    div(actionButton(ns("cancel"), "Cancel extraction", class = "btn-outline-dark"))
+    }
   ))
 }
 

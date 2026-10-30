@@ -12,6 +12,7 @@
 #   prepared_by (name), prepared_by_id, started    draft (created_at)
 #   saved, saved_by (name), saved_by_id, revision  draft
 #   submitted                                      draft_review_event (the latest Submitted)
+#   submitted_exact (seconds, with their fractions)  the same, to order requests sent in the same second
 #   requested_reviewer = list(id, name)            draft (requested_reviewer)
 #   sent_back = list(by, by_id, date, note)        draft_review_event (the latest Sent Back), only while Sent Back
 #   edit_kind ("Add", "Update" or "Delete")        edit_draft
@@ -124,6 +125,7 @@ edit_model_record <- function(parent, detail) {
     saved_by = parent$saver$name,
     saved_by_id = parent$saved_by,
     submitted = draft_row_submitted(parent),
+    submitted_exact = draft_row_submitted_exact(parent),
     revision = parent$revision,
     summary = parent$summary,
     requested_reviewer = draft_row_person(parent$requested_reviewer, parent$reviewer),

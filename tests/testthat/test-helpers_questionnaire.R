@@ -103,7 +103,7 @@ test_that("the change request dialog has the Basic Info form and what it adds, a
     saved_by_id = 2L, saved = format_time(Sys.time()), status = "Awaiting Review", revision = 1L
   )
   preview <- list(
-    what = list(list(kind = "Response options", title = "40 response options", subtitle = "", facts = "40 new", is_new = TRUE)),
+    what = list(list(kind = "Answer choices", title = "40 answer choices", subtitle = "", facts = "40 new", is_new = TRUE)),
     summary = "Adds the wave.", unchecked = 2
   )
   html <- htmltools::renderTags(change_request_dialog(record, me, shiny::NS("cr"), list(preview = preview)))$html

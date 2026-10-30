@@ -81,6 +81,21 @@ push_model_existing <- function(connection, questionnaire_id) {
   )
 }
 
+#' Which questionnaires print each component, and what each questionnaire is called: to say where a block another
+#' questionnaire prints already is used.
+#'
+#' @param connection The MATR database, `list(url, key)`; see `model_database.R`.
+#' @return A list of data frames: `placed` (`component_id`, `questionnaire_id`) and `questionnaires`
+#'   (`questionnaire_id`, `name`, `abbreviation`).
+push_model_placed <- function(connection) {
+  list(
+    placed = database_model_get(
+      connection, "questionnaire_component", c("component_id", "questionnaire_id"), order_by = c("component_id", "questionnaire_id")
+    ),
+    questionnaires = database_model_get(connection, "questionnaire", c("questionnaire_id", "name", "abbreviation"), order_by = "questionnaire_id")
+  )
+}
+
 # The rows of a table whose `column` is one of `ids`, asked for a few ids at a time.
 push_model_by_ids <- function(connection, table, columns, column, ids) {
   ids <- unique(ids[!is.na(ids)])

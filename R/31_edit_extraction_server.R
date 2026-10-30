@@ -74,11 +74,8 @@ edit_extraction_server <- function(
     claiming <- reactiveVal(NULL) # a draft someone else has, while staff are asked whether to take it over
     last_active <- reactiveVal(Sys.time()) # when staff last did something on the site
     recorded <- reactiveVal(NULL) # what the recorded questionnaire prints already; see extraction_service_recorded()
-    show_variables <- reactiveVal(0L) # ticks when the list should show each question's MATR IDs
     loads <- reactiveVal(0L) # ticks each time a draft is opened on this page
     problems <- reactive(draft_service_check(req(draft()), lookups))
-    matr_ids <- reactive(extraction_service_matr_ids(record()$matr_csv$text %||% "")) # from the CSV
-    available_matr_ids <- reactive(draft_service_available_matr_ids(req(draft()), matr_ids()))
     has_unsaved_changes <- reactive(!identical(draft(), saved()))
     saved_at <- reactiveVal(NULL) # when this page last saved the draft
     autosave_off <- reactiveVal(FALSE) # a save was refused: only Save tries again
@@ -125,8 +122,6 @@ edit_extraction_server <- function(
       problems = problems,
       layout_version = layout_version,
       suggestions = suggestions,
-      matr_ids = available_matr_ids,
-      show_variables = show_variables,
       original = original,
       loaded = loads
     )
@@ -486,98 +481,9 @@ edit_extraction_server <- function(
       if (isolate(has_draft())) release_draft(isolate(record_id()))
     })
 
-    # ------ MATR IDs ----------------------------------------------------------
-    # The CSV lists one MATR ID per variable, in the order they appear. It belongs to the draft's
-    # record, so adding one saves it at once. Giving the IDs out changes the questionnaire, so Undo and
-    # the page's Save apply: all at once in order (Auto Apply), or one by one from each variable's
-    # MATR ID drop-down, which offers the uploaded IDs no other variable has (Manual Assignment). Or they
-    # are taken from a recorded questionnaire that asks the same questions (From a questionnaire), which
-    # starts on the questionnaire the extraction goes into, once that is known.
-    show_matr_ids <- function() {
-      showModal(matr_ids_dialog(
-        ns,
-        can_apply = length(matr_ids()) > 0,
-        questionnaires = questionnaire_service_all_choices(catalog$get()),
-        picked = extraction_service_info(record())$questionnaire_id
-      ))
-    }
-
-    observeEvent(input$matr_csv, {
-      req(can_change())
-      upload <- input$matr_csv
-      tryCatch(
-        {
-          saved_record <- extraction_service_add_matr_csv(connection, record_id(), upload, me, expected_revision = loaded_revision())
-          loaded_revision(saved_record$revision)
-          extractions$changed()
-        },
-        error = function(problem) {
-          show_problem(problem, "Couldn't add the CSV")
-        }
-      )
-    })
-
-    observeEvent(matr_ids(), {
-      updateActionButton(session, "auto_apply", disabled = length(matr_ids()) == 0)
-      updateActionButton(session, "manual_assign", disabled = length(matr_ids()) == 0)
-    })
-
-    observeEvent(input$auto_apply, {
-      # Giving out the IDs is its own step, with its own count, so it doesn't take checks off.
-      applied <- change_draft(
-        draft_service_auto_apply_matr_ids(draft(), matr_ids(), replace = isTRUE(input$matr_replace)),
-        keep_checked = TRUE
-      )
-      if (applied) removeModal()
-    })
-
-    observeEvent(input$manual_assign, {
-      removeModal()
-      show_variables(show_variables() + 1L)
-      free <- plural(length(available_matr_ids()), "uploaded ID is", plural_form = "uploaded IDs are")
-      showNotification(sprintf(
-        "Type or pick each question's MATR ID under it in the list (a question with several variables has them in its details). %s still free.", free
-      ), type = "message")
-    })
-
-    observeEvent(input$matr_questionnaire, {
-      updateActionButton(session, "import_matr_ids", disabled = !has_text(input$matr_questionnaire))
-    })
-
-    # A questionnaire that asks the same questions: its MATR IDs go to the questions worded the same. Like
-    # any change it can be undone, and it doesn't take a check off.
-    observeEvent(input$import_matr_ids, {
-      questionnaire_id <- input$matr_questionnaire %||% ""
-      source <- questionnaire_service_get(catalog$get(), questionnaire_id)
-      known <- tryCatch(extraction_service_questionnaire_matr_ids(connection, questionnaire_id), error = function(problem) {
-        show_problem(problem, "Couldn't read that questionnaire's MATR IDs")
-        NULL
-      })
-      if (is.null(known)) {
-        return()
-      }
-      name <- if (is.null(source)) "that questionnaire" else source$abbreviation
-      if (nrow(known) == 0) {
-        showNotification(sprintf("%s has no variables with MATR IDs yet, so there is nothing to take.", name), type = "warning")
-        return()
-      }
-      before <- draft()
-      change_draft(draft_service_fill_recorded_matr_ids(draft(), known, from = name), keep_checked = TRUE)
-      if (identical(before, draft())) {
-        showNotification(sprintf(
-          "Nothing to fill in: no question without MATR IDs is worded like one of %s's.", name
-        ), type = "message")
-      } else {
-        removeModal()
-      }
-    })
-
-    # The header's buttons: "to fix" jumps to the next block with a problem, MATR IDs opens its dialog.
+    # "to fix" jumps to the next block with a problem.
     observeEvent(input$action, {
-      switch(input$action$action,
-             next_problem = selected(draft_service_next_problem(draft(), problems(), selected())),
-             matr_ids = show_matr_ids()
-      )
+      if (identical(input$action$action, "next_problem")) selected(draft_service_next_problem(draft(), problems(), selected()))
     })
 
     observe({
@@ -710,46 +616,6 @@ edit_extraction_server <- function(
 
     # How far the checking has got.
     output$progress <- renderUI(structure_progress_ui(draft_service_counts(req(draft()))))
-
-    output$matr_csv_status <- renderUI({
-      csv <- record()$matr_csv
-      ids <- matr_ids()
-      if (is.null(csv)) {
-        return(tagList(
-          strong("Drop the CSV of MATR IDs here"),
-          div("One per row, in the order they appear on the questionnaire.")
-        ))
-      }
-      tagList(
-        strong(csv$name),
-        div(
-          plural(length(ids), "MATR ID"),
-          if (length(ids) > 0) tagList(" · ", code(ids[1]), " to ", code(ids[length(ids)]))
-        )
-      )
-    })
-
-    # Whether the CSV and the draft agree on how many variables there are, and how many IDs are still free.
-    output$matr_fill_note <- renderUI({
-      n_ids <- length(draft_service_uploaded_matr_ids(matr_ids()))
-      if (n_ids == 0) {
-        return(NULL)
-      }
-      boxes <- req(draft())$variables
-      mismatch <- draft_service_matr_id_mismatch(n_ids, nrow(boxes))
-      n_filled <- sum(!is.na(boxes$matr_id))
-      tagList(
-        if (is.null(mismatch)) {
-          p(app_icon("done"), sprintf(" One MATR ID for each of the %d variables.", nrow(boxes)))
-        } else {
-          p(class = "callout", mismatch, " Nothing is lost: what is left over is still offered in the drop-downs.")
-        },
-        p(sprintf(
-          "%s of the variables have a MATR ID; %s still free.",
-          format(n_filled, big.mark = ","), plural(length(available_matr_ids()), "uploaded ID is", plural_form = "uploaded IDs are")
-        ))
-      )
-    })
 
     output$save_status <- renderUI({
       if (has_unsaved_changes()) {

@@ -40,6 +40,15 @@ test_that("every word typed has to be in the sentence or a name, ignoring capita
   expect_equal(kept("all", NULL), h$ids)
 })
 
+test_that("a delete says what was deleted, by the name it had", {
+  wave <- list(kind = "Delete", deleted = "Kid Questionnaire Wave 1", summary = "Deleted the wave “KQ Wave 1” and 2,120 connected records")
+  expect_equal(history_service_changes_text(wave), "Deleted Kid Questionnaire Wave 1")
+  # one deleted before its name was kept: its sentence, without the count
+  wave$deleted <- NA_character_
+  expect_equal(history_service_changes_text(wave), "Deleted the wave “KQ Wave 1”")
+  expect_equal(history_service_changes_text(list(kind = "Update"), list(added = 0, changed = 1, removed = 0, tables = 1)), "Changes 1 row, in 1 table.")
+})
+
 test_that("who was behind an edit reads as a sentence", {
   expect_equal(history_service_people(h$records[[h$ids[1]]]), paste0("prepared by ", h$me$name, " and approved by ", h$approver$name))
   expect_equal(history_service_people(h$records[[h$ids[3]]]), paste0("made by ", h$admin$name, ", applied at once (no approval needed)"))
@@ -66,7 +75,13 @@ test_that("what an edit changed is its rows, grouped, with the counts", {
 
   added <- history_service_changes(test_connection, h$ids[4])
   expect_equal(added$counts$added, 1)
+  # a delete keeps only the row picked, and nothing it held (docs/sql/15_deletes_kept_as_one_row.sql)
   removed <- history_service_changes(test_connection, h$ids[2])
-  expect_equal(removed$counts$removed, 1)
-  expect_match(removed$groups[[1]]$fields$old[1], "Parents")
+  expect_length(removed$groups, 1)
+  expect_equal(removed$groups[[1]][c("table", "action")], list(table = "respondent_type", action = "Delete"))
+  expect_match(removed$groups[[1]]$row, "^respondent_type_id [0-9]+$")
+  expect_equal(nrow(removed$groups[[1]]$fields), 0)
+  expect_equal(history_service_changes_text(h$records[[h$ids[2]]], removed$counts), paste("Deleted", h$records[[h$ids[2]]]$deleted))
+  expect_match(h$records[[h$ids[2]]]$deleted, "Parents [0-9]+ renamed$") # its name when it was deleted
+  expect_equal(history_service_changes_text(h$records[[h$ids[3]]], changes$counts), "Changes 1 row, in 1 table.")
 })

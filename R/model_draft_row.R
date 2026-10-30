@@ -29,7 +29,7 @@ draft_columns <- c(
   "created_at", "saved_at", "editing_by", "editing_at",
   "preparer:staff!prepared_by(name)", "saver:staff!saved_by(name)", "editor:staff!editing_by(name)",
   "reviewer:staff!requested_reviewer(name)",
-  "reviews:draft_review_event(event,staff_id,revision,note,occurred_at,person:staff(name))"
+  "reviews:draft_review_event(event,staff_id,note,occurred_at,person:staff(name))"
 )
 
 # The statuses of a draft that is finished with: applied to the MATR metadata database, or set aside. A list
@@ -232,6 +232,13 @@ draft_row_latest <- function(row, event) {
 # When the draft was last sent for review, or NULL.
 draft_row_submitted <- function(row) {
   database_time(draft_row_latest(row, "Submitted")$occurred_at)
+}
+
+# The same, as seconds with the fractions the database keeps (`submitted` is to the second), or NULL: two
+# requests sent in the same second still come in the order they were sent.
+draft_row_submitted_exact <- function(row) {
+  sent <- draft_row_latest(row, "Submitted")$occurred_at
+  if (!is.null(sent)) as.numeric(parse_time(sent))
 }
 
 # Who sent the draft back, when and why: only while it is sent back.

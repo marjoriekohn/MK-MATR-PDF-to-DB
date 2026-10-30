@@ -188,9 +188,9 @@ preview_coding <- function(box, draft) {
 
 # ------ A change request, laid out to read --------------------------------------------------------
 # What an extraction's change request comes to: on Change Requests, its Basic Info (the registry, study,
-# questionnaire and wave it goes into, filled in there) and what it adds (a card for each kind of row,
-# saying how many rows are new, how many are already in the database and are used again, and which only
-# link the two); and, on both pages, the questionnaire itself. The Edit Extraction page shows the
+# questionnaire and wave it goes into, filled in there) and what it adds (a card for each kind of row that is
+# kept once, saying how many rows are new and how many are already in the database and are used again, with a
+# list of each row to open under them); and, on both pages, the questionnaire itself. The Edit Extraction page shows the
 # questionnaire before the request is submitted, and Change Requests the whole of it while it waits for
 # a reviewer.
 
@@ -221,7 +221,8 @@ extraction_request_ui <- function(preview, draft, pdf_url = NULL, basic_info = N
         class = "request-section",
         h3("What it adds"),
         if (nzchar(preview$summary %||% "")) p(class = "form-text", preview$summary),
-        div(class = "request-cards", lapply(preview$what, request_card_ui))
+        div(class = "request-cards", lapply(preview$what, request_card_ui)),
+        request_rows_ui(preview$what)
       )
     },
     if (questionnaire && isTRUE(preview$unchecked > 0)) {
@@ -253,6 +254,59 @@ request_card_ui <- function(card) {
     h3(class = "edit-card-title", card$title),
     if (nzchar(card$subtitle %||% "")) p(class = "edit-card-subtitle", card$subtitle),
     if (length(card$facts) > 0) div(class = "edit-card-facts", lapply(card$facts, function(fact) row_badge(fact)))
+  )
+}
+
+#' Each row the cards count, a list for each card to open, in the order of their words: which are added and which
+#' are already in the database and pointed at again, and how often each is used. A group has no words, so it isn't
+#' listed.
+#'
+#' @param cards The cards, from `extraction_service_what_cards()`; those with no `rows` are left out.
+#' @return A UI element, or `NULL` if no card has rows.
+request_rows_ui <- function(cards) {
+  cards <- Filter(function(card) NROW(card$rows) > 0, cards)
+  if (length(cards) == 0) {
+    return(NULL)
+  }
+  div(
+    class = "request-rows",
+    p(class = "form-text", "Open a list to see each row: the new ones are added, and the others are already in the database."),
+    lapply(cards, function(card) {
+      rows <- card$rows[order(tolower(card$rows$text)), , drop = FALSE] # by its words
+      columns <- card$columns
+      n_new <- sum(rows$is_new)
+      tags$details(
+        class = "request-rows-list",
+        tags$summary(
+          span(class = "request-rows-kind", card$kind),
+          span(class = "request-rows-count", paste0(
+            plural(n_new, "new row", big_mark = ","),
+            if (n_new < nrow(rows)) paste0(", ", format(nrow(rows) - n_new, big.mark = ","), " already there")
+          ))
+        ),
+        div(
+          class = "request-rows-table",
+          tags$table(
+            class = "table table-sm",
+            tags$thead(tags$tr(
+              tags$th(columns[["text"]]),
+              if ("detail" %in% names(columns)) tags$th(columns[["detail"]]),
+              tags$th(class = "is-status", "In the database"),
+              if ("uses" %in% names(columns)) tags$th(class = "is-count", columns[["uses"]])
+            )),
+            tags$tbody(lapply(seq_len(nrow(rows)), function(i) {
+              row <- rows[i, ]
+              tags$tr(
+                tags$td(if (nzchar(row$text)) shorten(row$text, 160) else span(class = "text-muted", "(no words)")),
+                if ("detail" %in% names(columns)) tags$td(shorten(row$detail, 120)),
+                tags$td(class = "is-status", if (row$is_new) row_badge("New", class = "is-add") else span(class = "text-muted", row$status)),
+                if ("uses" %in% names(columns)) tags$td(class = "is-count", format(row$uses, big.mark = ","))
+              )
+            }))
+          )
+        )
+      )
+    })
   )
 }
 

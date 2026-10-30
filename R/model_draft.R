@@ -64,7 +64,7 @@ draft_model_save_reviewed <- function(connection, id, draft_json, staff_id, revi
 #' Save what the reading job returned.
 #'
 #' It is only kept if the draft is still being read for `reading_started`, so a job
-#' that was overtaken by a new PDF or "Try reading again" saves nothing.
+#' that was overtaken by "Try reading again" saves nothing.
 #'
 #' @param connection The MATR database, `list(url, key)`; see `model_database.R`.
 #' @param id The draft's id.

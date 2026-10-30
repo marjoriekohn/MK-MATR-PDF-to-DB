@@ -462,7 +462,7 @@ assign_into <- function(json, given) {
 # and saves the questionnaire to the draft. `assigning` is a step of its own, only for a draft with a
 # file of Variable Names and Coding: the questionnaire has been read and checked, and Gemini is giving
 # its variables their MATR IDs and its choices their codes. That adds only those two fields; the
-# questionnaire stays as it was read. A new PDF or "Try reading again"
+# questionnaire stays as it was read. "Try reading again"
 # sets it back to queued, which starts a new job. Jobs outlive the session that
 # started them, and the site too.
 

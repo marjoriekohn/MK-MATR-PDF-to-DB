@@ -76,3 +76,22 @@ history_service_changes <- function(connection, id) {
   groups <- change_service_groups(history_model_get_items(connection, id))
   list(groups = groups, counts = change_service_counts(groups))
 }
+
+#' What an edit changed, in a sentence, over the rows it lists.
+#'
+#' A delete keeps only the row picked (private.apply_draft_items()), so it isn't counted: it says what was
+#' deleted, "Deleted Kid Questionnaire Wave 1". One deleted before the name was kept says it as its sentence
+#' does ("Deleted the wave “KQ Wave 1”"), without the count of the rows that went with it.
+#'
+#' @param record An edit, from `history_service_get_all()`.
+#' @param counts Its counts, from `history_service_changes()`.
+#' @return A string.
+history_service_changes_text <- function(record, counts) {
+  if (identical(record$kind, "Delete")) {
+    if (!is.na(record$deleted %||% NA)) {
+      return(paste("Deleted", record$deleted))
+    }
+    return(sub(" and [0-9,]+ connected records?$", "", record$summary %||% ""))
+  }
+  change_service_counts_text(counts)
+}

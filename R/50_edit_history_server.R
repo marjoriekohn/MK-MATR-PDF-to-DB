@@ -70,7 +70,7 @@ edit_history_server <- function(
         size = "l",
         easyClose = TRUE,
         p(class = "list-card-meta", paste(c(history_service_when(record), history_service_people(record)), collapse = " · ")),
-        p(class = "form-text", change_service_counts_text(changes$counts)),
+        p(class = "form-text", history_service_changes_text(record, changes$counts)),
         change_items_ui(changes$groups),
         footer = modalButton("Close")
       ))

@@ -5,7 +5,7 @@
 # A sample database with a third option set, Agree / Disagree, that no variable offers.
 with_unused_set <- function(snap) {
   snap$answer_option <- rbind(snap$answer_option, data.frame(answer_option_id = c(40, 41), standardized_label = c("Agree", "Disagree")))
-  snap$option_set <- rbind(snap$option_set, data.frame(option_set_id = 3, name = "Agree / Disagree", description = NA_character_))
+  snap$option_set <- rbind(snap$option_set, data.frame(option_set_id = 3, name = "Agree / Disagree"))
   snap$answer_option_set <- rbind(snap$answer_option_set, data.frame(option_set_id = c(3, 3), answer_option_id = c(40, 41)))
   snap
 }
@@ -92,8 +92,7 @@ test_that("deleting a set no variable offers takes its choices out of it, and sc
     "Update question_scale {\"component_id\":9,\"scale_id\":1} expected_option_set_id: 3 -> -",
     "Delete answer_option_set {\"answer_option_id\":40,\"option_set_id\":3} NA: - -> -",
     "Delete answer_option_set {\"answer_option_id\":41,\"option_set_id\":3} NA: - -> -",
-    "Delete option_set {\"option_set_id\":3} name: Agree / Disagree -> -",
-    "Delete option_set {\"option_set_id\":3} description: - -> -"
+    "Delete option_set {\"option_set_id\":3} name: Agree / Disagree -> -"
   ))
 })
 

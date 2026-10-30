@@ -599,8 +599,10 @@ edit_update_items <- function(entity, snap, row, fields, values) {
 #' @param entity A kind of thing staff can edit: one entry of `edit_entities` (see `service_edit_entities.R`).
 #' @param snap The tables the kind needs, as `edit_service_load()` reads them: a list of data frames named after the tables.
 #' @param row The row being deleted.
-#' @return A list: `cascade`, `reach`, `blocked` (empty when it can go ahead), `items`, and
-#'   `far_reaching` (whether anything beyond the row itself is affected).
+#' @return A list: `cascade`, `reach`, `blocked` (empty when it can go ahead), `items`,
+#'   `far_reaching` (whether anything beyond the row itself is affected) and `deleted` (the row picked:
+#'   `table`, `row`, its key as JSON, and `name`, see `edit_deleted_name()`), which is all the Edit History keeps
+#'   of a delete once it is applied.
 edit_service_delete_plan <- function(entity, snap, row) {
   start <- if (!is.null(entity$delete_start)) {
     entity$delete_start(snap, row)
@@ -614,8 +616,19 @@ edit_service_delete_plan <- function(entity, snap, row) {
     cascade = cascade, reach = reach, blocked = blocked,
     items = edit_delete_items(snap, cascade),
     # whether anything beyond the row itself is affected
-    far_reaching = reach$total > 0 || length(reach$changed) > 0
+    far_reaching = reach$total > 0 || length(reach$changed) > 0,
+    deleted = list(table = entity$table, row = edit_row_identifier(entity$table, row), name = edit_deleted_name(snap, entity$table, row))
   )
+}
+
+# What the Edit History calls a row once it is deleted ("Deleted Kid Questionnaire Wave 1"): a wave by its
+# questionnaire's name and its own, anything else as Make an edit names it.
+edit_deleted_name <- function(snap, table, row) {
+  if (table == "wave") {
+    questionnaire <- edit_lookup(snap, "questionnaire", "questionnaire_id", row$questionnaire_id, "name")
+    if (!is.na(questionnaire)) return(paste(questionnaire, row$name))
+  }
+  edit_label(snap, table, row)
 }
 
 # Every field of every row that goes, children before parents, and first any
@@ -849,7 +862,9 @@ edit_service_record <- function(me, form, built, status, previous = NULL, review
     reach = if (!is.null(built$plan)) {
       list(
         rows_removed = built$plan$reach$total,
-        rows_emptied = sum(vapply(built$plan$reach$changed, function(change) change$n, numeric(1)))
+        rows_emptied = sum(vapply(built$plan$reach$changed, function(change) change$n, numeric(1))),
+        # the row picked: once the delete is applied, it is all applied_item keeps of it (apply_draft_items())
+        deleted = built$plan$deleted
       )
     },
     items = built$items

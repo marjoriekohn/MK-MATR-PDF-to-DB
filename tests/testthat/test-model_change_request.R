@@ -46,18 +46,18 @@ test_that("one approval from someone else applies a change, in one step", {
   expect_equal(entry$approved_by, approver$name)
   expect_equal(entry$prepared_by, me$name)
   expect_true(entry$approval_required)
-  # the approval is one of the draft's reviews, of the revision the approver read, and the draft says when it was applied
+  # the approval is one of the draft's reviews, the draft keeps the revision the approver read, and it says when it was applied
   applied <- database_model_select(
-    test_connection, "draft", c("draft_id", "applied_at", "reviews:draft_review_event(event,staff_id,revision,occurred_at)"),
+    test_connection, "draft", c("draft_id", "applied_at", "revision", "reviews:draft_review_event(event,staff_id,occurred_at)"),
     filters = list(draft_id = database_eq(request$id))
   )[[1]]
   approval <- draft_row_latest(applied, "Approved")
   expect_equal(approval$staff_id, approver$staff_id)
-  expect_equal(approval$revision, request$revision)
+  expect_equal(applied$revision, request$revision)
   expect_false(is.null(approval$occurred_at))
   expect_false(is.null(applied$applied_at))
   expect_error(
-    database_model_insert(test_connection, "draft_review_event", list(draft_id = request$id, event = "Sent Back", staff_id = approver$staff_id, revision = 1)),
+    database_model_insert(test_connection, "draft_review_event", list(draft_id = request$id, event = "Sent Back", staff_id = approver$staff_id)),
     "already been applied"
   ) # an applied draft's record takes no more
   expect_equal(history_id, request$id) # an applied draft is its own record

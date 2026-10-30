@@ -1961,7 +1961,7 @@ comment on column public.draft.status is
 comment on column public.draft.prepared_by is 'Who started it. Never changes.';
 comment on column public.draft.saved_by is 'Who saved it last (or sent it back). An approver can''t be this person.';
 comment on column public.draft.requested_reviewer is
-  'The staff member the preparer asked to review it (they are emailed a link once there is a login). Any other eligible staff member may still approve.';
+  'The staff member the preparer asked to review it. Any other eligible staff member may still approve.';
 comment on column public.draft.revision is 'Rises every time the content is saved. An approval is of the revision the approver read.';
 comment on column public.draft.summary is 'One line saying what it comes to; a change request is listed by it.';
 comment on column public.draft.saved_at is 'When staff last saved it. The reading job''s progress does not change it.';

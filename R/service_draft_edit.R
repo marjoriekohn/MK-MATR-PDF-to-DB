@@ -592,81 +592,21 @@ same_choice_variables <- function(draft, variable_id) {
 }
 
 # ------ MATR IDs ---------------------------------------------------------------
-# The uploaded CSV lists one MATR ID per variable, in the order the variables appear. They are given
-# to the variables either all at once, in that order (Auto Apply), or one by one, each variable's MATR
-# ID picked from the uploaded IDs no other variable has yet, or typed (Manual Assignment). Either way an
-# ID goes to one variable only (set_matr_id()), and an ID the variables don't use is still offered.
-
-#' The uploaded MATR IDs as they can be given: each once, blanks left out.
-#'
-#' @param matr_ids The IDs, in order (`extraction_service_matr_ids()`).
-#' @return A character vector, in the CSV's order.
-draft_service_uploaded_matr_ids <- function(matr_ids) {
-  matr_ids <- trimws(as.character(matr_ids))
-  unique(matr_ids[!is.na(matr_ids) & nzchar(matr_ids)])
-}
-
-#' The uploaded MATR IDs no variable has yet.
-#'
-#' What each variable's MATR ID drop-down offers.
-#'
-#' @param draft A draft: `list(questionnaire, components, variables, response_options)`; see the top of `service_draft.R`.
-#' @param matr_ids The IDs, in order (`extraction_service_matr_ids()`).
-#' @return A character vector, in the CSV's order.
-draft_service_available_matr_ids <- function(draft, matr_ids) {
-  setdiff(draft_service_uploaded_matr_ids(matr_ids), draft$variables$matr_id)
-}
-
-#' Give the variables the uploaded MATR IDs in the order they appear (Auto Apply).
-#'
-#' The first variable without a MATR ID gets the first uploaded ID no variable has, and so on, so what
-#' was typed or picked already is kept. With `replace`, every variable is given the ID in its place in
-#' the list instead. If the counts differ, nothing is lost: the variables left over keep no MATR ID and
-#' the IDs left over are still offered in the drop-downs, and staff are told with `message()`.
-#'
-#' @param draft A draft: `list(questionnaire, components, variables, response_options)`; see the top of `service_draft.R`.
-#' @param matr_ids The IDs, in order (`extraction_service_matr_ids()`).
-#' @param replace Whether to replace the MATR IDs the variables have.
-#' @return The changed draft. An error if the list is empty.
-draft_service_auto_apply_matr_ids <- function(draft, matr_ids, replace = FALSE) {
-  ids <- draft_service_uploaded_matr_ids(matr_ids)
-  if (length(ids) == 0) stop("The CSV has no MATR IDs in it. Check the file and add it again.")
-  in_order <- match(draft_service_boxes_in_order(draft), draft$variables$id)
-  if (replace) {
-    draft$variables$matr_id <- NA_character_
-  }
-  targets <- in_order[is.na(draft$variables$matr_id[in_order])]
-  pool <- setdiff(ids, draft$variables$matr_id)
-  n <- min(length(targets), length(pool))
-  draft$variables$matr_id[targets[seq_len(n)]] <- pool[seq_len(n)]
-  repeated <- unique(matr_ids[duplicated(trimws(matr_ids)) & nzchar(trimws(matr_ids))])
-  n_unfilled <- length(targets) - n
-  n_left <- length(pool) - n
-  message(paste(c(
-    sprintf("Gave %s a MATR ID, in the order they appear.", plural(n, "variable")),
-    if (n_unfilled > 0) sprintf("%s still %s none.", plural(n_unfilled, "variable"), if (n_unfilled == 1) "has" else "have"),
-    if (n_left > 0) {
-      sprintf(
-        "%s left over, still offered in each MATR ID drop-down.",
-        plural(n_left, "uploaded ID is", plural_form = "uploaded IDs are")
-      )
-    },
-    if (length(repeated) > 0) sprintf("The CSV lists %s more than once; each is given once.", word_list(repeated))
-  ), collapse = " "))
-  draft
-}
+# Reading gives the variables their MATR IDs from the file of Variable Names and Coding; staff type the rest.
+# A draft going into a recorded questionnaire takes the ones its questions have already. An ID goes to one
+# variable only (set_matr_id()).
 
 #' Fill the variables' MATR IDs from a recorded questionnaire's questions.
 #'
 #' A question with the same words as one the questionnaire asks (ignoring capitals and extra spaces) gets
 #' its variables' MATR IDs, first variable to first variable and so on. Used for the questionnaire the
-#' extraction goes into (its earlier waves), and for any questionnaire picked in the MATR IDs dialog. Only
-#' blank MATR IDs are filled, so nothing typed or filled from a CSV is lost. Says how many were filled with
+#' extraction goes into (its earlier waves). Only blank MATR IDs are filled, so nothing typed or read is
+#' lost. Says how many were filled with
 #' `message()`; a MATR ID already used by another variable of the draft isn't used again.
 #'
 #' @param draft A draft: `list(questionnaire, components, variables, response_options)`; see the top of `service_draft.R`.
 #' @param recorded The recorded questions' MATR IDs: a data frame with `text`, `matr_id` and `display_order`
-#'   (`extraction_service_recorded()$matr_ids`, `extraction_service_questionnaire_matr_ids()`).
+#'   (`extraction_service_recorded()$matr_ids`).
 #' @param from Where they come from, for the message: e.g. `"the questionnaire's earlier waves"`.
 #' @return The changed draft; the same draft if nothing matched.
 draft_service_fill_recorded_matr_ids <- function(draft, recorded, from = "the questionnaire's earlier waves") {
@@ -731,27 +671,6 @@ draft_service_renumber_questions <- function(draft) {
   numbers[match(printed[is_question], blocks$id)] <- as.character(seq_len(sum(is_question)))
   draft$components$question_number <- numbers
   draft
-}
-
-#' What filling leaves undone when the CSV and the draft count variables differently.
-#'
-#' @param n_ids How many MATR IDs the CSV has.
-#' @param n_boxes How many variables the draft has.
-#' @return A sentence, or `NULL` when the counts match.
-draft_service_matr_id_mismatch <- function(n_ids, n_boxes) {
-  if (n_ids == n_boxes) {
-    return(NULL)
-  }
-  extra <- abs(n_ids - n_boxes)
-  sprintf(
-    "The CSV has %s for %s, so %s.",
-    plural(n_ids, "MATR ID"), plural(n_boxes, "variable"),
-    if (n_ids < n_boxes) {
-      if (extra == 1) "the last variable gets none" else sprintf("the last %d variables get none", extra)
-    } else {
-      if (extra == 1) "its last ID is left over" else sprintf("its last %d IDs are left over", extra)
-    }
-  )
 }
 
 # ------ Keeping the tables consistent ------------------------------------------

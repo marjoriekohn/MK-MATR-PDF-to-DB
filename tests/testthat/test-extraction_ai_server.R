@@ -1,5 +1,5 @@
-# The AI-Powered mode of the Extraction page: upload a PDF and watch it being read, in the background; once
-# it has been read it opens on the Edit Extraction page. The database is the real one; no reading job is
+# The AI-Powered mode of the Extraction page: choose a PDF, begin, and watch it being read, in the background;
+# once it has been read it opens on the Edit Extraction page. The database is the real one; no reading job is
 # started here (server.R does that).
 
 ai_page <- function(me, extractions = test_extractions()) {
@@ -21,22 +21,37 @@ local_page_drafts <- function(me, env = parent.frame()) {
   withr::defer(test_delete("draft", list(prepared_by = database_eq(me$staff_id), status = "neq.Applied")), envir = env)
 }
 
-test_that("an upload becomes a draft, and the page is then about it", {
+test_that("the files chosen can be swapped until Begin Extraction, which makes the draft with them; then they can't", {
   me <- local_staff()
   local_pdf_cache()
   local_page_drafts(me)
   page <- ai_page(me)
   shiny::testServer(extraction_ai_server, args = page$args, {
     errors <- collect_errors(session)
-    expect_null(current_id())
-    session$setInputs(pdf = fake_upload())
+    expect_match(output$footer_button$html, "Begin Extraction")
+    expect_match(output$footer_button$html, "disabled") # no PDF yet
+    expect_equal(text_of(output$footer_note), "Choose the questionnaire PDF to begin.")
+    session$setInputs(pdf = fake_upload("first.pdf"))
+    expect_null(current_id()) # nothing is read yet
+    expect_match(text_of(output$pdf_card), "first.pdf")
+    session$setInputs(replace_pdf = fake_upload(), supplement = fake_csv_upload("AH01", "codes.csv"))
+    expect_match(text_of(output$pdf_card), "AHP_wave3.pdf")
+    expect_match(text_of(output$supplement), "codes.csv")
+    expect_false(grepl("disabled", output$footer_button$html))
+
+    session$setInputs(begin = 1)
     expect_false(is.null(current_id()))
     expect_equal(record()$pdf$name, "AHP_wave3.pdf")
+    expect_equal(record()$supplement$name, "codes.csv")
     expect_equal(record()$extraction_status, "queued")
     expect_equal(record()$prepared_by_id, me$staff_id)
-    expect_equal(reading()$pdf$name, "AHP_wave3.pdf")
     expect_match(text_of(output$pdf_card), "AHP_wave3.pdf 2 pages")
+    expect_false(grepl("Replace", output$pdf_card$html)) # the files are the draft's now
+    expect_match(text_of(output$supplement), "^Variable Names and Coding from codes.csv")
+    expect_match(output$supplement$html, "codes.csv</strong>.", fixed = TRUE) # the full stop against the name, no space
     expect_match(text_of(output$reading), "Reading your questionnaire")
+    expect_match(output$footer_button$html, "Open in Edit Extraction")
+    expect_match(output$footer_button$html, "disabled")
     expect_length(errors(), 0)
   })
 })
@@ -48,7 +63,7 @@ test_that("a file that isn't a PDF is turned away with a sentence, and no draft 
   page <- ai_page(me)
   shiny::testServer(extraction_ai_server, args = page$args, {
     errors <- collect_errors(session)
-    session$setInputs(pdf = fake_upload("notes.pdf", text = "just some words"))
+    session$setInputs(pdf = fake_upload("notes.pdf", text = "just some words"), begin = 1)
     expect_null(current_id())
     expect_match(notice_texts(seen), "notes.pdf isn't a PDF")
     expect_length(errors(), 0)
@@ -64,8 +79,8 @@ test_that("Open in Edit Extraction opens once reading has finished, and clears t
   shiny::testServer(extraction_ai_server, args = page$args, {
     show_draft(first)
     expect_equal(current_id(), first$id)
-    session$flushReact()
-    expect_false(last_update(seen, "open_extraction")$disabled)
+    expect_match(output$footer_button$html, "Open in Edit Extraction")
+    expect_false(grepl("disabled", output$footer_button$html))
     expect_equal(text_of(output$footer_note), "Reading has finished. Open the whole extraction to review it, and edit it if you need to.")
     expect_match(text_of(output$reading), "Finished reading")
     session$setInputs(open_extraction = 1)
@@ -83,7 +98,7 @@ test_that("a reading that failed can be tried again, and the note under it point
   shiny::testServer(extraction_ai_server, args = page$args, {
     show_draft(failed)
     expect_match(text_of(output$reading), "Try reading again")
-    expect_equal(text_of(output$footer_note), "Reading stopped. Try reading again, or replace the PDF.")
+    expect_equal(text_of(output$footer_note), "Reading stopped. Try reading again, or cancel the extraction and begin again with another PDF.")
     session$setInputs(retry = 1)
     expect_equal(record()$extraction_status, "queued")
     session$setInputs(to_continue = 1)
@@ -109,10 +124,10 @@ test_that("Cancel asks first, then deletes the draft and empties the page", {
   })
 })
 
-test_that("the mode is drawn with the drop zone and the button that opens it", {
+test_that("the mode is drawn with the drop zone and a place for its buttons", {
   html <- htmltools::renderTags(extraction_ai_ui("ai"))$html
   expect_match(html, 'id="ai-pdf_card"')
-  expect_match(html, 'id="ai-open_extraction"')
+  expect_match(html, 'id="ai-footer_button"')
   expect_false(grepl("Reading happens in the background", html, fixed = TRUE))
   expect_false(grepl('id="ai-info-|About questionnaire|An AI reads it, and while it does', html, ignore.case = TRUE))
   manual <- htmltools::renderTags(extraction_manual_ui("manual"))$html
@@ -137,5 +152,8 @@ test_that("how long reading has taken is drawn once, for the browser to count on
   for (status in c("ready", "failed")) {
     done <- htmltools::renderTags(reading_card(utils::modifyList(reading, list(extraction_status = status)), shiny::NS("ai")))$html
     expect_false(grepl("reading-elapsed", done), info = status)
+    # Cancel is there while it can still go wrong; a draft that has been read is discarded from Extraction Drafts
+    expect_equal(grepl('id="ai-cancel"', done), status == "failed", info = status)
   }
+  expect_match(htmltools::renderTags(reading_card(reading, shiny::NS("ai")))$html, 'id="ai-cancel"')
 })
