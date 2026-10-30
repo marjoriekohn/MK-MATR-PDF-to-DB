@@ -152,7 +152,7 @@ make_edit_server <- function(id, connection, me, show_page, active = NULL) {
       })
     }
 
-    lapply(names(make_edit_kinds), function(key) {
+    lapply(make_edit_listed, function(key) {
       items_output(paste0("items_", key), key, function() {
         read <- tables_of(key)
         if (inherits(read, "error")) {
@@ -163,7 +163,7 @@ make_edit_server <- function(id, connection, me, show_page, active = NULL) {
           ))
         }
         entity <- edit_entities[[key]]
-        if (!is.null(entity$scope)) {
+        if (!is.null(entity$scope) && !key %in% make_edit_flat) {
           return(scope_sections(key, read))
         }
         items_ui(key, read, "")
@@ -174,6 +174,7 @@ make_edit_server <- function(id, connection, me, show_page, active = NULL) {
     scope_sections <- function(key, snap) {
       table <- edit_entities[[key]]$scope$table
       owners <- edit_choices(snap, table)
+      owners <- owners[order(tolower(names(owners)), method = "radix")]
       if (length(owners) == 0) {
         return(p(class = "edit-list-note", paste0("There are no ", edit_nouns[[table]][2], " in the database yet.")))
       }
@@ -190,11 +191,14 @@ make_edit_server <- function(id, connection, me, show_page, active = NULL) {
 
     items_ui <- function(key, snap, q) {
       entity <- edit_entities[[key]]
-      cards <- edit_service_cards(entity, snap, if (nzchar(q)) q)
-      chosen <- isolate(if (identical(kind(), key) && identical(scope(), q)) picked())
+      cards <- make_edit_cards(key, snap, q)
+      chosen <- isolate(if (identical(kind(), key)) list(scope = scope(), key = picked()))
       tagList(
         if (nrow(cards) == 0) p(class = "edit-list-note", paste0("No ", tolower_words(make_edit_kinds[[key]][1]), " yet.")),
-        lapply(seq_len(nrow(cards)), function(i) make_edit_item(key, cards[i, , drop = FALSE], q, identical(cards$key[i], chosen))),
+        lapply(seq_len(nrow(cards)), function(i) {
+          card <- cards[i, , drop = FALSE]
+          make_edit_item(key, card, card$scope, identical(card$scope, chosen$scope) && identical(card$key, chosen$key))
+        }),
         if (!isTRUE(entity$view_only)) make_edit_add_button(key, q)
       )
     }
@@ -224,8 +228,8 @@ make_edit_server <- function(id, connection, me, show_page, active = NULL) {
     })
 
     # Opening a section shows its first item in the details, while they show nothing or an item: not over a form or
-    # what was just done. Not when they already show one of its items, or when it only holds sections (Questions holds
-    # a section for each questionnaire).
+    # what was just done. Not when they already show one of its items, or when it only holds sections (Scale Items
+    # holds a section for each measurement scale).
     pick_first <- function(section) {
       if (!verb() %in% c("", "view")) {
         return()
@@ -234,7 +238,7 @@ make_edit_server <- function(id, connection, me, show_page, active = NULL) {
       key <- parts[1]
       q <- if (length(parts) > 1) parts[2] else ""
       entity <- edit_entities[[key]]
-      if (is.null(entity) || (!is.null(entity$scope) && !nzchar(q))) {
+      if (is.null(entity) || (!is.null(entity$scope) && !nzchar(q) && !key %in% make_edit_flat)) {
         return()
       }
       read <- tables_of(key)
@@ -242,13 +246,13 @@ make_edit_server <- function(id, connection, me, show_page, active = NULL) {
         assign(key, read, envir = just_failed) # its list says so, without reading again at once
         return()
       }
-      cards <- edit_service_cards(entity, read, if (nzchar(q)) q)
-      if (nrow(cards) == 0 || (identical(kind(), key) && identical(scope(), q) && any(picked() %in% cards$key))) {
+      cards <- make_edit_cards(key, read, q)
+      if (nrow(cards) == 0 || (identical(kind(), key) && any(paste(scope(), picked()) %in% paste(cards$scope, cards$key)))) {
         return()
       }
-      show_item(list(kind = key, scope = q, key = cards$key[1], verb = "view"))
+      show_item(list(kind = key, scope = cards$scope[1], key = cards$key[1], verb = "view"))
       # the list marks it as it is drawn; the page script unmarks the item picked before, in a section already open
-      session$sendCustomMessage("make-edit-picked", paste(key, q, cards$key[1], sep = "|"))
+      session$sendCustomMessage("make-edit-picked", paste(key, cards$scope[1], cards$key[1], sep = "|"))
     }
 
     # Going to another item, or to + Add, while a form has something typed in it asks first.
@@ -293,7 +297,11 @@ make_edit_server <- function(id, connection, me, show_page, active = NULL) {
       }
       show_item(list(kind = "", scope = "", key = NULL, verb = ""))
       owner <- edit_nouns[[edit_entities[[jump$kind]]$scope$table %||% "questionnaire"]][1]
-      hint(paste0("Open ", make_edit_kinds[[jump$kind]][1], " in the list, then the ", owner, ", and pick it there."))
+      hint(if (jump$kind %in% make_edit_flat) {
+        paste0("Open ", make_edit_kinds[[jump$kind]][1], " in the list, and pick it there.")
+      } else {
+        paste0("Open ", make_edit_kinds[[jump$kind]][1], " in the list, then the ", owner, ", and pick it there.")
+      })
     })
 
     # ------ The details ------------------------------------------------------------
@@ -302,6 +310,7 @@ make_edit_server <- function(id, connection, me, show_page, active = NULL) {
       mode <- verb()
       key <- kind()
       picked()
+      scope()
       done()
       hint()
       isolate(detail_ui(mode, key))
@@ -316,6 +325,9 @@ make_edit_server <- function(id, connection, me, show_page, active = NULL) {
       }
       if (mode == "done") {
         return(done_ui())
+      }
+      if (mode == "add" && !is.null(entity()$scope) && !nzchar(scope())) {
+        return(scope_picker_ui(key))
       }
       blocked <- if (mode != "view") cant(mode)
       if (mode != "add" && is.null(tryCatch(row(), shiny.silent.error = function(problem) NULL))) {
@@ -332,7 +344,7 @@ make_edit_server <- function(id, connection, me, show_page, active = NULL) {
         div(
           class = "detail-content",
           if (mode == "view") {
-            p(class = "detail-note edit-about", entity()$about)
+            NULL
           } else if (!is.null(blocked)) {
             edit_callout("warning", title = paste("You can't", mode, paste(entity()$article, entity()$noun), "yet"), p(blocked))
           } else {
@@ -358,6 +370,32 @@ make_edit_server <- function(id, connection, me, show_page, active = NULL) {
         div(class = "detail-actions", detail_buttons(mode, blocked))
       )
     }
+
+    # + Add of a kind listed together (Questions) asks which questionnaire first; the form comes once one is picked.
+    scope_picker_ui <- function(key) {
+      table <- entity()$scope$table
+      div(
+        class = "block-detail edit-detail",
+        div(
+          class = "detail-head",
+          tags$button(type = "button", class = "btn btn-sm btn-link detail-back", `data-detail-back` = NA, app_icon("back"), " List"),
+          span(class = "row-badge", make_edit_kinds[[key]][2]),
+          h2(class = "detail-title", detail_title("add"))
+        ),
+        div(
+          class = "detail-content",
+          selectInput(
+            ns("add_scope"), NULL, edit_choices(snapshot(), table, blank = entity()$scope$label),
+            width = "100%", selectize = nrow(snapshot()[[table]]) > 30
+          ) |> tag_input_attributes("select", `aria-label` = entity()$scope$label, title = entity()$scope$label)
+        ),
+        div(class = "detail-actions", review_button("Cancel", "back", class = "btn btn-outline-dark"))
+      )
+    }
+
+    observeEvent(input$add_scope, {
+      if (identical(verb(), "add") && nzchar(input$add_scope)) scope(input$add_scope)
+    })
 
     detail_title <- function(mode) {
       if (mode == "add") {
@@ -667,9 +705,9 @@ make_edit_server <- function(id, connection, me, show_page, active = NULL) {
           p(strong(outcome$record$summary)),
           p(
             if (isTRUE(outcome$applied) && identical(outcome$verb, "delete")) {
-              "It is gone from the database now, and recorded in the Edit History."
+              "Successfully deleted from the database."
             } else if (isTRUE(outcome$applied)) {
-              "It is in the database now, and recorded in the Edit History."
+              "Successfully saved to the database."
             } else if (isTRUE(outcome$resaved)) {
               "This is a new version of the request. It is waiting on Change Requests, where one other staff member has to approve it."
             } else {

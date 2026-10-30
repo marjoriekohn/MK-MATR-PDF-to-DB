@@ -44,7 +44,7 @@ press <- function(session, what) session$setInputs(action = list(action = what))
 # Opening (or closing) a section of the list: only an open section's items are drawn.
 open_section <- function(session, id) session$setInputs(action = list(action = "toggle", id = as.character(id)))
 
-test_that("a kind's section lists its items and + Add; a kind that belongs to a questionnaire has one for each", {
+test_that("a kind's section lists its items, by name, and + Add; Questions lists every questionnaire's together", {
   me <- local_staff()
   tree <- shared_tree()
   page <- page_args(me)
@@ -59,15 +59,15 @@ test_that("a kind's section lists its items and + Add; a kind that belongs to a 
     # opening it showed its first item, marked in the list
     expect_equal(c(kind(), verb()), c("registry", "view"))
     expect_match(registries, sprintf('is-selected" tabindex="0" data-action="select" data-id="registry||%s"', picked()), fixed = TRUE)
-    # Questions: a section for each questionnaire, its questions read once it is opened
+    # Questions: one list, each question with its questionnaire, and no section for each questionnaire
     open_section(session, "questionnaire_question")
     questions <- paste(output$items_questionnaire_question$html, collapse = "")
-    expect_match(questions, sprintf('data-id="questionnaire_question:%s"', tree$questionnaire$questionnaire_id), fixed = TRUE)
-    expect_equal(kind(), "registry") # a section of sections picks nothing
-    open_section(session, paste0("questionnaire_question:", tree$questionnaire$questionnaire_id))
-    inside <- paste(output[[paste0("items_questionnaire_question_", tree$questionnaire$questionnaire_id)]]$html, collapse = "")
-    expect_match(text_of(inside), "Add Question")
-    expect_equal(kind(), "registry") # nor does one with nothing in it
+    expect_false(grepl(sprintf('data-id="questionnaire_question:%s"', tree$questionnaire$questionnaire_id), questions, fixed = TRUE))
+    expect_match(text_of(questions), "Add Question")
+    # Blocks and the shared wording aren't listed
+    expect_error(output$items_questionnaire_component)
+    expect_error(output$items_component)
+    expect_error(output$items_question)
     # Collapse All closes every section
     session$setInputs(action = list(action = "collapse_all"))
     expect_error(output$items_registry)
@@ -121,7 +121,7 @@ test_that("an add is applied at once, is in the history, and the details say so"
     expect_true(done()$applied)
     made$applied <- c(made$applied, done()$history_id)
     expect_match(text_of(output$detail), "Done")
-    expect_match(text_of(output$detail), "in the database now, and recorded in the Edit History")
+    expect_match(text_of(output$detail), "Successfully saved to the database")
     # the list is read again, so it has the new one
     open_section(session, "respondent_type")
     expect_match(text_of(output$items_respondent_type), name, fixed = TRUE)
@@ -264,14 +264,17 @@ test_that("a saved edit can be discarded, after asking", {
   })
 })
 
-test_that("a question can be added to a questionnaire here: the details don't say it can't", {
+test_that("a question can be added to a questionnaire here: + Add asks which questionnaire, then shows the form", {
   me <- local_staff()
   tree <- shared_tree()
   page <- page_args(me)
   shiny::testServer(make_edit_server, args = page$args, {
-    add(session, "questionnaire_question", as.character(tree$questionnaire$questionnaire_id))
+    add(session, "questionnaire_question")
+    expect_match(paste(output$detail$html, collapse = ""), "add_scope")
+    expect_false(grepl("change-main", paste(output$detail$html, collapse = "")))
+    session$setInputs(add_scope = as.character(tree$questionnaire$questionnaire_id))
+    expect_equal(scope(), as.character(tree$questionnaire$questionnaire_id))
     expect_false(grepl("You can't add", text_of(output$detail)))
-    expect_match(text_of(output$detail), "A question as it's printed in one questionnaire")
     expect_match(paste(output$detail$html, collapse = ""), "change-main") # the form, with its variables
   })
 })

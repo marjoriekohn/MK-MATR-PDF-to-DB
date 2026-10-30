@@ -306,9 +306,9 @@ extraction_model_local_pdf <- function(connection, sha256) {
 
 #' Remove a PDF no draft uses any more: from Storage, and this server's copy.
 #'
-#' The database lets a PDF's row (`pdf_file`) go when the last draft that used it is discarded or applied;
-#' while the row is there, a draft still uses the file and it stays. A PDF of MATR IDs and codes (a draft's
-#' `supplement`) has no row of its own: it stays while another draft's supplement is the same file.
+#' The database lets a PDF's row (`pdf_file`) go when the last draft that used it is discarded, unless a wave
+#' was extracted from it; while the row is there, the file stays. A PDF of MATR IDs and codes (a draft's
+#' `supplement`) has a row too, and also stays while another draft's supplement is the same file.
 #'
 #' @param connection The MATR database, `list(url, key)`; see `model_database.R`.
 #' @param sha256 The PDF's SHA-256, or `NULL`.

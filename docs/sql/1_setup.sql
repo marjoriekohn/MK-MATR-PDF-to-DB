@@ -3,22 +3,21 @@
 --
 -- Builds every table, rule, function and permission the site and the public dashboard use, on a
 -- Supabase project: a new one, or one to start over. Part 0 first removes whatever tables and functions
--- are there, so the build starts clean, and the last part puts back five tables' rows:
+-- are there, so the build starts clean, and the last part puts back these tables' rows:
 --
---   KEPT:  staff, component_type, subject, principal_investigator and respondent_type, with their IDs.
---          They are copied to a schema of their own (matr_keep) before anything is removed, and back
---          once the database is built.
---   LOST:  every other row (registries, studies, questionnaires, drafts, their history, ...).
+--   KEPT:  staff, component_type, subject, principal_investigator, respondent_type, registry, study,
+--          questionnaire, wave, pdf_file and wave_file, with their IDs. They are copied to a schema of their own
+--          (matr_keep) before anything is removed, and back once the database is built.
+--   LOST:  every other row (what the questionnaires print, their variables, drafts, their history, ...).
 --
 -- Part 0 refuses to run if any other table holds a row, so it can't empty a database that is in use.
 -- Rows left from trying the site out can be cleared anyway, on purpose: see the top of part 0. Once
 -- real data is in, change the database with migrations instead of running this again.
 --
--- The PDFs the drafts kept in Storage (bucket extraction-pdfs) would be left with no draft, so part 0
--- also refuses to run until that bucket is empty: see the top of part 0. Sign-in accounts
--- (Authentication > Users) are not touched.
+-- The PDFs stay: their files in Storage (bucket extraction-pdfs) aren't touched, and their rows
+-- (pdf_file) are kept, and so is what says which wave was extracted from which (wave_file). Sign-in accounts (Authentication > Users) are not touched.
 --
---   0. Clear the schemas           keep the five tables above; remove public and private
+--   0. Clear the schemas           keep the tables above; remove public and private
 --   1. Create tables               columns, primary keys, unique and check constraints
 --   2. Add references              foreign keys
 --   3. Indexes                     for foreign keys and lookups not already covered by a key
@@ -29,7 +28,7 @@
 --   Rules the site enforces instead
 --   Checks of the database build   (rolled back: they leave nothing behind)
 --   Staff access                   what a signed-in staff member may read
---   Put back the kept rows         the five tables above, from matr_keep
+--   Put back the kept rows         the tables above, from matr_keep
 --
 -- Each part is its own transaction: if a statement fails, its part makes nothing, and the parts before
 -- it stay. If a part fails, fix the cause and run the whole file again. The kept rows stay in matr_keep
@@ -44,7 +43,7 @@
 
 
 -- =====================================================================================================
--- 0. CLEAR THE SCHEMAS (KEEPING STAFF, COMPONENT TYPES, SUBJECTS, INVESTIGATORS AND RESPONDENT TYPES)
+-- 0. CLEAR THE SCHEMAS (KEEPING STAFF, THE STARTING LISTS, REGISTRIES, STUDIES, QUESTIONNAIRES, WAVES AND PDFS)
 -- =====================================================================================================
 -- Copies the kept tables' rows to matr_keep, then removes the schemas public and private with everything
 -- in them, and makes public again with the permissions a new Supabase project starts with (the build
@@ -54,35 +53,23 @@
 -- have checked which project this is, uncomment the next line to clear them anyway. EVERY ROW OF THEM
 -- IS LOST.
 set matr.clear_with_data = 'yes';
---
--- Empty the Storage bucket extraction-pdfs first: every file in it belongs to a draft that goes. SQL
--- can't do it (Supabase refuses a delete from storage.objects, and one forced through would leave the
--- file itself behind), so use the Storage API, as the site does: in the dashboard, Storage >
--- extraction-pdfs > the bucket's menu > Empty bucket; or, with the project's URL and secret key,
---   curl -X POST "$SUPABASE_URL/storage/v1/bucket/extraction-pdfs/empty" -H "apikey: $SUPABASE_SECRET_KEY"
 
 begin;
 
--- Nothing else may hold data, unless clearing it was asked for, and no PDF may be left in Storage
+-- Nothing else may hold data, unless clearing it was asked for
 do $$
 declare
   t       regclass;
   holding text[] := array[]::text[];
   has_row boolean;
-  n_pdfs  bigint;
 begin
-  select count(*) into n_pdfs from storage.objects where bucket_id = 'extraction-pdfs';
-  if n_pdfs > 0 then
-    raise exception 'Refusing to clear the database: the Storage bucket extraction-pdfs still holds % file(s), which no draft would have afterwards. Empty it first: see the top of part 0.',
-      n_pdfs;
-  end if;
-
   for t in
     select c.oid::regclass from pg_class c
     where c.relnamespace in (select oid from pg_namespace where nspname in ('public', 'private'))
       and c.relkind in ('r', 'p')
       and not (c.relnamespace = 'public'::regnamespace
-               and c.relname in ('staff', 'component_type', 'subject', 'principal_investigator', 'respondent_type'))   -- kept
+               and c.relname in ('staff', 'component_type', 'subject', 'principal_investigator', 'respondent_type',
+                                 'registry', 'study', 'questionnaire', 'wave', 'pdf_file', 'wave_file'))   -- kept
     order by 1
   loop
     execute format('select exists (select 1 from %s)', t) into has_row;
@@ -112,7 +99,8 @@ begin
     return;
   end if;
   create schema matr_keep;
-  foreach t in array array['staff', 'component_type', 'subject', 'principal_investigator', 'respondent_type'] loop
+  foreach t in array array['staff', 'component_type', 'subject', 'principal_investigator', 'respondent_type',
+                           'registry', 'study', 'questionnaire', 'wave', 'pdf_file', 'wave_file'] loop
     if to_regclass('public.' || t) is not null then
       execute format('create table matr_keep.%I as select to_jsonb(r) as kept from public.%I r', t, t);
       execute format('select count(*) from matr_keep.%I', t) into n;
@@ -216,10 +204,10 @@ create table public.principal_investigator (
 create table public.study (
   study_id                          bigint primary key default private.random_id('study', 'study_id'),
   registry_id                       bigint not null,                     -- BR1, BR2
-  principal_investigator_id         bigint not null,                     -- BR3, BR4
+  principal_investigator_id         bigint,                              -- BR3, BR4 (optional)
   contact_principal_investigator_id bigint,                              -- BR6-BR9
   name              text not null,
-  status            text not null
+  status            text
     constraint study_status_check check (status in ('Active', 'Ended')),
   description       text,
   methods           text,
@@ -249,6 +237,10 @@ create table public.questionnaire (
   abbreviation       text    not null,
   upvote_count       integer not null default 0                          -- BR16
     constraint questionnaire_upvote_count_nonnegative check (upvote_count >= 0),
+  -- the total across all its waves, for when the waves' own counts aren't known; the waves' counts
+  -- can't add up to more (wave_counts_within_questionnaire, section 4)
+  participant_count  integer
+    constraint questionnaire_participant_count_check check (participant_count >= 0),
   description        text
 );
 
@@ -560,6 +552,20 @@ create table public.pdf_file (
     constraint pdf_file_pdf_bytes_check check (pdf_bytes >= 0)
 );
 
+-- The PDF and the file of Variable Names and Coding a wave's extraction was read from, written when the
+-- extraction is applied (private.apply_draft_items()): a PDF by its pdf_file row, a CSV or text file by its
+-- text. A table of its own, not columns of wave, because the public dashboard reads all of wave and this is
+-- the staff's record, like the drafts.
+create table public.wave_file (
+  wave_id           bigint primary key,
+  pdf_sha256        text,
+  pdf_name          text,
+  supplement_name   text,
+  supplement_sha256 text,
+  supplement_text   text,
+  constraint wave_file_supplement_is_one_file check (supplement_sha256 is null or supplement_text is null)
+);
+
 -- Each time a draft is submitted for review, sent back, or approved: who, when, and the
 -- reviewer's note for a send back. draft itself says only where it is now (status, requested_reviewer).
 create table public.draft_review_event (
@@ -724,6 +730,15 @@ alter table public.extracted_draft
   add constraint extracted_draft_pdf_sha256_fkey
     foreign key (pdf_sha256) references public.pdf_file (pdf_sha256);
 
+-- A wave's files go with the wave.
+alter table public.wave_file
+  add constraint wave_file_wave_id_fkey
+    foreign key (wave_id) references public.wave (wave_id) on delete cascade,
+  add constraint wave_file_pdf_sha256_fkey
+    foreign key (pdf_sha256) references public.pdf_file (pdf_sha256),
+  add constraint wave_file_supplement_sha256_fkey
+    foreign key (supplement_sha256) references public.pdf_file (pdf_sha256);
+
 alter table public.ai_extracted_draft
   add constraint ai_extracted_draft_extraction_fkey
     foreign key (draft_id, method) references public.extracted_draft (draft_id, method) on delete cascade;
@@ -785,6 +800,8 @@ create index draft_saved_by_idx                    on public.draft (saved_by);
 create index draft_requested_reviewer_idx          on public.draft (requested_reviewer);
 create index draft_editing_by_idx                  on public.draft (editing_by);
 create index extracted_draft_pdf_sha256_idx        on public.extracted_draft (pdf_sha256);
+create index wave_file_pdf_sha256_idx              on public.wave_file (pdf_sha256);
+create index wave_file_supplement_sha256_idx       on public.wave_file (supplement_sha256);
 create index draft_review_event_staff_idx          on public.draft_review_event (staff_id);
 
 -- Lookups: the site lists drafts by kind and status
@@ -1289,6 +1306,13 @@ begin
       set pdf_pages = coalesce(f.pdf_pages, excluded.pdf_pages),
           pdf_bytes = coalesce(f.pdf_bytes, excluded.pdf_bytes);
   end if;
+  -- a PDF of Variable Names and Coding (supplement) is kept the same way
+  if jsonb_typeof(given -> 'supplement') = 'object' and given -> 'supplement' ->> 'sha256' is not null then
+    insert into public.pdf_file as f (pdf_sha256, pdf_bytes)
+    values (given -> 'supplement' ->> 'sha256', (given -> 'supplement' ->> 'bytes')::bigint)
+    on conflict (pdf_sha256) do update
+      set pdf_bytes = coalesce(f.pdf_bytes, excluded.pdf_bytes);
+  end if;
   given := given - 'pdf_pages' - 'pdf_bytes';
 
   select coalesce(jsonb_object_agg(e.key, e.value), '{}'::jsonb) into reading
@@ -1696,6 +1720,24 @@ begin
     values (d.draft_id, 'Approved', p_approved_by);
   end if;
 
+  -- An extraction's wave keeps the PDF and the file of Variable Names and Coding it was read from, so they stay
+  -- with it after the draft is gone (a CSV or text file by its text)
+  if d.kind = 'Extraction' then
+    insert into public.pdf_file (pdf_sha256, pdf_bytes)
+    select x.supplement ->> 'sha256', (x.supplement ->> 'bytes')::bigint
+    from public.extracted_draft x
+    where x.draft_id = d.draft_id and x.supplement ->> 'sha256' is not null
+    on conflict (pdf_sha256) do nothing;
+    insert into public.wave_file as f (wave_id, pdf_sha256, pdf_name, supplement_name, supplement_sha256, supplement_text)
+    select w.wave_id, x.pdf_sha256, x.pdf_name, x.supplement ->> 'name', x.supplement ->> 'sha256', x.supplement ->> 'text'
+    from public.extracted_draft x
+    join public.wave w on w.wave_id = case when x.info ->> 'wave_id' ~ '^[0-9]+$' then (x.info ->> 'wave_id')::bigint end
+    where x.draft_id = d.draft_id
+    on conflict (wave_id) do update
+      set pdf_sha256 = excluded.pdf_sha256, pdf_name = excluded.pdf_name, supplement_name = excluded.supplement_name,
+          supplement_sha256 = excluded.supplement_sha256, supplement_text = excluded.supplement_text;
+  end if;
+
   update public.draft
   set status = 'Applied', applied_at = now(), saved_at = now()
   where draft_id = d.draft_id;
@@ -2080,20 +2122,61 @@ create constraint trigger response_option_count_in_wave
   deferrable initially deferred
   for each row execute function public.response_option_count_in_wave();
 
--- A PDF no draft uses any more (its draft was discarded) goes too (its file in Storage is removed by the site).
+-- A PDF (the questionnaire's, or the file of Variable Names and Coding) that no draft and no wave uses
+-- any more (its draft was discarded) goes too (its file in Storage is removed by the site). One a wave
+-- was extracted from (wave_file) stays.
 create function public.extracted_draft_pdf_let_go()
 returns trigger
 language plpgsql
 set search_path = public, pg_temp
 as $$
+declare
+  sha text;
 begin
-  if old.pdf_sha256 is not null
-     and not exists (select 1 from public.extracted_draft where pdf_sha256 = old.pdf_sha256) then
-    delete from public.pdf_file where pdf_sha256 = old.pdf_sha256;
+  foreach sha in array array_remove(array[old.pdf_sha256, old.supplement ->> 'sha256'], null) loop
+    if not exists (select 1 from public.extracted_draft where pdf_sha256 = sha or supplement ->> 'sha256' = sha)
+       and not exists (select 1 from public.wave_file where pdf_sha256 = sha or supplement_sha256 = sha) then
+      delete from public.pdf_file where pdf_sha256 = sha;
+    end if;
+  end loop;
+  return null;
+end;
+$$;
+
+-- A questionnaire's participant count is the total across all its waves, so the waves' own counts (where
+-- known) can't add up to more. Checked when the transaction ends, so a change can set both.
+create function public.wave_counts_within_questionnaire()
+returns trigger
+language plpgsql
+set search_path = public, pg_temp
+as $$
+declare
+  q     public.questionnaire%rowtype;
+  waves bigint;
+begin
+  select * into q from public.questionnaire where questionnaire_id = new.questionnaire_id;
+  if not found or q.participant_count is null then
+    return null;
+  end if;
+  select coalesce(sum(respondent_count), 0) into waves from public.wave where questionnaire_id = q.questionnaire_id;
+  if waves > q.participant_count then
+    raise exception 'The waves of % have % respondents between them, more than its % participants in all.',
+      q.name, waves, q.participant_count;
   end if;
   return null;
 end;
 $$;
+
+create constraint trigger wave_counts_within_questionnaire
+  after insert or update of respondent_count, questionnaire_id on public.wave
+  deferrable initially deferred
+  for each row execute function public.wave_counts_within_questionnaire();
+
+-- (the same function: new.questionnaire_id is the questionnaire's own)
+create constraint trigger questionnaire_count_covers_waves
+  after insert or update of participant_count on public.questionnaire
+  deferrable initially deferred
+  for each row execute function public.wave_counts_within_questionnaire();
 
 create trigger extracted_draft_pdf_let_go
   after delete on public.extracted_draft
@@ -2350,14 +2433,16 @@ alter table public.staff                  add constraint staff_name_not_blank   
                                           add constraint staff_email_not_blank                   check (btrim(email) <> '');
 -- (answer_option.standardized_label: answer_option_label_normal, part B, refuses a blank too)
 
--- M7 (BR5): a study's lead investigator never changes.
+-- M7 (BR5): a study's lead investigator never changes once it is recorded (a study added without one
+-- can be given one later).
 create function public.study_principal_investigator_immutable()
 returns trigger
 language plpgsql
 set search_path = public, pg_temp
 as $$
 begin
-  if new.principal_investigator_id <> old.principal_investigator_id then
+  if old.principal_investigator_id is not null
+     and new.principal_investigator_id is distinct from old.principal_investigator_id then
     raise exception 'A study''s lead investigator can''t be changed. The contact investigator can.';
   end if;
   return new;
@@ -2386,6 +2471,7 @@ create trigger staff_never_deleted
 -- The trigger functions above are for the database itself; nobody calls them over /rpc/.
 revoke all on function public.response_option_count_in_wave()         from public, anon, authenticated;
 revoke all on function public.extracted_draft_pdf_let_go()            from public, anon, authenticated;
+revoke all on function public.wave_counts_within_questionnaire()      from public, anon, authenticated;
 revoke all on function public.choices_match_set_check()               from public, anon, authenticated;
 revoke all on function public.component_kind_check()                  from public, anon, authenticated;
 revoke all on function public.questionnaire_component_parent_check()  from public, anon, authenticated;
@@ -2528,7 +2614,7 @@ comment on table public.draft                   is 'A change to the MATR data: a
 comment on table public.edit_draft              is 'The details of a draft that is an edit made on Make an edit.';
 comment on table public.extracted_draft         is 'The details of a draft that is an extraction of a questionnaire: typed by hand (Manual) or read from a PDF by an AI (AI-Powered, with its ai_extracted_draft).';
 comment on table public.ai_extracted_draft      is 'What an AI-Powered extraction has and a Manual one doesn''t: the reading of its PDF, what the AI returned, and what the reviewer changed in it.';
-comment on table public.pdf_file                is 'A PDF uploaded for an extraction, once per file (by its SHA-256): its pages and size. The file itself is in Storage, bucket extraction-pdfs, as <hash>.pdf (docs/sql/3_pdf_storage.sql). It goes when no extraction draft uses it any more.';
+comment on table public.pdf_file                is 'A PDF uploaded for an extraction (the questionnaire, or its file of Variable Names and Coding), once per file (by its SHA-256): its pages and size. The file itself is in Storage, bucket extraction-pdfs, as <hash>.pdf. Kept once a wave was extracted from it (wave_file); otherwise it goes when no extraction draft uses it any more.';
 comment on column public.answer_option.standardized_label is
   'The answer in standard wording, kept normalized: lower case, straight quotes, one space between words, no question mark, no full stop or colon at the end.';
 comment on column public.extracted_draft.supplement is
@@ -2537,7 +2623,17 @@ comment on table public.draft_review_event      is 'Each time a draft was submit
 comment on table public.applied_item            is 'What an applied draft did: for an edit that adds or updates, one field it changed, with its old and new value; for an extraction, one table it added rows to; for an edit that deletes, the one row staff picked to delete (what it and the rows that went with it held isn''t kept).';
 
 -- ------ Columns --------------------------------------------------------------------------------------
-comment on column public.study.status is 'Active: the study is ongoing. Ended: all data collections are finished.';
+comment on column public.study.status is 'Active: the study is ongoing. Ended: all data collections are finished. Empty when not known.';
+comment on column public.study.principal_investigator_id is 'The lead investigator. Empty when not known; never changes once recorded.';
+comment on column public.questionnaire.participant_count is
+  'How many took it, across all its waves, for when the waves'' own counts aren''t known. The waves'' counts can''t add up to more.';
+comment on table public.wave_file is
+  'The PDF and the file of Variable Names and Coding a wave''s extraction was read from, written when the extraction is applied. Goes with the wave; private to staff.';
+comment on column public.wave_file.pdf_sha256 is 'The questionnaire''s PDF (pdf_file).';
+comment on column public.wave_file.pdf_name is 'That PDF''s name, as uploaded.';
+comment on column public.wave_file.supplement_name is 'The name of the file of Variable Names and Coding the extraction was given, if any.';
+comment on column public.wave_file.supplement_sha256 is 'That file, when it is a PDF (pdf_file).';
+comment on column public.wave_file.supplement_text is 'That file''s text, when it is a CSV or text file.';
 comment on column public.questionnaire_component.display_order is 'Position among components sharing the same parent, counting from 1.';
 comment on column public.questionnaire_component.skip_condition is
   'For a Group that skips: the answer that skips, e.g. No for "If you answered No to items 22a-d, go to Question 28". Empty when it doesn''t skip.';
@@ -2782,10 +2878,12 @@ insert into public.wave (questionnaire_id, name, respondent_count) select pg_tem
 insert into public.wave (questionnaire_id, name, respondent_count) select pg_temp.id('questionnaire'), 'Wave 2', 90;
 insert into ctx select 'wave1', wave_id from public.wave where questionnaire_id = pg_temp.id('questionnaire') and name = 'Wave 1';
 insert into ctx select 'wave2', wave_id from public.wave where questionnaire_id = pg_temp.id('questionnaire') and name = 'Wave 2';
-insert into public.component_type (name) values ('ZZ Section') on conflict do nothing;
-insert into ctx select 'section_type', component_type_id from public.component_type where name = 'ZZ Section';
-insert into public.component (component_type_id, text) select pg_temp.id('section_type'), 'Section A';
-insert into ctx select 'section_a', component_id from public.component where text = 'Section A' and component_type_id = pg_temp.id('section_type');
+-- The real Section type (section 7): only a Section or a Group may hold other blocks (M3)
+insert into ctx select 'section_type', component_type_id from public.component_type where name = 'Section';
+with made as (
+  insert into public.component (component_type_id, text) select pg_temp.id('section_type'), 'Section A' returning component_id
+)
+insert into ctx select 'section_a', component_id from made;
 insert into public.questionnaire_component (questionnaire_id, component_id, display_order)
   select pg_temp.id('questionnaire'), pg_temp.id('section_a'), 1;
 
@@ -2840,7 +2938,7 @@ do $$
 declare t text;
 begin
   foreach t in array array['staff', 'applied_item', 'draft', 'extracted_draft', 'edit_draft',
-                           'ai_extracted_draft', 'pdf_file', 'draft_review_event'] loop
+                           'ai_extracted_draft', 'pdf_file', 'wave_file', 'draft_review_event'] loop
     assert not has_table_privilege('anon', 'public.' || t, 'select, insert, update, delete'), t || ' is private to anon';
     assert not has_table_privilege('authenticated', 'public.' || t, 'select, insert, update, delete'), t || ' is private to signed-in users';
     assert has_table_privilege('service_role', 'public.' || t, 'select, insert, update, delete'), t || ' is the site''s';
@@ -3476,6 +3574,66 @@ begin
 end;
 $$;
 
+-- A study needs no lead investigator or status, and one recorded later never changes. A questionnaire's
+-- participant count covers its waves'. An applied extraction's wave keeps its PDF and its file of
+-- Variable Names and Coding, and a discarded draft doesn't take them with it.
+do $$
+declare
+  st bigint;
+  other bigint;
+  e bigint;
+begin
+  insert into public.study (registry_id, name) values (pg_temp.id('registry'), 'ZZ Study With No Lead') returning study_id into st;
+  update public.study set principal_investigator_id = pg_temp.id('pi') where study_id = st;
+  insert into public.principal_investigator (name, email) values ('ZZ Other PI', 'other@drafts.test')
+    returning principal_investigator_id into other;
+  perform pg_temp.expect_error(format('update public.study set principal_investigator_id = %s where study_id = %s', other, st), 'lead investigator can''t be changed');
+  perform pg_temp.expect_error(format('update public.study set principal_investigator_id = null where study_id = %s', st), 'lead investigator can''t be changed');
+
+  -- the test waves have 100 and 90 respondents (checked when the transaction ends, so it is run here as that would)
+  begin
+    update public.questionnaire set participant_count = 150 where questionnaire_id = pg_temp.id('questionnaire');
+    set constraints questionnaire_count_covers_waves immediate;
+    raise exception 'went through';
+  exception when others then
+    assert sqlerrm like '%190 respondents between them, more than its 150 participants%', 'a total below the waves'' is refused: ' || sqlerrm;
+  end;
+  update public.questionnaire set participant_count = 200 where questionnaire_id = pg_temp.id('questionnaire');
+  set constraints questionnaire_count_covers_waves immediate;
+  set constraints questionnaire_count_covers_waves deferred;
+  begin
+    update public.wave set respondent_count = 120 where wave_id = pg_temp.id('wave1');
+    set constraints wave_counts_within_questionnaire immediate;
+    raise exception 'went through';
+  exception when others then
+    assert sqlerrm like '%210 respondents between them%', 'waves that add up to more are refused: ' || sqlerrm;
+  end;
+  update public.wave set respondent_count = null where wave_id = pg_temp.id('wave1');
+  set constraints wave_counts_within_questionnaire immediate;
+  set constraints wave_counts_within_questionnaire deferred;
+
+  e := public.create_draft('Extraction', pg_temp.id('ada'), jsonb_build_object('summary', 'Files'), jsonb_build_object(
+    'method', 'Manual', 'pdf_sha256', 'zzfiles', 'pdf_name', 'q.pdf', 'pdf_bytes', 20,
+    'supplement', jsonb_build_object('name', 'codes.pdf', 'sha256', 'zzcodes', 'bytes', 10),
+    'info', jsonb_build_object('wave_id', pg_temp.id('wave1')::text)));
+  assert (select pdf_bytes from public.pdf_file where pdf_sha256 = 'zzcodes') = 10, 'the file of Variable Names and Coding has a pdf_file row';
+  perform public.apply_draft(e, pg_temp.id('ada'), jsonb_build_array(
+    pg_temp.item(1, 'wave', jsonb_build_object('wave_id', 'new:wave:1'), 'Insert', 'questionnaire_id', null, pg_temp.id('questionnaire')::text),
+    pg_temp.item(2, 'wave', jsonb_build_object('wave_id', 'new:wave:1'), 'Insert', 'name', null, 'Wave Files')));
+  assert (select pdf_sha256 = 'zzfiles' and pdf_name = 'q.pdf' and supplement_sha256 = 'zzcodes' and supplement_name = 'codes.pdf'
+                 and supplement_text is null
+          from public.wave_file where wave_id = pg_temp.id('wave1')), 'the wave keeps the files it was extracted from';
+  e := public.create_draft('Extraction', pg_temp.id('ada'), '{}'::jsonb, jsonb_build_object(
+    'method', 'Manual', 'pdf_sha256', 'zzfiles', 'supplement', jsonb_build_object('name', 'codes.pdf', 'sha256', 'zzcodes')));
+  perform public.discard_draft(e, pg_temp.id('ada'));
+  assert (select count(*) from public.pdf_file where pdf_sha256 in ('zzfiles', 'zzcodes')) = 2, 'discarding a draft leaves the files a wave uses';
+  e := public.create_draft('Extraction', pg_temp.id('ada'), '{}'::jsonb, jsonb_build_object(
+    'method', 'Manual', 'pdf_sha256', 'zzalone', 'supplement', jsonb_build_object('name', 'c.pdf', 'sha256', 'zzalone2')));
+  perform public.discard_draft(e, pg_temp.id('ada'));
+  assert not exists (select 1 from public.pdf_file where pdf_sha256 in ('zzalone', 'zzalone2')), 'and takes the ones nothing else uses';
+end;
+$$;
+
 rollback;
 select 'All checks passed.' as result;
 
@@ -3515,7 +3673,7 @@ declare
   t text;
 begin
   foreach t in array array['staff', 'draft', 'edit_draft', 'extracted_draft', 'ai_extracted_draft', 'pdf_file',
-                           'draft_review_event', 'applied_item'] loop
+                           'wave_file', 'draft_review_event', 'applied_item'] loop
     execute format('grant select on public.%I to authenticated', t);
     execute format('revoke insert, update, delete on public.%I from authenticated', t);
     execute format('revoke all on public.%I from anon', t);
@@ -3528,14 +3686,15 @@ $$;
 commit;
 
 -- =====================================================================================================
--- PUT BACK THE KEPT ROWS: staff, component_type, subject, principal_investigator and respondent_type,
--- as part 0 saved them in matr_keep
+-- PUT BACK THE KEPT ROWS: staff, component_type, subject, principal_investigator, respondent_type,
+-- registry, study, questionnaire, wave, pdf_file and wave_file, as part 0 saved them in matr_keep
 -- =====================================================================================================
--- After the checks, which expect a clean build. Rows come back with their IDs. A table with rows kept
--- has exactly those (they replace its starting rows, so a starting component type or subject that was
--- deleted stays deleted); a table with none kept keeps the starting rows. Staff, investigators and
--- respondent types have no starting rows. matr_keep goes once the rows
--- are back. If this part fails, nothing in it happens and matr_keep stays: fix the cause and run the
+-- After the checks, which expect a clean build. Rows come back with their IDs, each table after the ones
+-- it points at. A table with rows kept has exactly those (they replace its starting rows, so a starting
+-- component type or subject that was deleted stays deleted); a table with none kept keeps the starting
+-- rows. The other tables have no starting rows. A column the old table didn't have is left empty
+-- (or its default). The waves come back asking no questions: what the questionnaires print is not
+-- kept. matr_keep goes once the rows are back. If this part fails, nothing in it happens and matr_keep stays: fix the cause and run the
 -- whole file again.
 
 begin;
@@ -3595,6 +3754,63 @@ begin
     from matr_keep.respondent_type;
     get diagnostics n = row_count;
     raise notice 'Put back % respondent type(s).', n;
+  end if;
+
+  if to_regclass('matr_keep.pdf_file') is not null then
+    insert into public.pdf_file (pdf_sha256, pdf_pages, pdf_bytes)
+    select kept ->> 'pdf_sha256', (kept ->> 'pdf_pages')::integer, (kept ->> 'pdf_bytes')::bigint
+    from matr_keep.pdf_file;
+    get diagnostics n = row_count;
+    raise notice 'Put back % PDF(s).', n;
+  end if;
+
+  if to_regclass('matr_keep.registry') is not null then
+    insert into public.registry (registry_id, name, abbreviation, participant_count, description)
+    select (kept ->> 'registry_id')::bigint, kept ->> 'name', kept ->> 'abbreviation',
+           (kept ->> 'participant_count')::integer, kept ->> 'description'
+    from matr_keep.registry;
+    get diagnostics n = row_count;
+    raise notice 'Put back % registr(y/ies).', n;
+  end if;
+
+  if to_regclass('matr_keep.study') is not null then
+    insert into public.study (study_id, registry_id, principal_investigator_id, contact_principal_investigator_id,
+                              name, status, description, methods, acknowledgements)
+    select (kept ->> 'study_id')::bigint, (kept ->> 'registry_id')::bigint, (kept ->> 'principal_investigator_id')::bigint,
+           (kept ->> 'contact_principal_investigator_id')::bigint, kept ->> 'name', kept ->> 'status',
+           kept ->> 'description', kept ->> 'methods', kept ->> 'acknowledgements'
+    from matr_keep.study;
+    get diagnostics n = row_count;
+    raise notice 'Put back % stud(y/ies).', n;
+  end if;
+
+  if to_regclass('matr_keep.questionnaire') is not null then
+    insert into public.questionnaire (questionnaire_id, study_id, respondent_type_id, name, abbreviation,
+                                      upvote_count, participant_count, description)
+    select (kept ->> 'questionnaire_id')::bigint, (kept ->> 'study_id')::bigint, (kept ->> 'respondent_type_id')::bigint,
+           kept ->> 'name', kept ->> 'abbreviation', coalesce((kept ->> 'upvote_count')::integer, 0),
+           (kept ->> 'participant_count')::integer, kept ->> 'description'
+    from matr_keep.questionnaire;
+    get diagnostics n = row_count;
+    raise notice 'Put back % questionnaire(s).', n;
+  end if;
+
+  if to_regclass('matr_keep.wave') is not null then
+    insert into public.wave (wave_id, questionnaire_id, name, respondent_count, administered_date)
+    select (kept ->> 'wave_id')::bigint, (kept ->> 'questionnaire_id')::bigint, kept ->> 'name',
+           (kept ->> 'respondent_count')::integer, (kept ->> 'administered_date')::date
+    from matr_keep.wave;
+    get diagnostics n = row_count;
+    raise notice 'Put back % wave(s).', n;
+  end if;
+
+  if to_regclass('matr_keep.wave_file') is not null then
+    insert into public.wave_file (wave_id, pdf_sha256, pdf_name, supplement_name, supplement_sha256, supplement_text)
+    select (kept ->> 'wave_id')::bigint, kept ->> 'pdf_sha256', kept ->> 'pdf_name', kept ->> 'supplement_name',
+           kept ->> 'supplement_sha256', kept ->> 'supplement_text'
+    from matr_keep.wave_file;
+    get diagnostics n = row_count;
+    raise notice 'Put back % wave''s file record(s).', n;
   end if;
 
   drop schema matr_keep cascade;

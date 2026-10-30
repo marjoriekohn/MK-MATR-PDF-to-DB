@@ -1,11 +1,11 @@
 #' The Make an edit page.
 #'
-#' Everything staff can add, change or delete in the MATR metadata database, one item at a time, laid out as
-#' Edit Extraction lays out a questionnaire: an outline on the left and the item picked on the right. Each kind of
-#' thing is a section of the outline, closed until it is clicked; open, it lists that kind's items and + Add. A
-#' kind that belongs to a questionnaire (its blocks, its questions) has a section for each questionnaire inside
-#' it, and a scale's items a section for each measurement scale. The details show the item picked, with Edit and Delete; Edit and + Add show its form, with Save. Saved
-#' edits that aren't finished are listed above.
+#' Everything staff can add, change or delete in the MATR metadata database, laid out as Edit Extraction lays out
+#' a questionnaire: an outline on the left and the item picked on the right. Each kind of thing is a section of the
+#' outline, closed until it is clicked; open, it lists that kind's items, by name, and + Add. Questions are listed
+#' together, whichever questionnaire prints them; a scale's items have a section for each measurement scale. The
+#' details show the item picked, with Edit and Delete; Edit and + Add show its form, with Save. Saved edits that
+#' aren't finished are listed above.
 #'
 #' @param id The module's id.
 #' @return The page's UI.
@@ -15,7 +15,7 @@ make_edit_ui <- function(id) {
     id = ns("main"),
     class = "page edit-page is-wide",
     `data-ns` = ns(""),
-    page_header("Metadata", "View, add, change or delete what is in the MATR metadata database, one item at a time."),
+    page_header("Metadata", "View, add, change or delete what is in the MATR metadata database."),
     uiOutput(ns("drafts")),
     card(
       class = "structure-card",
@@ -35,7 +35,7 @@ make_edit_ui <- function(id) {
             class = "outline-split",
             div(
               class = "outline-body",
-              div(class = "outline-tree", div(class = "outline-list", lapply(names(make_edit_kinds), function(kind) {
+              div(class = "outline-tree", div(class = "outline-list", lapply(make_edit_listed, function(kind) {
                 make_edit_section(kind, make_edit_kinds[[kind]][1], uiOutput(ns(paste0("items_", kind)), class = "outline-list"))
               }))),
               p(class = "outline-filter-empty", "Nothing in the open lists matches.")
@@ -53,8 +53,9 @@ make_edit_ui <- function(id) {
 }
 
 # The kinds of thing, in the order the list has them: what the list calls them, and one of them (for + Add).
-# Blocks and Questions are as printed in one questionnaire; the shared wording is a block's or question's words
-# in every questionnaire that prints them. Scale Items are as listed in one measurement scale. PDF Files are only shown.
+# Questions are as printed in one questionnaire. Scale Items are as listed in one measurement scale. PDF Files
+# are only shown. Blocks and the shared wording of blocks and questions aren't in the list (make_edit_listed),
+# but a saved edit of one can still be opened.
 make_edit_kinds <- list(
   registry = c("Registries", "Registry"),
   study = c("Studies", "Study"),
@@ -75,6 +76,41 @@ make_edit_kinds <- list(
   question = c("Shared Question Wording", "Question Wording"),
   pdf_file = c("PDF Files", "PDF File")
 )
+
+# The kinds the list has a section for.
+make_edit_listed <- setdiff(names(make_edit_kinds), c("questionnaire_component", "component", "question"))
+
+# Kinds that belong to a questionnaire but are listed together, each item with its questionnaire: no section for
+# each questionnaire, and + Add asks which questionnaire first.
+make_edit_flat <- "questionnaire_question"
+
+#' A kind's items as the list shows them: in alphabetical order, each with the questionnaire (or scale) it is in.
+#'
+#' @param key The kind, a name of `edit_entities`.
+#' @param snap The tables the kind needs, as `edit_service_load()` reads them.
+#' @param scope The questionnaire's (or scale's) key, for a kind that has a section for each; otherwise "".
+#' @return Cards, from `edit_service_cards()`, with `scope` too.
+make_edit_cards <- function(key, snap, scope = "") {
+  entity <- edit_entities[[key]]
+  with_scope <- function(cards, q) {
+    cards$scope <- rep(q, nrow(cards))
+    cards
+  }
+  cards <- if (key %in% make_edit_flat) {
+    owners <- unname(edit_choices(snap, entity$scope$table))
+    parts <- lapply(owners, function(q) {
+      cards <- with_scope(edit_service_cards(entity, snap, q), q)
+      where <- edit_questionnaire_short(snap, as.numeric(q))
+      cards$subtitle <- if (nrow(cards) > 0) ifelse(nzchar(cards$subtitle), paste(where, cards$subtitle, sep = " · "), where) else character()
+      cards$search <- paste(cards$search, tolower(where))
+      cards
+    })
+    if (length(parts) == 0) with_scope(edit_cards(character(), character()), character()) else do.call(rbind, parts)
+  } else {
+    with_scope(edit_service_cards(entity, snap, if (nzchar(scope)) scope), scope)
+  }
+  cards[order(tolower(cards$title), cards$subtitle, method = "radix"), , drop = FALSE]
+}
 
 #' A section of the list: its row, which opens and closes it (the page script does it at once), and what is
 #' inside it, drawn only once it is opened (Shiny doesn't draw what is hidden).

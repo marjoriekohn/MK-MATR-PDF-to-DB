@@ -218,8 +218,8 @@ extraction_service_discard <- function(connection, id, me) {
   invisible()
 }
 
-#' Remove a draft's PDF from Storage once the draft is gone (discarded, or applied) and no other draft
-#' uses the file.
+#' Remove a discarded draft's PDF from Storage when no other draft, and no wave, uses the file. An applied
+#' extraction keeps its files: its wave names them (wave_file).
 #'
 #' The draft is already gone, so a file that can't be removed only stays behind in Storage: that is a
 #' warning in the log, not an error.

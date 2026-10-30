@@ -47,7 +47,7 @@ database_tables <- list(
     key = "questionnaire_id", order_by = "name",
     columns = c(
       questionnaire_id = "id", study_id = "id", respondent_type_id = "id",
-      name = "text", abbreviation = "text", description = "text"
+      name = "text", abbreviation = "text", participant_count = "number", description = "text"
     )
   ),
   wave = list(
@@ -158,6 +158,13 @@ database_tables <- list(
   pdf_file = list(
     key = "pdf_sha256", order_by = "pdf_sha256",
     columns = c(pdf_sha256 = "text", pdf_pages = "number", pdf_bytes = "number")
+  ),
+  # ... and the waves extracted from them, which keep their PDFs' names after the drafts are gone
+  wave_file = list(
+    key = "wave_id", order_by = "wave_id",
+    columns = c(
+      wave_id = "id", pdf_sha256 = "text", pdf_name = "text", supplement_sha256 = "text", supplement_name = "text"
+    )
   ),
   extracted_draft = list(
     key = "draft_id", order_by = "draft_id",

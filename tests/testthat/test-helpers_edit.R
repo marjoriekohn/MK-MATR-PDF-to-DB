@@ -44,18 +44,18 @@ test_that("a text box says what it holds inside it, and whether it can be left e
   expect_match(html, 'placeholder="Name (e.g. Adult Health Study)"', fixed = TRUE)
 })
 
-test_that("the info block says what the kind is, what the verb involves and what sending does, once", {
+test_that("the info block says what the verb involves and what sending does, once, and nothing for a plain add", {
   study <- edit_entities$study
-  added <- text_of(edit_info_block(study, "add", approval = FALSE))
+  expect_null(edit_info_block(study, "add", approval = FALSE))
+  added <- text_of(edit_info_block(study, "add", approval = TRUE))
   expect_match(added, "Adding a study")
-  expect_match(added, study$about, fixed = TRUE)
-  expect_match(added, "as soon as you send it")
+  expect_false(grepl(study$about, added, fixed = TRUE))
   deleted <- edit_info_block(study, "delete", approval = TRUE)
   expect_match(text_of(deleted), study$delete_about, fixed = TRUE)
   expect_match(text_of(deleted), "approves it on Change Requests")
   expect_match(paste(as.character(deleted), collapse = ""), "is-danger")
   expect_match(text_of(edit_info_block(study, "update", editing_request = TRUE)), "new version of this request")
-  expect_false(grepl("Adding|Changing|Deleting", text_of(edit_info_block(study, ""))))
+  expect_null(edit_info_block(study, ""))
 })
 
 test_that("a drop-down offers its choices by name, with the one that is chosen selected", {
@@ -84,8 +84,7 @@ test_that("where a shared question appears lists each questionnaire, its place a
   row <- edit_service_row(edit_entities$question, snap, "4")
   usage <- edit_service_usage(edit_entities$question, snap, row)
   where <- text_of(edit_usage_ui(edit_entities$question, "Do you now smoke cigarettes?", usage))
-  expect_match(where, "Where this appears")
-  expect_match(where, "Everything below changes if you make this edit.")
+  expect_false(grepl("Where this appears|Everything below changes", where))
   expect_match(where, "“Do you now smoke cigarettes?”", fixed = TRUE)
   expect_match(where, "position [0-9]+")
   expect_match(where, "variable")
@@ -102,7 +101,7 @@ test_that("a component nothing prints, and a row nothing points at, say they aff
   alone <- edit_service_row(edit_entities$registry, snap, "2")
   expect_match(
     text_of(edit_usage_ui(edit_entities$registry, "Example Registry", edit_service_usage(edit_entities$registry, snap, alone))),
-    "Nothing else points at this yet|Everything below changes"
+    "Nothing else points at this yet"
   )
 })
 

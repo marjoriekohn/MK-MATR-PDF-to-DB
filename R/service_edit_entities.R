@@ -260,7 +260,9 @@ study_entity <- list(
     lead <- edit_lookup(snap, "principal_investigator", "principal_investigator_id", rows$principal_investigator_id, "name")
     edit_cards(
       key_text(rows$study_id), rows$name,
-      subtitle = paste0(registry, " · led by ", lead, ifelse(is.na(rows$status), "", paste0(" · ", rows$status))),
+      subtitle = paste0(
+        registry, ifelse(is.na(lead), "", paste0(" · led by ", lead)), ifelse(is.na(rows$status), "", paste0(" · ", rows$status))
+      ),
       facts = lapply(n_q, function(n) edit_count(n, "questionnaire"))
     )
   },
@@ -272,11 +274,12 @@ study_entity <- list(
         choices = edit_choices(snap, "registry", blank = "Choose a registry")
       ),
       edit_field("principal_investigator_id", "Lead investigator", "select",
-        required = TRUE, choices = investigators,
-        locked = "A study's lead investigator never changes once it's recorded."
+        choices = investigators,
+        # one can be picked later, if none was when the study was added
+        locked = if (!is.null(row) && !is.na(row$principal_investigator_id)) "A study's lead investigator never changes once it's recorded."
       ),
       edit_field("contact_principal_investigator_id", "Contact investigator", "select",
-        required = TRUE, choices = investigators,
+        choices = investigators,
         hint = "Who to contact about this study."
       ),
       edit_field("name", "Name",
@@ -290,7 +293,7 @@ study_entity <- list(
         }
       ),
       edit_field("status", "Status", "select",
-        required = TRUE, choices = c("Choose a status" = "", study_statuses), tooltip = study_status_tooltip
+        choices = c("Choose a status" = "", study_statuses), tooltip = study_status_tooltip
       ),
       edit_field("description", "Description", "textarea"),
       edit_field("methods", "Methods", "textarea"),
@@ -377,7 +380,10 @@ questionnaire_entity <- list(
     who <- edit_lookup(snap, "respondent_type", "respondent_type_id", rows$respondent_type_id, "name")
     edit_cards(
       key_text(rows$questionnaire_id), edit_label(snap, "questionnaire", rows),
-      subtitle = paste0(study, " · for ", tolower(who)),
+      subtitle = paste0(
+        study, " · for ", tolower(who),
+        ifelse(is.na(rows$participant_count), "", paste0(" · ", format(rows$participant_count, big.mark = ",", trim = TRUE), " participants"))
+      ),
       facts = Map(function(w, q) c(edit_count(w, "wave"), edit_count(q, "question")), n_waves, n_questions)
     )
   },
@@ -415,6 +421,17 @@ questionnaire_entity <- list(
         required = TRUE,
         placeholder = "e.g. AHP",
         problem = study_taken("abbreviation", "the abbreviation")
+      ),
+      edit_field("participant_count", "Total participants", "number",
+        min = 0, placeholder = "e.g. 1,200",
+        hint = "Across all its waves, for when each wave's count isn't known. The waves' counts can't add up to more.",
+        problem = function(value, values) {
+          total <- edit_whole_number(value)
+          waves <- if (!is.null(row)) edit_wave_total(snap, row$questionnaire_id) else 0
+          if (!is.na(total) && waves > total) {
+            sprintf("Its waves have %s respondents between them, more than this.", format(waves, big.mark = ","))
+          }
+        }
       ),
       edit_field("description", "Description", "textarea")
     )
@@ -476,10 +493,34 @@ wave_entity <- list(
         }
       ),
       edit_field("administered_date", "Date administered", "date", placeholder = "MM/DD/YYYY"),
-      edit_field("respondent_count", "Number of respondents", "number", min = 0, placeholder = "e.g. 1,200")
+      edit_field("respondent_count", "Number of respondents", "number",
+        min = 0, placeholder = "e.g. 1,200",
+        problem = function(value, values) {
+          count <- edit_whole_number(value)
+          q <- suppressWarnings(as.numeric(values$questionnaire_id))
+          total <- snap$questionnaire$participant_count[match(q, snap$questionnaire$questionnaire_id)]
+          if (is.na(count) || length(total) != 1 || is.na(total)) {
+            return(NULL)
+          }
+          others <- edit_wave_total(snap, q, except = row$wave_id)
+          if (others + count > total) {
+            sprintf(
+              "%s has %s participants in all, and its other waves have %s, so this wave can have at most %s.",
+              edit_questionnaire_short(snap, q), format(total, big.mark = ","), format(others, big.mark = ","),
+              format(max(total - others, 0), big.mark = ",")
+            )
+          }
+        }
+      )
     )
   }
 )
+
+# How many respondents a questionnaire's waves have between them, where known (leaving out the wave `except`).
+edit_wave_total <- function(snap, questionnaire_id, except = NULL) {
+  waves <- snap$wave[snap$wave$questionnaire_id %in% questionnaire_id & !snap$wave$wave_id %in% except, , drop = FALSE]
+  sum(waves$respondent_count, na.rm = TRUE)
+}
 
 # ------ Shared lists ---------------------------------------------------------------------------------
 component_type_entity <- list(
@@ -892,11 +933,18 @@ question_scale_entity <- list(
 #'
 #' @param snap The tables the kind needs, as `edit_service_load()` reads them: a list of data frames named after the tables.
 #' @param hashes PDFs' SHA-256s.
-#' @return One string per PDF: its names joined by " / ", or "PDF" and the start of its hash if no draft names it.
+#' @return One string per PDF: its names joined by " / ", or "PDF" and the start of its hash if no draft or wave
+#'   names it.
 edit_pdf_names <- function(snap, hashes) {
   drafts <- snap$extracted_draft
+  waves <- snap$wave_file
+  named <- c(
+    stats::setNames(drafts$pdf_name, drafts$pdf_sha256),
+    if (!is.null(waves)) stats::setNames(c(waves$pdf_name, waves$supplement_name), c(waves$pdf_sha256, waves$supplement_sha256))
+  )
+  named <- named[!is.na(names(named)) & !is.na(named) & nzchar(named)]
   vapply(hashes, function(hash) {
-    names <- unique(drafts$pdf_name[drafts$pdf_sha256 %in% hash & !is.na(drafts$pdf_name) & nzchar(drafts$pdf_name)])
+    names <- unique(unname(named[names(named) %in% hash]))
     if (length(names) == 0) paste("PDF", substr(hash, 1, 12)) else paste(sort(names), collapse = " / ")
   }, character(1), USE.NAMES = FALSE)
 }
@@ -916,7 +964,7 @@ pdf_file_entity <- list(
     "shown here: it's the record of what extractions were read from, so it isn't changed or deleted, and new ones come ",
     "in on the Extraction page."
   ),
-  reads = c("extracted_draft", "draft"),
+  reads = c("extracted_draft", "draft", "wave_file"),
   can = function(snap, mode) {
     switch(mode,
       add = "PDFs come in when they're uploaded for an extraction, on the Extraction page.",

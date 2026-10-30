@@ -25,8 +25,8 @@ edit_callout <- function(kind, ..., title = NULL, icon_name = NULL) {
 
 # ------ The info block ----------------------------------------------------------------------------
 #' Everything staff should know about the edit they are making, in one place under the sentence: what
-#' the kind of thing is, what the verb involves for it, and what happens when it is sent. Nothing else
-#' on the page says these again.
+#' the verb involves for the kind of thing, and what happens when it is sent. Nothing else on the page
+#' says these again. `NULL` when there is nothing to say (a plain add or update, applied at once).
 #'
 #' @param entity The kind of thing; see `edit_entities`.
 #' @param verb `"add"`, `"update"`, `"delete"`, or `""` while it isn't picked yet.
@@ -46,13 +46,14 @@ edit_info_block <- function(entity, verb, approval = FALSE, editing_request = FA
     "Saving makes a new version of this request, which nobody has approved yet."
   } else if (approval) {
     "Nothing changes in the MATR metadata database until one other staff member approves it on Change Requests."
-  } else {
-    "It changes the MATR metadata database as soon as you send it, and is recorded in the Edit History."
+  }
+  if (length(c(how, sent)) == 0) {
+    return(NULL)
   }
   edit_callout(
     if (identical(verb, "delete")) "danger" else "info",
     title = if (nzchar(verb)) paste(doing[[verb]], entity$article, entity$noun),
-    lapply(c(entity$about, how, sent), p)
+    lapply(c(how, sent), p)
   )
 }
 
@@ -231,10 +232,6 @@ edit_usage_ui <- function(entity, title, usage) {
   local <- !is.null(entity$scope)
   div(
     class = "edit-usage",
-    h2("Where this appears"),
-    if (!local && !isTRUE(entity$view_only) && (length(usage$uses) > 0 || length(usage$pointing) > 0)) {
-      p(class = "form-text", "Everything below changes if you make this edit.")
-    },
     if (entity$table == "component") div(class = "edit-usage-title", paste0("“", title, "”")),
     if (length(usage$uses) > 0) {
       div(class = "edit-usage-list", lapply(usage$uses, function(use) {
