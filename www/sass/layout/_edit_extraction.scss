@@ -302,3 +302,27 @@ button.review-pill:hover { background: rgba($vcu-gold, 0.2); }
   &:hover, &:focus-visible { text-decoration: underline; }
 }
 .problem-pop-more { list-style: none; color: $vcu-gray; }
+
+// ------ Normalize ---------------------------------------------------------------------------
+// Answer choices to word as the database does, and questions about different people to link
+.normalize {
+  > .request-section:first-child { margin-top: 0; }
+  .normalize-table {
+    font-size: 0.9rem;
+    th, td { padding: 0.35rem 0.75rem; vertical-align: middle; }
+    .is-count { text-align: right; font-variant-numeric: tabular-nums; }
+  }
+}
+.normalize-all { margin-bottom: 0.75rem; }
+.normalize-group {
+  margin: 0 0 0.5rem;
+  &.is-linked { border-color: $vcu-gold; }
+  ul { margin: 0.35rem 0 0; padding-left: 1.25rem; font-size: 0.9rem; }
+}
+.normalize-group-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+  .edit-card-title { flex: 1 1 16rem; margin: 0; font-size: 1rem; }
+}

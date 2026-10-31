@@ -13,13 +13,16 @@ push_chunk_size <- 150
 #' The answer choices and option sets in the database.
 #'
 #' @param connection The MATR database, `list(url, key)`; see `model_database.R`.
-#' @return A list of data frames: `answer_options` (`answer_option_id`, `standardized_label`),
-#'   `option_sets` (`option_set_id`, `name`) and `members` (`option_set_id`, `answer_option_id`).
+#' @return A list of data frames: `answer_options` (`answer_option_id`, `standardized_label`), `aliases`
+#'   (`alias`, `answer_option_id`: wordings merged into a choice), `option_sets` (`option_set_id`, `name`),
+#'   `members` (`option_set_id`, `answer_option_id`) and `stems` (`question_stem_id`, `text`).
 push_model_options <- function(connection) {
   list(
     answer_options = database_model_get(
       connection, "answer_option", c("answer_option_id", "standardized_label"), order_by = "answer_option_id"
     ),
+    aliases = database_model_get(connection, "answer_option_alias", c("alias", "answer_option_id"), order_by = "alias"),
+    stems = database_model_get(connection, "question_stem", c("question_stem_id", "text"), order_by = "question_stem_id"),
     option_sets = database_model_get(connection, "option_set", c("option_set_id", "name"), order_by = "option_set_id"),
     members = database_model_get(
       connection, "answer_option_set", c("option_set_id", "answer_option_id"),

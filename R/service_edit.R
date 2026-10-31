@@ -536,7 +536,9 @@ edit_service_build <- function(entity, mode, snap, row = NULL, scope = NULL, fie
   } else {
     edit_update_items(entity, snap, row, fields, values)
   }
-  summary <- if (mode != "add") {
+  summary <- if (mode != "add" && !is.null(entity$summary_update)) {
+    entity$summary_update(snap, row, fields, values)
+  } else if (mode != "add") {
     edit_summary_update(entity, snap, row, fields, values)
   } else if (!is.null(entity$summary_add)) {
     entity$summary_add(snap, scope, fields, values)

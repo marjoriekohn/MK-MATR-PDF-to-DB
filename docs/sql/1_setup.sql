@@ -10,6 +10,10 @@
 --          (matr_keep) before anything is removed, and back once the database is built.
 --   LOST:  every other row (what the questionnaires print, their variables, drafts, their history, ...).
 --
+-- On the TEST project (rqygcjgftmtatzrzcwcf) nothing is lost: every table's rows are kept and put back,
+-- so the questionnaires extracted there stay as test data. tests/database/reset_test_database.sql trims
+-- it to them. Run tests/database/test_functions.sql again afterwards: its functions go with public.
+--
 -- Part 0 refuses to run if any other table holds a row, so it can't empty a database that is in use.
 -- Rows left from trying the site out can be cleared anyway, on purpose: see the top of part 0. Once
 -- real data is in, change the database with migrations instead of running this again.
@@ -28,7 +32,7 @@
 --   Rules the site enforces instead
 --   Checks of the database build   (rolled back: they leave nothing behind)
 --   Staff access                   what a signed-in staff member may read
---   Put back the kept rows         the tables above, from matr_keep
+--   Put back the kept rows         the tables above (every table, on the test project), from matr_keep
 --
 -- Each part is its own transaction: if a statement fails, its part makes nothing, and the parts before
 -- it stay. If a part fails, fix the cause and run the whole file again. The kept rows stay in matr_keep
@@ -63,6 +67,11 @@ declare
   holding text[] := array[]::text[];
   has_row boolean;
 begin
+  -- the test project keeps every row (the next block), so nothing is lost there
+  if (select system_identifier::text from pg_control_system()) = '7692131729119822239' then
+    raise notice 'This is the MATR test database: keeping every table''s rows.';
+    return;
+  end if;
   for t in
     select c.oid::regclass from pg_class c
     where c.relnamespace in (select oid from pg_namespace where nspname in ('public', 'private'))
@@ -88,19 +97,27 @@ begin
 end;
 $$;
 
--- The kept rows, each as JSON, so they come back whatever columns the old tables had
+-- The kept rows, each as JSON, so they come back whatever columns the old tables had. On the test
+-- project, every table in public.
 do $$
 declare
-  t text;
-  n bigint;
+  t    text;
+  n    bigint;
+  kept text[] := array['staff', 'component_type', 'subject', 'principal_investigator', 'respondent_type',
+                       'registry', 'study', 'questionnaire', 'wave', 'pdf_file', 'wave_file'];
 begin
   if to_regnamespace('matr_keep') is not null then
     raise notice 'matr_keep is already there (an earlier run stopped before putting its rows back): keeping those rows.';
     return;
   end if;
+  if (select system_identifier::text from pg_control_system()) = '7692131729119822239' then
+    kept := kept || array(select c.relname::text from pg_class c
+                          where c.relnamespace = 'public'::regnamespace and c.relkind in ('r', 'p')
+                            and c.relname <> all (kept)
+                          order by 1);
+  end if;
   create schema matr_keep;
-  foreach t in array array['staff', 'component_type', 'subject', 'principal_investigator', 'respondent_type',
-                           'registry', 'study', 'questionnaire', 'wave', 'pdf_file', 'wave_file'] loop
+  foreach t in array kept loop
     if to_regclass('public.' || t) is not null then
       execute format('create table matr_keep.%I as select to_jsonb(r) as kept from public.%I r', t, t);
       execute format('select count(*) from matr_keep.%I', t) into n;
@@ -163,7 +180,8 @@ $$;
 
 -- An answer choice as it is kept (answer_option_label_normal): lower case, straight quotes, one space between
 -- words, no question mark, and no full stop or colon at the end. The site's normal_answer() (R/service_draft.R)
--- does the same.
+-- does the same, and writes some wordings one way too (a range of numbers as "1-2", "hrs" as "hours"), so what
+-- it gives always passes this check.
 create function private.normal_answer(p_text text)
 returns text
 language sql
@@ -271,9 +289,21 @@ create table public.component (
   text              text                                                 -- empty only for Groups (BR42: component_kind_rules)
 );
 
--- QUESTION is a subtype of COMPONENT with no attributes of its own (BR43, BR44).
+-- QUESTION is a subtype of COMPONENT (BR43, BR44). Its one attribute of its own is the stem it shares with
+-- the questions that differ from it only in who they ask about.
 create table public.question (
-  component_id bigint primary key
+  component_id     bigint primary key,
+  question_stem_id bigint
+);
+
+-- What questions that differ only in who they ask about have in common: "Has [subject] ever repeated a grade?"
+-- for "Has Twin A ever repeated a grade?" and "Has Twin B ever repeated a grade?". Each question keeps its own
+-- printed words, number and variables; [subject] is filled in with a variable's subject when the stem is shown.
+-- One stem for each wording, but for runs of spaces: question_stem_text_unique, section 3.
+create table public.question_stem (
+  question_stem_id bigint primary key default private.random_id('question_stem', 'question_stem_id'),
+  text             text   not null
+    constraint question_stem_text_not_blank check (btrim(text) <> '')
 );
 
 create table public.questionnaire_component (
@@ -375,6 +405,14 @@ create table public.answer_option (
   standardized_label text   not null
     constraint answer_option_label_unique unique                         -- BR110
     constraint answer_option_label_normal check (standardized_label = private.normal_answer(standardized_label))
+);
+
+-- Wordings merged into an answer choice on Make an edit: an extraction that reads one of them uses the choice
+-- instead of adding it again ("1 to 2" for "1-2"). An alias isn't a choice's wording itself (the site checks).
+create table public.answer_option_alias (
+  alias            text   primary key
+    constraint answer_option_alias_normal check (alias = private.normal_answer(alias)),
+  answer_option_id bigint not null
 );
 
 create table public.answer_option_set (
@@ -531,7 +569,7 @@ create table public.ai_extracted_draft (
   review_edits       jsonb  not null default '[]'::jsonb,
   reading_status     text   not null
     constraint ai_extracted_draft_reading_status_check
-    check (reading_status in ('queued', 'sent', 'received', 'assigning', 'ready', 'failed')),   -- assigning: 10_assigning_status.sql
+    check (reading_status in ('queued', 'sent', 'received', 'assigning', 'ready', 'failed')),
   reading_started    timestamptz,
   reading_claimed_at timestamptz,
   reading_pid        integer,
@@ -680,6 +718,15 @@ alter table public.closed_ended
   add constraint closed_ended_option_set_id_fkey
     foreign key (option_set_id) references public.option_set (option_set_id);
 
+alter table public.question
+  add constraint question_question_stem_id_fkey
+    foreign key (question_stem_id) references public.question_stem (question_stem_id) on delete set null;
+
+-- A choice's merged wordings go with it.
+alter table public.answer_option_alias
+  add constraint answer_option_alias_answer_option_id_fkey
+    foreign key (answer_option_id) references public.answer_option (answer_option_id) on delete cascade;
+
 alter table public.answer_option_set
   add constraint answer_option_set_option_set_id_fkey
     foreign key (option_set_id) references public.option_set (option_set_id),
@@ -765,6 +812,7 @@ alter table public.applied_item
 -- Uniqueness that ignores case or spaces (an index, as a unique constraint can't hold an expression)
 create unique index staff_email_unique  on public.staff   (lower(email));          -- BR22
 create unique index subject_name_unique on public.subject (lower(btrim(name)));
+create unique index question_stem_text_unique on public.question_stem (btrim(regexp_replace(text, '\s+', ' ', 'g')));
 create unique index option_set_name_unique                 on public.option_set (lower(btrim(name)));              -- BR109
 create unique index measurement_scale_name_unique          on public.measurement_scale (lower(btrim(name)));       -- BR78
 create unique index measurement_scale_abbreviation_unique  on public.measurement_scale (lower(btrim(abbreviation)));
@@ -788,6 +836,8 @@ create index wave_question_question_idx            on public.wave_question (ques
 create index variable_subject_id_idx               on public.variable (subject_id);
 create index closed_ended_option_set_id_idx        on public.closed_ended (option_set_id);
 create index answer_option_set_answer_option_idx   on public.answer_option_set (answer_option_id);
+create index answer_option_alias_answer_option_idx on public.answer_option_alias (answer_option_id);
+create index question_question_stem_idx            on public.question (question_stem_id);
 create index response_option_answer_option_idx     on public.response_option (answer_option_id);
 create index response_option_skip_to_idx           on public.response_option (skip_to_component_id);
 create index response_option_count_choice_idx      on public.response_option_count (variable_key, answer_option_id);
@@ -1432,12 +1482,13 @@ declare
     'registry', 'principal_investigator', 'study', 'respondent_type', 'questionnaire', 'wave',
     'component_type', 'component', 'questionnaire_component', 'question', 'questionnaire_question',
     'wave_question', 'category', 'question_category', 'answer_option', 'subject', 'option_set', 'answer_option_set',
-    'measurement_scale', 'question_scale', 'variable', 'open_ended', 'closed_ended', 'response_option', 'response_option_count'
+    'measurement_scale', 'question_scale', 'variable', 'open_ended', 'closed_ended', 'response_option', 'response_option_count',
+    'question_stem', 'answer_option_alias'
   ];
   loadable constant text[] := array[
     'questionnaire', 'wave', 'component', 'questionnaire_component', 'question', 'questionnaire_question',
     'wave_question', 'variable', 'open_ended', 'closed_ended', 'option_set', 'answer_option',
-    'answer_option_set', 'response_option', 'response_option_count', 'subject'
+    'answer_option_set', 'response_option', 'response_option_count', 'subject', 'question_stem'
   ];
   token_pattern constant text := '^new:[a-z_]+:[0-9]+$';
 
@@ -2091,7 +2142,6 @@ $$;
 
 
 -- ------ 4d. Respondents' counts, extraction drafts that go, and the audit's rules ----------------------
--- (docs/sql/9_integrity_rules.sql, parts D to F)
 
 -- The wave asks the variable's question: it is in the variable's questionnaire, and asks that question.
 -- Checked when the transaction ends, so an extraction can add the count before or after the wave's question.
@@ -2537,7 +2587,7 @@ declare
     'component_type', 'component', 'question', 'questionnaire_component', 'questionnaire_question',
     'wave_question', 'subject', 'variable', 'open_ended', 'closed_ended', 'option_set',
     'answer_option', 'answer_option_set', 'response_option', 'response_option_count', 'category', 'question_category',
-    'measurement_scale', 'question_scale'
+    'measurement_scale', 'question_scale', 'question_stem', 'answer_option_alias'
   ];
 begin
   foreach t in array dashboard_tables loop
@@ -2593,6 +2643,8 @@ comment on table public.wave                    is 'One round of data collection
 comment on table public.component_type          is 'Kind of building block: Section, Question, Instruction, ...';
 comment on table public.component               is 'One piece of printed material, held once for the whole registry.';
 comment on table public.question                is 'Subtype of component that requests one or more answers.';
+comment on table public.question_stem           is 'What questions that differ only in who they ask about share, e.g. "Has [subject] ever repeated a grade?". [subject] is filled in with each variable''s subject when shown.';
+comment on column public.question.question_stem_id is 'The stem this question shares with the questions that differ from it only in who they ask about (Twin A, Twin B). Empty when it shares none.';
 comment on table public.questionnaire_component is 'Where a questionnaire printed a component: parent and display order.';
 comment on table public.questionnaire_question  is 'A question as printed in one questionnaire; variables attach here.';
 comment on table public.wave_question           is 'That a wave actually asked a question: its place among the wave''s questions, and the number printed beside it.';
@@ -2601,7 +2653,8 @@ comment on table public.variable                is 'One place an answer is recor
 comment on table public.open_ended              is 'Variable the respondent writes.';
 comment on table public.closed_ended            is 'Variable chosen from an option set.';
 comment on table public.option_set              is 'Named collection of answer options, independent of order and coding.';
-comment on table public.answer_option           is 'One answer choice, stored once for the whole registry.';
+comment on table public.answer_option           is 'One answer choice, stored once for the whole registry. [subject] in its words stands for the variable''s subject ("describes [subject] very well").';
+comment on table public.answer_option_alias     is 'A wording merged into an answer choice on Make an edit. An extraction that reads it uses the choice instead.';
 comment on table public.response_option_count   is 'How many of a wave''s respondents gave one answer (response option) of one variable. Typed on Edit Extraction for the extraction''s wave.';
 comment on table public.answer_option_set       is 'Links answer options to option sets.';
 comment on table public.response_option         is 'One answer option as it was printed for one closed-ended variable. A closed-ended variable has one or more (a lone check box has one).';
@@ -2776,7 +2829,7 @@ insert into public.component_type (name, description) values
 
 -- Who a variable can be about; staff keep this list on Make an edit.
 insert into public.subject (name) values
-  ('Respondent'), ('Respondent''s Family'), ('Respondent''s Children'), ('Respondent''s Siblings');
+  ('Respondent'), ('Respondent''s Family'), ('Respondent''s Children'), ('Respondent''s Siblings'), ('Twin A'), ('Twin B');
 
 commit;
 
@@ -2789,7 +2842,7 @@ commit;
 --   BR69 questionnaire question asked in >= 1 wave
 --   BR80 scale has >= 1 question        BR87 questionnaire question has >= 1 variable
 --   BR99 closed-ended has >= 1 option   BR106 option set has >= 1 answer option
--- BR5, BR23, BR42, BR45, BR53 and BR102 are the database's too since docs/sql/9_integrity_rules.sql (section 4d).
+-- BR5, BR23, BR42, BR45, BR53 and BR102 are the database's too (section 4d).
 -- BR11 (a study has a questionnaire) and BR19 (a questionnaire has a wave) are no longer enforced:
 -- a study's last questionnaire and a questionnaire's last wave can be deleted.
 -- BR28, BR29, BR32, BR35 and BR36 described the old Wave Load / two-approver design; the draft
@@ -2961,13 +3014,14 @@ begin
   foreach t in array array['registry', 'principal_investigator', 'study', 'respondent_type', 'questionnaire', 'wave',
     'component_type', 'component', 'question', 'questionnaire_component', 'questionnaire_question', 'wave_question',
     'subject', 'variable', 'open_ended', 'closed_ended', 'option_set', 'answer_option', 'answer_option_set',
-    'response_option', 'response_option_count', 'category', 'question_category', 'measurement_scale', 'question_scale'] loop
+    'response_option', 'response_option_count', 'category', 'question_category', 'measurement_scale', 'question_scale',
+    'question_stem', 'answer_option_alias'] loop
     assert has_table_privilege('anon', 'public.' || t, 'select'), t || ' is readable by the dashboard';
     assert not has_table_privilege('anon', 'public.' || t, 'insert, update, delete, truncate'), t || ' is read-only to the dashboard';
     assert (select count(*) from pg_policies where schemaname = 'public' and tablename = t) = 1, t || ' has its one policy';
     assert has_table_privilege('service_role', 'public.' || t, 'select, insert, update, delete'), t || ' is the site''s to change';
   end loop;
-  assert (select count(*) from pg_class where relnamespace = 'public'::regnamespace and relkind = 'r') = 33, 'thirty-three tables';
+  assert (select count(*) from pg_class where relnamespace = 'public'::regnamespace and relkind = 'r') = 36, 'thirty-six tables';
   assert not exists (select 1 from pg_class where relnamespace = 'public'::regnamespace and relkind = 'r' and not relrowsecurity), 'RLS on all of them';
   assert has_function_privilege('anon', 'public.upvote_questionnaire(bigint)', 'execute'), 'the dashboard may upvote';
   assert not has_function_privilege('anon', 'public.draft_needs_approval(bigint)', 'execute'), 'but not ask about drafts';
@@ -3582,6 +3636,8 @@ declare
   st bigint;
   other bigint;
   e bigint;
+  w1 bigint;
+  w2 bigint;
 begin
   insert into public.study (registry_id, name) values (pg_temp.id('registry'), 'ZZ Study With No Lead') returning study_id into st;
   update public.study set principal_investigator_id = pg_temp.id('pi') where study_id = st;
@@ -3590,7 +3646,13 @@ begin
   perform pg_temp.expect_error(format('update public.study set principal_investigator_id = %s where study_id = %s', other, st), 'lead investigator can''t be changed');
   perform pg_temp.expect_error(format('update public.study set principal_investigator_id = null where study_id = %s', st), 'lead investigator can''t be changed');
 
-  -- the test waves have 100 and 90 respondents (checked when the transaction ends, so it is run here as that would)
+  -- two waves of 100 and 90 respondents, and the questionnaire's other waves none (earlier checks changed
+  -- and deleted the test waves). The rule is checked when the transaction ends, so it is run here as that would.
+  update public.wave set respondent_count = null where questionnaire_id = pg_temp.id('questionnaire');
+  insert into public.wave (questionnaire_id, name, respondent_count) values (pg_temp.id('questionnaire'), 'ZZ Counted 1', 100)
+    returning wave_id into w1;
+  insert into public.wave (questionnaire_id, name, respondent_count) values (pg_temp.id('questionnaire'), 'ZZ Counted 2', 90)
+    returning wave_id into w2;
   begin
     update public.questionnaire set participant_count = 150 where questionnaire_id = pg_temp.id('questionnaire');
     set constraints questionnaire_count_covers_waves immediate;
@@ -3602,27 +3664,27 @@ begin
   set constraints questionnaire_count_covers_waves immediate;
   set constraints questionnaire_count_covers_waves deferred;
   begin
-    update public.wave set respondent_count = 120 where wave_id = pg_temp.id('wave1');
+    update public.wave set respondent_count = 120 where wave_id = w1;
     set constraints wave_counts_within_questionnaire immediate;
     raise exception 'went through';
   exception when others then
     assert sqlerrm like '%210 respondents between them%', 'waves that add up to more are refused: ' || sqlerrm;
   end;
-  update public.wave set respondent_count = null where wave_id = pg_temp.id('wave1');
+  update public.wave set respondent_count = null where wave_id = w1;
   set constraints wave_counts_within_questionnaire immediate;
   set constraints wave_counts_within_questionnaire deferred;
 
   e := public.create_draft('Extraction', pg_temp.id('ada'), jsonb_build_object('summary', 'Files'), jsonb_build_object(
     'method', 'Manual', 'pdf_sha256', 'zzfiles', 'pdf_name', 'q.pdf', 'pdf_bytes', 20,
     'supplement', jsonb_build_object('name', 'codes.pdf', 'sha256', 'zzcodes', 'bytes', 10),
-    'info', jsonb_build_object('wave_id', pg_temp.id('wave1')::text)));
+    'info', jsonb_build_object('wave_id', w1::text)));
   assert (select pdf_bytes from public.pdf_file where pdf_sha256 = 'zzcodes') = 10, 'the file of Variable Names and Coding has a pdf_file row';
   perform public.apply_draft(e, pg_temp.id('ada'), jsonb_build_array(
     pg_temp.item(1, 'wave', jsonb_build_object('wave_id', 'new:wave:1'), 'Insert', 'questionnaire_id', null, pg_temp.id('questionnaire')::text),
     pg_temp.item(2, 'wave', jsonb_build_object('wave_id', 'new:wave:1'), 'Insert', 'name', null, 'Wave Files')));
   assert (select pdf_sha256 = 'zzfiles' and pdf_name = 'q.pdf' and supplement_sha256 = 'zzcodes' and supplement_name = 'codes.pdf'
                  and supplement_text is null
-          from public.wave_file where wave_id = pg_temp.id('wave1')), 'the wave keeps the files it was extracted from';
+          from public.wave_file where wave_id = w1), 'the wave keeps the files it was extracted from';
   e := public.create_draft('Extraction', pg_temp.id('ada'), '{}'::jsonb, jsonb_build_object(
     'method', 'Manual', 'pdf_sha256', 'zzfiles', 'supplement', jsonb_build_object('name', 'codes.pdf', 'sha256', 'zzcodes')));
   perform public.discard_draft(e, pg_temp.id('ada'));
@@ -3694,14 +3756,22 @@ commit;
 -- component type or subject that was deleted stays deleted); a table with none kept keeps the starting
 -- rows. The other tables have no starting rows. A column the old table didn't have is left empty
 -- (or its default). The waves come back asking no questions: what the questionnaires print is not
--- kept. matr_keep goes once the rows are back. If this part fails, nothing in it happens and matr_keep stays: fix the cause and run the
+-- kept. On the test project every other table was kept too, and comes back after these, each after the
+-- tables it points at, with its own triggers off while its rows go in (the rows were already checked
+-- when they were first made; the foreign keys stay on). matr_keep goes once the rows are back. If this part fails, nothing in it happens and matr_keep stays: fix the cause and run the
 -- whole file again.
 
 begin;
 
 do $$
 declare
-  n bigint;
+  n     bigint;
+  t     text;
+  rest  text[];
+  ready text[];
+  keys  text[];
+  cols  text;
+  vals  text;
 begin
   if to_regnamespace('matr_keep') is null then
     return;   -- nothing was kept (a new project)
@@ -3715,7 +3785,7 @@ begin
       from matr_keep.component_type;
       get diagnostics n = row_count;
       raise notice 'Put back % component type(s).', n;
-      update public.component_type set name = 'Group' where name = 'Question Group'; -- renamed by 9_integrity_rules.sql
+      update public.component_type set name = 'Group' where name = 'Question Group'; -- its old name
     end if;
   end if;
 
@@ -3812,6 +3882,51 @@ begin
     get diagnostics n = row_count;
     raise notice 'Put back % wave''s file record(s).', n;
   end if;
+
+  -- The test project's other tables, each after the ones it points at
+  rest := array(select c.relname::text from pg_class c
+                where c.relnamespace = 'matr_keep'::regnamespace and c.relkind = 'r'
+                  and c.relname <> all (array['staff', 'component_type', 'subject', 'principal_investigator',
+                                              'respondent_type', 'registry', 'study', 'questionnaire', 'wave',
+                                              'pdf_file', 'wave_file'])
+                order by 1);
+  foreach t in array rest loop
+    if to_regclass('public.' || t) is null then
+      execute format('select count(*) from matr_keep.%I', t) into n;
+      raise notice 'Not putting back % row(s) of %: the database has no such table now.', n, t;
+      rest := array_remove(rest, t);
+    end if;
+  end loop;
+  while cardinality(rest) > 0 loop
+    ready := array(select r from unnest(rest) r
+                   where not exists (select 1 from pg_constraint f, unnest(rest) u
+                                     where f.contype = 'f' and f.conrelid = ('public.' || r)::regclass
+                                       and u <> r and f.confrelid = ('public.' || u)::regclass)
+                   order by 1);
+    if cardinality(ready) = 0 then
+      raise exception 'Can''t put back %: they point at each other, so none can go first.', array_to_string(rest, ', ');
+    end if;
+    foreach t in array ready loop
+      -- the columns the kept rows have and the new table still has
+      execute format('select array(select distinct jsonb_object_keys(kept) from matr_keep.%I)', t) into keys;
+      select string_agg(format('%I', a.attname), ', ' order by a.attnum),
+             string_agg(format('r.%I', a.attname), ', ' order by a.attnum)
+      into cols, vals
+      from pg_attribute a
+      where a.attrelid = ('public.' || t)::regclass and a.attnum > 0 and not a.attisdropped
+        and a.attgenerated = '' and a.attname = any (keys);
+      n := 0;
+      if cols is not null then
+        execute format('alter table public.%I disable trigger user', t);
+        execute format('insert into public.%I (%s) select %s from matr_keep.%I k cross join lateral jsonb_populate_record(null::public.%I, k.kept) r',
+                       t, cols, vals, t, t);
+        get diagnostics n = row_count;
+        execute format('alter table public.%I enable trigger user', t);
+      end if;
+      raise notice 'Put back % row(s) of %.', n, t;
+    end loop;
+    rest := array(select r from unnest(rest) r where r <> all (ready));
+  end loop;
 
   drop schema matr_keep cascade;
 end;

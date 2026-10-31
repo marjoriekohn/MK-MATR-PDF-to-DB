@@ -2,8 +2,10 @@
 #' has got across the page under both, over the extracted questionnaire.
 #'
 #' One panel: the whole questionnaire as it was extracted, as a list with the picked block's details
-#' beside it (`extraction_outline_ui()`). The header's buttons: Undo, Save, Open PDF (if the file is here:
-#' it opens in its own tab, at the page of the block picked) and Preview (of the change request).
+#' beside it (`extraction_outline_ui()`). The header's buttons: Undo, Save, Normalize (answer choices worded as
+#' the database words them, and questions that differ only in who they ask about linked: `normalize_dialog()`),
+#' Open PDF (if the file is here: it opens in its own tab, at the page of the block picked) and Preview (of the
+#' change request).
 #' On a phone the buttons are only their icons, sharing a row of their own evenly under the progress bar.
 #'
 #' (It was called the review page. Change Requests has its own review, of requests waiting for approval.)
@@ -29,6 +31,10 @@ edit_extraction_ui <- function(id) {
           class = "review-buttons",
           actionButton(ns("undo"), icon_label("undo", "Undo"), class = "btn-outline-dark", disabled = TRUE, title = "Undo"),
           actionButton(ns("save"), icon_label("save", "Save"), class = "btn-outline-dark", disabled = TRUE, title = "Save"),
+          actionButton(
+            ns("normalize"), icon_label("normalize", "Normalize"), class = "btn-outline-dark",
+            title = "Word answer choices as the database does, and link questions that differ only in who they ask about"
+          ),
           uiOutput(ns("pdf_link"), inline = TRUE),
           uiOutput(ns("request_button"), inline = TRUE)
         )
@@ -203,3 +209,117 @@ submit_request_dialog <- function(ns, summary, unchecked, approval, reviewers) {
     )
   )
 }
+
+#' The Normalize dialog: what could be worded as the database words it, and the questions that could be linked,
+#' each with a button that does it (a change like any other, which Undo takes back). Nothing is written to the
+#' database: it is all in the draft until its change request is approved.
+#'
+#' @param ns The module's namespace function.
+#' @return A `modalDialog()`, for `showModal()`.
+normalize_dialog <- function(ns) {
+  modalDialog(
+    title = "Normalize",
+    size = "xl",
+    easyClose = TRUE,
+    uiOutput(ns("normalize_body")),
+    footer = modalButton("Close")
+  )
+}
+
+#' What the Normalize dialog lists.
+#'
+#' @param ns The module's namespace function.
+#' @param choices From `normalize_service_choice_suggestions()`.
+#' @param groups From `normalize_service_question_groups()`.
+#' @param draft The questionnaire on screen.
+#' @return A UI element. Its buttons are data-action buttons of the page (`use_choice`, `link`, `link_all`,
+#'   `unlink`), so the body carries the page's namespace.
+normalize_ui <- function(ns, choices, groups, draft) {
+  open <- Filter(function(group) !group$linked, groups)
+  div(
+    class = "normalize", `data-ns` = ns(""),
+    div(
+      class = "request-section",
+      h3("Answer choices"),
+      p(
+        class = "form-text",
+        "Ranges, dashes and abbreviations are already written one way (“1 to 2” is “1-2”, “hrs” is “hours”). ",
+        "These choices are worded a little differently from one the database has, or another of this questionnaire's."
+      ),
+      if (nrow(choices) == 0) {
+        p(class = "text-muted", "Nothing to change.")
+      } else {
+        tags$table(
+          class = "table table-sm normalize-table",
+          tags$thead(tags$tr(tags$th("This questionnaire has"), tags$th(class = "is-count", "Choices"), tags$th("Use instead"), tags$th())),
+          tags$tbody(lapply(seq_len(nrow(choices)), function(i) {
+            row <- choices[i, ]
+            tags$tr(
+              tags$td(row$from),
+              tags$td(class = "is-count", row$uses),
+              tags$td(
+                row$to, " ",
+                span(class = "form-text", switch(row$why,
+                  merged = "(merged into it on Make an edit)",
+                  if (row$in_database) "(in the database)" else "(more of this questionnaire's choices)"
+                ))
+              ),
+              tags$td(review_button("Use it", "use_choice", `data-from` = row$from, `data-to` = row$to))
+            )
+          }))
+        )
+      }
+    ),
+    div(
+      class = "request-section",
+      h3("Questions about different people"),
+      p(
+        class = "form-text",
+        "These questions differ only in who they ask about. Linking them keeps each one's words, number and variables, ",
+        "and gives them one stem, with [subject] for who they ask about. Each variable is then about who its question ",
+        "asks about, and a choice that names them says [subject] instead, so they share one set of choices."
+      ),
+      if (length(groups) == 0) {
+        p(class = "text-muted", "None found.")
+      } else {
+        tagList(
+          if (length(open) > 1) {
+            div(class = "normalize-all", review_button(icon_label("link", "Link all"), "link_all", class = "btn btn-sm btn-primary"))
+          },
+          lapply(groups, function(group) normalize_group_ui(group, draft))
+        )
+      }
+    )
+  )
+}
+
+# One group of questions that differ only in who they ask about: its stem, each question with whom it asks about,
+# and Link or Unlink.
+normalize_group_ui <- function(group, draft) {
+  blocks <- draft$components[match(group$ids, draft$components$id), , drop = FALSE]
+  ids <- paste(group$ids, collapse = ",")
+  div(
+    class = c("edit-card", "normalize-group", if (group$linked) "is-linked"),
+    div(
+      class = "normalize-group-head",
+      h4(class = "edit-card-title", group$stem),
+      if (group$linked) {
+        tagList(
+          row_badge(icon_label("link", "Linked")),
+          review_button(icon_label("unlink", "Unlink"), "unlink", `data-ids` = ids)
+        )
+      } else {
+        review_button(icon_label("link", "Link"), "link", `data-ids` = ids, class = "btn btn-sm btn-primary")
+      }
+    ),
+    tags$ul(lapply(seq_len(nrow(blocks)), function(i) {
+      number <- draft_service_question_number(blocks[i, ])
+      tags$li(
+        if (!is.na(number)) strong(number, outline_number_separator),
+        blocks$text[i], " ",
+        span(class = "form-text", paste0("(about ", group$subjects[i], ")"))
+      )
+    }))
+  )
+}
+

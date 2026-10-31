@@ -178,7 +178,8 @@ reading_service_instructions <- function(lookups, prompt_path = reading_prompt_p
     component_types = quoted(lookups$component_types),
     subjects = quoted(lookups$subjects),
     answer_data_types = quoted(lookups$answer_data_types),
-    answer_options = paste0("  - ", lookups$answer_options, collapse = "\n")
+    # not a choice with [subject] in it: Gemini writes who a choice names as printed, and staff link the questions
+    answer_options = paste0("  - ", grep(subject_placeholder, lookups$answer_options, fixed = TRUE, value = TRUE, invert = TRUE), collapse = "\n")
   )
   for (name in names(lists)) {
     prompt <- gsub(paste0("{{", name, "}}"), lists[[name]], prompt, fixed = TRUE)

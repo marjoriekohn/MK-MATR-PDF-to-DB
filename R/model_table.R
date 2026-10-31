@@ -74,7 +74,11 @@ database_tables <- list(
   ),
   question = list(
     key = "component_id", order_by = "component_id",
-    columns = c(component_id = "id")
+    columns = c(component_id = "id", question_stem_id = "id")
+  ),
+  question_stem = list(
+    key = "question_stem_id", order_by = "text",
+    columns = c(question_stem_id = "id", text = "text")
   ),
   questionnaire_question = list(
     key = c("questionnaire_id", "component_id"), order_by = c("questionnaire_id", "component_id"),
@@ -102,6 +106,10 @@ database_tables <- list(
   answer_option = list(
     key = "answer_option_id", order_by = "standardized_label",
     columns = c(answer_option_id = "id", standardized_label = "text")
+  ),
+  answer_option_alias = list(
+    key = "alias", order_by = "alias",
+    columns = c(alias = "text", answer_option_id = "id")
   ),
   subject = list(
     key = "subject_id", order_by = "name",
@@ -150,8 +158,12 @@ database_tables <- list(
     columns = c(
       variable_key = "id", answer_option_id = "id", display_order = "number",
       code_value = "text",
-      skip_instruction = "text", skip_to_component_id = "id"
+      skip_instruction = "text", skip_to_component_id = "id", skip_to_end = "flag"
     )
+  ),
+  response_option_count = list(
+    key = c("wave_id", "variable_key", "answer_option_id"), order_by = c("wave_id", "variable_key", "answer_option_id"),
+    columns = c(wave_id = "id", variable_key = "id", answer_option_id = "id", respondent_count = "number")
   ),
   # The PDFs extractions were read from, and the extractions that name them: Make an edit lists the PDFs (and
   # only shows them; nothing about a PDF can change). Only the columns that say which draft is which.

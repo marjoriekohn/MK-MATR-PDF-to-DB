@@ -154,6 +154,54 @@ test_that("an answer choice and a set of choices that are there already are used
   expect_equal(nchar(push_option_set_name(paste("choice", 1:60), character())), 150)
 })
 
+test_that("a choice worded the old way, or merged into another, is the one there; the exact words come first", {
+  options <- c(no_options[c("option_sets", "members")], list(
+    answer_options = data.frame(answer_option_id = c(10, 11, 12), standardized_label = c("1 to 2", "1-2", "never")),
+    aliases = data.frame(alias = "not ever", answer_option_id = 12)
+  ))
+  built <- build_for(small_draft(labels = c("1 - 2", "Not ever.")), options = options)
+  expect_false("answer_option" %in% built$items$entity_name)
+  offered <- built$items$record_identifier[built$items$entity_name == "response_option"]
+  expect_true(any(grepl('"answer_option_id":11,', offered, fixed = TRUE))) # "1-2", not the older "1 to 2"
+  expect_true(any(grepl('"answer_option_id":12,', offered, fixed = TRUE))) # "not ever" was merged into "never"
+  expect_equal(built$rows$answer_options$text, c("1-2", "never"))
+  expect_equal(built$rows$answer_options$status, rep("Already in the database", 2))
+
+  # only "1 to 2" there: it is used, as normal_answer() writes it the same way
+  options$answer_options <- options$answer_options[-2, ]
+  older <- build_for(small_draft(labels = c("1 - 2", "Never")), options = options)
+  expect_false("answer_option" %in% older$items$entity_name)
+  expect_true(any(grepl('"answer_option_id":10,', older$items$record_identifier, fixed = TRUE)))
+})
+
+test_that("a new choice that looks like one in the database says so in the preview", {
+  options <- c(no_options[c("option_sets", "members")], list(
+    answer_options = data.frame(answer_option_id = 10, standardized_label = "yes, most of the time")
+  ))
+  built <- build_for(small_draft(labels = c("Yes most of the time", "No")), options = options)
+  rows <- built$rows$answer_options
+  expect_equal(rows$detail[rows$text == "yes most of the time"], "Looks like “yes, most of the time”")
+  expect_equal(rows$detail[rows$text == "no"], "")
+  expect_true(all(rows$is_new))
+})
+
+test_that("a linked question's stem is added once, or the one there with its words is used", {
+  draft <- small_draft()
+  question <- draft$components$id[draft$components$component_type == "Question"][1]
+  draft$components$stem[draft$components$id == question] <- paste(test_marker, "Do [subject] smoke?")
+  built <- build_for(draft)
+  lines <- item_lines(built$items)
+  expect_true(paste0("Insert question_stem {\"question_stem_id\":\"new:question_stem:1\"} text: - -> ", test_marker, " Do [subject] smoke?") %in% lines)
+  expect_equal(sum(built$items$entity_name == "question" & built$items$attribute_name == "question_stem_id"), 1)
+  expect_equal(built$summary$stems, 1L)
+  expect_match(extraction_service_push_summary(built$summary), "1 new question stem")
+
+  there <- c(no_options, list(stems = data.frame(question_stem_id = 77, text = paste(test_marker, " Do [subject]  smoke? "))))
+  reused <- build_for(draft, options = there)
+  expect_false("question_stem" %in% reused$items$entity_name)
+  expect_equal(reused$items$new_value[reused$items$entity_name == "question" & reused$items$attribute_name == "question_stem_id"], "77")
+})
+
 test_that("how many of the wave's respondents gave an answer is added for the extraction's wave, and only where typed", {
   draft <- small_draft(labels = c("Yes.", "NO"))
   expect_equal(draft$response_options$answer_option, c("yes", "no")) # kept normalized
@@ -291,7 +339,7 @@ test_that("repeated choices are new response options, but each answer choice and
   expect_equal(length(unique(added$items$record_identifier[added$items$entity_name == "response_option"])), 6)
 
   options <- list(
-    answer_options = data.frame(answer_option_id = c(10, 11), standardized_label = c("Yes", "No")),
+    answer_options = data.frame(answer_option_id = c(10, 11), standardized_label = c("yes", "no")),
     option_sets = data.frame(option_set_id = 5, name = "Yes / No"),
     members = data.frame(option_set_id = c(5, 5), answer_option_id = c(10, 11))
   )

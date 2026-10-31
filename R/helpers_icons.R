@@ -21,6 +21,9 @@ app_icons <- c(
   collapse = "compress",
   filter = "filter",
   search = "magnifying-glass",
+  normalize = "wand-magic-sparkles",
+  link = "link",
+  unlink = "link-slash",
   # what something is
   question_number = "hashtag",
   matr_id = "fingerprint",

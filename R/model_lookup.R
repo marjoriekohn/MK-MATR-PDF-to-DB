@@ -30,3 +30,11 @@ lookup_model_get_answer_options <- function(connection) {
     order_by = "answer_option_id"
   )
 }
+
+#' The wordings merged into answer choices on Make an edit.
+#'
+#' @param connection The MATR database, `list(url, key)`; see `model_database.R`.
+#' @return A data frame with `alias` and `answer_option_id`.
+lookup_model_get_answer_option_aliases <- function(connection) {
+  database_model_get(connection, "answer_option_alias", c("alias", "answer_option_id"), order_by = "alias")
+}

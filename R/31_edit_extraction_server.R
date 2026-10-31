@@ -481,9 +481,50 @@ edit_extraction_server <- function(
       if (isolate(has_draft())) release_draft(isolate(record_id()))
     })
 
-    # "to fix" jumps to the next block with a problem.
+    # "to fix" jumps to the next block with a problem; the Normalize dialog's buttons change the draft.
     observeEvent(input$action, {
-      if (identical(input$action$action, "next_problem")) selected(draft_service_next_problem(draft(), problems(), selected()))
+      action <- input$action
+      switch(action$action %||% "",
+        next_problem = selected(draft_service_next_problem(draft(), problems(), selected())),
+        use_choice = change_draft(normalize_service_use_choice(draft(), action$from, action$to)),
+        link = change_draft(normalize_service_link(draft(), normalize_group(action$ids), lookups$subjects)),
+        link_all = {
+          linked <- draft()
+          for (group in Filter(function(group) !group$linked, normalize_groups())) {
+            linked <- normalize_service_link(linked, group, lookups$subjects)
+          }
+          change_draft(linked)
+        },
+        unlink = change_draft(normalize_service_unlink(draft(), strsplit(action$ids, ",", fixed = TRUE)[[1]])),
+        NULL
+      )
+    })
+
+    # ------ Normalize -------------------------------------------------------------------------
+    # Answer choices worded as the database words them, and questions that differ only in who they ask about
+    # linked (service_normalize.R). The dialog lists them as the draft is now, so it changes as its buttons are used.
+    normalize_open <- reactiveVal(FALSE)
+    normalize_groups <- reactive(normalize_service_question_groups(req(draft()), lookups$subjects))
+    # the group of these questions (`ids` joined by commas), as the dialog listed it
+    normalize_group <- function(ids) {
+      wanted <- strsplit(ids %||% "", ",", fixed = TRUE)[[1]]
+      found <- Filter(function(group) identical(group$ids, wanted), normalize_groups())
+      req(length(found) == 1)
+      found[[1]]
+    }
+
+    observeEvent(input$normalize, {
+      req(draft())
+      normalize_open(TRUE)
+      showModal(normalize_dialog(ns))
+    })
+
+    output$normalize_body <- renderUI({
+      req(normalize_open(), draft())
+      normalize_ui(
+        ns, normalize_service_choice_suggestions(draft(), lookups$answer_options, lookups$answer_option_aliases),
+        normalize_groups(), draft()
+      )
     })
 
     observe({

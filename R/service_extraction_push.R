@@ -13,9 +13,13 @@
 #
 # What is reused, and what is new:
 #   * An answer choice is kept once for the whole registry, so a choice whose words are already
-#     there (exactly) is the one that is there; the others are added.
+#     there (as normal_answer() writes them) is the one that is there, and so is a choice whose words were
+#     merged into one on Make an edit (answer_option_alias); the others are added. A new choice that looks
+#     like one that is there ("yes most of the time" for "yes, most of the time") says so in the preview.
 #   * A set of choices is kept once, so a variable whose choices are those of an existing option
 #     set (in any order) uses it; otherwise a set is added, named after its choices.
+#   * A question linked on the Edit Extraction page with the questions that differ from it only in who they
+#     ask about has a stem (question_stem), kept once for each wording: the one there, or a new one.
 #   * The questionnaire's blocks are found where it prints them: a block with the same kind and
 #     words, in the same place, is that block (so the wave asks the same question, and finds its
 #     variables by MATR ID). The blocks that aren't there are added, after the ones that are in the
@@ -218,7 +222,9 @@ extraction_service_build_items <- function(draft, info, ids, existing, options) 
     push$insert("component", list(component_id = component), list(
       component_type_id = push$type_id(block$component_type), text = block$text
     ))
-    if (block$component_type == "Question") push$insert("question", list(component_id = component))
+    if (block$component_type == "Question") {
+      push$insert("question", list(component_id = component), list(question_stem_id = push_question_stem(push, block$stem)))
+    }
     push$summary$blocks <- push$summary$blocks + 1L
     push$note_block(block, "New", is_new = TRUE)
   }
@@ -271,7 +277,8 @@ push_start <- function(ids, existing, options) {
   push <- new.env()
   push$summary <- list(
     blocks = 0L, blocks_found = 0L, blocks_shared = 0L, questions = 0L, variables = 0L, variables_found = 0L,
-    choices = 0L, answer_options = 0L, answer_options_found = 0L, option_sets = 0L, option_sets_found = 0L, subjects = 0L
+    choices = 0L, answer_options = 0L, answer_options_found = 0L, option_sets = 0L, option_sets_found = 0L, subjects = 0L,
+    stems = 0L
   )
   push$existing <- existing
   push$options <- options
@@ -437,20 +444,56 @@ push_skip_to <- function(push, skip_to_id) {
   )
 }
 
+# The answer choice that is there for these words: the one worded so, the one they were merged into
+# (answer_option_alias), or one that normal_answer() writes the same way (worded before it wrote ranges one way,
+# say); NA if there is none. Its id, as a number, named with its words.
+push_found_answer <- function(options, label) {
+  answer_options <- options$answer_options
+  found <- function(ids) {
+    if (length(ids) == 0) {
+      return(NULL)
+    }
+    stats::setNames(ids[1], answer_options$standardized_label[match(ids[1], answer_options$answer_option_id)])
+  }
+  found(answer_options$answer_option_id[answer_options$standardized_label %in% label]) %||%
+    found(options$aliases$answer_option_id[options$aliases$alias %in% label]) %||%
+    found(answer_options$answer_option_id[normal_answer(answer_options$standardized_label) %in% label]) %||%
+    NA_real_
+}
+
+# The words a choice is kept with: those of the choice that is there for them, or its own, as normal_answer()
+# writes them.
+push_answer_words <- function(options, labels) {
+  labels <- normal_answer(labels)
+  vapply(labels, function(label) {
+    there <- push_found_answer(options, label)
+    if (is.na(there)) label else names(there)
+  }, character(1), USE.NAMES = FALSE)
+}
+
 # The id (or the name) of an answer choice with these words: the one that is there, or a new one. `uses` is 1 for
-# a variable's choice (a response option points at it) and 0 for a member of a set of choices.
+# a variable's choice (a response option points at it) and 0 for a member of a set of choices. A new one that looks
+# like one that is there says so (normalize_look_alikes()).
 push_answer_option <- function(push, label, uses = 0L) {
   label <- normal_answer(label)
-  answer_options <- push$options$answer_options
-  there <- answer_options$answer_option_id[normal_answer(answer_options$standardized_label) %in% label]
-  push$note("answer_options", label, label, "", if (length(there) == 1) "Already in the database" else "New", length(there) != 1, uses)
-  if (length(there) == 1) {
+  there <- push_found_answer(push$options, label)
+  if (!is.na(there)) {
+    label <- names(there)
+    push$note("answer_options", label, label, "", "Already in the database", FALSE, uses)
+  } else {
+    alike <- normalize_look_alikes(label, push$options$answer_options$standardized_label)
+    push$note(
+      "answer_options", label, label, if (length(alike) > 0) paste0("Looks like “", alike[1], "”") else "",
+      "New", TRUE, uses
+    )
+  }
+  if (!is.na(there)) {
     found_key <- paste0("found choice:", label) # counted once, however many variables use it
     if (is.null(push$made[[found_key]])) {
       push$made[[found_key]] <- TRUE
       push$summary$answer_options_found <- push$summary$answer_options_found + 1L
     }
-    return(there)
+    return(unname(there))
   }
   key <- paste0("choice:", label)
   if (!is.null(push$made[[key]])) {
@@ -466,10 +509,10 @@ push_answer_option <- function(push, label, uses = 0L) {
 # The id (or the name) of an option set with exactly these choices, in any order: the one that is
 # there, or a new one named after its choices.
 push_option_set <- function(push, labels) {
-  labels <- unique(normal_answer(labels))
+  labels <- unique(push_answer_words(push$options, labels))
   key <- paste(sort(labels), collapse = "\r")
   options <- push$options
-  member_labels <- normal_answer(options$answer_options$standardized_label)[match(
+  member_labels <- options$answer_options$standardized_label[match(
     options$members$answer_option_id,
     options$answer_options$answer_option_id
   )]
@@ -511,6 +554,27 @@ push_option_set <- function(push, labels) {
   push$made[[made_key]] <- name
   push$summary$option_sets <- push$summary$option_sets + 1L
   name
+}
+
+# The id (or the name) of the stem a question shares (its words, with [subject] for who it asks about): the one
+# there with the same words, but for runs of spaces, or a new one; NA for a question that shares none.
+push_question_stem <- function(push, stem) {
+  words <- push_words(stem)
+  if (!nzchar(words)) {
+    return(NA)
+  }
+  stems <- push$options$stems
+  there <- stems$question_stem_id[push_words(stems$text) == words]
+  if (length(there) > 0) {
+    return(there[1])
+  }
+  key <- paste0("stem:", words)
+  if (is.null(push$made[[key]])) {
+    push$made[[key]] <- push$token("question_stem")
+    push$insert("question_stem", list(question_stem_id = push$made[[key]]), list(text = words))
+    push$summary$stems <- push$summary$stems + 1L
+  }
+  push$made[[key]]
 }
 
 # "Yes / No", "Never / Sometimes / Often", with a number after it if the name is taken. A name is taken
@@ -646,7 +710,8 @@ extraction_service_push_summary <- function(summary) {
     if (summary$choices > 0) plural(summary$choices, "response option"),
     if (summary$answer_options > 0) plural(summary$answer_options, "new answer choice"),
     if (summary$option_sets > 0) plural(summary$option_sets, "new set of choices", plural_form = "new sets of choices"),
-    if (summary$subjects > 0) plural(summary$subjects, "new subject")
+    if (summary$subjects > 0) plural(summary$subjects, "new subject"),
+    if (isTRUE(summary$stems > 0)) plural(summary$stems, "new question stem")
   )
   paste0("Adds ", word_list(parts), ".")
 }

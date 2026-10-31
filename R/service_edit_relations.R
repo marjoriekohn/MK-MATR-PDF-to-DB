@@ -74,6 +74,8 @@ edit_relations <- list(
     c(questionnaire_id = "questionnaire_id", component_id = "component_id"), "remove"
   ),
   relation("question", "component", c(component_id = "component_id"), "remove"),
+  # questions that shared a stem that goes no longer share it; their own words stay
+  relation("question", "question_stem", c(question_stem_id = "question_stem_id"), "clear", clears = "question stem"),
   relation("questionnaire_question", "question", c(component_id = "component_id"), "remove"),
   relation(
     "questionnaire_question", "questionnaire_component",
@@ -125,6 +127,8 @@ edit_relations <- list(
     fix = "Take it out of those option sets first (Option Sets, then Edit)."
   ),
   relation("answer_option_set", "option_set", c(option_set_id = "option_set_id"), "remove"),
+  # the wordings merged into a choice go with it
+  relation("answer_option_alias", "answer_option", c(answer_option_id = "answer_option_id"), "remove"),
   relation(
     "closed_ended", "option_set", c(option_set_id = "option_set_id"), "block",
     why = "These variables offer exactly this set of choices.",
@@ -145,9 +149,9 @@ edit_delete_order <- c(
   "response_option", "open_ended", "closed_ended", "variable", "wave_question",
   "question_scale", "question_category", "questionnaire_question",
   "questionnaire_component", "question", "component", "answer_option_set",
-  "option_set", "answer_option", "wave", "questionnaire", "study", "registry",
+  "option_set", "answer_option_alias", "answer_option", "wave", "questionnaire", "study", "registry",
   "principal_investigator", "respondent_type", "component_type", "category",
-  "measurement_scale", "subject"
+  "measurement_scale", "subject", "question_stem"
 )
 
 # ------ Rows and their identity -------------------------------------------------------
@@ -351,6 +355,9 @@ edit_nouns <- list(
   category = c("MeSH category", "MeSH categories"),
   question_category = c("MeSH tag on a question", "MeSH tags on questions"),
   answer_option = c("answer choice", "answer choices"),
+  answer_option_alias = c("merged wording", "merged wordings"),
+  question_stem = c("question stem", "question stems"),
+  response_option_count = c("count of answers", "counts of answers"),
   subject = c("subject", "subjects"),
   answer_option_set = c("choice in an option set", "choices in option sets"),
   option_set = c("option set", "option sets"),
@@ -384,7 +391,7 @@ edit_display_order <- c(
   "registry", "study", "questionnaire", "wave", "component", "questionnaire_component",
   "questionnaire_question", "wave_question", "variable", "response_option",
   "question_category", "question_scale", "category", "measurement_scale", "answer_option",
-  "answer_option_set", "option_set", "principal_investigator", "respondent_type", "component_type", "subject",
+  "answer_option_set", "answer_option_alias", "option_set", "question_stem", "principal_investigator", "respondent_type", "component_type", "subject",
   "pdf_file", "extracted_draft"
 )
 
@@ -403,6 +410,8 @@ edit_label_needs <- list(
   closed_ended = "variable",
   response_option = c("variable", "answer_option"),
   answer_option_set = c("answer_option", "option_set"),
+  answer_option_alias = "answer_option",
+  response_option_count = c("variable", "answer_option"),
   pdf_file = "extracted_draft",
   extracted_draft = "draft"
 )
@@ -525,6 +534,15 @@ edit_labels <- list(
     paste0(ifelse(is.na(term), rows$mesh_id, term), " on “", edit_component_text(snap, rows$component_id), "”")
   },
   answer_option = function(snap, rows) rows$standardized_label,
+  answer_option_alias = function(snap, rows) {
+    paste0("“", rows$alias, "” for “", edit_lookup(snap, "answer_option", "answer_option_id", rows$answer_option_id, "standardized_label"), "”")
+  },
+  question_stem = function(snap, rows) rows$text,
+  response_option_count = function(snap, rows) {
+    matr_id <- edit_lookup(snap, "variable", "variable_key", rows$variable_key, "matr_id")
+    shown <- edit_lookup(snap, "answer_option", "answer_option_id", rows$answer_option_id, "standardized_label")
+    paste0(matr_id, " · ", shown, ": ", rows$respondent_count)
+  },
   subject = function(snap, rows) rows$name,
   answer_option_set = function(snap, rows) {
     set <- edit_lookup(snap, "option_set", "option_set_id", rows$option_set_id, "name")

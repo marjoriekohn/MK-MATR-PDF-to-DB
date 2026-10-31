@@ -40,17 +40,30 @@ container_types <- c("Section", "Group")
 
 # An answer choice as the database keeps it (answer_option.standardized_label): lower case, with straight quotes,
 # one space between words, and no question mark, or full stop or colon at the end ("Yes." and "YES" are "yes").
-# The printed words aren't kept: a choice is its standard wording.
+# The printed words aren't kept: a choice is its standard wording, so wordings that only look different are
+# written one way: a range of numbers with a hyphen ("1 to 2", "1 - 2" and "1–2" are "1-2"), a dash as a hyphen,
+# and "hrs", "hr" and "mins" in full. The database checks less (private.normal_answer()), so what this gives
+# always passes.
 normal_answer <- function(text) {
   text <- as.character(text)
   text <- gsub("[\u2018\u2019]", "'", text)
   text <- gsub("[\u201c\u201d]", '"', text)
+  text <- gsub("[\u2013\u2014]", "-", text)
   text <- gsub("?", "", text, fixed = TRUE)
   text <- tolower(trimws(gsub("[[:space:]]+", " ", text)))
+  text <- gsub("([0-9]) ?(?:-|to) ?(?=[0-9])", "\\1-", text, perl = TRUE)
+  text <- gsub("\\bhrs\\b", "hours", text, perl = TRUE)
+  text <- gsub("\\bhr\\b", "hour", text, perl = TRUE)
+  text <- gsub("\\bmins\\b", "minutes", text, perl = TRUE)
   text <- sub("[.:[:space:]]+$", "", text)
   text[!is.na(text) & !nzchar(text)] <- NA
   text
 }
+
+# What stands for who a variable is about, in an answer choice ("describes [subject] very well") or a question
+# stem ("Has [subject] ever repeated a grade?"), so the questions about Twin A and Twin B share them. It is
+# filled in with the variable's subject where the words are shown (service_normalize.R).
+subject_placeholder <- "[subject]"
 
 # Kinds of block that were called something else when older drafts were saved (docs/sql/9_integrity_rules.sql
 # renamed Question Group to Group).
@@ -104,7 +117,8 @@ new_row_defaults <- list(
     question_number = NA_character_, printed_number = NA_character_, self_contained = NA,
     condition = NA_character_, parent_question_id = NA_character_, checked = FALSE, ref = NA_character_,
     parent_from_skip = FALSE, page = NA_integer_,
-    skip_condition = NA_character_, skip_when = NA_character_, skip_instruction = NA_character_, skip_to_id = NA_character_
+    skip_condition = NA_character_, skip_when = NA_character_, skip_instruction = NA_character_, skip_to_id = NA_character_,
+    stem = NA_character_
   ),
   variables = data.frame(
     id = NA_character_, component_id = NA_character_, display_order = Inf,
@@ -226,7 +240,10 @@ draft_service_from_json <- function(json) {
       skip_condition = pluck(blocks, "skip_condition"),
       skip_when = pluck(blocks, "skip_when"),
       skip_instruction = pluck(blocks, "skip_instruction"),
-      skip_to_id = skip_ids(blocks)
+      skip_to_id = skip_ids(blocks),
+      # a question's stem, which it shares with the questions that differ from it only in who they ask about
+      # ("Has [subject] ever repeated a grade?"); staff link them on the Edit Extraction page (service_normalize.R)
+      stem = pluck(blocks, "stem")
     ),
     variables = data.frame(
       id = ids_for("v", seq_along(boxes)),
@@ -370,6 +387,7 @@ blocks_json <- function(draft, parent_id) {
       json$self_contained <- block$self_contained
       json$condition <- block$condition
       json$parent_question <- question_number_of(draft, block$parent_question_id)
+      json$stem <- block$stem
       if (isTRUE(block$parent_from_skip)) json$parent_from_skip <- TRUE
       json$variables <- boxes_json(draft, block$id)
     }
