@@ -180,29 +180,61 @@ edit_service_parent_question_choices <- function(snap, questionnaire_id, compone
 #'
 #' @param snap The tables the kind needs, as `edit_service_load()` reads them: a list of data frames named after the tables.
 #' @param component_id The component's id.
-#' @return A list with one list per questionnaire; empty if none.
+#' @return A list with one list per questionnaire, by name; empty if none. Each has `questionnaire_id`,
+#'   `component_id`, `questionnaire` (its name), `section`, `position`, `numbers` (the number it was asked as, named by wave), `waves`,
+#'   `variables` (how many) and `boxes` (each variable: `matr_id`, `tags` and `coding`, see `edit_use_boxes()`).
 edit_service_uses <- function(snap, component_id) {
   placed <- snap$questionnaire_component
   placed <- placed[placed$component_id == component_id, , drop = FALSE]
   if (nrow(placed) == 0) {
     return(list())
   }
-  lapply(seq_len(nrow(placed)), function(i) {
+  uses <- lapply(seq_len(nrow(placed)), function(i) {
     row <- placed[i, ]
     q_id <- row$questionnaire_id
     section <- edit_lookup(snap, "component", "component_id", row$parent_component_id, "text")
     waves <- edit_placed_rows(snap, "wave_question", q_id, component_id)
+    waves <- waves[order(edit_lookup(snap, "wave", "wave_id", waves$wave_id, "administered_date"), waves$wave_id), , drop = FALSE]
     wave_names <- edit_lookup(snap, "wave", "wave_id", waves$wave_id, "name")
-    boxes <- sum(snap$variable$questionnaire_id == q_id & snap$variable$component_id == component_id)
+    boxes <- snap$variable[snap$variable$questionnaire_id == q_id & snap$variable$component_id == component_id, , drop = FALSE]
     list(
-      questionnaire_id = q_id,
+      questionnaire_id = q_id, component_id = component_id,
       questionnaire = edit_label(snap, "questionnaire", snap$questionnaire[snap$questionnaire$questionnaire_id == q_id, ]),
       section = if (is.na(row$parent_component_id)) NA_character_ else section,
       position = row$display_order,
       numbers = stats::setNames(edit_called_number(waves), wave_names),
       waves = wave_names,
-      variables = boxes
+      variables = nrow(boxes),
+      boxes = edit_use_boxes(snap, boxes)
     )
+  })
+  uses[order(tolower(vapply(uses, function(use) use$questionnaire, character(1))), method = "radix")]
+}
+
+#' A question's variables in one questionnaire, as its card there shows them.
+#'
+#' @param snap The tables the kind needs, as `edit_service_load()` reads them: a list of data frames named after the tables.
+#' @param boxes Rows of `variable`.
+#' @return A list with one list per variable, in order: `matr_id`, `tags` ("[Smokes now] [Respondent]", see
+#'   `edit_variable_tags()`) and `coding`, its choices ("1 = Yes", in order) or a write-in's kind of answer.
+edit_use_boxes <- function(snap, boxes) {
+  boxes <- boxes[order(boxes$display_order, boxes$matr_id), , drop = FALSE]
+  tags <- edit_variable_tags(snap, boxes)
+  lapply(seq_len(nrow(boxes)), function(i) {
+    key <- boxes$variable_key[i]
+    choices <- snap$response_option # (a kind that hasn't read them shows none)
+    if (!is.null(choices)) choices <- choices[choices$variable_key %in% key, , drop = FALSE]
+    if (NROW(choices) > 0) choices <- choices[order(choices$display_order), , drop = FALSE]
+    written <- snap$open_ended$answer_data_type[snap$open_ended$variable_key %in% key]
+    coding <- if (NROW(choices) > 0) {
+      shown <- edit_lookup(snap, "answer_option", "answer_option_id", choices$answer_option_id, "standardized_label")
+      paste0(ifelse(is.na(choices$code_value), "?", choices$code_value), " = ", ifelse(is.na(shown), "(blank)", shown))
+    } else if (length(written) > 0) {
+      paste("Write-in:", if (is.na(written[1])) "answer type not picked" else written[1])
+    } else {
+      character()
+    }
+    list(matr_id = boxes$matr_id[i], tags = tags[i], coding = coding)
   })
 }
 

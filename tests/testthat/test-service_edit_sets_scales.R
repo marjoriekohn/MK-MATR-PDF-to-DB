@@ -199,7 +199,7 @@ test_that("a PDF's details are its names, pages, size and fingerprint, and the e
   expect_equal(form$initial$pdf_file__pdf_sha256, strrep("a1", 32))
   usage <- edit_service_usage(form$entity, form$snap, form$row)
   expect_equal(usage$pointing[[1]]$text, "2 extractions")
-  expect_equal(usage$pointing[[1]]$examples, c("AHP_Redacted.pdf (Applied)", "AHP copy.pdf (Draft)"))
+  expect_equal(usage$pointing[[1]]$labels, c("AHP copy.pdf (Draft)", "AHP_Redacted.pdf (Applied)")) # by name
 })
 
 test_that("the new kinds are sections of Make an edit's list", {

@@ -53,16 +53,17 @@ make_edit_ui <- function(id) {
 }
 
 # The kinds of thing, in the order the list has them: what the list calls them, and one of them (for + Add).
-# Questions are as printed in one questionnaire. Scale Items are as listed in one measurement scale. PDF Files
-# are only shown. Blocks and the shared wording of blocks and questions aren't in the list (make_edit_listed),
-# but a saved edit of one can still be opened.
+# Questions are each question once, however many questionnaires ask it: its details have a card for each, which
+# opens it as it is in that questionnaire alone. Scale Items are as listed in one measurement scale. PDF Files are
+# only shown. Blocks, a question as it is in one questionnaire and the shared wording of blocks aren't in the list
+# (make_edit_listed), but a saved edit of one can still be opened.
 make_edit_kinds <- list(
   registry = c("Registries", "Registry"),
   study = c("Studies", "Study"),
   questionnaire = c("Questionnaires", "Questionnaire"),
   wave = c("Waves", "Wave"),
   questionnaire_component = c("Blocks", "Block"),
-  questionnaire_question = c("Questions", "Question"),
+  question = c("Questions", "Question"),
   investigator = c("Principal Investigators", "Principal Investigator"),
   respondent_type = c("Respondent Types", "Respondent Type"),
   subject = c("Subjects", "Subject"),
@@ -73,18 +74,14 @@ make_edit_kinds <- list(
   category = c("Categories", "Category"),
   component_type = c("Component Types", "Component Type"),
   component = c("Shared Block Wording", "Block Wording"),
-  question = c("Shared Question Wording", "Question Wording"),
+  questionnaire_question = c("Questions in One Questionnaire", "Question"),
   pdf_file = c("PDF Files", "PDF File")
 )
 
 # The kinds the list has a section for.
-make_edit_listed <- setdiff(names(make_edit_kinds), c("questionnaire_component", "component", "question"))
+make_edit_listed <- setdiff(names(make_edit_kinds), c("questionnaire_component", "component", "questionnaire_question"))
 
-# Kinds that belong to a questionnaire but are listed together, each item with its questionnaire: no section for
-# each questionnaire, and + Add asks which questionnaire first.
-make_edit_flat <- "questionnaire_question"
-
-#' A kind's items as the list shows them: in alphabetical order, each with the questionnaire (or scale) it is in.
+#' A kind's items as the list shows them: in alphabetical order.
 #'
 #' @param key The kind, a name of `edit_entities`.
 #' @param snap The tables the kind needs, as `edit_service_load()` reads them.
@@ -96,19 +93,7 @@ make_edit_cards <- function(key, snap, scope = "") {
     cards$scope <- rep(q, nrow(cards))
     cards
   }
-  cards <- if (key %in% make_edit_flat) {
-    owners <- unname(edit_choices(snap, entity$scope$table))
-    parts <- lapply(owners, function(q) {
-      cards <- with_scope(edit_service_cards(entity, snap, q), q)
-      where <- edit_questionnaire_short(snap, as.numeric(q))
-      cards$subtitle <- if (nrow(cards) > 0) ifelse(nzchar(cards$subtitle), paste(where, cards$subtitle, sep = " · "), where) else character()
-      cards$search <- paste(cards$search, tolower(where), recycle0 = TRUE) # a questionnaire with no questions has none
-      cards
-    })
-    if (length(parts) == 0) with_scope(edit_cards(character(), character()), character()) else do.call(rbind, parts)
-  } else {
-    with_scope(edit_service_cards(entity, snap, if (nzchar(scope)) scope), scope)
-  }
+  cards <- with_scope(edit_service_cards(entity, snap, if (nzchar(scope)) scope), scope)
   cards[order(tolower(cards$title), cards$subtitle, method = "radix"), , drop = FALSE]
 }
 

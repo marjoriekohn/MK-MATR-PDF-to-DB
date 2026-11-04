@@ -97,13 +97,14 @@ test_that("a form can ask to go to another kind, with adding as the verb unless 
     session$setInputs(action = list(action = "jump", kind = "registry"))
     expect_equal(jump()$kind, "registry")
     expect_equal(jump()$verb, "add")
-    session$setInputs(action = list(action = "jump", kind = "questionnaire_question", verb = "update"))
+    session$setInputs(action = list(action = "jump", kind = "questionnaire_question", verb = "view", scope = "1", key = "1|4"))
     expect_equal(jump()$kind, "questionnaire_question")
-    expect_equal(jump()$verb, "update")
+    expect_equal(jump()$verb, "view")
+    expect_equal(c(jump()$scope, jump()$key), c("1", "1|4"))
   })
 })
 
-test_that("changing something several questionnaires share says so, asks to confirm, and offers to change it in just one", {
+test_that("changing something several questionnaires share says so, asks to confirm, and offers to open it in just one", {
   page <- change_page("question", "update", "4")
   shiny::testServer(edit_change_server, args = change_args(page), {
     draw()
@@ -111,7 +112,8 @@ test_that("changing something several questionnaires share says so, asks to conf
     expect_match(form, "I understand this changes it in all 2 questionnaires that use it.")
     aside <- text_of(output$impact)
     expect_match(aside, "Shared by 2 questionnaires")
-    expect_match(aside, "Change it in one questionnaire only")
+    expect_match(aside, "Open in this questionnaire")
+    expect_match(paste(output$impact$html, collapse = ""), 'data-kind="questionnaire_question" data-verb="view" data-scope="1" data-key="1|4"', fixed = TRUE)
     expect_match(aside, "AHP|Adult Health and Personality")
     expect_match(aside, "MQ|Mother Questionnaire")
   })

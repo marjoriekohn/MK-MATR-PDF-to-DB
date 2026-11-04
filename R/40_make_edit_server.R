@@ -171,7 +171,7 @@ make_edit_server <- function(id, connection, me, show_page, active = NULL) {
           ))
         }
         entity <- edit_entities[[key]]
-        if (!is.null(entity$scope) && !key %in% make_edit_flat) {
+        if (!is.null(entity$scope)) {
           return(scope_sections(key, read))
         }
         items_ui(key, read, "")
@@ -207,7 +207,7 @@ make_edit_server <- function(id, connection, me, show_page, active = NULL) {
           card <- cards[i, , drop = FALSE]
           make_edit_item(key, card, card$scope, identical(card$scope, chosen$scope) && identical(card$key, chosen$key))
         }),
-        if (!isTRUE(entity$view_only)) make_edit_add_button(key, q)
+        if (!isTRUE(entity$view_only)) make_edit_add_button(entity$add_as %||% key, q)
       )
     }
 
@@ -246,7 +246,7 @@ make_edit_server <- function(id, connection, me, show_page, active = NULL) {
       key <- parts[1]
       q <- if (length(parts) > 1) parts[2] else ""
       entity <- edit_entities[[key]]
-      if (is.null(entity) || (!is.null(entity$scope) && !nzchar(q) && !key %in% make_edit_flat)) {
+      if (is.null(entity) || (!is.null(entity$scope) && !nzchar(q))) {
         return()
       }
       read <- tables_of(key)
@@ -296,20 +296,21 @@ make_edit_server <- function(id, connection, me, show_page, active = NULL) {
       verb(where$verb)
     }
 
-    # A form can ask to go to another kind: to add the registry it needs, or to change a block in one questionnaire.
+    # A form can ask to go to another kind: to add the registry it needs, or to open a question or block as it is in
+    # one questionnaire (a card under a shared question has a button for each).
     observeEvent(change$jump(), {
       jump <- change$jump()
       if (identical(jump$verb, "add")) {
         go_to(list(kind = jump$kind, scope = scope(), key = NULL, verb = "add"))
         return()
       }
+      if (has_text(jump$key)) {
+        go_to(list(kind = jump$kind, scope = jump$scope %||% "", key = jump$key, verb = jump$verb))
+        return()
+      }
       show_item(list(kind = "", scope = "", key = NULL, verb = ""))
       owner <- edit_nouns[[edit_entities[[jump$kind]]$scope$table %||% "questionnaire"]][1]
-      hint(if (jump$kind %in% make_edit_flat) {
-        paste0("Open ", make_edit_kinds[[jump$kind]][1], " in the list, and pick it there.")
-      } else {
-        paste0("Open ", make_edit_kinds[[jump$kind]][1], " in the list, then the ", owner, ", and pick it there.")
-      })
+      hint(paste0("Open ", make_edit_kinds[[jump$kind]][1], " in the list, then the ", owner, ", and pick it there."))
     })
 
     # ------ The details ------------------------------------------------------------

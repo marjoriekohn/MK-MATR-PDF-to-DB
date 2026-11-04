@@ -221,44 +221,122 @@ edit_changes_ui <- function(changes) {
 # ------ Where this appears ---------------------------------------------------------------------------------
 #' What changing a row reaches.
 #'
-#' For a component or question: each questionnaire that prints it. For anything else:
-#' the rows that point at it.
+#' For a component or question: how many questionnaires print it, and a card for each (see `edit_use_card()`). For
+#' anything else: the rows that point at it,
+#' each kind of row a box saying how many there are, where they are, and every one of them. A few are listed as they
+#' are; more are folded away, one fold for each questionnaire they are in (the most first), or one for them all.
+#' The row's own name is the details' title, so it isn't said again here.
 #'
 #' @param entity The kind of thing; see `edit_entities`.
-#' @param title The row's name.
 #' @param usage The result of `edit_service_usage()`.
 #' @return A UI element.
-edit_usage_ui <- function(entity, title, usage) {
+edit_usage_ui <- function(entity, usage) {
   local <- !is.null(entity$scope)
   div(
     class = "edit-usage",
-    if (entity$table == "component") div(class = "edit-usage-title", paste0("“", title, "”")),
     if (length(usage$uses) > 0) {
-      div(class = "edit-usage-list", lapply(usage$uses, function(use) {
-        div(
-          class = "edit-use",
-          strong(use$questionnaire),
-          p(class = "edit-use-where", edit_use_where(use)),
-          if (length(use$waves) > 0) p(class = "edit-use-detail", paste("Asked in", paste(use$waves, collapse = ", "))),
-          if (use$variables > 0) p(class = "edit-use-detail", edit_count(use$variables, "variable", "variables"))
-        )
-      }))
+      n <- length(usage$uses)
+      tagList(
+        p(
+          class = "edit-usage-count",
+          strong(edit_count(n, "questionnaire")),
+          if (entity$key == "question") {
+            if (n == 1) " uses this question" else " use this question"
+          } else {
+            if (n == 1) " prints this" else " print this"
+          }
+        ),
+        div(class = "edit-usage-list", lapply(usage$uses, edit_use_card, entity = entity))
+      )
     },
     if (entity$table == "component" && length(usage$uses) == 0) {
       p(class = "edit-usage-none", "No questionnaire prints this yet, so changing it affects nothing else.")
     },
-    lapply(usage$pointing, function(line) {
-      div(
-        class = "edit-use",
-        strong(line$text),
-        p(class = "edit-use-detail", paste(line$examples, collapse = " · "), if (line$more > 0) paste0(" and ", line$more, " more"))
-      )
-    }),
+    lapply(usage$pointing, edit_pointing_ui),
     if (entity$table != "component" && length(usage$pointing) == 0 && !local) {
       p(
         class = "edit-usage-none",
         if (isTRUE(entity$view_only)) "Nothing else points at this." else "Nothing else points at this yet, so changing it affects nothing else."
       )
+    }
+  )
+}
+
+# How many listed as they are before they're folded away.
+edit_usage_shown <- 6
+
+# One kind of row that points at the row: "867 variables", "in 4 questionnaires", then the rows.
+edit_pointing_ui <- function(line) {
+  groups <- line$groups
+  where <- if (length(groups) == 1) {
+    paste("all in", groups[[1]]$questionnaire)
+  } else if (length(groups) > 1) {
+    paste("in", edit_count(length(groups), "questionnaire"))
+  }
+  rows <- function(labels) tags$ul(class = "edit-use-rows", lapply(labels, tags$li))
+  div(
+    class = "edit-use",
+    div(class = "edit-use-head", strong(line$text), if (!is.null(where)) span(class = "edit-use-where", where)),
+    if (line$n <= edit_usage_shown) {
+      rows(line$labels)
+    } else if (length(groups) > 1) {
+      div(class = "edit-use-groups", lapply(groups, function(group) {
+        edit_use_fold(group$questionnaire, length(group$labels), rows(group$labels))
+      }))
+    } else {
+      edit_use_fold(paste("Show all", format(line$n, big.mark = ",")), NULL, rows(line$labels))
+    }
+  )
+}
+
+# A fold that opens to the rows: what it holds, and how many.
+edit_use_fold <- function(title, n, ...) {
+  tags$details(
+    class = "edit-use-fold",
+    tags$summary(span(class = "edit-use-fold-title", title), if (!is.null(n)) span(class = "edit-use-count", format(n, big.mark = ","))),
+    ...
+  )
+}
+
+#' A questionnaire that prints a component or asks a question, as its card in the details shows it.
+#'
+#' Its name, with a button that opens the component or question as it is in that questionnaire alone; where it sits;
+#' each wave that asked it, with the number it had; and each variable, with what it records, who it is about, and its
+#' choices.
+#'
+#' @param use One of `edit_service_uses()`.
+#' @param entity The kind of thing: a component or a question.
+#' @return A UI element.
+edit_use_card <- function(use, entity) {
+  div(
+    class = "edit-use",
+    div(
+      class = "edit-use-head",
+      strong(class = "edit-use-name", use$questionnaire),
+      review_button(
+        "Open in this questionnaire", "jump",
+        `data-kind` = if (entity$key == "question") "questionnaire_question" else "questionnaire_component",
+        `data-verb` = "view", `data-scope` = key_text(use$questionnaire_id),
+        `data-key` = paste(key_text(use$questionnaire_id), key_text(use$component_id), sep = "|"),
+        class = "btn btn-sm btn-outline-dark"
+      )
+    ),
+    p(class = "edit-use-where", edit_use_where(use)),
+    if (length(use$waves) > 0) {
+      tags$ul(class = "edit-use-asked", Map(function(wave, number) {
+        tags$li(span(class = "edit-use-wave", wave), paste0(" · question ", number))
+      }, use$waves, unname(use$numbers)))
+    } else if (entity$key == "question") {
+      p(class = "edit-use-detail", "Not asked in any wave yet.")
+    },
+    if (length(use$boxes) > 0) {
+      div(class = "edit-use-boxes", lapply(use$boxes, function(box) {
+        div(
+          class = "edit-use-box",
+          div(span(class = "edit-use-matr", box$matr_id), if (nzchar(box$tags)) span(class = "edit-use-tags", box$tags)),
+          if (length(box$coding) > 0) tags$ul(class = "edit-use-coding", lapply(box$coding, tags$li))
+        )
+      }))
     }
   )
 }

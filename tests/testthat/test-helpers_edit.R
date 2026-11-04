@@ -83,30 +83,52 @@ test_that("where a shared question appears lists each questionnaire, its place a
   snap <- test_snapshot(edit_service_tables(edit_entities$question))
   row <- edit_service_row(edit_entities$question, snap, "4")
   usage <- edit_service_usage(edit_entities$question, snap, row)
-  where <- text_of(edit_usage_ui(edit_entities$question, "Do you now smoke cigarettes?", usage))
+  where <- text_of(edit_usage_ui(edit_entities$question, usage))
   expect_false(grepl("Where this appears|Everything below changes", where))
-  expect_match(where, "“Do you now smoke cigarettes?”", fixed = TRUE)
+  expect_false(grepl("“Do you now smoke cigarettes?”", where, fixed = TRUE)) # the details' title says it already
   expect_match(where, "position [0-9]+")
-  expect_match(where, "variable")
+  expect_match(where, "2 questionnaires use this question")
+  # each questionnaire's card: the number it was asked as in each wave, its variables and their choices
+  expect_match(where, "Wave 1 · question 2", fixed = TRUE)
+  expect_match(where, "AH02SM [Smokes now] [Respondent]", fixed = TRUE)
+  expect_match(where, "1 = Yes", fixed = TRUE)
+  expect_match(where, "Open in this questionnaire")
+})
+
+test_that("a questionnaire lists its components in printed order by kind, and a wave its questions by number", {
+  entity <- edit_entities$questionnaire
+  snap <- test_snapshot(edit_service_tables(entity))
+  usage <- edit_service_usage(entity, snap, edit_service_row(entity, snap, "1"))
+  placed <- Filter(function(line) line$table == "questionnaire_component", usage$pointing)[[1]]
+  expect_equal(placed$labels[1], "Section · A. About you")
+  expect_false(any(grepl("^AHP ·|^Group ·|untitled group", placed$labels)))
+  expect_null(placed$groups) # all in this questionnaire: not said again
+  entity <- edit_entities$wave
+  snap <- test_snapshot(edit_service_tables(entity))
+  usage <- edit_service_usage(entity, snap, edit_service_row(entity, snap, "1"))
+  asked <- Filter(function(line) line$table == "wave_question", usage$pointing)[[1]]
+  expect_equal(asked$text, "4 questions asked")
+  expect_equal(asked$labels[2], "2 · Do you now smoke cigarettes? [Smokes now] [Respondent]")
+  expect_false(any(grepl("AHP|Wave 1", asked$labels)))
 })
 
 test_that("a component nothing prints, and a row nothing points at, say they affect nothing else", {
   snap <- test_snapshot(edit_service_tables(edit_entities$component))
   unused <- edit_service_row(edit_entities$component, snap, "15")
   expect_match(
-    text_of(edit_usage_ui(edit_entities$component, "Unused", edit_service_usage(edit_entities$component, snap, unused))),
+    text_of(edit_usage_ui(edit_entities$component, edit_service_usage(edit_entities$component, snap, unused))),
     "No questionnaire prints this yet, so changing it affects nothing else."
   )
   snap <- test_snapshot(edit_service_tables(edit_entities$subject))
   alone <- edit_service_row(edit_entities$subject, snap, "2")
   expect_match(
-    text_of(edit_usage_ui(edit_entities$subject, "Respondent's Family", edit_service_usage(edit_entities$subject, snap, alone))),
+    text_of(edit_usage_ui(edit_entities$subject, edit_service_usage(edit_entities$subject, snap, alone))),
     "Nothing else points at this yet"
   )
   # and a row something points at lists it
   snap <- test_snapshot(edit_service_tables(edit_entities$registry))
   used <- edit_service_row(edit_entities$registry, snap, "2")
-  expect_match(text_of(edit_usage_ui(edit_entities$registry, "Example Registry", edit_service_usage(edit_entities$registry, snap, used))), "Example Study")
+  expect_match(text_of(edit_usage_ui(edit_entities$registry, edit_service_usage(edit_entities$registry, snap, used))), "Example Study")
 })
 
 test_that("a row that rows point at lists them, with examples", {
@@ -114,8 +136,61 @@ test_that("a row that rows point at lists them, with examples", {
   registry <- edit_service_row(edit_entities$registry, snap, "1")
   usage <- edit_service_usage(edit_entities$registry, snap, registry)
   expect_gt(length(usage$pointing), 0)
-  html <- text_of(edit_usage_ui(edit_entities$registry, "MATR", usage))
+  html <- text_of(edit_usage_ui(edit_entities$registry, usage))
   expect_match(html, "Adult Health Study")
+  expect_false(grepl("more$| more ", html)) # every row is listed, not a few and a count
+})
+
+test_that("many rows pointing at a row are listed by questionnaire, the most first, every one of them", {
+  snap <- test_snapshot(edit_service_tables(edit_entities$subject))
+  counts <- table(snap$variable$subject_id)
+  subject <- edit_service_row(edit_entities$subject, snap, names(counts)[which.max(counts)])
+  usage <- edit_service_usage(edit_entities$subject, snap, subject)
+  line <- usage$pointing[[1]]
+  expect_equal(length(line$labels), line$n)
+  expect_equal(sum(vapply(line$groups, function(group) length(group$labels), numeric(1))), line$n)
+  sizes <- vapply(line$groups, function(group) length(group$labels), numeric(1))
+  expect_equal(sizes, sort(sizes, decreasing = TRUE))
+  html <- as.character(edit_usage_ui(edit_entities$subject, usage))
+  if (line$n > edit_usage_shown) expect_match(html, "<details", fixed = TRUE)
+  if (length(line$groups) > 1) expect_match(text_of(html), paste("in", length(line$groups), "questionnaires"))
+  if (length(line$groups) == 1) expect_match(text_of(html), paste("all in", line$groups[[1]]$questionnaire), fixed = TRUE)
+})
+
+test_that("a questionnaire's and a wave's details say the study they belong to first", {
+  details_of <- function(key) {
+    entity <- edit_entities[[key]]
+    snap <- test_snapshot(edit_service_tables(entity))
+    row <- snap[[entity$table]][1, ]
+    fields <- edit_service_fields(entity, snap, "update", row)
+    edit_service_details(entity, snap, row, fields, edit_service_initial(entity, fields, snap, "update", row))
+  }
+  questionnaire <- details_of("questionnaire")
+  expect_equal(
+    questionnaire$label[1:9],
+    c(
+      "Registry", "Study", "Lead investigator", "Contact investigator", "Status", "Name", "Respondent Type",
+      "Abbreviation", "Total participants"
+    )
+  )
+  expect_false("(empty)" %in% questionnaire$value[1:2])
+  wave <- details_of("wave")
+  expect_equal(
+    wave$label,
+    c(
+      "Registry", "Study", "Lead investigator", "Contact investigator", "Questionnaire", "Respondent Type", "Wave name",
+      "Date administered", "Number of respondents"
+    )
+  )
+  expect_false(grepl(" · ", wave$value[wave$label == "Questionnaire"], fixed = TRUE)) # not the drop-down's name
+})
+
+test_that("a kind with one field doesn't say it again under the title", {
+  entity <- edit_entities$subject
+  snap <- test_snapshot(edit_service_tables(entity))
+  row <- snap$subject[1, ]
+  fields <- edit_service_fields(entity, snap, "update", row)
+  expect_equal(nrow(edit_service_details(entity, snap, row, fields, edit_service_initial(entity, fields, snap, "update", row))), 0)
 })
 
 test_that("a delete says what goes with it, what is only changed, and how it falls on each questionnaire", {

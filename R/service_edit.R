@@ -88,7 +88,8 @@ edit_service_tables <- function(entity) {
   })), entity$scope$table))
   unique(c(
     edit_tables_to_read(c(part_tables, entity$scope$table)), parents,
-    unlist(edit_label_needs[parents]), unlist(edit_choice_needs[parents]), entity$reads
+    unlist(edit_label_needs[parents]), unlist(edit_choice_needs[parents]), entity$reads,
+    "questionnaire" # where a row appears is grouped by questionnaire
   ))
 }
 
@@ -306,6 +307,58 @@ edit_part_values <- function(fields, values, part) {
 # Every field that's shown and can be changed: not hidden, not locked.
 edit_service_active <- function(fields, values) {
   Filter(function(field) edit_service_visible(field, values) && is.null(field$locked), fields)
+}
+
+# ------ The details ------------------------------------------------------------------------------------------------
+#' What a row's details list: its fields as text, each on a line of its own.
+#'
+#' A field that only matters while another has a value is left out when it doesn't, and so is the one field of a kind
+#' that has only one, which is the details' title already (a subject's name). A kind with `details` lists what it
+#' belongs to as well (a questionnaire's study), and picks and orders its own fields: `details(snap, row, own)` takes
+#' these lines and gives the ones to show.
+#'
+#' @param entity A kind of thing staff can edit: one entry of `edit_entities` (see `service_edit_kinds.R`).
+#' @param snap The tables the kind needs, as `edit_service_load()` reads them: a list of data frames named after the tables.
+#' @param row The row.
+#' @param fields The form's fields, from `edit_service_fields()` (as an update).
+#' @param values What each starts with, from `edit_service_initial()`.
+#' @return A data frame of `name` (the field's, `NA` for a line about what the row belongs to), `label`, `value` (as
+#'   staff read it; `"(empty)"` for nothing) and `wide`.
+edit_service_details <- function(entity, snap, row, fields, values) {
+  shown <- Filter(function(field) field$type != "variables" && edit_service_visible(field, values), fields)
+  own <- edit_details_lines(
+    vapply(shown, function(field) field$name, character(1)),
+    vapply(shown, function(field) field$label, character(1)),
+    vapply(shown, function(field) {
+      value <- values[[field$id]]
+      edit_display_value(field, if (is.null(value) || !nzchar(value)) NA else value)
+    }, character(1)),
+    wide = vapply(shown, function(field) field$type == "textarea", logical(1))
+  )
+  if (!is.null(entity$details)) {
+    return(entity$details(snap, row, own))
+  }
+  if (nrow(own) == 1) own[0, ] else own
+}
+
+#' Lines of a row's details.
+#'
+#' @param name The fields' names; `NA` for a line about what the row belongs to.
+#' @param label What each is.
+#' @param value Each as staff read it; `NA` is shown as `"(empty)"`.
+#' @param wide Whether each is long text.
+#' @return A data frame, as `edit_service_details()` gives it.
+edit_details_lines <- function(name, label, value, wide = FALSE) {
+  value <- as.character(value)
+  data.frame(
+    name = as.character(name), label = as.character(label), value = ifelse(is.na(value) | !nzchar(value), "(empty)", value),
+    wide = rep_len(as.logical(wide), length(label)), stringsAsFactors = FALSE
+  )
+}
+
+# The lines named `names`, in that order (any the details don't have are left out).
+edit_details_pick <- function(lines, names) {
+  lines[stats::na.omit(match(names, lines$name)), , drop = FALSE]
 }
 
 # ------ Checking what's typed -----------------------------------------------------------------------------------
@@ -767,7 +820,13 @@ edit_summary_delete <- function(entity, snap, row, plan) {
 #' @param entity A kind of thing staff can edit: one entry of `edit_entities` (see `service_edit_kinds.R`).
 #' @param snap The tables the kind needs, as `edit_service_load()` reads them: a list of data frames named after the tables.
 #' @param row The row being changed.
-#' @return A list: `uses`, `shared` (how many questionnaires print a component) and `pointing`.
+#' A kind with `usage_rows(snap, row, table, rows)` says how it lists the rows of `table` that point at it: a list of
+#' `rows` (the ones to list, in order), `labels` and, if it likes, `text`; or `NULL` for the usual way, by name.
+#'
+#' @return A list: `uses`, `shared` (how many questionnaires print a component) and `pointing`, one list for each
+#'   kind of row that points at it: `table`, `n`, `text` ("3 variables"), `labels` (every row's name, in order) and
+#'   `groups`, the rows by the questionnaire they are in (see `edit_usage_groups()`), or `NULL` when they are all in
+#'   the row's own questionnaire.
 edit_service_usage <- function(entity, snap, row) {
   if (entity$table == "component") {
     uses <- edit_service_uses(snap, row$component_id)
@@ -780,12 +839,66 @@ edit_service_usage <- function(entity, snap, row) {
       return(NULL)
     }
     rows <- edit_rows(snap, relation$child, hits)
+    listed <- if (!is.null(entity$usage_rows)) entity$usage_rows(snap, row, relation$child, rows)
+    if (is.null(listed)) {
+      labels <- edit_label(snap, relation$child, rows)
+      by_name <- order(tolower(labels), method = "radix")
+      listed <- list(rows = rows[by_name, , drop = FALSE], labels = labels[by_name])
+    }
+    if (nrow(listed$rows) == 0) {
+      return(NULL)
+    }
+    groups <- edit_usage_groups(snap, relation$child, listed$rows, listed$labels)
+    own <- if (entity$table == "questionnaire") row$questionnaire_id else row$questionnaire_id %||% NA
+    if (length(groups) == 1 && length(own) == 1 && !is.na(own) && isTRUE(groups[[1]]$id == own)) groups <- NULL
     list(
-      table = relation$child, n = nrow(rows), text = plural_noun(nrow(rows), relation$child),
-      examples = utils::head(edit_label(snap, relation$child, rows), 5), more = max(0, nrow(rows) - 5)
+      table = relation$child, n = nrow(listed$rows), text = listed$text %||% plural_noun(nrow(listed$rows), relation$child),
+      labels = listed$labels, groups = groups
     )
   })
   list(uses = list(), shared = 0, pointing = Filter(Negate(is.null), pointing))
+}
+
+#' Rows that point at something, by the questionnaire each is in.
+#'
+#' A row is in a questionnaire if it holds one (a variable, a wave) or its variable does (a variable's choice).
+#'
+#' @param snap The tables the kind needs, as `edit_service_load()` reads them: a list of data frames named after the tables.
+#' @param table The rows' table.
+#' @param rows The rows.
+#' @param labels Their names, from `edit_label()`.
+#' @return A list with one list per questionnaire, the most rows first: `id`, `questionnaire` (its name, or "Not in
+#'   a questionnaire") and `labels`, in the order given. `NULL` for rows that can't be in a questionnaire, or are
+#'   questionnaires.
+edit_usage_groups <- function(snap, table, rows, labels) {
+  ids <- if (table == "questionnaire") {
+    NULL
+  } else if ("questionnaire_id" %in% names(rows)) {
+    rows$questionnaire_id
+  } else if ("variable_key" %in% names(rows) && !is.null(snap$variable)) {
+    edit_lookup(snap, "variable", "variable_key", rows$variable_key, "questionnaire_id")
+  }
+  if (is.null(ids) || is.null(snap$questionnaire)) {
+    return(NULL)
+  }
+  named <- snap$questionnaire[match(ids, snap$questionnaire$questionnaire_id), , drop = FALSE]
+  names <- ifelse(is.na(named$questionnaire_id), "Not in a questionnaire", edit_label(snap, "questionnaire", named))
+  by_name <- split(seq_along(labels), factor(names, unique(names)))
+  by_name <- by_name[order(-lengths(by_name), names(by_name))]
+  unname(Map(function(name, these) {
+    list(id = named$questionnaire_id[these[1]], questionnaire = name, labels = labels[these])
+  }, names(by_name), by_name))
+}
+
+#' Who each variable is about and what it records, as the questionnaire's preview shows them: "[Smokes now]
+#' [Respondent]", each part when it has one.
+#'
+#' @param snap The tables the kind needs, as `edit_service_load()` reads them: a list of data frames named after the tables.
+#' @param variables Rows of `variable`.
+#' @return One string per variable; `""` for one with neither.
+edit_variable_tags <- function(snap, variables) {
+  about <- if (is.null(snap$subject)) rep(NA_character_, nrow(variables)) else edit_lookup(snap, "subject", "subject_id", variables$subject_id, "name")
+  vapply(seq_len(nrow(variables)), function(i) preview_variable_tags(list(label = variables$label[i], subject = about[i])), character(1))
 }
 
 # ------ What's left to do ------------------------------------------------------------------------------------------------------------

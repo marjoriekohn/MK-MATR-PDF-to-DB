@@ -157,7 +157,10 @@ edit_change_server <- function(
 
     observeEvent(input$action, {
       event <- input$action
-      if (identical(event$action, "jump")) jump(list(kind = event$kind, verb = event$verb %||% "add", at = Sys.time()))
+      if (identical(event$action, "jump")) {
+        # an item to open (a question as it is in one questionnaire) says which: its questionnaire and key
+        jump(list(kind = event$kind, verb = event$verb %||% "add", scope = event$scope, key = event$key, at = Sys.time()))
+      }
     })
 
     # ------ UI ----------------------------------------------------------------
@@ -170,21 +173,17 @@ edit_change_server <- function(
       )
     })
 
-    # The row's fields as text, each on a line of its own and whole (a field that only matters while another has a
-    # value is left out when it doesn't), and where the row is used.
+    # The row's details as text, each on a line of its own and whole (see edit_service_details()), and where the row
+    # is used.
     view_ui <- function(ctx) {
-      start <- initial()
-      shown <- Filter(function(field) field$type != "variables" && edit_service_visible(field, start), fields())
+      lines <- edit_service_details(ctx$entity, ctx$snap, ctx$row, fields(), initial())
       tagList(
-        div(class = "edit-view", detail_section(NULL, lapply(shown, function(field) {
-          value <- start[[field$id]]
-          detail_field(
-            field$label,
-            span(class = "detail-value", edit_display_value(field, if (is.null(value) || !nzchar(value)) NA else value)),
-            wide = field$type == "textarea"
-          )
-        }))),
-        div(class = "edit-usage", edit_usage_ui(ctx$entity, edit_label(ctx$snap, ctx$entity$table, ctx$row), usage()))
+        if (nrow(lines) > 0) {
+          div(class = "edit-view", detail_section(NULL, lapply(seq_len(nrow(lines)), function(i) {
+            detail_field(lines$label[i], span(class = "detail-value", lines$value[i]), wide = lines$wide[i])
+          })))
+        },
+        div(class = "edit-usage", edit_usage_ui(ctx$entity, usage()))
       )
     }
 
@@ -260,7 +259,6 @@ edit_change_server <- function(
     })
 
     update_aside <- function(ctx) {
-      title <- edit_label(ctx$snap, ctx$entity$table, ctx$row)
       use <- usage()
       local <- !is.null(ctx$entity$scope)
       words_changed <- local && any(c("text", "component_type_id") %in% changes()$name)
@@ -269,12 +267,10 @@ edit_change_server <- function(
           edit_callout(
             "warning",
             title = paste("Shared by", use$shared, "questionnaires"),
-            p("If only one questionnaire should have the new words, change it there instead. That edits just that questionnaire's copy."),
-            review_button(
-              paste("Change it in one questionnaire only"), "jump",
-              `data-kind` = if (ctx$entity$key == "question") "questionnaire_question" else "questionnaire_component",
-              `data-verb` = "update", class = "btn btn-sm btn-outline-dark"
-            )
+            p(paste(
+              "If only one questionnaire should have the new words, change it there instead: press Open in this",
+              "questionnaire on its card below. That edits just that questionnaire's copy."
+            ))
           )
         },
         if (words_changed) {
@@ -293,7 +289,7 @@ edit_change_server <- function(
             })
           )
         },
-        edit_usage_ui(ctx$entity, title, use)
+        edit_usage_ui(ctx$entity, use)
       )
     }
 

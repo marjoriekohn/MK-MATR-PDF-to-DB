@@ -175,6 +175,10 @@ question_entity <- list(
     "own variables and question number."
   ),
   update_about = "A question is shared. Changing its wording changes it in every questionnaire that asks it.",
+  # Questions in the list are each question once; + Add there adds one to a questionnaire, with its variables
+  add_as = "questionnaire_question",
+  # its card in each questionnaire lists its variables: who each is about, and its choices
+  reads = c("subject", "answer_option", "response_option", "open_ended"),
   delete_about = paste0(
     "Deleting a question takes it out of every questionnaire that asks it. Its variables, their ",
     "choices, its MATR IDs, its question numbers in every wave, and its MeSH tags all go with it."
@@ -190,7 +194,7 @@ question_entity <- list(
         rows$component_id,
         boxes
       ),
-      tag = "Question", warn = edit_shared_warning(snap, rows$component_id)
+      warn = edit_shared_warning(snap, rows$component_id)
     )
   },
   fields = function(snap, mode, row, scope) {

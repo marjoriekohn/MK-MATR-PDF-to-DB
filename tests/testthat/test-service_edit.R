@@ -51,7 +51,7 @@ test_that("a component's card says how many questionnaires print it, and warns w
   smoke <- cards[cards$title == "Do you now smoke cigarettes?", ]
   expect_equal(smoke$facts[[1]], c("seen in 2 questionnaires: AHP, MQ", "2 variables"))
   expect_equal(smoke$warn, "Shared: changes show in 2 questionnaires")
-  expect_equal(smoke$tag, "Question")
+  expect_true(is.na(smoke$tag)) # every item under Questions is one, so none says so
 
   once <- cards[cards$title == "What is your date of birth?", ]
   expect_equal(once$facts[[1]][1], "seen in 1 questionnaire: AHP")

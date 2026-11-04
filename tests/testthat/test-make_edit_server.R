@@ -38,7 +38,7 @@ press <- function(session, what) session$setInputs(action = list(action = what))
 # Opening (or closing) a section of the list: only an open section's items are drawn.
 open_section <- function(session, id) session$setInputs(action = list(action = "toggle", id = as.character(id)))
 
-test_that("a kind's section lists its items, by name, and + Add; Questions lists every questionnaire's together", {
+test_that("a kind's section lists its items, by name, and + Add; Questions lists each question once", {
   me <- local_staff()
   tree <- shared_tree()
   page <- page_args(me)
@@ -53,19 +53,23 @@ test_that("a kind's section lists its items, by name, and + Add; Questions lists
     # opening it showed its first item, marked in the list
     expect_equal(c(kind(), verb()), c("registry", "view"))
     expect_match(registries, sprintf('is-selected" tabindex="0" data-action="select" data-id="registry||%s"', picked()), fixed = TRUE)
-    # Questions: one list, each question with its questionnaire, and no section for each questionnaire
-    open_section(session, "questionnaire_question")
-    questions <- paste(output$items_questionnaire_question$html, collapse = "")
-    expect_false(grepl(sprintf('data-id="questionnaire_question:%s"', tree$questionnaire$questionnaire_id), questions, fixed = TRUE))
+    # Questions: each question once, with no section for each questionnaire; + Add adds one to a questionnaire
+    open_section(session, "question")
+    questions <- paste(output$items_question$html, collapse = "")
+    expect_false(grepl(sprintf('data-id="question:%s"', tree$questionnaire$questionnaire_id), questions, fixed = TRUE))
+    items <- regmatches(questions, gregexpr('class="outline-node" data-id="question\\|\\|[0-9]+"', questions))[[1]]
+    expect_gt(length(items), 0)
+    expect_false(any(duplicated(items)))
     expect_match(text_of(questions), "Add Question")
-    # Blocks and the shared wording aren't listed
+    expect_match(questions, 'data-action="add" data-kind="questionnaire_question"', fixed = TRUE)
+    # Blocks, a question in one questionnaire and the shared wording of blocks aren't listed
     expect_error(output$items_questionnaire_component)
     expect_error(output$items_component)
-    expect_error(output$items_question)
+    expect_error(output$items_questionnaire_question)
     # Collapse All closes every section
     session$setInputs(action = list(action = "collapse_all"))
     expect_error(output$items_registry)
-    expect_error(output$items_questionnaire_question)
+    expect_error(output$items_question)
     expect_length(errors(), 0)
   })
 })
