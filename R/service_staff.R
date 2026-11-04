@@ -5,7 +5,8 @@
 # email).
 #
 # While developing, STAFF_EMAIL (in .env) signs the site in as that staff member without a
-# link. It must be empty where the site serves real use (docs/environment.md).
+# link. It only works where the site is opened on this computer (site_is_local()), so a site that serves real use
+# asks everyone to sign in even if it is set.
 
 # The two roles. An ADMIN never needs approval to change the database; see
 # service_change_request.R for what a STAFF member needs it for.
@@ -103,9 +104,10 @@ staff_service_resume <- function(connection, auth, refresh_token) {
 #' @param email The email.
 #' @param redirect_to The site's own address, which the link brings them back to.
 #' @return Called for its effect. An error with a sentence if the email is blank or isn't a staff member's,
-#'   or Auth refused.
+#'   the site's address isn't known (`site_address()` gives `""` when the browser hasn't said it), or Auth refused.
 staff_service_send_link <- function(connection, auth, email, redirect_to) {
   if (!has_text(email)) stop("Type your email.", call. = FALSE)
+  if (!has_text(redirect_to)) stop("The browser didn't say the site's address. Reload the page and try again.", call. = FALSE)
   me <- staff_service_for_email(connection, email)
   auth_model_send_link(auth, me$email, redirect_to)
   invisible()

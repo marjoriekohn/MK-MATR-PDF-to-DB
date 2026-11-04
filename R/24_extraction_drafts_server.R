@@ -1,3 +1,8 @@
+# State kept outside reactive values: `loaded_drafts`, each card's questionnaire as last saved, an environment made
+# by new.env() inside the module, so each session has its own and it goes when the session ends. Nothing else reads
+# it. Shiny runs a session's code one piece at a time, so nothing changes it while something else is reading it; it
+# isn't made to be shared between threads or sessions, and shouldn't be.
+
 #' The Extraction Drafts page's server.
 #'
 #' Every extraction draft still being prepared, newest first. Continue opens a draft that
@@ -78,7 +83,10 @@ extraction_drafts_server <- function(
     observeEvent(input$confirm_take_over, {
       removeModal()
       record <- extractions$all()[[taking() %||% ""]]
-      req(record)
+      if (is.null(record)) {
+        showNotification("That draft isn't here any more: it was discarded, or added to the database.", type = "warning")
+        return()
+      }
       open_edit_extraction(record, take_over = TRUE)
     })
 

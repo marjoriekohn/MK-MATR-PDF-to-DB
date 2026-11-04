@@ -330,10 +330,10 @@ test_that("values are saved tidied", {
   expect_equal(edit_service_normalize(edit_field("c", "C", "choice"), "FALSE"), "false")
 })
 
-test_that("a study's add form names only the study's own fields left blank", {
+test_that("a study's add form names only the study's own required fields left blank", {
   form <- form_for("study", "add")
   missing <- edit_service_check(form$fields, form$values)$missing
-  expect_equal(missing, c("registry", "lead investigator", "contact investigator", "name", "status"))
+  expect_equal(missing, c("registry", "name")) # its investigators and status can be left empty
 })
 
 test_that("every kind builds its forms from the tables it reads, whatever it's asked to do", {
@@ -414,6 +414,36 @@ test_that("every kind copes with a database that has nothing in it", {
   # questions come only from New extraction, the next two belong to a questionnaire, a scale item belongs to a
   # measurement scale, and a PDF comes in with an extraction
   expect_equal(without_form, c("question", "questionnaire_component", "questionnaire_question", "question_scale", "pdf_file"))
+})
+
+test_that("a field of a kind the form can't draw is refused when the field is made", {
+  expect_error(edit_field("administered_date", "Date administered", "date_time"), "can't be of type date_time")
+  expect_equal(edit_field("administered_date", "Date administered", "date")$type, "date")
+})
+
+test_that("an add or update with a field left to fill in or fix is refused, however it is built", {
+  entity <- edit_entities$registry
+  snap <- test_snapshot(edit_service_tables(entity))
+  fields <- edit_service_fields(entity, snap, "add")
+  values <- list(registry__name = "ZZ Registry", registry__abbreviation = "ZZR", registry__participant_count = "12")
+  expect_gt(nrow(edit_service_build(entity, "add", snap, fields = fields, values = values)$items), 0)
+  expect_error(
+    edit_service_build(entity, "add", snap, fields = fields, values = utils::modifyList(values, list(registry__abbreviation = ""))),
+    "Fill in the abbreviation.", fixed = TRUE
+  )
+  expect_error(
+    edit_service_build(entity, "add", snap, fields = fields, values = utils::modifyList(values, list(registry__participant_count = "lots"))),
+    "Type a whole number", fixed = TRUE
+  )
+  # an update that changes nothing writes nothing, so it isn't refused
+  row <- edit_service_row(entity, snap, edit_service_cards(entity, snap)$key[1])
+  fields <- edit_service_fields(entity, snap, "update", row)
+  initial <- edit_service_initial(entity, fields, snap, "update", row)
+  expect_equal(nrow(edit_service_build(entity, "update", snap, row, NULL, fields, initial)$items), 0)
+  expect_error(
+    edit_service_build(entity, "update", snap, row, NULL, fields, utils::modifyList(initial, list(registry__name = "  "))),
+    "Fill in the name.", fixed = TRUE
+  )
 })
 
 test_that("a questionnaire with nothing in it yet can be added to", {

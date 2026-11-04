@@ -113,12 +113,15 @@ change_request_review_label <- function(state) {
 #' @param ns The module's namespace function.
 #' @param detail What the request comes to: for an edit `change_request_service_changes()`; for an
 #'   extraction `list(preview = <from extraction_service_request_preview()>)`.
-#' @return A `modalDialog()`, for `showModal()`.
+#' @return A `modalDialog()`, for `showModal()`. Saving an extraction's Basic Info changes the request, so what
+#'   depends on it is in parts of their own (`request_title`, `request_detail`, `request_footer`), which the page
+#'   draws again in place (`change_request_parts()`) while the form stays as it is.
 change_request_dialog <- function(record, me, ns, detail) {
   state <- change_request_service_state(record, me)
   extraction <- identical(record$kind, extraction_kind)
+  parts <- change_request_parts(record, me, ns, detail, ready = !state$needs_info)
   modalDialog(
-    title = if (nzchar(record$summary %||% "")) record$summary else "(no description)",
+    title = span(id = ns("request_title"), parts$title),
     size = if (extraction) "xl" else "l",
     easyClose = TRUE,
     p(
@@ -129,29 +132,50 @@ change_request_dialog <- function(record, me, ns, detail) {
         if (!is.null(record$requested_reviewer)) paste("asked", record$requested_reviewer$name %||% "someone")
       ), collapse = " · ")
     ),
-    if (extraction) {
-      extraction_request_ui(detail$preview, NULL, basic_info = basic_info_ui(ns, state), questionnaire = FALSE)
-    } else {
-      tagList(
-        p(class = "form-text", change_service_counts_text(detail$counts)),
-        change_items_ui(detail$groups)
-      )
-    },
-    if (state$can_approve) {
-      edit_callout(
-        "warning",
-        title = "Approving adds this to the MATR metadata database now.",
-        "All of it is done at once. If a row has changed since this was prepared, nothing is added and you are told which."
-      )
-    },
-    footer = tagList(
+    if (extraction) extraction_request_ui(list(), NULL, basic_info = basic_info_ui(ns, state), questionnaire = FALSE),
+    div(id = ns("request_detail"), parts$detail),
+    footer = div(id = ns("request_footer"), class = "change-request-footer", parts$footer)
+  )
+}
+
+#' The parts of a request's dialog that depend on the request as saved: its title, what it comes to (with the
+#' note that approving adds it now) and the buttons. Each is one element, so the page can put it in place of the
+#' one that is there.
+#'
+#' @inheritParams change_request_dialog
+#' @param ready Whether Approve (or an ADMIN's Add) can be pressed: its Basic Info is saved and fits.
+#' @return A list of UI elements: `title`, `detail` and `footer`.
+change_request_parts <- function(record, me, ns, detail, ready) {
+  state <- change_request_service_state(record, me)
+  extraction <- identical(record$kind, extraction_kind)
+  list(
+    title = span(if (nzchar(record$summary %||% "")) record$summary else "(no description)"),
+    detail = div(
+      if (extraction) {
+        extraction_request_ui(detail$preview, NULL, questionnaire = FALSE)
+      } else {
+        tagList(
+          p(class = "form-text", change_service_counts_text(detail$counts)),
+          change_items_ui(detail$groups)
+        )
+      },
+      if (state$can_approve) {
+        edit_callout(
+          "warning",
+          title = "Approving adds this to the MATR metadata database now.",
+          "All of it is done at once. If a row has changed since this was prepared, nothing is added and you are told which."
+        )
+      }
+    ),
+    footer = div(
+      class = "change-request-footer-buttons",
       modalButton("Close"),
       # an extraction's Edit and Withdraw are on its Preview, with the questionnaire
       if (!extraction) actionButton(ns("edit"), "Edit", class = "btn-outline-dark"),
       if (!extraction && state$can_withdraw) actionButton(ns("withdraw"), "Withdraw", class = "btn-outline-dark"),
       if (state$can_send_back) actionButton(ns("send_back"), "Send back", class = "btn-outline-dark"),
-      if (state$can_add) actionButton(ns("add"), "Add it to the database", class = "btn-primary", disabled = state$needs_info),
-      if (state$can_approve) actionButton(ns("approve"), "Approve", class = "btn-primary", disabled = state$needs_info)
+      if (state$can_add) actionButton(ns("add"), "Add it to the database", class = "btn-primary", disabled = !ready),
+      if (state$can_approve) actionButton(ns("approve"), "Approve", class = "btn-primary", disabled = !ready)
     )
   )
 }

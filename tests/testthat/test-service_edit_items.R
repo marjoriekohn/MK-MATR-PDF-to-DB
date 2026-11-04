@@ -60,7 +60,7 @@ test_that("an add is one Insert per field filled in, on a row with no ID yet", {
 test_that("a study is added by itself, without a questionnaire or a wave", {
   form <- form_for(
     "study", "add",
-    study__registry_id = "1", study__principal_investigator_id = "2", study__name = "New Study", study__status = "Ongoing"
+    study__registry_id = "1", study__principal_investigator_id = "2", study__name = "New Study", study__status = "Active"
   )
   built <- form_items(form)
   lines <- item_lines(built$items)
@@ -68,14 +68,17 @@ test_that("a study is added by itself, without a questionnaire or a wave", {
     'Insert study {"study_id":"new:study:1"} registry_id: - -> 1',
     'Insert study {"study_id":"new:study:1"} principal_investigator_id: - -> 2',
     'Insert study {"study_id":"new:study:1"} name: - -> New Study',
-    'Insert study {"study_id":"new:study:1"} status: - -> Ongoing'
+    'Insert study {"study_id":"new:study:1"} status: - -> Active'
   ))
 })
 
-test_that("a section can be added without words", {
-  section <- as.character(edit_type_id(test_snapshot("component_type"), "Section"))
-  built <- form_items(form_for("component", "add", component__component_type_id = section, component__text = ""))
-  expect_equal(item_lines(built$items), 'Insert component {"component_id":"new:component:1"} component_type_id: - -> 1')
+test_that("a group can be added without words, and a section can't", {
+  types <- test_snapshot("component_type")
+  group <- as.character(edit_type_id(types, "Group"))
+  built <- form_items(form_for("component", "add", component__component_type_id = group, component__text = ""))
+  expect_equal(item_lines(built$items), 'Insert component {"component_id":"new:component:1"} component_type_id: - -> 8')
+  section <- as.character(edit_type_id(types, "Section"))
+  expect_error(form_items(form_for("component", "add", component__component_type_id = section, component__text = "")), "Add the printed words")
 })
 
 test_that("a new question is a component of the kind Question, and its question row", {
@@ -131,9 +134,12 @@ test_that("a delete names the row picked, the one line the history keeps of it",
 })
 
 test_that("a row with nothing but a key is still deleted", {
-  built <- delete_items_for("question", "3")
-  rows <- built$items[built$items$entity_name == "question", ]
-  expect_equal(item_lines(rows), 'Delete question {"component_id":3} NA: - -> -')
+  built <- delete_items_for("option_set", "1")
+  rows <- built$items[built$items$entity_name == "answer_option_set", ]
+  expect_equal(item_lines(rows)[1], 'Delete answer_option_set {"answer_option_id":1,"option_set_id":1} NA: - -> -')
+  # a question's row is its key and its stem
+  question <- delete_items_for("question", "3")$items
+  expect_equal(item_lines(question[question$entity_name == "question", ]), 'Delete question {"component_id":3} question_stem_id: - -> -')
 })
 
 test_that("what's emptied rather than deleted is written first", {
@@ -322,6 +328,21 @@ test_that("changing a shared question's words in one questionnaire carries its s
   # the old rows go last
   expect_match(lines[length(lines)], "Delete questionnaire_component")
   expect_true(all(startsWith(lines[(length(lines) - 4):length(lines)], "Delete")))
+})
+
+test_that("a question reworded in one questionnaire stays linked with the questions it shares a stem with", {
+  entity <- edit_entities$questionnaire_component
+  snap <- test_snapshot(edit_service_tables(entity))
+  snap$question$question_stem_id[snap$question$component_id == 4] <- 77
+  form <- form_for("questionnaire_component", "update", "4|4", scope = "4", snap = snap, questionnaire_component__text = "Do you currently smoke cigarettes?")
+  lines <- item_lines(form_items(form)$items)
+  expect_equal(lines[3:4], c(
+    'Insert question {"component_id":"new:component:1"} component_id: - -> new:component:1',
+    'Insert question {"component_id":"new:component:1"} question_stem_id: - -> 77'
+  ))
+  # a question that shares no stem gets none
+  plain <- item_lines(form_items(form_for("questionnaire_component", "update", "4|4", scope = "4", questionnaire_component__text = "Do you currently smoke cigarettes?"))$items)
+  expect_false(any(grepl("question_stem_id", plain)))
 })
 
 test_that("the follow-ups of a reworded question follow the new one", {
@@ -528,6 +549,10 @@ test_that("another open proposal that changes the same row is a conflict", {
   expect_equal(conflicts[[1]]$prepared_by, "Sam")
   # saving your own again isn't a conflict with itself
   expect_length(edit_service_conflicts(list(theirs), mine, except = theirs$id), 0)
+  # two edits that each add a registry add two rows, both called new:registry:1 in their own edit
+  adding <- function(name) form_items(form_for("registry", "add", registry__name = name, registry__abbreviation = substr(name, 1, 3), registry__participant_count = "10"))$items
+  another_add <- saved_as(edit_service_record(sam, list(), list(items = adding("Second Registry"), summary = ""), "Draft"), "14")
+  expect_length(edit_service_conflicts(list(another_add), adding("First Registry")), 0)
 })
 
 test_that("the changes to a swapped-in question come before the old rows are removed", {
@@ -581,6 +606,24 @@ test_that("a question can be added to a questionnaire, whole: no sentence says t
   existing <- Filter(function(field) field$name == "component_id", form$fields)[[1]]
   expect_true("11" %in% existing$choices) # Mother Questionnaire's pregnancy question
   expect_false(any(c("3", "4", "5", "7") %in% existing$choices))
+})
+
+test_that("a question added here offers the choice a wording was merged into, as an extraction would", {
+  entity <- edit_entities$questionnaire_question
+  snap <- test_snapshot(edit_service_tables(entity))
+  snap$answer_option_alias <- data.frame(alias = "not ever", answer_option_id = 2) # merged into "No"
+  choices <- list(list(code_value = "1", answer_option = "Yes"), list(code_value = "0", answer_option = "Not ever"))
+  form <- form_for(
+    "questionnaire_question", "add", scope = "1", snap = snap,
+    questionnaire_question__text = "Do you exercise?",
+    questionnaire_question__parent_component_id = "6", questionnaire_question__display_order = "1",
+    questionnaire_question__asked_2 = "yes", questionnaire_question__qn_2 = "1a4",
+    questionnaire_question__variables = variables_json(yes_no_variable(choices = choices))
+  )
+  items <- form_items(form)$items
+  expect_false("answer_option" %in% items$entity_name) # neither is added again
+  offered <- items$record_identifier[items$entity_name == "response_option"]
+  expect_true(any(grepl('"answer_option_id":2,', offered, fixed = TRUE)))
 })
 
 test_that("a new question is added with its place, its numbers in each wave that asks it, and its variables", {

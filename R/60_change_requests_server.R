@@ -89,10 +89,12 @@ change_requests_server <- function(
     }
 
     # The Preview's table, drawn once the dialog is open: a DataTables table put in a dialog as it opens stays
-    # empty. Each Preview gets an output of its own, so the table is drawn anew.
+    # empty. Each Preview gets an output of its own, so the table is drawn anew; the one before goes (an output
+    # set to NULL stops drawing), so a long session doesn't keep one for every Preview it opened.
     shown_draft <- reactiveVal(NULL)
     table_count <- 0L
     request_table <- function() {
+      if (table_count > 0) output[[paste0("request_table_", table_count)]] <- NULL
       table_count <<- table_count + 1L
       name <- paste0("request_table_", table_count)
       output[[name]] <- renderUI(questionnaire_preview_ui(req(shown_draft())))
@@ -213,7 +215,16 @@ change_requests_server <- function(
       extractions$changed()
       refreshed(refreshed() + 1L)
       showNotification("Basic Info saved.", type = "message")
-      show_request(saved) # what it adds is worked out again for where it goes now
+      # what it adds is worked out again for where it goes now, and drawn in place: the form stays as it is
+      reviewing(saved)
+      detail <- request_detail(saved)
+      reviewing_detail(detail)
+      parts <- change_request_parts(saved, me, ns, detail, ready = length(info_blockers()) == 0)
+      for (part in names(parts)) {
+        where <- paste0("#", ns(paste0("request_", part)))
+        removeUI(paste(where, "> *"), multiple = TRUE)
+        insertUI(where, "afterBegin", parts[[part]])
+      }
     })
 
     # Approving, or adding an ADMIN's own request, can't go ahead with Basic Info missing or unsaved.

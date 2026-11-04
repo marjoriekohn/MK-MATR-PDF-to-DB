@@ -579,10 +579,17 @@ test_that("a draft someone else saved within the minute is shown as they saved i
     expect_true(has_draft())
     expect_true(has_unsaved_changes()) # kept, and asked about
     expect_match(seen$modals[[length(seen$modals)]], "Someone saved this draft after you opened it", fixed = TRUE)
+    asked <- function() sum(grepl("Your changes here can't be saved over theirs", unlist(seen$modals), fixed = TRUE))
+    expect_equal(asked(), 1)
+    session$elapse(draft_claim_renew_seconds * 1000)
+    expect_equal(asked(), 1) # not asked again about the same save, over whatever dialog is open now
+    saved_by_colleague("Theirs once more")
+    session$elapse(draft_claim_renew_seconds * 1000)
+    expect_equal(asked(), 2) # a later save is asked about
     session$setInputs(reopen = 1)
     expect_false(has_unsaved_changes())
-    expect_equal(draft()$components$text[draft()$components$id == "c3"], "Theirs again")
-    expect_equal(loaded_revision(), first$revision + 2)
+    expect_equal(draft()$components$text[draft()$components$id == "c3"], "Theirs once more")
+    expect_equal(loaded_revision(), first$revision + 3)
   })
 })
 

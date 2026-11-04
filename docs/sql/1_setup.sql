@@ -56,7 +56,7 @@
 -- If the other tables hold only rows you mean to throw away (left from trying the site out), and you
 -- have checked which project this is, uncomment the next line to clear them anyway. EVERY ROW OF THEM
 -- IS LOST.
-set matr.clear_with_data = 'yes';
+-- set matr.clear_with_data = 'yes';
 
 begin;
 
@@ -809,10 +809,11 @@ alter table public.applied_item
 -- Primary keys and unique constraints already make an index, and an index also serves any search on
 -- its first columns. So a foreign key only needs one here when no key starts with its columns.
 
--- Uniqueness that ignores case or spaces (an index, as a unique constraint can't hold an expression)
+-- Uniqueness that ignores case or spaces (an index, as a unique constraint can't hold an expression, so an
+-- insert's ON CONFLICT names the expression as its target, not a constraint)
 create unique index staff_email_unique  on public.staff   (lower(email));          -- BR22
 create unique index subject_name_unique on public.subject (lower(btrim(name)));
-create unique index question_stem_text_unique on public.question_stem (btrim(regexp_replace(text, '\s+', ' ', 'g')));
+create unique index question_stem_text_unique on public.question_stem (btrim(regexp_replace(text, '[[:space:]]+', ' ', 'g')));
 create unique index option_set_name_unique                 on public.option_set (lower(btrim(name)));              -- BR109
 create unique index measurement_scale_name_unique          on public.measurement_scale (lower(btrim(name)));       -- BR78
 create unique index measurement_scale_abbreviation_unique  on public.measurement_scale (lower(btrim(abbreviation)));
@@ -1459,15 +1460,17 @@ $$;
 -- applied_item records the real numbers.
 --
 -- What applied_item keeps: an edit that adds or updates, each field, with its old and new value; an extraction, a
--- line for each table it added to; an edit that deletes, one line for the row staff picked to delete (named in
+-- line for each table it added to (and one for the questions it reused and linked, below); an edit that deletes, one line for the row staff picked to delete (named in
 -- edit_draft.reach as "deleted"), and nothing of what it or the rows that went with it held. The delete's own list
 -- of items is emptied too, so what was deleted is gone for good.
 --
 -- Constraints that can be deferred are deferred to the end, so rows can be put in order (display
 -- orders) and the answer-format check (BR92) looks at the finished change.
 --
--- An edit can change the tables Make an edit changes (R/service_edit_entities.R, and what their changes
--- reach). An extraction only adds rows (Insert), to the tables a questionnaire is made of.
+-- An edit can change the tables Make an edit changes (R/service_edit_entities_*.R, and what their changes
+-- reach). An extraction only adds rows (Insert), to the tables a questionnaire is made of, with one exception: a
+-- question it reuses (one another questionnaire prints with the same words) that has no stem yet gets the stem the
+-- extraction links it with (an Update of question.question_stem_id from empty), so it stays linked.
 create function private.apply_draft_items(
   d             public.draft,
   p_items       jsonb,
@@ -1515,7 +1518,8 @@ declare
   recorded_val text;
   token        text;
   added_tables text[] := array[]::text[]; -- an extraction's rows, as added: their tables ...
-  added_ids    text[] := array[]::text[]; -- ... and their keys
+  added_ids    text[] := array[]::text[]; -- ... and their keys ...
+  added_acts   text[] := array[]::text[]; -- ... and whether they were added or (a reused question's stem) updated
   deleting     boolean := false;          -- an edit that deletes: recorded as the one row picked ...
   picked       jsonb;                     -- ... {"table", "row"}, from edit_draft.reach ...
   last_table   text;                      -- ... or, if the draft doesn't say, the last row deleted
@@ -1525,6 +1529,10 @@ begin
     raise exception 'There is nothing in this to apply.';
   end if;
 
+  -- For the rest of the transaction, not just this function: SET CONSTRAINTS can't be undone at the end of a
+  -- function. The site calls apply_draft() and approve_draft() through the REST API, each in a transaction of its
+  -- own, so it ends with them. Anything that calls this inside a longer transaction runs what follows with every
+  -- deferrable constraint deferred, as the build's checks do (they set one immediate again where they need it).
   set constraints all deferred;
 
   if d.kind = 'Edit' then
@@ -1570,8 +1578,12 @@ begin
     if grp.action is null or grp.action not in ('Insert', 'Update', 'Delete') then
       raise exception 'Item %: the action % isn''t Insert, Update or Delete.', grp.first_item, coalesce(grp.action, '(none)');
     end if;
-    if d.kind = 'Extraction' and grp.action <> 'Insert' then
-      raise exception 'Item %: an extraction only adds rows.', grp.first_item;
+    if d.kind = 'Extraction' and grp.action <> 'Insert' and not (
+      grp.action = 'Update' and grp.entity_name = 'question'
+      and not exists (select 1 from jsonb_array_elements(grp.attrs) a
+                      where a.value ->> 'attribute' is distinct from 'question_stem_id' or a.value ->> 'old' is not null)
+    ) then
+      raise exception 'Item %: an extraction only adds rows, and links a question it reuses that has no stem yet.', grp.first_item;
     end if;
 
     cols := col_cache -> grp.entity_name;
@@ -1714,10 +1726,11 @@ begin
       recorded_id := replace(recorded_id, '"' || token || '"', new_ids ->> token);
     end loop;
     if d.kind = 'Extraction' then
-      -- an extraction is recorded by the rows it added, one line for each table (below), not field by field:
-      -- what it put in them is in its extraction draft, which is kept
+      -- an extraction is recorded by the rows it added (or linked), one line for each table (below), not field by
+      -- field: what it put in them is in its extraction draft, which is kept
       added_tables := added_tables || grp.entity_name;
       added_ids := added_ids || recorded_id;
+      added_acts := added_acts || grp.action;
       continue;
     end if;
     if deleting then
@@ -1743,16 +1756,17 @@ begin
   end loop;
 
   -- An extraction's line for each table it added to: the keys of its rows there, as a JSON array, in the order
-  -- they were added (the tables in the order it first added to them).
+  -- they were added (the tables in the order it first added to them); and a line of the questions it reused and
+  -- linked (Update), if any.
   if d.kind = 'Extraction' then
     insert into public.applied_item (draft_id, item_number, entity_name, record_identifier, action)
-    select d.draft_id, row_number() over (order by min(first_at)), t, '[' || string_agg(id, ',' order by first_at) || ']', 'Insert'
+    select d.draft_id, row_number() over (order by min(first_at)), t, '[' || string_agg(id, ',' order by first_at) || ']', act
     from (
-      select a.t, a.id, min(a.n) as first_at
-      from unnest(added_tables, added_ids) with ordinality as a(t, id, n)
-      group by a.t, a.id
+      select a.t, a.act, a.id, min(a.n) as first_at
+      from unnest(added_tables, added_ids, added_acts) with ordinality as a(t, id, act, n)
+      group by a.t, a.act, a.id
     ) as added
-    group by t;
+    group by t, act;
   end if;
 
   -- A delete's one line: the row staff picked (the wave, the questionnaire), with nothing it held. The list of
@@ -2673,7 +2687,7 @@ comment on column public.answer_option.standardized_label is
 comment on column public.extracted_draft.supplement is
   'The optional file of MATR IDs and codes Gemini reads after the questionnaire: {name, sha256, bytes} for a PDF (in Storage as <sha256>.pdf), or {name, text} for a CSV or text file.';
 comment on table public.draft_review_event      is 'Each time a draft was submitted for review, sent back, or approved: by whom and when. An approval is of the draft''s revision the approver read (approve_draft checks it).';
-comment on table public.applied_item            is 'What an applied draft did: for an edit that adds or updates, one field it changed, with its old and new value; for an extraction, one table it added rows to; for an edit that deletes, the one row staff picked to delete (what it and the rows that went with it held isn''t kept).';
+comment on table public.applied_item            is 'What an applied draft did: for an edit that adds or updates, one field it changed, with its old and new value; for an extraction, one table it added rows to (or, as an Update, the questions it reused and linked with others); for an edit that deletes, the one row staff picked to delete (what it and the rows that went with it held isn''t kept).';
 
 -- ------ Columns --------------------------------------------------------------------------------------
 comment on column public.study.status is 'Active: the study is ongoing. Ended: all data collections are finished. Empty when not known.';
@@ -2830,6 +2844,15 @@ insert into public.component_type (name, description) values
 -- Who a variable can be about; staff keep this list on Make an edit.
 insert into public.subject (name) values
   ('Respondent'), ('Respondent''s Family'), ('Respondent''s Children'), ('Respondent''s Siblings'), ('Twin A'), ('Twin B');
+
+-- The PDFs' bucket: the extractions' PDFs (and PDF files of Variable Names and Coding) are kept in Storage, as
+-- <sha256>.pdf (R/model_storage.R). Private: only the site's server reaches it, with the secret key, which Row
+-- Level Security doesn't apply to, and no policy on storage.objects lets anyone else in. Up to 50 MB, as the site
+-- accepts (shiny.maxRequestSize in global.R), and only PDFs. A project that has it keeps it as it is, with its
+-- files, so this statement can also be run by itself.
+insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
+values ('extraction-pdfs', 'extraction-pdfs', false, 50 * 1024 * 1024, array['application/pdf'])
+on conflict (id) do nothing;
 
 commit;
 
@@ -3489,6 +3512,9 @@ begin
     jsonb_build_array(pg_temp.item(1, 'registry', jsonb_build_object('registry_id', 'new:registry:1'), 'Insert', 'name', null, 'Not allowed'))), 'touches a table it can''t change \(registry\)');
   perform pg_temp.expect_error(format('select public.approve_draft(%s, 1, %s, %L::jsonb)', e, pg_temp.id('ben'),
     jsonb_build_array(pg_temp.item(1, 'wave', jsonb_build_object('wave_id', pg_temp.id('wave2')), 'Update', 'name', 'Round 2', 'No'))), 'only adds rows');
+  -- a question it reuses can be linked, but only one that has no stem yet
+  perform pg_temp.expect_error(format('select public.approve_draft(%s, 1, %s, %L::jsonb)', e, pg_temp.id('ben'),
+    jsonb_build_array(pg_temp.item(1, 'question', jsonb_build_object('component_id', 1), 'Update', 'question_stem_id', '5', '6'))), 'only adds rows');
   made := public.approve_draft(e, 1, pg_temp.id('ben'), items);
 
   select questionnaire_id into q from public.questionnaire where name = 'ZZ Pushed Questionnaire';
@@ -3785,7 +3811,6 @@ begin
       from matr_keep.component_type;
       get diagnostics n = row_count;
       raise notice 'Put back % component type(s).', n;
-      update public.component_type set name = 'Group' where name = 'Question Group'; -- its old name
     end if;
   end if;
 

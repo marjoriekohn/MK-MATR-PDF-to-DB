@@ -102,7 +102,7 @@ make_edit_cards <- function(key, snap, scope = "") {
       cards <- with_scope(edit_service_cards(entity, snap, q), q)
       where <- edit_questionnaire_short(snap, as.numeric(q))
       cards$subtitle <- if (nrow(cards) > 0) ifelse(nzchar(cards$subtitle), paste(where, cards$subtitle, sep = " · "), where) else character()
-      cards$search <- paste(cards$search, tolower(where))
+      cards$search <- paste(cards$search, tolower(where), recycle0 = TRUE) # a questionnaire with no questions has none
       cards
     })
     if (length(parts) == 0) with_scope(edit_cards(character(), character()), character()) else do.call(rbind, parts)

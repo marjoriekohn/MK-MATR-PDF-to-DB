@@ -1,25 +1,26 @@
-# The Edit History service: which edits to show, who was behind each, and what each changed. The edits are
-# made by applying them as Make an edit does, and the history is what the database wrote.
+# The Edit History service: which edits to show, who was behind each, and what each changed. What each changed is
+# what the database wrote for edits applied as Make an edit applies them.
 
-# Three edits by one ADMIN: an add, an update of it and a delete of it, and one a STAFF member's delete
-# approved by a colleague. Returns their records in the order the history lists them (newest first).
-# They are only read, so they are made once for the whole file and removed when it ends.
-history_of_four <- function(env) {
-  admin <- local_staff("ADMIN", name = paste(test_marker, "Alice Admin"), env = env)
-  me <- local_staff(name = paste(test_marker, "Maggie Staff"), env = env)
-  approver <- local_staff(name = paste(test_marker, "Alex Approver"), env = env)
-  name <- test_name("Parents")
-  added <- local_applied_edit(admin, "respondent_type", "add", respondent_type__name = name, env = env)
-  key <- unname(database_model_get(test_connection, "respondent_type", "respondent_type_id", filters = list(name = database_eq(name)))[[1]])
-  updated <- local_applied_edit(admin, "respondent_type", "update", key, respondent_type__name = paste(name, "renamed"), env = env)
-  deleted <- local_applied_edit(admin, "respondent_type", "delete", key, env = env)
-  approved <- local_approved_delete(me, approver, env = env)
-  ids <- as.character(c(approved, deleted, updated, added))
-  records <- history_service_get_all(test_connection)
-  list(records = records[names(records) %in% ids], ids = ids, admin = admin, me = me, approver = approver)
+# Four edits as history_service_get_all() gives them, newest first: one a STAFF member's delete approved by a
+# colleague, then an ADMIN's add of a respondent type, an update of it and a delete of it. Only the test of what an
+# edit changed needs edits the database applied; the rest only read the records, so they are made up here.
+sample_history_record <- function(id, kind, summary, prepared_by, approved_by = NA_character_, deleted = NA_character_) {
+  list(
+    id = id, kind = kind, source = edit_draft_kind, status = "Applied", summary = summary,
+    prepared_by = prepared_by, approved_by = approved_by, approval_required = !is.na(approved_by), deleted = deleted,
+    prepared = "2026-10-02T15:00:00Z", approved = if (!is.na(approved_by)) "2026-10-02T15:20:00Z", applied = "2026-10-02T15:30:00Z"
+  )
 }
-
-h <- history_of_four(environment()) # at the top of the file: removed when the file ends
+h <- list(
+  ids = c("104", "103", "102", "101"),
+  admin = list(name = "Alice Admin"), me = list(name = "Maggie Staff"), approver = list(name = "Alex Approver")
+)
+h$records <- stats::setNames(list(
+  sample_history_record("104", "Delete", "Deleted the respondent type “Teachers”", h$me$name, h$approver$name, deleted = "Teachers"),
+  sample_history_record("103", "Delete", "Deleted the respondent type “Parents renamed”", h$admin$name, deleted = "Parents renamed"),
+  sample_history_record("102", "Update", "Changed the name of the respondent type “Parents”", h$admin$name),
+  sample_history_record("101", "Add", "Added the respondent type “Parents”", h$admin$name)
+), h$ids)
 
 test_that("a kind narrows the edits, and 'all' keeps every kind", {
   expect_equal(names(history_service_filter(h$records, "all")), h$ids)
@@ -67,21 +68,32 @@ test_that("when it was applied is in words, and an edit not applied says where i
 })
 
 test_that("what an edit changed is its rows, grouped, with the counts", {
-  changes <- history_service_changes(test_connection, h$ids[3])
+  # an ADMIN's add of a respondent type, an update of it and a delete of it, applied as Make an edit applies them
+  admin <- local_staff("ADMIN")
+  name <- test_name("Parents")
+  added <- as.character(local_applied_edit(admin, "respondent_type", "add", respondent_type__name = name))
+  key <- unname(database_model_get(test_connection, "respondent_type", "respondent_type_id", filters = list(name = database_eq(name)))[[1]])
+  updated <- as.character(local_applied_edit(admin, "respondent_type", "update", key, respondent_type__name = paste(name, "renamed")))
+  deleted <- as.character(local_applied_edit(admin, "respondent_type", "delete", key))
+  records <- history_service_get_all(test_connection)
+
+  changes <- history_service_changes(test_connection, updated)
   expect_length(changes$groups, 1)
   expect_equal(changes$groups[[1]]$table, "respondent_type")
   expect_equal(changes$groups[[1]]$fields$column, "name")
   expect_equal(changes$counts, list(added = 0, changed = 1, removed = 0, tables = 1))
+  expect_equal(history_service_changes_text(records[[updated]], changes$counts), "Changes 1 row, in 1 table.")
+  expect_match(records[[updated]]$summary, "^Changed the ")
 
-  added <- history_service_changes(test_connection, h$ids[4])
-  expect_equal(added$counts$added, 1)
-  # a delete keeps only the row picked, and nothing it held (docs/sql/15_deletes_kept_as_one_row.sql)
-  removed <- history_service_changes(test_connection, h$ids[2])
+  expect_equal(history_service_changes(test_connection, added)$counts$added, 1)
+  # a delete keeps only the row picked, and nothing it held (private.apply_draft_items())
+  removed <- history_service_changes(test_connection, deleted)
   expect_length(removed$groups, 1)
   expect_equal(removed$groups[[1]][c("table", "action")], list(table = "respondent_type", action = "Delete"))
   expect_match(removed$groups[[1]]$row, "^respondent_type_id [0-9]+$")
   expect_equal(nrow(removed$groups[[1]]$fields), 0)
-  expect_equal(history_service_changes_text(h$records[[h$ids[2]]], removed$counts), paste("Deleted", h$records[[h$ids[2]]]$deleted))
-  expect_match(h$records[[h$ids[2]]]$deleted, "Parents [0-9]+ renamed$") # its name when it was deleted
-  expect_equal(history_service_changes_text(h$records[[h$ids[3]]], changes$counts), "Changes 1 row, in 1 table.")
+  expect_equal(records[[deleted]]$deleted, paste(name, "renamed")) # its name when it was deleted
+  expect_equal(history_service_changes_text(records[[deleted]], removed$counts), paste("Deleted", paste(name, "renamed")))
+  expect_equal(records[[deleted]]$kind, "Delete")
+  expect_false(records[[deleted]]$approval_required)
 })

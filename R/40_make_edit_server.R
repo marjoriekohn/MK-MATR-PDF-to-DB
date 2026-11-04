@@ -1,3 +1,9 @@
+# State kept outside reactive values: `tables` (each kind's tables as read), `just_failed` (a read that failed as
+# its section opened) and `open_sections` (whether each section is open), environments made by new.env() inside the
+# module, so each session has its own and they go when it ends. Nothing else reads them. Shiny runs a session's
+# code one piece at a time, so nothing changes them while something else is reading them; they aren't made to be
+# shared between threads or sessions, and shouldn't be.
+
 #' The Make an edit page's server.
 #'
 #' The list on the left has a section for each kind of thing (40_make_edit_ui.R); a section's items are read from
@@ -91,18 +97,20 @@ make_edit_server <- function(id, connection, me, show_page, active = NULL) {
 
     # Read when the page is opened (a reviewer can send one back) and when this session saved or discarded one;
     # the database isn't asked over and over. If it can't be reached the last proposals read stay on screen, with
-    # a message, and the next read tries again.
+    # a message, and the next read tries again. The tables aren't read again while a form or a delete is open:
+    # that would draw it again as it started, losing what was typed. They are once it is saved or closed.
     if (!is.null(active)) {
       observeEvent(active(),
         {
           if (isTRUE(active())) {
             saved_count(saved_count() + 1L)
-            read_again()
+            if (!verb() %in% c("add", "update", "delete")) read_again()
           }
         },
         ignoreInit = TRUE
       )
     }
+    # the proposals last read, for when they can't be read again: this session's own (it is made inside the module)
     last_proposals <- list()
     proposals <- reactive({
       saved_count()
@@ -306,6 +314,14 @@ make_edit_server <- function(id, connection, me, show_page, active = NULL) {
 
     # ------ The details ------------------------------------------------------------
     # Drawn again when another item is picked or the details change what they show, never as a form is typed in.
+    # What the row holds is the change module's (edit_change_server()), which draws it again when the tables are
+    # read again; this draws only around it, and again if the row picked is no longer there once they are
+    # (`row_gone`, which changes only when that does, so a form being typed in isn't drawn again).
+    row_gone <- reactiveVal(FALSE)
+    observe({
+      gone <- verb() %in% c("view", "update", "delete") && is.null(tryCatch(row(), shiny.silent.error = function(problem) NULL))
+      row_gone(gone)
+    })
     output$detail <- renderUI({
       mode <- verb()
       key <- kind()
@@ -313,6 +329,7 @@ make_edit_server <- function(id, connection, me, show_page, active = NULL) {
       scope()
       done()
       hint()
+      row_gone()
       isolate(detail_ui(mode, key))
     })
 

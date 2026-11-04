@@ -15,7 +15,8 @@ push_chunk_size <- 150
 #' @param connection The MATR database, `list(url, key)`; see `model_database.R`.
 #' @return A list of data frames: `answer_options` (`answer_option_id`, `standardized_label`), `aliases`
 #'   (`alias`, `answer_option_id`: wordings merged into a choice), `option_sets` (`option_set_id`, `name`),
-#'   `members` (`option_set_id`, `answer_option_id`) and `stems` (`question_stem_id`, `text`).
+#'   `members` (`option_set_id`, `answer_option_id`), `stems` (`question_stem_id`, `text`) and `linked`
+#'   (`component_id`, `question_stem_id`: the questions that have a stem).
 push_model_options <- function(connection) {
   list(
     answer_options = database_model_get(
@@ -23,6 +24,10 @@ push_model_options <- function(connection) {
     ),
     aliases = database_model_get(connection, "answer_option_alias", c("alias", "answer_option_id"), order_by = "alias"),
     stems = database_model_get(connection, "question_stem", c("question_stem_id", "text"), order_by = "question_stem_id"),
+    linked = database_model_get(
+      connection, "question", c("component_id", "question_stem_id"),
+      order_by = "component_id", filters = list(question_stem_id = "not.is.null")
+    ),
     option_sets = database_model_get(connection, "option_set", c("option_set_id", "name"), order_by = "option_set_id"),
     members = database_model_get(
       connection, "answer_option_set", c("option_set_id", "answer_option_id"),

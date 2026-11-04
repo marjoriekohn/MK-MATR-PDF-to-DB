@@ -12,8 +12,8 @@ home_recent_n <- 4
 #' @return A list: `shown` (the newest `n` applied changes, as `history_service_get_all()` returns
 #'   them) and `total` (how many there are).
 home_service_recent_history <- function(connection, n = home_recent_n) {
-  records <- history_service_get_all(connection) # newest first
-  list(shown = utils::head(unname(records), n), total = length(records))
+  # only the newest are read, and the rest counted: the history only grows
+  list(shown = unname(history_service_get_all(connection, most = n)), total = history_model_count(connection))
 }
 
 #' "See all 12" or "See more", for the button under a list.

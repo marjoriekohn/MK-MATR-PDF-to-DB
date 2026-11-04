@@ -97,12 +97,16 @@ test_that("a component nothing prints, and a row nothing points at, say they aff
     text_of(edit_usage_ui(edit_entities$component, "Unused", edit_service_usage(edit_entities$component, snap, unused))),
     "No questionnaire prints this yet, so changing it affects nothing else."
   )
-  snap <- test_snapshot(edit_service_tables(edit_entities$registry))
-  alone <- edit_service_row(edit_entities$registry, snap, "2")
+  snap <- test_snapshot(edit_service_tables(edit_entities$subject))
+  alone <- edit_service_row(edit_entities$subject, snap, "2")
   expect_match(
-    text_of(edit_usage_ui(edit_entities$registry, "Example Registry", edit_service_usage(edit_entities$registry, snap, alone))),
+    text_of(edit_usage_ui(edit_entities$subject, "Respondent's Family", edit_service_usage(edit_entities$subject, snap, alone))),
     "Nothing else points at this yet"
   )
+  # and a row something points at lists it
+  snap <- test_snapshot(edit_service_tables(edit_entities$registry))
+  used <- edit_service_row(edit_entities$registry, snap, "2")
+  expect_match(text_of(edit_usage_ui(edit_entities$registry, "Example Registry", edit_service_usage(edit_entities$registry, snap, used))), "Example Study")
 })
 
 test_that("a row that rows point at lists them, with examples", {

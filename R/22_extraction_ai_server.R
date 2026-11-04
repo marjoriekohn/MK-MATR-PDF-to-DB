@@ -93,10 +93,10 @@ extraction_ai_server <- function(
 
     observeEvent(input$to_continue, switch_mode("drafts"))
 
+    # The reading's card stays until the draft is open there (not while someone else is working on it, say).
     observeEvent(input$open_extraction, {
       req(record())
-      open_edit_extraction(record())
-      show_draft(NULL)
+      if (isTRUE(open_edit_extraction(record()))) show_draft(NULL)
     })
 
     # ------ OUTPUT ------------------------------------------------------------

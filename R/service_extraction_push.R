@@ -19,7 +19,10 @@
 #   * A set of choices is kept once, so a variable whose choices are those of an existing option
 #     set (in any order) uses it; otherwise a set is added, named after its choices.
 #   * A question linked on the Edit Extraction page with the questions that differ from it only in who they
-#     ask about has a stem (question_stem), kept once for each wording: the one there, or a new one.
+#     ask about has a stem (question_stem), kept once for each wording: the one there, or a new one. A question
+#     that is there already (found, or printed by another questionnaire) keeps the link too: one with no stem
+#     gets it (the one change an extraction makes to a row that is there), and one linked under another stem
+#     stops the push with a sentence.
 #   * The questionnaire's blocks are found where it prints them: a block with the same kind and
 #     words, in the same place, is that block (so the wave asks the same question, and finds its
 #     variables by MATR ID). The blocks that aren't there are added, after the ones that are in the
@@ -208,6 +211,7 @@ extraction_service_build_items <- function(draft, info, ids, existing, options) 
       component_of[[id]] <- found[[id]]
       push$summary$blocks_found <- push$summary$blocks_found + 1L
       push$note_block(block, "Already in the questionnaire")
+      push_link_reused(push, block, found[[id]])
       next
     }
     placed_here <- c(existing$placements$component_id, unlist(Filter(is.numeric, component_of)))
@@ -217,6 +221,7 @@ extraction_service_build_items <- function(draft, info, ids, existing, options) 
     if (!is.null(shared)) {
       push$summary$blocks_shared <- push$summary$blocks_shared + 1L
       push$note_block(block, push_shared_status(push$options, shared)) # placed here, not copied
+      push_link_reused(push, block, shared)
       next
     }
     push$insert("component", list(component_id = component), list(
@@ -278,7 +283,7 @@ push_start <- function(ids, existing, options) {
   push$summary <- list(
     blocks = 0L, blocks_found = 0L, blocks_shared = 0L, questions = 0L, variables = 0L, variables_found = 0L,
     choices = 0L, answer_options = 0L, answer_options_found = 0L, option_sets = 0L, option_sets_found = 0L, subjects = 0L,
-    stems = 0L
+    stems = 0L, linked = 0L
   )
   push$existing <- existing
   push$options <- options
@@ -308,6 +313,10 @@ push_start <- function(ids, existing, options) {
     # a row that is only its key still has to be said (a question is only its component)
     if (length(rows) == 0) rows <- list(edit_item(table, identifier, "Insert", names(key)[1], NA, key[[1]]))
     items <<- c(items, rows)
+  }
+  # A change to a row that is there: only a reused question's stem (push_link_reused()).
+  push$update <- function(table, key, column, old, new) {
+    items <<- c(items, list(edit_item(table, edit_identifier(key), "Update", column, old, new)))
   }
   push$items <- function() items
   # A row of the kind, by `key`: the first time it is come to, what it is; `uses` are added each time.
@@ -418,9 +427,8 @@ push_variables <- function(push, draft, block, component, questionnaire) {
   }
 }
 
-# A group's skip, as where the questionnaire places it records it (docs/sql/13_group_skips.sql): nothing for a
-# block that isn't a group, or a group that doesn't skip, so those push the same as before the columns were
-# added. An empty `skip_when` is "every".
+# A group's skip, as where the questionnaire places it records it: nothing for a block that isn't a group, or a
+# group that doesn't skip, which leave those columns as their defaults. An empty `skip_when` is "every".
 push_group_skip <- function(push, block) {
   if (!identical(block$component_type, "Group") || (is.na(block$skip_to_id) && is.na(block$skip_condition))) {
     return(list())
@@ -435,8 +443,7 @@ push_group_skip <- function(push, block) {
 }
 
 # Where a choice or write-in skips to, as its row records it: the component (skip_to_component_id), or the end of
-# the questionnaire (skip_to_end). Empty fields aren't sent, so a draft with neither is pushed the same as before
-# the columns were added (docs/sql/7_more_skips.sql).
+# the questionnaire (skip_to_end). Empty fields aren't sent, which leaves the columns as their defaults.
 push_skip_to <- function(push, skip_to_id) {
   list(
     skip_to_component_id = if (!is.na(skip_to_id) && skip_to_id != skip_to_end_id) push$component_of[[skip_to_id]] %||% NA else NA,
@@ -446,7 +453,8 @@ push_skip_to <- function(push, skip_to_id) {
 
 # The answer choice that is there for these words: the one worded so, the one they were merged into
 # (answer_option_alias), or one that normal_answer() writes the same way (worded before it wrote ranges one way,
-# say); NA if there is none. Its id, as a number, named with its words.
+# say). Always one value: the choice's id, as a number, named with its words as the database keeps them (which
+# can differ from `label`: "1 to 2" kept, "1-2" read); or an unnamed NA if there is none.
 push_found_answer <- function(options, label) {
   answer_options <- options$answer_options
   found <- function(ids) {
@@ -476,9 +484,9 @@ push_answer_words <- function(options, labels) {
 # like one that is there says so (normalize_look_alikes()).
 push_answer_option <- function(push, label, uses = 0L) {
   label <- normal_answer(label)
-  there <- push_found_answer(push$options, label)
+  there <- push_found_answer(push$options, label) # one id, named with the words it is kept with; or NA
   if (!is.na(there)) {
-    label <- names(there)
+    label <- names(there) # the choice's words as kept, so it is listed and counted once whichever wording found it
     push$note("answer_options", label, label, "", "Already in the database", FALSE, uses)
   } else {
     alike <- normalize_look_alikes(label, push$options$answer_options$standardized_label)
@@ -577,6 +585,34 @@ push_question_stem <- function(push, stem) {
   push$made[[key]]
 }
 
+# A linked question whose component is there already keeps its link: a component with no stem gets the draft's (an
+# Update, which the database allows an extraction only for this), and one with the same stem needs nothing. One
+# linked under another stem is a sentence: linking it here would unlink it from the questions it is linked with.
+push_link_reused <- function(push, block, component) {
+  words <- push_words(block$stem)
+  if (!identical(block$component_type, "Question") || !nzchar(words)) {
+    return(invisible())
+  }
+  linked <- push$options$linked
+  current <- linked$question_stem_id[match(component, linked$component_id)]
+  if (length(current) == 1 && !is.na(current)) {
+    stems <- push$options$stems
+    if (identical(push_words(stems$text[match(current, stems$question_stem_id)]), words)) {
+      return(invisible())
+    }
+    called <- draft_service_question_name(list(components = block), block$id)
+    stop(sprintf(
+      "%s (“%s”) is printed by another questionnaire already, linked with other questions as “%s”. Link it the same way, or unlink it.",
+      paste0(toupper(substr(called, 1, 1)), substring(called, 2)), shorten(block$text, 80),
+      stems$text[match(current, stems$question_stem_id)]
+    ), call. = FALSE)
+  }
+  stem <- push_question_stem(push, block$stem) # first: it may add the stem, which has to come before the update
+  push$update("question", list(component_id = component), "question_stem_id", NA, stem)
+  push$summary$linked <- push$summary$linked + 1L
+  invisible()
+}
+
 # "Yes / No", "Never / Sometimes / Often", with a number after it if the name is taken. A name is taken
 # whatever its capitals and outer spaces, as the database compares them (option_set_name_unique).
 push_option_set_name <- function(labels, taken) {
@@ -660,8 +696,10 @@ push_shared_status <- function(options, component_id) {
   if (length(questionnaires) > 1) {
     return(paste("Used by", plural(length(questionnaires), "questionnaire")))
   }
-  row <- options$questionnaires[options$questionnaires$questionnaire_id %in% questionnaires, , drop = FALSE]
-  called <- if (nrow(row) == 1 && !is.na(row$abbreviation) && nzchar(row$abbreviation)) row$abbreviation else row$name[1] %||% NA
+  # its one row: all NAs if it isn't listed, and NULL with no list, which `has_text()` reads as blank either way
+  listed <- options$questionnaires
+  row <- if (!is.null(listed)) listed[match(questionnaires, listed$questionnaire_id), , drop = FALSE]
+  called <- if (has_text(row$abbreviation)) trimws(row$abbreviation) else if (has_text(row$name)) trimws(row$name) else NA_character_
   if (is.na(called)) "Printed by another questionnaire" else paste("Used in", called)
 }
 
@@ -711,7 +749,8 @@ extraction_service_push_summary <- function(summary) {
     if (summary$answer_options > 0) plural(summary$answer_options, "new answer choice"),
     if (summary$option_sets > 0) plural(summary$option_sets, "new set of choices", plural_form = "new sets of choices"),
     if (summary$subjects > 0) plural(summary$subjects, "new subject"),
-    if (isTRUE(summary$stems > 0)) plural(summary$stems, "new question stem")
+    if (isTRUE(summary$stems > 0)) plural(summary$stems, "new question stem"),
+    if (isTRUE(summary$linked > 0)) paste(plural(summary$linked, "question"), "already there linked")
   )
   paste0("Adds ", word_list(parts), ".")
 }

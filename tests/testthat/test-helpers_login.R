@@ -50,3 +50,25 @@ test_that("the menu names the person, links to the problem form in a new tab, an
 test_that("the problem form's address is the Google Form", {
   expect_match(report_problem_url, "^https://forms\\.gle/")
 })
+
+test_that("the site's address is put together from what the browser says, or is blank when it hasn't said", {
+  session <- function(...) list(clientData = list(...))
+  expect_equal(
+    site_address(session(url_protocol = "https:", url_hostname = "matr.example.org", url_port = "", url_pathname = "/admin/")),
+    "https://matr.example.org/admin/"
+  )
+  expect_equal(site_address(session(url_protocol = "http:", url_hostname = "localhost", url_port = "5599", url_pathname = "/")), "http://localhost:5599/")
+  expect_equal(site_address(session()), "") # not "//"
+  expect_equal(site_address(NULL), "")
+})
+
+test_that("a development sign-in is only for a site served on this computer", {
+  session <- function(host) list(clientData = list(url_hostname = host))
+  expect_true(site_is_local(session("localhost")))
+  expect_true(site_is_local(session("127.0.0.1")))
+  expect_true(site_is_local(session("mocksession"))) # testServer()'s
+  expect_false(site_is_local(session("marjoriekohn-matr-admin.share.connect.posit.cloud")))
+  expect_false(site_is_local(session(NULL)))
+  expect_false(site_is_local(NULL))
+})
+

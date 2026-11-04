@@ -37,6 +37,8 @@ test_that("a choice looks like another worded the same but for punctuation, capi
   expect_equal(normalize_look_alikes("a little bit", labels), character()) # different words aren't alike
   expect_equal(normalize_look_alikes("age 16", labels), character())
   expect_equal(normalize_look_alikes("a little", labels), character()) # not itself
+  # short words keep their "s": "yes" isn't "ye"
+  expect_equal(normalize_look_alikes("yes", c("ye", "no", "yes.")), "yes.")
 })
 
 # One question with a variable for each vector of choices.
@@ -83,8 +85,9 @@ test_that("questions that differ only in who they ask about, or are worded the s
   expect_false(any(vapply(groups, function(group) group$linked, TRUE)))
   # a question naming both twins compares them: it is no one's
   expect_false(any(vapply(groups, function(group) "c9" %in% group$ids, TRUE)))
-  # without subjects to find, there is nothing
+  # without subjects to find, there is nothing; and a one-letter subject isn't looked for in every "a"
   expect_length(normalize_service_question_groups(twins_draft(), character()), 0)
+  expect_length(normalize_service_question_groups(twins_draft(), "A"), 0)
 })
 
 test_that("linking gives questions their stem and subjects, and choices that name the twin [subject], so they share a set", {

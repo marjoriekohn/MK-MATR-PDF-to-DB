@@ -98,6 +98,7 @@ test_that("a sign-in link is only asked for a staff member's email, so Auth neve
   here <- "http://localhost:5599/"
   expect_error(staff_service_send_link(test_connection, unreachable, "", here), "Type your email")
   expect_error(staff_service_send_link(test_connection, unreachable, "   ", here), "Type your email")
+  expect_error(staff_service_send_link(test_connection, unreachable, "zztest-nobody@example.test", ""), "Reload the page")
   expect_error(staff_service_send_link(test_connection, unreachable, "zztest-nobody@example.test", here), "no staff member")
   me <- local_staff()
   expect_error(staff_service_send_link(test_connection, unreachable, me$email, here), "Couldn't reach the sign-in service")

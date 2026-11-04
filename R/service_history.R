@@ -12,9 +12,10 @@ history_page_size <- 25
 #' Every edit in the history, newest first.
 #'
 #' @param connection The MATR database, `list(url, key)`; see `model_database.R`.
+#' @param most Only the newest this many; all of them by default.
 #' @return A list of records named by id; see `history_model_get_all()`.
-history_service_get_all <- function(connection) {
-  history_model_get_all(connection)
+history_service_get_all <- function(connection, most = Inf) {
+  history_model_get_all(connection, most)
 }
 
 #' The edits of one kind that match some words.

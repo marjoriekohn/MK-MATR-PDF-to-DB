@@ -93,10 +93,10 @@ test_that("a draft opens as Gemini read it, then as staff last saved it", {
   record <- local_extraction(me)
   expect_error(draft_service_load(test_connection, record$id), "hasn't been read yet")
 
-  expect_true(draft_model_save_reading(test_connection, record$id, gold_json(), record$reading_started))
-  expect_identical(draft_service_load(test_connection, record$id), gold_draft())
+  expect_true(draft_model_save_reading(test_connection, record$id, short_gold_json(), record$reading_started))
+  expect_identical(draft_service_load(test_connection, record$id), short_gold_draft())
 
-  draft <- gold_draft()
+  draft <- short_gold_draft()
   draft$components$checked[3] <- TRUE
   draft$response_options$code_value[1:2] <- c("1", "a") # codes are text: a letter too
   draft$variables$matr_id[1] <- "q1a"
@@ -106,13 +106,13 @@ test_that("a draft opens as Gemini read it, then as staff last saved it", {
   expect_equal(saved$saved_by_id, me$staff_id)
   expect_equal(saved$revision, 2)
   # what the AI returned is never touched by saving
-  expect_identical(draft_service_from_json(draft_model_get_both(test_connection, record$id)$original), gold_draft())
+  expect_identical(draft_service_from_json(draft_model_get_both(test_connection, record$id)$original), short_gold_draft())
 })
 
 test_that("a draft that isn't in the database is a sentence", {
   me <- local_staff()
   expect_error(draft_service_load(test_connection, "0"), "no longer in the database")
-  expect_error(draft_service_save(test_connection, "0", gold_draft(), me$staff_id), "no longer in the database")
+  expect_error(draft_service_save(test_connection, "0", short_gold_draft(), me$staff_id), "no longer in the database")
 })
 
 test_that("a draft typed by hand starts empty and can be saved and opened again", {
@@ -189,9 +189,3 @@ test_that("a save is refused if someone saved the draft after the person opened 
   )
 })
 
-test_that("a draft saved when groups were called Question Groups opens with them as Groups", {
-  json <- list(components = list(list(component_type = "Question Group", children = list(
-    list(component_type = "Question", text = "Do you smoke?", variables = list(list(variable_type = "closed_ended", response_options = list(list(answer_option = "yes")))))
-  ))))
-  expect_equal(draft_service_from_json(json)$components$component_type, c("Group", "Question"))
-})

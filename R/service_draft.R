@@ -65,17 +65,6 @@ normal_answer <- function(text) {
 # filled in with the variable's subject where the words are shown (service_normalize.R).
 subject_placeholder <- "[subject]"
 
-# Kinds of block that were called something else when older drafts were saved (docs/sql/9_integrity_rules.sql
-# renamed Question Group to Group).
-old_type_names <- c(`Question Group` = "Group")
-
-# The kinds of block as they are called now.
-renamed_types <- function(component_types) {
-  old <- component_types %in% names(old_type_names)
-  component_types[old] <- old_type_names[component_types[old]]
-  component_types
-}
-
 #' Whether blocks of these kinds hold other blocks.
 #'
 #' @param component_types Kinds of block.
@@ -83,7 +72,7 @@ renamed_types <- function(component_types) {
 is_container <- function(component_types) component_types %in% container_types
 
 # Who a variable is about when it is about the respondent: the subject the database keeps for them, and the
-# name it had before (docs/sql/5_respondent.sql renames it). Staff and the AI leave About blank for the
+# name it had before ("Self"). Staff and the AI leave About blank for the
 # respondent; the blank is saved to the database as this subject.
 respondent_subject <- "Respondent"
 respondent_names <- c("Respondent", "Self")
@@ -224,7 +213,7 @@ draft_service_from_json <- function(json) {
       id = block_ids,
       parent_id = ids_for("c", pluck(blocks, ".parent", NA_integer_)),
       display_order = as.numeric(seq_along(blocks)),
-      component_type = renamed_types(pluck(blocks, "component_type")),
+      component_type = pluck(blocks, "component_type"),
       text = pluck(blocks, "text"),
       question_number = rep(NA_character_, length(blocks)),
       printed_number = pluck(blocks, "printed_number"),

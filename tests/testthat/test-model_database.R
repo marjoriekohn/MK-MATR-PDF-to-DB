@@ -128,7 +128,7 @@ test_that("a table the key hasn't been granted is not mistaken for a bad key", {
   publishable <- list(url = test_connection$url, key = test_publishable_key())
   expect_error(
     database_model_get(publishable, "staff", "email"),
-    "won't let the site use this table \\(permission denied for table staff\\).*docs/sql/sql_scripts.sql"
+    "won't let the site use this table \\(permission denied for table staff\\).*docs/sql/1_setup.sql"
   )
 })
 
@@ -137,6 +137,28 @@ test_that("a row the database refuses is a sentence with its reason", {
     database_model_insert(test_connection, "wave", list(questionnaire_id = 0, name = test_name("Orphan wave"))),
     "wouldn't save that: insert or update on table \"wave\" violates foreign key"
   )
+})
+
+test_that("the last page is the one whose range reaches the end, or, without a range, one that isn't full", {
+  reply <- function(range = NULL, rows = 0) {
+    headers <- c(list(`Content-Type` = "application/json"), if (!is.null(range)) list(`Content-Range` = range))
+    httr2::response(status_code = 200, headers = headers, body = charToRaw(as.character(jsonlite::toJSON(lapply(seq_len(rows), function(i) list(id = i)), auto_unbox = TRUE))))
+  }
+  expect_true(database_last_page(reply("0-999/1000"), 1000))
+  expect_false(database_last_page(reply("0-999/1500"), 1000))
+  expect_true(database_last_page(reply("*/0"), 1000))
+  # a proxy dropped the range: a full page may have more after it
+  expect_false(database_last_page(reply(rows = 3), 3))
+  expect_true(database_last_page(reply(rows = 2), 3))
+})
+
+test_that("a row the database has already, with the same name or words, says nothing was changed", {
+  body <- jsonlite::toJSON(list(code = "23505", message = "duplicate key value violates unique constraint \"subject_name_unique\""), auto_unbox = TRUE)
+  response <- httr2::response(status_code = 409, headers = list(`Content-Type` = "application/json"), body = charToRaw(as.character(body)))
+  said <- database_problem(response)
+  expect_match(said, "^The MATR database already has one with the same name or words, so nothing was changed")
+  expect_match(said, "subject_name_unique", fixed = TRUE)
+  expect_match(said, "try again\\.$")
 })
 
 test_that("a missing table and an unreachable database are sentences too", {

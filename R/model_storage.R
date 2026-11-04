@@ -4,7 +4,7 @@
 # a draft needs later (its PDF) are also kept in a private bucket in the project's Storage, which the
 # site's server reads and writes with the secret key (the same `connection` as the database, in the
 # apikey header). Nobody else can read the bucket: it isn't public, and no policy lets anyone in.
-# The bucket is made by docs/sql/3_pdf_storage.sql.
+# The bucket is made by docs/sql/1_setup.sql (section 7, "The PDFs' bucket").
 #
 #   curl "$SUPABASE_URL/storage/v1/object/extraction-pdfs/<sha256>.pdf" -H "apikey: $SUPABASE_SECRET_KEY"
 
@@ -105,7 +105,7 @@ storage_problem <- function(response, bucket) {
   body <- tryCatch(httr2::resp_body_json(response), error = function(problem) list())
   if (identical(body$code, "NoSuchBucket")) {
     return(sprintf(
-      "The file storage has no bucket called %s yet, so the PDF can't be kept. Run docs/sql/3_pdf_storage.sql.",
+      "The file storage has no bucket called %s yet, so the PDF can't be kept. Run the statement under \"The PDFs' bucket\" in docs/sql/1_setup.sql.",
       bucket
     ))
   }

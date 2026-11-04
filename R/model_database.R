@@ -7,7 +7,9 @@
 # Only this server holds the key; the browser never talks to the database. The
 # secret key gets past Row Level Security, which hides STAFF, WRITE_HISTORY and
 # the drafts from the publishable key, so it never goes to a browser or into
-# a log.
+# a log. It can also change any table: the database's own rules (its constraints,
+# triggers and draft functions) and the site's service functions are what stand
+# between staff and a wrong change, so nothing a browser sends is used without them.
 #
 # This file is the only place that makes requests to the database. Every other
 # model function names a table and what it wants from it; services and modules
@@ -90,19 +92,21 @@ database_model_get <- function(connection, table, columns, order_by = columns[1]
 #' @inheritParams database_model_get
 #' @param select PostgREST's `select`: columns, which can embed another table, e.g. `"preparer:staff!prepared_by(name)"`.
 #' @param order_by The columns to sort by, or `NULL` for the database's order.
+#' @param most The most rows to read (the first, in `order_by`'s order), up to a page; all of them by default.
 #' @return A list with one list per row; empty if there are none.
 database_model_select <- function(connection, table, select, order_by = NULL,
-                                  filters = list(), page_size = database_page_size) {
+                                  filters = list(), page_size = database_page_size, most = Inf) {
   pages <- database_fetch(
-    connection, table, select, order_by, filters, page_size,
-    parse = function(body) jsonlite::fromJSON(body, simplifyVector = FALSE)
+    connection, table, select, order_by, filters, min(page_size, most),
+    parse = function(body) jsonlite::fromJSON(body, simplifyVector = FALSE), one_page = is.finite(most)
   )
   as.list(unlist(pages, recursive = FALSE))
 }
 
 # The pages of rows, each as `parse` makes them from the reply's body. httr2 asks for one page
-# after another, moving `offset` on by a page each time, until the reply says it was the last.
-database_fetch <- function(connection, table, select, order_by, filters, page_size, parse) {
+# after another, moving `offset` on by a page each time, until the reply says it was the last (or after
+# the first, for `one_page`).
+database_fetch <- function(connection, table, select, order_by, filters, page_size, parse, one_page = FALSE) {
   first_page <- database_request(connection, table) |>
     database_filter(filters) |>
     httr2::req_url_query(select = select, order = order_by, .multi = "comma") |>
@@ -111,8 +115,10 @@ database_fetch <- function(connection, table, select, order_by, filters, page_si
   responses <- tryCatch(
     httr2::req_perform_iterative(
       first_page,
-      next_req = httr2::iterate_with_offset("offset", start = 0, offset = page_size, resp_complete = database_last_page),
-      max_reqs = Inf, progress = FALSE
+      next_req = httr2::iterate_with_offset(
+        "offset", start = 0, offset = page_size, resp_complete = function(resp) database_last_page(resp, page_size)
+      ),
+      max_reqs = if (one_page) 1 else Inf, progress = FALSE
     ),
     error = function(problem) stop("Couldn't reach the MATR database: ", conditionMessage(problem), call. = FALSE)
   )
@@ -124,9 +130,14 @@ database_fetch <- function(connection, table, select, order_by, filters, page_si
 }
 
 # Whether a reply is the last page: its Content-Range ("0-999/1500", or "*/0" for none) reaches
-# the end of the table. A reply with no range counts as the last.
-database_last_page <- function(resp) {
-  range <- httr2::resp_header(resp, "Content-Range") %||% ""
+# the end of the table. A reply without a range (a proxy can drop it) is the last unless it holds a whole
+# page of rows, so a long table isn't cut short.
+database_last_page <- function(resp, page_size = database_page_size) {
+  range <- httr2::resp_header(resp, "Content-Range")
+  if (is.null(range)) {
+    rows <- tryCatch(length(jsonlite::fromJSON(httr2::resp_body_string(resp), simplifyVector = FALSE)), error = function(problem) 0)
+    return(rows < page_size)
+  }
   found <- regmatches(range, regexec("^[0-9]+-([0-9]+)/([0-9]+)$", range))[[1]]
   if (length(found) == 0) {
     return(TRUE)
@@ -302,16 +313,24 @@ database_problem <- function(response) {
   status <- httr2::resp_status(response)
   body <- tryCatch(httr2::resp_body_json(response), error = function(problem) list())
   message <- body$message %||% ""
-  # P0001 is a function of ours refusing with a sentence for staff (docs/sql/sql_scripts.sql): show it as written.
+  # P0001 is a function of ours refusing with a sentence for staff (docs/sql/1_setup.sql): show it as written.
   if (identical(body$code, "P0001") && nzchar(message)) {
     return(message)
   }
   # 42501 is PostgreSQL's "permission denied": the key is fine, but the table
-  # hasn't been granted to it (docs/sql/sql_scripts.sql grants each table).
+  # hasn't been granted to it (docs/sql/1_setup.sql grants each table).
   if (identical(body$code, "42501")) {
     return(paste0(
       "The MATR database won't let the site use this table (", message, "). ",
-      "The table needs granting to the service_role; see the grants in docs/sql/sql_scripts.sql and the migrations in docs/sql/."
+      "The table needs granting to the service_role; see the grants in docs/sql/1_setup.sql."
+    ))
+  }
+  # 23505 is a row with the same words or name as one the database has. The site looks for those first, so it is
+  # most often one another change added after this one was worked out, which doing it again finds and uses.
+  if (identical(body$code, "23505")) {
+    return(paste0(
+      "The MATR database already has one with the same name or words, so nothing was changed (", message, "). ",
+      "If it wasn't there when you started, someone added it meanwhile: try again."
     ))
   }
   switch(as.character(status),

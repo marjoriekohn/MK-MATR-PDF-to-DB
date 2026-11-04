@@ -238,6 +238,36 @@ test_that("a recorded questionnaire's blocks are found where it prints them, and
   expect_equal(parent, "100")
 })
 
+test_that("a linked question another questionnaire prints keeps the link: it gets the stem, unless it has another", {
+  draft <- small_draft()
+  question <- draft$components$id[draft$components$component_type == "Question"][1]
+  draft$components$stem[draft$components$id == question] <- paste(test_marker, "Do [subject] smoke?")
+  printed <- c(no_options, list(components = data.frame(component_id = 150, component_type_id = 2, text = paste(test_marker, "Do you smoke?"))))
+
+  # it has no stem yet: the extraction gives it one, the one change it makes to a row that is there
+  built <- build_for(draft, options = printed)
+  lines <- item_lines(built$items)
+  expect_true('Update question {"component_id":150} question_stem_id: - -> new:question_stem:1' %in% lines)
+  expect_lt(match("Insert question_stem", substr(lines, 1, 20)), match('Update question {"component_id":150} question_stem_id: - -> new:question_stem:1', lines))
+  expect_equal(built$summary$linked, 1L)
+  expect_match(extraction_service_push_summary(built$summary), "1 question already there linked")
+  expect_equal(sum(built$items$action == "Update"), 1)
+
+  # it has that stem already: nothing to change
+  stems <- data.frame(question_stem_id = 77, text = paste(test_marker, "Do [subject] smoke?"))
+  same <- build_for(draft, options = c(printed, list(stems = stems, linked = data.frame(component_id = 150, question_stem_id = 77))))
+  expect_false(any(same$items$action == "Update"))
+  expect_false("question_stem" %in% same$items$entity_name)
+
+  # it is linked under another: linking it here would unlink it from those, so the push says so
+  other <- data.frame(question_stem_id = 78, text = "Does [subject] smoke?")
+  expect_error(
+    build_for(draft, options = c(printed, list(stems = rbind(stems, other), linked = data.frame(component_id = 150, question_stem_id = 78)))),
+    "Question 1 (“ZZTEST Do you smoke?”) is printed by another questionnaire already, linked with other questions as “Does [subject] smoke?”",
+    fixed = TRUE
+  )
+})
+
 test_that("a block another questionnaire prints with the same kind and words is placed here, not copied", {
   options <- utils::modifyList(no_options, list(components = data.frame(
     component_id = c(300, 150, 160, 170),
@@ -285,6 +315,11 @@ test_that("a block another questionnaire prints with the same kind and words is 
   expect_equal(push_shared_status(where, 150), "Used by 2 questionnaires")
   where$placed$questionnaire_id[3] <- 3
   expect_equal(push_shared_status(where, 300), "Used in Mother Questionnaire") # no abbreviation: its name
+  where$questionnaires$abbreviation[2] <- "  "
+  expect_equal(push_shared_status(where, 300), "Used in Mother Questionnaire") # a blank one is none
+  where$placed$questionnaire_id[3] <- 9 # a questionnaire that isn't listed
+  expect_equal(push_shared_status(where, 300), "Printed by another questionnaire")
+  where$placed$questionnaire_id[3] <- 3
   shared <- build_for(small_draft(), options = c(options, where))
   expect_equal(shared$rows$blocks$status[!shared$rows$blocks$is_new], "Used by 2 questionnaires") # 150, the oldest
 })

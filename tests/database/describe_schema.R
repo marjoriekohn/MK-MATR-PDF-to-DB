@@ -328,7 +328,7 @@ describe <- function(connection, catalog = NULL, source = "the live database's o
     },
     "",
     paste(
-      "[sql/sql_scripts.sql](sql/sql_scripts.sql) builds the database. \"Required?\" is \"yes\" for a column with no",
+      "[sql/1_setup.sql](sql/1_setup.sql) builds the database. \"Required?\" is \"yes\" for a column with no",
       "default that can't be left empty; a column that isn't marked can be left out when a row is added."
     ), "",
     body,

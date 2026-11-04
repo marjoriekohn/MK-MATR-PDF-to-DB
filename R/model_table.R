@@ -13,7 +13,7 @@
 #   date    a day, as YYYY-MM-DD
 #   flag    TRUE or FALSE
 #
-# docs/sql/sql_scripts.sql builds the tables, and docs/database_tables.md lists
+# docs/sql/1_setup.sql builds the tables, and docs/database_tables.md lists
 # their columns as the live database describes them.
 
 database_tables <- list(

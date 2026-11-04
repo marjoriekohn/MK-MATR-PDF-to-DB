@@ -1,3 +1,8 @@
+# State kept outside reactive values: `last`, the picks before "+ Add new …" was chosen, an environment made by
+# new.env() inside the module, so each session has its own and it goes when the session ends. Nothing else reads
+# it. Shiny runs a session's code one piece at a time, so nothing changes it while something else is reading it; it
+# isn't made to be shared between threads or sessions, and shouldn't be.
+
 #' The form that says where an extraction goes (its Basic Info): its registry, study, questionnaire and wave.
 #'
 #' Four drop-downs, each holding what is in the one before it; the wave drop-down offers the
@@ -203,21 +208,17 @@ extraction_info_server <- function(
         wave = list(wave__questionnaire_id = before$questionnaire_id),
         list()
       )
+      # The new row is picked once the catalog has it. If it couldn't be read again, the drop-downs have
+      # no choice to pick it from: they stay as they were, and staff are told how to get it.
       then <- function(key) {
-        added <- edit_service_quick_row(now(), kind, key)
-        come_back(switch(kind,
-          registry = utils::modifyList(before, list(registry_id = key, study_id = "", questionnaire_id = "", wave_id = "")),
-          study = utils::modifyList(before, list(
-            registry_id = as.character(added$registry_id %||% before$registry_id), study_id = key,
-            questionnaire_id = "", wave_id = ""
-          )),
-          questionnaire = utils::modifyList(before, list(
-            registry_id = "", study_id = as.character(added$study_id %||% before$study_id), questionnaire_id = key, wave_id = ""
-          )),
-          wave = utils::modifyList(before, list(
-            questionnaire_id = as.character(added$questionnaire_id %||% before$questionnaire_id), wave_id = key
-          ))
-        ))
+        picks <- edit_service_quick_picks(now(), kind, key, before)
+        if (is.null(picks)) {
+          showNotification(
+            "It was added, but the list couldn't be read again, so it isn't picked. Reload the page and pick it from the list.",
+            type = "warning", duration = NULL
+          )
+        }
+        come_back(picks %||% before)
       }
       opened <- quick$open(kind, values = start, then = then, back = function() come_back(before))
       # the pop-up couldn't open: the drop-down goes back to what it had

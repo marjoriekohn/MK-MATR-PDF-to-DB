@@ -389,7 +389,8 @@ reading_progress <- function(record) {
     return(progress_step("Typed by hand", "done"))
   }
   switch(record$extraction_status,
-    ready = progress_step("Read by Gemini", "done"),
+    # read, but the Variable Names and Coding couldn't be applied (extraction_service_reading_steps() says why)
+    ready = if (is.null(record$error)) progress_step("Read by Gemini", "done") else progress_step("Read by Gemini · codes not applied", "attention"),
     failed = progress_step("Read by Gemini · failed", "attention"),
     progress_step("Read by Gemini", "in_progress")
   )

@@ -30,19 +30,29 @@ use_test_database()
 # Most of a database test's time is its requests, one after another. Each request is counted here, and
 # tests/testthat.R shows how many each test made beside its time. (httr2 asks its mock function about every
 # request first; this one only counts it and lets it go. A test that mocks the replies sets its own.)
-# Each is also listed (its method and address), for finding the requests a test repeats.
+# Each is also listed (its method and address), for finding the requests a test repeats: as sent, since decoding
+# every address slowed every request; test_request_log() reads them.
 test_requests <- new.env()
 test_requests$count <- 0L
 test_requests$log <- character()
 options(
   httr2_mock = function(req) {
     test_requests$count <- test_requests$count + 1L
-    test_requests$log[test_requests$count] <- paste(req$method %||% "GET", utils::URLdecode(req$url))
+    test_requests$log[test_requests$count] <- paste(req$method %||% "GET", req$url)
     NULL
   },
   matr.test_requests = test_requests
 )
 if (testthat::is_testing()) withr::defer(options(httr2_mock = NULL, matr.test_requests = NULL), envir = testthat::teardown_env())
+
+#' The requests made so far, their addresses decoded, e.g. `"GET https://….supabase.co/rest/v1/wave?select=wave_id,name"`.
+#'
+#' @param since Only those after the first `since` requests: `test_requests$count` before what to look at.
+#' @return A character vector, oldest first.
+test_request_log <- function(since = 0L) {
+  log <- utils::tail(test_requests$log, max(test_requests$count - since, 0L))
+  vapply(log, utils::URLdecode, character(1), USE.NAMES = FALSE)
+}
 
 # ------ The database the tests use -----------------------------------------------------------------------
 # Everything that is about the database is tested against a real one: the test Supabase project
@@ -258,12 +268,20 @@ test_functions_missing <- paste(
 #' The applied draft lists every row it added, with the numbers the database gave them, so what a test
 #' added by applying an edit or pushing an extraction is removed from the list: the rows added last first,
 #' since they point at the ones before. The applied draft itself and its items stay (see the top of this file).
+#' Several applied drafts are removed together: one read of their items, and one request for each table.
 #'
-#' @param history_id The applied draft's id.
+#' @param history_ids The applied drafts' ids.
 #' @return Called for its effect.
-test_remove_applied <- function(history_id) {
-  items <- history_model_get_items(test_connection, as.character(history_id))
-  added <- unique(items[items$action == "Insert", c("entity_name", "record_identifier")])
+test_remove_applied <- function(history_ids) {
+  history_ids <- unique(as.character(history_ids))
+  if (length(history_ids) == 0) {
+    return(invisible())
+  }
+  items <- database_model_get(
+    test_connection, history_item_table, c("item_number", "entity_name", "record_identifier", "action"),
+    order_by = c("draft_id", "item_number"), filters = list(draft_id = database_in(history_ids))
+  )
+  added <- unique(items[items$action %in% "Insert", c("entity_name", "record_identifier")])
   for (table in test_removal_order(unique(added$entity_name))) {
     # an edit's item names one row; an extraction's line for a table lists every row it added there
     keys <- unlist(lapply(added$record_identifier[added$entity_name == table], function(identifier) {

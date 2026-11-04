@@ -70,6 +70,7 @@ edit_extraction_server <- function(
     waiting <- reactiveVal(NULL) # a draft to open once unsaved changes are dealt with
     waiting_take_over <- reactiveVal(FALSE) # whether to take that draft over when it opens
     loaded_revision <- reactiveVal(NULL) # the draft's revision as this page opened it or last saved it
+    offered_revision <- reactiveVal(NULL) # a later revision someone else saved, which staff were asked about once
     claim <- reactiveVal(NULL) # NULL while this page has the draft to work on; otherwise why not (see below)
     claiming <- reactiveVal(NULL) # a draft someone else has, while staff are asked whether to take it over
     last_active <- reactiveVal(Sys.time()) # when staff last did something on the site
@@ -256,6 +257,7 @@ edit_extraction_server <- function(
       loaded <- draft_service_check_containers(loaded$draft) # drafts saved before sections were worked out
       record_id(opened$id)
       loaded_revision(revision)
+      offered_revision(NULL)
       claim(NULL)
       last_active(Sys.time())
       draft(loaded)
@@ -395,14 +397,19 @@ edit_extraction_server <- function(
 
     # This page has the draft, which the database has at `revision`. If someone saved it since this page
     # opened it or last saved it, the page shows what they saved; unless there are changes here that
-    # aren't saved, which staff are asked about rather than lose. Returns whether this page has it.
+    # aren't saved, which staff are asked about rather than lose: once for each revision, since the claim
+    # is renewed every minute and asking again would put the question over whatever dialog is open.
+    # Returns whether this page has it.
     catch_up <- function(revision) {
       claim(NULL)
       if (identical(as.integer(revision), as.integer(loaded_revision()))) {
         return(TRUE)
       }
       if (has_unsaved_changes()) {
-        offer_saved_version("Your changes here can't be saved over theirs.")
+        if (!identical(as.integer(revision), offered_revision())) {
+          offered_revision(as.integer(revision))
+          offer_saved_version("Your changes here can't be saved over theirs.")
+        }
         return(TRUE)
       }
       reloaded <- reload(revision)

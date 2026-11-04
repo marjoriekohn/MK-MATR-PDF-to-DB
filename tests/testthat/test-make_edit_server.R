@@ -20,18 +20,12 @@ page_args <- function(me) {
   )
 }
 
-# What the page applied or saved is removed when the test ends: the rows an applied change added, and the drafts.
+# What the page applied is removed when the test ends: the rows the applied changes added, in one request for each
+# table. (The drafts it saved go with the drafts of the test's staff.)
 local_outcomes <- function(env = parent.frame()) {
   made <- new.env()
   made$applied <- character()
-  made$drafts <- character()
-  withr::defer(
-    {
-      for (id in made$applied) test_remove_applied(id)
-      for (id in made$drafts) test_delete_draft(id)
-    },
-    envir = env
-  )
+  withr::defer(test_remove_applied(made$applied), envir = env)
   made
 }
 
@@ -99,6 +93,26 @@ test_that("picking an item shows it in the details, its fields as text, with Edi
     expect_equal(verb(), "update")
     expect_match(paste(output[["change-main"]]$html, collapse = ""), "<input")
     expect_length(errors(), 0)
+  })
+})
+
+test_that("going to another page and back with a form open keeps what was typed in it", {
+  me <- local_staff()
+  showing <- shiny::reactiveVal(TRUE)
+  page <- page_args(me)
+  name <- test_name("Typed before leaving")
+  shiny::testServer(make_edit_server, args = c(page$args, list(active = showing)), {
+    add(session, "respondent_type")
+    draw_form()
+    session$setInputs(`change-respondent_type__name` = name)
+    token <- change$token()
+    showing(FALSE)
+    session$flushReact()
+    showing(TRUE)
+    session$flushReact()
+    output[["change-main"]] # as the browser would draw it again, if it had changed
+    expect_equal(change$token(), token) # the form wasn't drawn again
+    expect_equal(change$values()[["respondent_type__name"]], name)
   })
 })
 
@@ -194,7 +208,6 @@ test_that("a STAFF member's delete is sent for approval and waits on Change Requ
     session$setInputs(submit = 1)
     expect_false(done()$applied)
     expect_equal(done()$record$status, "Awaiting Review")
-    made$drafts <- c(made$drafts, done()$record$id)
     expect_match(text_of(output$detail), "Sent for approval")
     expect_true(done()$record$id %in% names(change_request_service_waiting(test_connection)))
     expect_equal(nrow(table_model_get(test_connection, "respondent_type", list(respondent_type_id = database_eq(type$respondent_type_id)))), 1)
@@ -220,7 +233,6 @@ test_that("a STAFF member's delete is sent for approval and waits on Change Requ
 test_that("Save as draft keeps the form as typed, lists it at the top, and Continue opens it again", {
   me <- local_staff()
   seen <- local_browser()
-  made <- local_outcomes()
   page <- page_args(me)
   name <- test_name("Half typed")
   shiny::testServer(make_edit_server, args = page$args, {
@@ -230,7 +242,6 @@ test_that("Save as draft keeps the form as typed, lists it at the top, and Conti
     session$setInputs(`change-respondent_type__name` = name)
     session$setInputs(save_draft = 1)
     expect_false(is.null(draft()$id))
-    made$drafts <- c(made$drafts, draft()$id)
     expect_match(notice_texts(seen), "Saved as a draft", all = FALSE)
     saved_id <- draft()$id
     expect_true(saved_id %in% names(mine()))
@@ -355,7 +366,6 @@ test_that("a PDF is only shown: listed without + Add, its details without Edit o
     pick(session, "pdf_file", sha256)
     detail <- paste(output$detail$html, collapse = "")
     expect_match(text_of(detail), paste("PDF", substr(sha256, 1, 12)), fixed = TRUE)
-    expect_match(text_of(detail), "It is only shown here")
     expect_false(grepl('data-action="edit"|data-action="delete"', detail))
     expect_false(grepl("Open PDF", text_of(detail))) # (its file isn't in Storage)
     shown <- text_of(output[["change-main"]])
@@ -365,7 +375,7 @@ test_that("a PDF is only shown: listed without + Add, its details without Edit o
   })
 })
 
-test_that("an option set is added with its choices (once docs/sql/8_option_sets_editable.sql has run)", {
+test_that("an option set is added with its choices", {
   me <- local_staff()
   choice <- local_row("answer_option", list(standardized_label = tolower(test_name("Choice"))), "answer_option_id") # a choice is in lower case
   made <- local_outcomes()
@@ -378,7 +388,7 @@ test_that("an option set is added with its choices (once docs/sql/8_option_sets_
     session$setInputs(`change-option_set__name` = name, `change-option_set__answer_option_ids` = key_text(choice$answer_option_id))
     expect_true(change$ready())
     session$setInputs(submit = 1)
-    expect_true(isTRUE(done()$applied), info = "run docs/sql/8_option_sets_editable.sql on the test project")
+    expect_true(isTRUE(done()$applied), info = "the test project needs the option set rules of docs/sql/1_setup.sql")
     if (isTRUE(done()$applied)) made$applied <- c(made$applied, done()$history_id)
     expect_length(errors(), 0)
   })

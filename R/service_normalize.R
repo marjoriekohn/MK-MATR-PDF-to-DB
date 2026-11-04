@@ -101,11 +101,13 @@ normalize_service_use_choice <- function(draft, from, to) {
 
 # ------ Questions about different people ----------------------------------------------------------------------
 # Whole-word, any-capitals patterns for subjects' names, the longest first (so "Twin A" is found before "Twin").
+# A name of one letter isn't looked for: it would be found as a word in nearly every question ("a").
 normalize_subject_patterns <- function(subjects) {
-  subjects <- unique(trimws(subjects[!is.na(subjects) & nzchar(trimws(subjects))]))
+  subjects <- unique(trimws(subjects[!is.na(subjects) & nchar(gsub("[[:space:]]", "", subjects)) > 1]))
   subjects <- subjects[order(-nchar(subjects))]
   escaped <- gsub("([][{}()+*^$|\\\\?.])", "\\\\\\1", subjects)
-  stats::setNames(paste0("(?i)(?<![[:alnum:]])", gsub(" +", "\\\\s+", escaped), "(?![[:alnum:]])"), subjects)
+  # recycle0: no subjects, no patterns (not one that matches nothing in particular)
+  stats::setNames(paste0("(?i)(?<![[:alnum:]])", gsub(" +", "\\\\s+", escaped), "(?![[:alnum:]])", recycle0 = TRUE), subjects)
 }
 
 # Which subjects some words name: one character vector for each text.

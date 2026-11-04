@@ -117,6 +117,9 @@ auth_model_sign_out <- function(auth, access_token) {
 }
 
 # ------ Accounts (the secret key) -------------------------------------------------------------
+# The site doesn't call these: staff accounts are made in Supabase (Authentication > Users). The tests use them to
+# make a sign-in account for a test staff member and remove it afterwards (tests/testthat/helper-auth.R).
+
 #' Make an account, as the project's administrator.
 #'
 #' The email is marked confirmed, so the account can sign in at once.

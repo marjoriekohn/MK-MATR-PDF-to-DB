@@ -48,7 +48,7 @@ time_ago <- function(time, now = Sys.time()) {
 
 #' The day of a time, in words.
 #'
-#' For example "today at 9:15 AM", "yesterday", "on Sep 29".
+#' For example "today at 9:15 AM", "yesterday", "on Sep 29", or "on Sep 29, 2024" in another year.
 #'
 #' @param time A date-time.
 #' @param now What to measure from.
@@ -61,7 +61,9 @@ day_phrase <- function(time, now = Sys.time()) {
   if (days == 1) {
     return("yesterday")
   }
-  paste("on", format(time, "%b", tz = ""), as.integer(format(time, "%d", tz = "")))
+  day <- paste("on", format(time, "%b", tz = ""), as.integer(format(time, "%d", tz = "")))
+  if (format(time, "%Y", tz = "") != format(now, "%Y", tz = "")) day <- paste0(day, ", ", format(time, "%Y", tz = ""))
+  day
 }
 
 #' A number of seconds in words.
@@ -115,10 +117,11 @@ word_list <- function(words) {
 
 #' Whether text has anything in it besides spaces.
 #'
-#' @param x A character vector; `NULL` counts as nothing.
+#' @param x A character vector; `NULL` and `NA` count as nothing.
 #' @return A logical vector.
 has_text <- function(x) {
-  nzchar(trimws(x %||% ""))
+  x <- x %||% ""
+  !is.na(x) & nzchar(trimws(x))
 }
 
 #' An age range in words.

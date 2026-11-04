@@ -1,5 +1,5 @@
 # Merging one answer choice into another on Make an edit: updating a choice to the words of another
-# (service_edit_entities.R, edit_merge_items()).
+# (service_edit_entities_answers.R, edit_merge_items()).
 
 # "1 to 2" (on variable 10, with a count of answers, in set 100 with "3-4") and "1-2" (on variable 11, in set 200
 # with "3-4"): once merged, set 100 has the same choices as set 200, which more variables offer.

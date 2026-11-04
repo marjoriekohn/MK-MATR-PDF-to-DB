@@ -98,7 +98,7 @@ edit_choice_needs <- list(study = "registry", questionnaire = "study")
 #' Read the tables a kind needs, afresh.
 #'
 #' @param connection The MATR database, `list(url, key)`; see `model_database.R`.
-#' @param entity A kind of thing staff can edit: one entry of `edit_entities` (see `service_edit_entities.R`).
+#' @param entity A kind of thing staff can edit: one entry of `edit_entities` (see `service_edit_kinds.R`).
 #' @return A list of data frames named after the tables.
 edit_service_load <- function(connection, entity) {
   tables <- edit_service_tables(entity)
@@ -125,7 +125,7 @@ tolower_words <- function(text) {
 
 #' Why a kind can't be added, updated or deleted here.
 #'
-#' @param entity A kind of thing staff can edit: one entry of `edit_entities` (see `service_edit_entities.R`).
+#' @param entity A kind of thing staff can edit: one entry of `edit_entities` (see `service_edit_kinds.R`).
 #' @param snap The tables the kind needs, as `edit_service_load()` reads them: a list of data frames named after the tables.
 #' @param mode `"add"`, `"update"` or `"delete"`.
 #' @return A sentence, or `NULL` if it can.
@@ -138,7 +138,7 @@ edit_service_can <- function(entity, snap, mode) {
 #'
 #' Narrowed to those that have every word in `query`.
 #'
-#' @param entity A kind of thing staff can edit: one entry of `edit_entities` (see `service_edit_entities.R`).
+#' @param entity A kind of thing staff can edit: one entry of `edit_entities` (see `service_edit_kinds.R`).
 #' @param snap The tables the kind needs, as `edit_service_load()` reads them: a list of data frames named after the tables.
 #' @param scope The questionnaire's key, for a kind that belongs to one.
 #' @param query Words typed to find a card.
@@ -163,7 +163,7 @@ edit_service_filter <- function(cards, query = "") {
 
 #' A kind's row by its key.
 #'
-#' @param entity A kind of thing staff can edit: one entry of `edit_entities` (see `service_edit_entities.R`).
+#' @param entity A kind of thing staff can edit: one entry of `edit_entities` (see `service_edit_kinds.R`).
 #' @param snap The tables the kind needs, as `edit_service_load()` reads them: a list of data frames named after the tables.
 #' @param key The row's key, as text (`edit_key()`).
 #' @return A one-row data frame, or `NULL`.
@@ -180,7 +180,7 @@ edit_service_row <- function(entity, snap, key) {
 #' rows (a study, with its first questionnaire and wave) has the fields of all of them,
 #' `part` saying which.
 #'
-#' @param entity A kind of thing staff can edit: one entry of `edit_entities` (see `service_edit_entities.R`).
+#' @param entity A kind of thing staff can edit: one entry of `edit_entities` (see `service_edit_kinds.R`).
 #' @param snap The tables the kind needs, as `edit_service_load()` reads them: a list of data frames named after the tables.
 #' @param mode `"add"` or `"update"`.
 #' @param row The row being updated.
@@ -211,7 +211,7 @@ edit_service_fields <- function(entity, snap, mode, row = NULL, scope = NULL) {
 #' A row's values for an update; for an add the field's default or nothing. Dates are
 #' shown as MM/DD/YYYY.
 #'
-#' @param entity A kind of thing staff can edit: one entry of `edit_entities` (see `service_edit_entities.R`).
+#' @param entity A kind of thing staff can edit: one entry of `edit_entities` (see `service_edit_kinds.R`).
 #' @param fields The form's fields, from `edit_service_fields()`.
 #' @param snap The tables the kind needs, as `edit_service_load()` reads them: a list of data frames named after the tables.
 #' @param mode `"add"` or `"update"`.
@@ -511,7 +511,7 @@ edit_service_word_diff <- function(old, new) {
 # ------ Writing a change as items ----------------------------------------------------------------------------------------
 #' What an add, update or delete comes to.
 #'
-#' @param entity A kind of thing staff can edit: one entry of `edit_entities` (see `service_edit_entities.R`).
+#' @param entity A kind of thing staff can edit: one entry of `edit_entities` (see `service_edit_kinds.R`).
 #' @param mode `"add"`, `"update"` or `"delete"`.
 #' @param snap The tables the kind needs, as `edit_service_load()` reads them: a list of data frames named after the tables.
 #' @param row The row being updated or deleted.
@@ -520,7 +520,9 @@ edit_service_word_diff <- function(old, new) {
 #' @param values What is in the form: a named list of strings by field id. Not for a delete.
 #' @param plan For a delete, the plan if it is already worked out.
 #' @return A list: `items` (numbered, in the order to apply them) and `summary` (one
-#'   sentence for the proposal); a delete also has its `plan`.
+#'   sentence for the proposal); a delete also has its `plan`. An error with a sentence if an add or an
+#'   update would change something while its form still has a field to fill in or fix: the page only builds
+#'   a checked form, but a caller that builds one itself (`edit_service_quick_add()`) is checked here too.
 edit_service_build <- function(entity, mode, snap, row = NULL, scope = NULL, fields = NULL, values = NULL, plan = NULL) {
   if (mode == "delete") {
     plan <- plan %||% edit_service_delete_plan(entity, snap, row)
@@ -536,6 +538,8 @@ edit_service_build <- function(entity, mode, snap, row = NULL, scope = NULL, fie
   } else {
     edit_update_items(entity, snap, row, fields, values)
   }
+  # an update that changes nothing writes nothing, whatever its form holds
+  if (NROW(items) > 0) edit_refuse_unchecked(edit_service_check(fields, values))
   summary <- if (mode != "add" && !is.null(entity$summary_update)) {
     entity$summary_update(snap, row, fields, values)
   } else if (mode != "add") {
@@ -546,6 +550,15 @@ edit_service_build <- function(entity, mode, snap, row = NULL, scope = NULL, fie
     edit_summary_add(entity, snap, fields, values)
   }
   list(items = edit_number_items(items), summary = summary)
+}
+
+# Stops with what is left to fill in or fix, if anything is.
+edit_refuse_unchecked <- function(found) {
+  left <- c(
+    if (length(found$missing) > 0) paste0("Fill in the ", word_list(found$missing), "."),
+    unlist(found$problems, use.names = FALSE)
+  )
+  if (length(left) > 0) stop(paste(left, collapse = " "), call. = FALSE)
 }
 
 # ------ * Add ------------------------------------------------------------------------------------------------------------
@@ -576,7 +589,7 @@ edit_add_items <- function(entity, snap, fields, values) {
 # ------ * Update ----------------------------------------------------------------------------------------------------------
 #' One Update item per field that differs.
 #'
-#' @param entity A kind of thing staff can edit: one entry of `edit_entities` (see `service_edit_entities.R`).
+#' @param entity A kind of thing staff can edit: one entry of `edit_entities` (see `service_edit_kinds.R`).
 #' @param snap The tables the kind needs, as `edit_service_load()` reads them: a list of data frames named after the tables.
 #' @param row The row being updated.
 #' @param fields The form's fields, from `edit_service_fields()`.
@@ -598,7 +611,7 @@ edit_update_items <- function(entity, snap, row, fields, values) {
 #' What it reaches, what stops it, and the items. The kind says where it starts (a
 #' question's placement and its settings are one thing).
 #'
-#' @param entity A kind of thing staff can edit: one entry of `edit_entities` (see `service_edit_entities.R`).
+#' @param entity A kind of thing staff can edit: one entry of `edit_entities` (see `service_edit_kinds.R`).
 #' @param snap The tables the kind needs, as `edit_service_load()` reads them: a list of data frames named after the tables.
 #' @param row The row being deleted.
 #' @return A list: `cascade`, `reach`, `blocked` (empty when it can go ahead), `items`,
@@ -751,7 +764,7 @@ edit_summary_delete <- function(entity, snap, row, plan) {
 #' For a component or question, every questionnaire that prints it; for anything else, the
 #' rows that point at it.
 #'
-#' @param entity A kind of thing staff can edit: one entry of `edit_entities` (see `service_edit_entities.R`).
+#' @param entity A kind of thing staff can edit: one entry of `edit_entities` (see `service_edit_kinds.R`).
 #' @param snap The tables the kind needs, as `edit_service_load()` reads them: a list of data frames named after the tables.
 #' @param row The row being changed.
 #' @return A list: `uses`, `shared` (how many questionnaires print a component) and `pointing`.
@@ -813,7 +826,7 @@ edit_service_blockers <- function(mode, found = NULL, n_changes = 0, shared = 0,
 #' A draft as typed, with no items.
 #'
 #' @param verb `"add"`, `"update"` or `"delete"`.
-#' @param entity A kind of thing staff can edit: one entry of `edit_entities` (see `service_edit_entities.R`).
+#' @param entity A kind of thing staff can edit: one entry of `edit_entities` (see `service_edit_kinds.R`).
 #' @return A list with `summary` and `items` (`NULL`), like `edit_service_build()`.
 edit_service_unfinished <- function(verb, entity) {
   list(summary = paste0("Unfinished: ", verb, " ", entity$article, " ", entity$noun), items = NULL)
@@ -885,14 +898,18 @@ edit_service_conflicts <- function(records, items, except = NULL) {
   if (is.null(items) || nrow(items) == 0) {
     return(list())
   }
-  mine <- unique(paste(items$entity_name, items$record_identifier))
+  # a row an edit adds is named new:<table>:1 in every edit, so it is no other edit's row
+  rows_of <- function(items) {
+    named <- unique(paste(items$entity_name, items$record_identifier))
+    named[!grepl('"new:[a-z_]+:[0-9]+"', named)]
+  }
+  mine <- rows_of(items)
   Filter(function(record) {
     open <- record$status %in% edit_open_statuses && !identical(record$id, except)
     if (!open || NROW(record$items) == 0) {
       return(FALSE)
     }
-    theirs <- unique(paste(record$items$entity_name, record$items$record_identifier))
-    any(theirs %in% mine)
+    any(rows_of(record$items) %in% mine)
   }, records)
 }
 
@@ -986,11 +1003,11 @@ edit_service_withdraw <- function(connection, id, me) {
 #' The rows an add looks like.
 #'
 #' When someone adds something that is already there, the form says so before it saves, and shows what
-#' is there; it is a warning, not a block. Each kind says what counts as the same (`duplicates` in
-#' `service_edit_entities.R`): its name for most, a respondent type's age range, and so on. Capitals and
+#' is there; it is a warning, not a block. Each kind says what counts as the same (`duplicates` in its
+#' `service_edit_entities_*.R` file): its name for most, a respondent type's age range, and so on. Capitals and
 #' extra spaces don't count.
 #'
-#' @param entity A kind of thing staff can edit: one entry of `edit_entities` (see `service_edit_entities.R`).
+#' @param entity A kind of thing staff can edit: one entry of `edit_entities` (see `service_edit_kinds.R`).
 #' @param snap The tables the kind needs, as `edit_service_load()` reads them: a list of data frames named after the tables.
 #' @param fields The form's fields, from `edit_service_fields()`.
 #' @param values What is in the form: a named list of strings by field id.

@@ -102,9 +102,9 @@ test_that("news from a reading that has since started again is ignored", {
 
 test_that("saving a reviewed copy keeps how it differs from what the AI returned, for an AI draft only", {
   me <- local_staff()
-  ai <- local_read_extraction(me, json = gold_json())
+  ai <- local_read_extraction(me)
   opened <- extraction_service_open_draft(test_connection, ai)
-  expect_identical(opened$original, gold_draft())
+  expect_identical(opened$original, short_gold_draft())
   q1a <- block_numbered(opened$draft, "1a")$id
   edited <- draft_service_update(opened$draft, "components", q1a, "text", "Would you describe yourself as nervous?")
   extraction_service_save_draft(test_connection, ai, edited, opened$original, me)
@@ -124,10 +124,10 @@ test_that("saving a reviewed copy keeps how it differs from what the AI returned
   restored <- draft_service_update(again, "components", block_numbered(again, "1a")$id, "text", "Would you call yourself a nervous person?")
   extraction_service_save_draft(test_connection, ai, restored, reopened$original, me)
   expect_equal(vapply(review_edits_of(test_connection, ai$id), function(edit) edit$after, character(1)), "Do you worry?")
-  expect_identical(draft_service_from_json(draft_model_get_both(test_connection, ai$id)$original), gold_draft())
+  expect_identical(draft_service_from_json(draft_model_get_both(test_connection, ai$id)$original), short_gold_draft())
 
   manual <- local_manual_extraction(me)
-  typed <- draft_service_update(gold_draft(), "components", block_numbered(gold_draft(), "1a")$id, "text", "Typed by hand")
+  typed <- draft_service_update(short_gold_draft(), "components", block_numbered(short_gold_draft(), "1a")$id, "text", "Typed by hand")
   expect_null(extraction_service_open_draft(test_connection, manual)$original)
   extraction_service_save_draft(test_connection, manual, typed, NULL, me)
   expect_equal(review_edits_of(test_connection, manual$id), list())
@@ -190,6 +190,9 @@ test_that("the progress on each card is how it was read and how much of it is ch
   unread <- extraction_service_progress(list(status = "Draft", extraction_status = "failed", info = list(), matr_csv = NULL))
   expect_equal(unread$label, c("Read by Gemini · failed", "0% human-reviewed")) # nothing to check yet
   expect_equal(unread$state, c("attention", "not_started"))
+  uncoded <- extraction_service_progress(utils::modifyList(record, list(error = "the file has no MATR IDs")), draft)
+  expect_equal(uncoded$label[1], "Read by Gemini · codes not applied")
+  expect_equal(uncoded$state[1], "attention")
   expect_equal(draft_service_percent_checked(list(blocks = 0, checked = 0)), 0L)
 })
 

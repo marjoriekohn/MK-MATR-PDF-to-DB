@@ -17,6 +17,8 @@ test_that("how long ago is said in words", {
   expect_equal(time_ago(as.POSIXct("2026-10-02 12:00:00"), now), "yesterday")
   expect_equal(time_ago(as.POSIXct("2026-09-29 12:00:00"), now), "on Sep 29")
   expect_equal(day_phrase(as.POSIXct("2026-10-03 09:15:00"), now), "today at 9:15 AM")
+  expect_equal(time_ago(as.POSIXct("2024-09-29 12:00:00"), now), "on Sep 29, 2024") # another year says which
+  expect_equal(day_phrase(as.POSIXct("2025-12-31 12:00:00"), as.POSIXct("2026-01-01 15:00:00")), "yesterday")
 })
 
 test_that("durations and sizes are short words", {
@@ -56,4 +58,5 @@ test_that("words are listed with commas and an 'and'", {
 test_that("text counts only if it has something besides spaces, and nothing is nothing", {
   expect_equal(has_text(c("", "  ", "a", " b ")), c(FALSE, FALSE, TRUE, TRUE))
   expect_false(has_text(NULL))
+  expect_equal(has_text(c(NA, "a", NA_character_)), c(FALSE, TRUE, FALSE)) # nzchar(NA) alone would say TRUE
 })

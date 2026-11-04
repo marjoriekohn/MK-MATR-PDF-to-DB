@@ -34,12 +34,13 @@ history_columns <- c(
 #' Every applied change, newest first.
 #'
 #' @param connection The MATR database, `list(url, key)`; see `model_database.R`.
+#' @param most Only the newest this many (up to 1,000); all of them by default.
 #' @return A list of records, named by id; empty if nothing has been applied yet.
-history_model_get_all <- function(connection) {
+history_model_get_all <- function(connection, most = Inf) {
   rows <- database_model_select(
     connection, history_table, history_columns,
     order_by = c("applied_at.desc", "draft_id.desc"),
-    filters = list(status = database_eq(history_applied_status))
+    filters = list(status = database_eq(history_applied_status)), most = most
   )
   records <- lapply(rows, history_model_record)
   stats::setNames(records, vapply(records, function(record) record$id, character(1)))

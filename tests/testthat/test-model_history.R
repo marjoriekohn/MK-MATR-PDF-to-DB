@@ -43,6 +43,10 @@ test_that("a draft that isn't applied yet isn't in the history, and the count is
   admin <- local_staff("ADMIN")
   id <- local_applied_edit(admin, "respondent_type", "add", respondent_type__name = test_name("Counted"))
   expect_equal(history_model_count(test_connection), before + 1L)
+  # the newest are read alone, newest first
+  newest <- history_model_get_all(test_connection, most = 2)
+  expect_length(newest, min(2, before + 1L))
+  expect_equal(names(newest), utils::head(names(history_model_get_all(test_connection)), 2))
   expect_true(as.character(id) %in% names(history_model_get_all(test_connection)))
 })
 

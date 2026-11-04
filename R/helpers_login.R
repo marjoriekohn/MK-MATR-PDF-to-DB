@@ -140,6 +140,17 @@ user_menu <- function(me, development = FALSE) {
   )
 }
 
+#' Whether the browser reached the site on this computer, as while developing: a development sign-in
+#' (`STAFF_EMAIL`) only works then, so a deployed site that has it set still asks everyone to sign in.
+#'
+#' @param session The Shiny session.
+#' @return `TRUE` for localhost (or Shiny's test session, `testServer()`'s), `FALSE` otherwise.
+site_is_local <- function(session) {
+  # isolate(): it is read as the session starts, outside anything reactive
+  host <- tryCatch(isolate(session$clientData$url_hostname), error = function(problem) NULL)
+  isTRUE(host %in% c("localhost", "127.0.0.1", "::1", "[::1]", "mocksession"))
+}
+
 #' The site's own address, for a sign-in link to bring the person back to.
 #'
 #' @param session The Shiny session.
@@ -148,9 +159,13 @@ site_address <- function(session) {
   tryCatch(
     {
       client <- session$clientData
+      # without these there is no address, not "//"
+      if (!has_text(client$url_protocol) || !has_text(client$url_hostname)) {
+        return("")
+      }
       port <- client$url_port %||% ""
       paste0(
-        client$url_protocol %||% "", "//", client$url_hostname %||% "", if (nzchar(port)) paste0(":", port),
+        client$url_protocol, "//", client$url_hostname, if (has_text(port)) paste0(":", port),
         client$url_pathname %||% ""
       )
     },

@@ -375,7 +375,10 @@ edit_question_add_items_in <- function(snap, scope, fields, values) {
   push <- push_start(
     ids = list(component_types = snap$component_type, subjects = snap$subject),
     existing = NULL,
-    options = list(answer_options = snap$answer_option, option_sets = snap$option_set, members = snap$answer_option_set)
+    options = list(
+      answer_options = snap$answer_option, aliases = snap$answer_option_alias,
+      option_sets = snap$option_set, members = snap$answer_option_set
+    )
   )
   push_variables(push, draft, draft$components[1, ], component, q)
   add(do.call(rbind, push$items()))

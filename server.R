@@ -7,6 +7,7 @@ function(input, output, session) {
   # developing, STAFF_EMAIL in .env signs the site in as that staff member with
   # no password or link.
   auth <- auth_model_connection()
+  signed_in <- reactiveVal(NULL) # who is signed in, once someone is
   tokens <- NULL
   # the sign-in's tokens, kept in this session only, for signing out and changing the password
 
@@ -134,7 +135,6 @@ function(input, output, session) {
     session$reload()
   })
 
-  signed_in <- reactiveVal(NULL) # who is signed in, once someone is
   site <- NULL
   # what the pages share, once the site is built (the tests read it). The
   # session's sign-in, for the tests: who, and the tokens kept for signing out.
@@ -246,6 +246,10 @@ function(input, output, session) {
     observeEvent(input$nav, if (input$nav %in% c("home", "extraction", "drafts", "edit_extraction", "change_requests")) extractions$changed())
 
     # ------ MODULES -----------------------------------------------------------
+    # The pages hand each other functions that open things (a draft on Edit Extraction, an edit on Make an
+    # edit). A function may name a page set up further down, since it is only looked up when it is called; what
+    # is handed over as it is (`extraction$open_details`, `extraction$show_mode`) comes from a page set up
+    # already, so New Extraction comes before Extraction Drafts.
 
     # ------ * Home ------------------------------------------------------------
     # Its Continue and Review open a draft or a request where it is worked on (the pages are set up below).
@@ -267,8 +271,11 @@ function(input, output, session) {
     # ------ * New Extraction --------------------------------------------------
     # Every way of starting an extraction opens its draft on the Edit Extraction
     # page (set up below).
+    # Whether it opened: it doesn't if staff stay with unsaved changes, or someone else is working on it.
     open_edit_extraction <- function(record, take_over = FALSE) {
-      if (edit_extraction$open(record, take_over)) show_page("edit_extraction")
+      opened <- isTRUE(edit_extraction$open(record, take_over))
+      if (opened) show_page("edit_extraction")
+      invisible(opened)
     }
     extraction <- extraction_server("extraction", extractions, database, me, open_edit_extraction, show_page)
 
@@ -313,10 +320,14 @@ function(input, output, session) {
   }
 
   # ------ START --------------------------------------------------------------
-  # A development sign-in (STAFF_EMAIL) needs no password or link. Otherwise
-  # the login screen waits.
+  # A development sign-in (STAFF_EMAIL) needs no password or link, so it only
+  # works where the site is served on this computer: a deployed site with
+  # STAFF_EMAIL set would otherwise sign in every visitor. Otherwise the login
+  # screen waits.
   development_email <- trimws(Sys.getenv("STAFF_EMAIL"))
-  if (nzchar(development_email)) {
+  if (nzchar(development_email) && !site_is_local(session)) {
+    say("STAFF_EMAIL is set, but it only signs in on the computer the site runs on. Sign in with your email.")
+  } else if (nzchar(development_email)) {
     me <- tryCatch(staff_service_current(database, development_email), error = function(problem) problem)
     if (inherits(me, "error")) {
       say(conditionMessage(me))

@@ -14,6 +14,7 @@ test_that("drag and drop results are applied, and impossible ones refused", {
   into_itself <- replace(parent_ids, ids == "c1", "c1")
   expect_error(draft_service_apply_order(draft, ids, into_itself), "inside itself")
   expect_error(draft_service_apply_order(draft, ids[-1], parent_ids[-1]), "out of date")
+  expect_error(draft_service_apply_order(draft, ids, replace(parent_ids, ids == "c4", "c9999")), "out of date")
 })
 
 test_that("variables are reordered within their question", {
@@ -206,6 +207,13 @@ test_that("Apply to All? names the variables with the same choices coded otherwi
                   choices$variable_id[order(choices$variable_id, choices$display_order)], paste, collapse = "/")
   expect_true(all(lists[differ] == "yes/no")) # only those with the same choices
   expect_length(draft_service_codes_differ(suppressMessages(draft_service_copy_codes(draft, box)), box), 0)
+})
+
+test_that("letter codes go on past z without repeating", {
+  expect_equal(next_codes(c("a", "b"), 2), c("c", "d"))
+  expect_equal(next_codes("y", 4), c("z", "aa", "ab", "ac"))
+  expect_equal(next_codes("Z", 2), c("AA", "AB"))
+  expect_equal(next_codes(c("1", "2"), 1), "3")
 })
 
 test_that("new choices take the next code in their box, counting from 1", {

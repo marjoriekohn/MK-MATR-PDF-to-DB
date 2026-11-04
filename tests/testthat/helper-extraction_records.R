@@ -18,11 +18,11 @@ sample_extraction <- function(staff, ...) {
 }
 
 # An extraction draft saved in the database for the test, and removed when it ends with the other drafts of the
-# test's staff (test_clear_drafts(), one request for them all). `detail` are more columns
+# test's staff (test_clear_drafts(), one request for them all), and its PDF's row with it. Its PDF is never
+# uploaded (its hash is made up), so there is nothing in Storage to remove. `detail` are more columns
 # of its details to save with it (what the AI read, say), so it is made in one request.
 local_extraction <- function(staff, ..., detail = list(), env = parent.frame()) {
   sample <- sample_extraction(staff, ...)
-  withr::defer(test_delete_stored_pdf(sample$pdf$sha256), envir = env) # its row goes with the draft
   rows <- extraction_model_rows(sample, setdiff(names(sample), "requested_reviewer"))
   rows$parent$created_at <- sample$started
   if (!is.null(sample$requested_reviewer)) rows$parent$requested_reviewer <- sample$requested_reviewer$id

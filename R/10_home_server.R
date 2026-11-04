@@ -120,13 +120,12 @@ home_server <- function(
       if (!identical(event$action, "continue")) {
         return()
       }
-      if (identical(event$kind, "extraction")) {
-        record <- extractions$all()[[id]]
-        if (!is.null(record)) open_extraction(record)
-      } else {
-        record <- (edits() %||% list())[[id]]
-        if (!is.null(record)) open_edit(record)
+      record <- if (identical(event$kind, "extraction")) extractions$all()[[id]] else (edits() %||% list())[[id]]
+      if (is.null(record)) {
+        showNotification("That isn't here any more: it was discarded, or added to the database.", type = "warning")
+        return()
       }
+      if (identical(event$kind, "extraction")) open_extraction(record) else open_edit(record)
     })
 
     observeEvent(input$new_extraction, show_page("extraction"))

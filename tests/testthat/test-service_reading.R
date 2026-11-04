@@ -438,7 +438,7 @@ test_that("the job saves what Gemini read and marks the draft ready", {
     progress("sent")
     seen <<- extraction_model_get(test_connection, record$id)$extraction_status
     progress("received")
-    list(json = gold_json(), model = "gemini-3.8-flash", prompt_version = "abc123")
+    list(json = short_gold_json(), model = "gemini-3.8-flash", prompt_version = "abc123")
   }
   reading_service_run(test_connection, record$id, record$reading_started, read = read)
 
@@ -447,8 +447,8 @@ test_that("the job saves what Gemini read and marks the draft ready", {
   expect_equal(saved$extraction_status, "ready")
   expect_equal(saved$prompt_version, "abc123")
   expect_equal(saved$model, "gemini-3.8-flash")
-  expect_identical(draft_service_from_json(draft_model_get_both(test_connection, record$id)$original), gold_draft())
-  expect_equal(nrow(extraction_service_load_draft(test_connection, saved)$components), nrow(gold_draft()$components))
+  expect_identical(draft_service_from_json(draft_model_get_both(test_connection, record$id)$original), short_gold_draft())
+  expect_equal(nrow(extraction_service_load_draft(test_connection, saved)$components), nrow(short_gold_draft()$components))
 })
 
 test_that("the job reads the file of MATR IDs and codes once the questionnaire is read, and carries on without it if it fails", {
@@ -456,7 +456,7 @@ test_that("the job reads the file of MATR IDs and codes once the questionnaire i
   local_pdf_cache()
   record <- extraction_service_create(test_connection, fake_upload(), me, supplement = fake_csv_upload(c("AH01", "AH02"), "codes.csv"))
   expect_equal(record$supplement$name, "codes.csv")
-  read <- function(pdf_path, lookups, progress) list(json = gold_json(), model = "m", prompt_version = "p")
+  read <- function(pdf_path, lookups, progress) list(json = short_gold_json(), model = "m", prompt_version = "p")
   given <- NULL
   assign <- function(json, supplement) {
     given <<- supplement
@@ -491,7 +491,7 @@ test_that("the job reads the pick lists from the database for Gemini", {
   given <- NULL
   read <- function(pdf_path, lookups, progress) {
     given <<- lookups
-    list(json = gold_json(), model = "m", prompt_version = "p")
+    list(json = short_gold_json(), model = "m", prompt_version = "p")
   }
   subject <- local_row("subject", list(name = test_name("Subject")), "subject_id")
   reading_service_run(test_connection, record$id, record$reading_started, read = read)
@@ -521,7 +521,7 @@ test_that("a PDF this server hasn't got is fetched from Storage to read", {
   read_from <- NULL
   read <- function(pdf_path, lookups, progress) {
     read_from <<- pdf_path
-    list(json = gold_json(), model = "gemini-3.8-flash", prompt_version = "abc123")
+    list(json = short_gold_json(), model = "gemini-3.8-flash", prompt_version = "abc123")
   }
   reading_service_run(test_connection, record$id, record$reading_started, read = read)
   expect_equal(extraction_model_get(test_connection, record$id)$extraction_status, "ready")
@@ -547,7 +547,7 @@ test_that("a job whose reading was restarted saves nothing", {
   record <- extraction_service_create(test_connection, fake_upload(), me, now = Sys.time() - 60)
   read <- function(pdf_path, lookups, progress) {
     extraction_service_retry(test_connection, record$id, me) # staff press Try reading again meanwhile
-    list(json = gold_json(), model = "gemini-3.8-flash", prompt_version = "abc123")
+    list(json = short_gold_json(), model = "gemini-3.8-flash", prompt_version = "abc123")
   }
   reading_service_run(test_connection, record$id, record$reading_started, read = read)
 

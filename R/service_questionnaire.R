@@ -14,13 +14,11 @@
 #' @return A list of data frames: `registries`, `studies` (with `principal_investigator`),
 #'   `questionnaires` (with `respondent_type` and `n_waves`), `waves` and `respondent_types`.
 questionnaire_service_get_catalog <- function(connection) {
-  questionnaire_service_catalog(list(
-    registries = registry_model_get_all(connection),
-    studies = study_model_get_all(connection),
-    investigators = principal_investigator_model_get_all(connection),
-    questionnaires = questionnaire_model_get_all(connection),
-    waves = wave_model_get_all(connection),
-    respondent_types = respondent_type_model_get_all(connection)
+  # three requests: the studies come with their investigators, questionnaires and waves
+  questionnaire_service_catalog(c(
+    list(registries = registry_model_get_all(connection)),
+    study_model_get_tree(connection),
+    list(respondent_types = respondent_type_model_get_all(connection))
   ))
 }
 

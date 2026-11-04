@@ -241,6 +241,9 @@ draft_service_apply_order <- function(draft, ids, parent_ids) {
     stop("The outline was out of date. Try that again.")
   }
   parent_types <- blocks$component_type[match(parent_ids, blocks$id)]
+  if (any(!is.na(parent_ids) & is.na(parent_types))) {
+    stop("The outline was out of date. Try that again.") # a parent the draft doesn't have
+  }
   if (any(!is.na(parent_ids) & !is_container(parent_types))) {
     stop("Only sections and groups can hold other blocks.")
   }
@@ -535,7 +538,9 @@ next_codes <- function(codes, n) {
   if (length(codes) > 0 && all(grepl("^[A-Za-z]$", codes))) {
     alphabet <- if (all(codes == toupper(codes))) LETTERS else letters
     after <- max(match(tolower(codes), letters))
-    return(alphabet[pmin(after + seq_len(n), length(alphabet))])
+    # after z come aa, ab, ..., so no two choices get the same code
+    k <- after + seq_len(n)
+    return(ifelse(k <= 26, alphabet[pmin(k, 26)], paste0(alphabet[pmax((k - 1) %/% 26, 1)], alphabet[(k - 1) %% 26 + 1])))
   }
   numbers <- suppressWarnings(as.numeric(codes))
   numbers <- numbers[!is.na(numbers) & numbers == round(numbers)]

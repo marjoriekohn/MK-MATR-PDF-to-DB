@@ -226,7 +226,8 @@ edit_service_questionnaire_count <- function(snap, component_ids) {
 # `new` is list(component_type_id, text). The new component takes over this
 # questionnaire's placement: where it is, `where` (list(parent, display_order);
 # the old placement's if left out), what's inside it and, for a question, its
-# settings, its wave numbers, its variables and its MeSH categories.
+# stem (the questions it is linked with stay linked), its settings, its wave numbers, its variables and its MeSH
+# categories.
 # `between` is items that change the new rows (named by the new component's
 # `new:component:1`), written before the old placement goes. Measurement scale memberships aren't copied: each item number in
 # a scale belongs to one question, so the scale keeps pointing at the old
@@ -244,7 +245,11 @@ edit_service_swap_items <- function(snap, questionnaire_id, component_id, new, w
 
   add("component", edit_identifier(list(component_id = token)), "Insert", "component_type_id", NA, new$component_type_id)
   if (!is.na(new$text)) add("component", edit_identifier(list(component_id = token)), "Insert", "text", NA, new$text)
-  if (is_question) add("question", edit_identifier(list(component_id = token)), "Insert", "component_id", NA, token)
+  if (is_question) {
+    add("question", edit_identifier(list(component_id = token)), "Insert", "component_id", NA, token)
+    stem <- snap$question$question_stem_id[match(c_old, snap$question$component_id)]
+    if (length(stem) == 1 && !is.na(stem)) add("question", edit_identifier(list(component_id = token)), "Insert", "question_stem_id", NA, stem)
+  }
 
   where <- where %||% list(parent = placement$parent_component_id, display_order = placement$display_order)
   new_key <- edit_identifier(list(component_id = token, questionnaire_id = q))

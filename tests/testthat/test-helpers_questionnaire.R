@@ -126,6 +126,30 @@ test_that("the change request dialog has the Basic Info form and what it adds, a
   expect_match(unread, "This can&#39;t be added as it is|This can't be added as it is")
 })
 
+test_that("what saving Basic Info changes is in parts of the dialog the page can draw again, the form apart", {
+  reviewer <- list(staff_id = 1L, name = "Reviewer", role = "STAFF")
+  record <- list(
+    id = "7", kind = extraction_kind, summary = "Add ZZQ · Wave 3", prepared_by = "Alex", prepared_by_id = 2L,
+    saved_by_id = 2L, saved = format_time(Sys.time()), status = "Awaiting Review", revision = 2L
+  )
+  detail <- list(preview = list(summary = "Adds the wave.", what = list()))
+  html <- htmltools::renderTags(change_request_dialog(record, reviewer, shiny::NS("cr"), detail))$html
+  for (part in c("request_title", "request_detail", "request_footer")) expect_match(html, sprintf('id="cr-%s"', part))
+  # the form isn't in a part that is drawn again
+  parts <- change_request_parts(record, reviewer, shiny::NS("cr"), detail, ready = TRUE)
+  drawn <- vapply(parts, function(part) htmltools::renderTags(part)$html, "")
+  expect_false(any(grepl("cr-info-registry_id|cr-save_info", drawn)))
+  expect_match(drawn[["title"]], "Add ZZQ · Wave 3", fixed = TRUE)
+  # Approve can be pressed once the Basic Info is saved and fits
+  approve <- function(html) regmatches(html, regexpr('<button[^>]*id="cr-approve"[^>]*>', html))
+  expect_false(grepl("disabled", approve(drawn[["footer"]])))
+  expect_match(approve(htmltools::renderTags(change_request_parts(record, reviewer, shiny::NS("cr"), detail, ready = FALSE)$footer)$html), "disabled")
+  # whoever saved it can't approve it: no Approve, and no note that approving adds it
+  saved_by_me <- change_request_parts(utils::modifyList(record, list(saved_by_id = 1L)), reviewer, shiny::NS("cr"), detail, ready = TRUE)
+  expect_false(grepl('id="cr-approve"', htmltools::renderTags(saved_by_me$footer)$html))
+  expect_false(grepl("Approving adds this", htmltools::renderTags(saved_by_me$detail)$html))
+})
+
 test_that("an edit's request dialog keeps Edit and Withdraw, since it has no Preview", {
   me <- list(staff_id = 2L, name = "Alex", role = "STAFF")
   record <- list(

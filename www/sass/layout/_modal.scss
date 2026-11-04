@@ -1,3 +1,5 @@
 .modal-content { border: 2px solid $vcu-black; }
 .modal-header { background: $vcu-black; color: $vcu-white; border-bottom: 4px solid $vcu-gold; .modal-title { color: $vcu-white; } .btn-close { filter: invert(1); } }
 .modal-footer { border-top-color: $vcu-gray; }
+// A change request's buttons, in a part of their own so the page can draw them again (change_request_parts())
+.change-request-footer, .change-request-footer-buttons { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 0.5rem; }

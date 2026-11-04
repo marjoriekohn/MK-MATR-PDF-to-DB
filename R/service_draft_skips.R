@@ -22,7 +22,7 @@
 # A group can skip too, on the answers to the questions in it: "If you answered No to items 22a-d, go to
 # Question 28" is the group holding 22a-d, with `skip_condition` "No", `skip_when` "every" (or "any": when
 # any of them gets that answer), `skip_instruction` "Go to Question 28", and `skip_to_id` the question. It is
-# saved where the questionnaire places the group (questionnaire_component, docs/sql/13_group_skips.sql). The
+# saved where the questionnaire places the group (questionnaire_component). The
 # questions it skips past (printed after the group and before where it sends respondents) don't get a parent,
 # since a group isn't a question: their skip logic names the group instead (draft_service_group_skipped()).
 

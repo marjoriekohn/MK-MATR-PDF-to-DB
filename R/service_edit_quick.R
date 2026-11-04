@@ -18,7 +18,7 @@ edit_quick_needs <- list(
 #' The kind of thing a drop-down can add, as one row.
 #'
 #' @param key One of `edit_quick_kinds`.
-#' @return A kind of thing staff can edit: one entry of `edit_entities` (see `service_edit_entities.R`).
+#' @return A kind of thing staff can edit: one entry of `edit_entities` (see `service_edit_kinds.R`).
 edit_service_quick_entity <- function(key) {
   if (!key %in% edit_quick_kinds) stop("That can't be added from here.", call. = FALSE)
   entity <- edit_entities[[key]]
@@ -45,12 +45,15 @@ edit_service_quick_entity <- function(key) {
 #' @param me Who is adding it: `list(staff_id, name, role)`.
 #' @param now The time to record.
 #' @return A list: `record` (the saved edit), `history_id` and `key` (the new row's key, as text, for
-#'   the drop-down to pick). An error with the database's own sentence if it refused.
+#'   the drop-down to pick). An error with the database's own sentence if it refused: if it refused to apply it,
+#'   the sentence also says it is kept as a draft on the Metadata page.
 edit_service_quick_add <- function(connection, entity, snap, fields, values, me, now = Sys.time()) {
   built <- edit_service_build(entity, "add", snap, fields = fields, values = values)
   form <- list(action = "add", entity = entity$key, scope = "", target = "", values = values)
   saved <- edit_service_save(connection, edit_service_record(me, form, built, "Draft", now = now), me)
-  history_id <- edit_service_apply(connection, saved, me)
+  history_id <- tryCatch(edit_service_apply(connection, saved, me), error = function(problem) {
+    stop(conditionMessage(problem), " It is kept as a draft on the Metadata page, to finish there.", call. = FALSE)
+  })
   list(
     record = saved,
     history_id = history_id,
@@ -90,4 +93,28 @@ edit_service_quick_row <- function(catalog, kind, key) {
   id <- edit_table_key(edit_entities[[kind]]$table)[1]
   found <- rows[as.character(rows[[id]]) %in% key, , drop = FALSE]
   if (nrow(found) == 1) found
+}
+
+#' What the Basic Info drop-downs pick once a row was added from one of them: the new row, what it belongs
+#' to above it (a study's registry, from the row itself), and nothing below it.
+#'
+#' @param catalog The live tables the pages pick from, read again after the add.
+#' @param kind `"registry"`, `"study"`, `"questionnaire"` or `"wave"`.
+#' @param key The new row's key, as text (`edit_service_quick_add()`).
+#' @param before What the drop-downs had picked before the add: `registry_id`, `study_id`, `questionnaire_id`
+#'   and `wave_id`.
+#' @return The picks, like `before`; `NULL` if the new row isn't in the catalog (it couldn't be read again), so
+#'   there is nothing to pick it from.
+edit_service_quick_picks <- function(catalog, kind, key, before) {
+  added <- if (length(key) == 1 && !is.na(key)) edit_service_quick_row(catalog, kind, key)
+  if (is.null(added)) {
+    return(NULL)
+  }
+  utils::modifyList(before, switch(kind,
+    registry = list(registry_id = key, study_id = "", questionnaire_id = "", wave_id = ""),
+    study = list(registry_id = key_text(added$registry_id), study_id = key, questionnaire_id = "", wave_id = ""),
+    # a questionnaire's registry is the one its study is in; the drop-down finds it from the study
+    questionnaire = list(registry_id = "", study_id = key_text(added$study_id), questionnaire_id = key, wave_id = ""),
+    wave = list(questionnaire_id = key_text(added$questionnaire_id), wave_id = key)
+  ))
 }

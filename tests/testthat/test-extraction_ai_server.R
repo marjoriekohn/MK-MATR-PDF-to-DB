@@ -10,7 +10,10 @@ ai_page <- function(me, extractions = test_extractions()) {
     did = did,
     args = list(
       extractions = extractions, connection = test_connection, me = me,
-      open_edit_extraction = function(record) did$reviews[[length(did$reviews) + 1]] <- record,
+      open_edit_extraction = function(record) {
+        did$reviews[[length(did$reviews) + 1]] <- record
+        TRUE # it opened
+      },
       switch_mode = function(mode) did$modes <- c(did$modes, mode)
     )
   )

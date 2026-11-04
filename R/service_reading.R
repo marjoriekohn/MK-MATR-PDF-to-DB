@@ -10,6 +10,19 @@
 # MATR IDs and codes (its `supplement`), Gemini then reads that, in a request of its
 # own (prompts/assign_codes.md), and the variables get their MATR IDs and the choices
 # their codes (reading_service_assign()).
+#
+# State kept outside the database: `reading_jobs`, the jobs this site started. It is made once, when the site
+# loads (new.env() at the top level of this file), so it belongs to the R process, not to a session: every
+# session that process serves sees the same one, and the site's other R processes have their own. Shiny runs one
+# piece of code at a time in a process, so no two sessions change it at once; it isn't made to be shared between
+# threads, and the database (reading_started, reading_claimed_at, reading_pid) is what says which job a draft has.
+#
+# The site runs on one machine, with as many R processes as it likes. A copy of the site that finds a draft claimed
+# by a job it didn't start judges the job by its process id (job_is_lost()), and a process id only means something
+# on the machine that started it: on a second machine, a job running on the first would look dead and its draft be
+# marked failed, and a dead job whose id another process there has would look alive. Running the site on more than
+# one machine needs the draft to say which machine its job is on first (and when the job started, which also
+# tells a reused id from the job's own after a restart).
 
 reading_gemini_model <- "gemini-3.8-flash"
 reading_prompt_path <- "prompts/extraction.md"
@@ -46,10 +59,14 @@ reading_service_read <- function(pdf_path, lookups, progress = function(status) 
 
   for (attempt in 1:2) {
     progress("sent")
-    # If Gemini fails the second time, the first reading still stands.
+    # If Gemini fails the second time, the first reading still stands; why it failed goes in the job's log.
     answers <- tryCatch(
       generate(pdf_path, paste0(instructions, "\n\n## Your pages\n\n", requests, feedback), model = model),
-      error = function(problem) if (is.null(best)) stop(problem) else NULL
+      error = function(problem) {
+        if (is.null(best)) stop(problem)
+        message("Reading again failed, so the first reading is kept: ", conditionMessage(problem))
+        NULL
+      }
     )
     if (is.null(answers)) break
     progress("received")

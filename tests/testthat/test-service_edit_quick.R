@@ -37,6 +37,19 @@ test_that("a row in the catalog is found by its key", {
   expect_null(edit_service_quick_row(catalog, "investigator", "1")) # the catalog doesn't list them
 })
 
+test_that("after an add the drop-downs pick the new row and what it belongs to, or nothing if the catalog lacks it", {
+  catalog <- test_catalog()
+  before <- list(registry_id = "1", study_id = "1", questionnaire_id = "1", wave_id = "2")
+  expect_equal(
+    edit_service_quick_picks(catalog, "study", "3", before),
+    list(registry_id = "2", study_id = "3", questionnaire_id = "", wave_id = "") # study 3 is in registry 2
+  )
+  expect_equal(edit_service_quick_picks(catalog, "registry", "2", before), list(registry_id = "2", study_id = "", questionnaire_id = "", wave_id = ""))
+  # the catalog couldn't be read again, or the add made no row: nothing to pick it from
+  expect_null(edit_service_quick_picks(catalog, "study", "99", before))
+  expect_null(edit_service_quick_picks(catalog, "study", NA_character_, before))
+})
+
 test_that("a respondent type is added at once, by STAFF and by an ADMIN alike, and is in the history without an approver", {
   for (role in c("STAFF", "ADMIN")) {
     me <- local_staff(role)
@@ -101,7 +114,7 @@ test_that("study status is Active or Ended, with a tooltip, wherever it is enter
     status <- Filter(function(field) field$name == "status" && field$part == "study", fields)[[1]]
     expect_equal(unname(status$choices), c("", "Active", "Ended"))
     expect_equal(status$tooltip, study_status_tooltip)
-    expect_true(status$required)
+    expect_false(isTRUE(status$required)) # empty when not known
   }
   # the database holds the same two values
   # me <- local_staff()
@@ -116,13 +129,18 @@ test_that("an add the database refuses is a sentence, and what was typed is stil
   me <- local_staff()
   entity <- edit_service_quick_entity("respondent_type")
   snap <- edit_service_load(test_connection, entity)
-  # the youngest age can't be older than the oldest: the form's own check would stop it, so go round the form
+  # the youngest age can't be older than the oldest: the form's own check stops it, and nothing is saved ...
   typed <- form_values(entity, snap, respondent_type__name = test_name("Refused"), respondent_type__minimum_age = "30", respondent_type__maximum_age = "20")
+  expect_error(edit_service_quick_add(test_connection, entity, snap, typed$fields, typed$values, me), "The oldest age can't be younger")
+  mine <- function() Filter(function(record) identical(record$prepared_by_id, me$staff_id), edit_service_get_all(test_connection))
+  expect_length(mine(), 0)
+  # ... so, to reach the database's own refusal, go round the form's check too
+  local_stub("edit_service_check", function(fields, values) list(missing = character(), problems = list(), warnings = list(), missing_ids = character()))
   expect_error(
     edit_service_quick_add(test_connection, entity, snap, typed$fields, typed$values, me),
-    "wouldn't save that|violates check constraint"
+    "(wouldn't save that|violates check constraint).*kept as a draft on the Metadata page"
   )
-  saved <- Filter(function(record) identical(record$prepared_by_id, me$staff_id), edit_service_get_all(test_connection))
+  saved <- mine()
   expect_length(saved, 1)
   expect_equal(unname(saved)[[1]]$status, "Draft")
   expect_equal(unname(saved)[[1]]$form$values$respondent_type__name, typed$values$respondent_type__name)

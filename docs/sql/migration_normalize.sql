@@ -1,7 +1,8 @@
 -- Answer choices worded one way, and questions that differ only in who they ask about.
 -- For a database built before these were added to docs/sql/1_setup.sql (which builds them for a new one).
 -- Adds question_stem (and question.question_stem_id), answer_option_alias, the subjects Twin A and Twin B,
--- and lets changes add to the new tables (private.apply_draft_items()). Nothing already there changes.
+-- and lets changes add to the new tables (private.apply_draft_items()), and an extraction link a question it
+-- reuses that has no stem yet. Nothing already there changes.
 
 begin;
 
@@ -26,7 +27,8 @@ alter table public.answer_option_alias
   add constraint answer_option_alias_answer_option_id_fkey
     foreign key (answer_option_id) references public.answer_option (answer_option_id) on delete cascade;
 
-create unique index question_stem_text_unique on public.question_stem (btrim(regexp_replace(text, '\s+', ' ', 'g')));
+-- (an index, not a constraint: an insert that wants ON CONFLICT names this expression as its target)
+create unique index question_stem_text_unique on public.question_stem (btrim(regexp_replace(text, '[[:space:]]+', ' ', 'g')));
 create index answer_option_alias_answer_option_idx on public.answer_option_alias (answer_option_id);
 create index question_question_stem_idx            on public.question (question_stem_id);
 
@@ -94,7 +96,8 @@ declare
   recorded_val text;
   token        text;
   added_tables text[] := array[]::text[]; -- an extraction's rows, as added: their tables ...
-  added_ids    text[] := array[]::text[]; -- ... and their keys
+  added_ids    text[] := array[]::text[]; -- ... and their keys ...
+  added_acts   text[] := array[]::text[]; -- ... and whether they were added or (a reused question's stem) updated
   deleting     boolean := false;          -- an edit that deletes: recorded as the one row picked ...
   picked       jsonb;                     -- ... {"table", "row"}, from edit_draft.reach ...
   last_table   text;                      -- ... or, if the draft doesn't say, the last row deleted
@@ -104,6 +107,10 @@ begin
     raise exception 'There is nothing in this to apply.';
   end if;
 
+  -- For the rest of the transaction, not just this function: SET CONSTRAINTS can't be undone at the end of a
+  -- function. The site calls apply_draft() and approve_draft() through the REST API, each in a transaction of its
+  -- own, so it ends with them. Anything that calls this inside a longer transaction runs what follows with every
+  -- deferrable constraint deferred, as the build's checks do (they set one immediate again where they need it).
   set constraints all deferred;
 
   if d.kind = 'Edit' then
@@ -149,8 +156,12 @@ begin
     if grp.action is null or grp.action not in ('Insert', 'Update', 'Delete') then
       raise exception 'Item %: the action % isn''t Insert, Update or Delete.', grp.first_item, coalesce(grp.action, '(none)');
     end if;
-    if d.kind = 'Extraction' and grp.action <> 'Insert' then
-      raise exception 'Item %: an extraction only adds rows.', grp.first_item;
+    if d.kind = 'Extraction' and grp.action <> 'Insert' and not (
+      grp.action = 'Update' and grp.entity_name = 'question'
+      and not exists (select 1 from jsonb_array_elements(grp.attrs) a
+                      where a.value ->> 'attribute' is distinct from 'question_stem_id' or a.value ->> 'old' is not null)
+    ) then
+      raise exception 'Item %: an extraction only adds rows, and links a question it reuses that has no stem yet.', grp.first_item;
     end if;
 
     cols := col_cache -> grp.entity_name;
@@ -293,10 +304,11 @@ begin
       recorded_id := replace(recorded_id, '"' || token || '"', new_ids ->> token);
     end loop;
     if d.kind = 'Extraction' then
-      -- an extraction is recorded by the rows it added, one line for each table (below), not field by field:
-      -- what it put in them is in its extraction draft, which is kept
+      -- an extraction is recorded by the rows it added (or linked), one line for each table (below), not field by
+      -- field: what it put in them is in its extraction draft, which is kept
       added_tables := added_tables || grp.entity_name;
       added_ids := added_ids || recorded_id;
+      added_acts := added_acts || grp.action;
       continue;
     end if;
     if deleting then
@@ -322,16 +334,17 @@ begin
   end loop;
 
   -- An extraction's line for each table it added to: the keys of its rows there, as a JSON array, in the order
-  -- they were added (the tables in the order it first added to them).
+  -- they were added (the tables in the order it first added to them); and a line of the questions it reused and
+  -- linked (Update), if any.
   if d.kind = 'Extraction' then
     insert into public.applied_item (draft_id, item_number, entity_name, record_identifier, action)
-    select d.draft_id, row_number() over (order by min(first_at)), t, '[' || string_agg(id, ',' order by first_at) || ']', 'Insert'
+    select d.draft_id, row_number() over (order by min(first_at)), t, '[' || string_agg(id, ',' order by first_at) || ']', act
     from (
-      select a.t, a.id, min(a.n) as first_at
-      from unnest(added_tables, added_ids) with ordinality as a(t, id, n)
-      group by a.t, a.id
+      select a.t, a.act, a.id, min(a.n) as first_at
+      from unnest(added_tables, added_ids, added_acts) with ordinality as a(t, id, act, n)
+      group by a.t, a.act, a.id
     ) as added
-    group by t;
+    group by t, act;
   end if;
 
   -- A delete's one line: the row staff picked (the wave, the questionnaire), with nothing it held. The list of

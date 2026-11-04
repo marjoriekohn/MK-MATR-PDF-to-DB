@@ -13,8 +13,10 @@ gemini_max_output_tokens <- 65536L
 
 # One request waits this long for its answer, and a busy Gemini (these statuses,
 # or no answer at all) is asked again, waiting longer each time from the first
-# pause up to the longest, until `give_up_after` seconds have passed.
+# pause up to the longest, until `gemini_give_up_seconds` have passed. That is
+# twice a request's wait, so a request that gets no answer is still sent again.
 gemini_timeout_seconds <- 15 * 60
+gemini_give_up_seconds <- 2 * gemini_timeout_seconds
 gemini_first_pause_seconds <- 5
 gemini_longest_pause_seconds <- 30
 gemini_busy_statuses <- c(429, 500, 502, 503, 504)
@@ -65,7 +67,7 @@ gemini_model_request <- function(pdf_path, prompt, model, api_key) {
 # (httr2's own req_retry() isn't used: when requests are sent in parallel, this
 # version of httr2 retries a busy reply without any limit, and a job that never
 # gives up could run for ever.)
-gemini_model_perform <- function(requests, give_up_after = gemini_timeout_seconds, pause = gemini_first_pause_seconds) {
+gemini_model_perform <- function(requests, give_up_after = gemini_give_up_seconds, pause = gemini_first_pause_seconds) {
   responses <- vector("list", length(requests))
   waiting <- seq_along(requests)
   deadline <- Sys.time() + give_up_after
