@@ -17,8 +17,7 @@
 # Set COVERAGE_BADGE to a file name to have the badge drawn there as an SVG, e.g.
 #   COVERAGE_BADGE=coverage.svg Rscript tests/coverage/coverage.R
 
-# covr reads the files in the session's encoding; the code is UTF-8 (it prints "·", "—"), and read
-# any other way its strings can't be sorted or compared.
+# The fixtures and the code are UTF-8, which a session in a plain "C" locale can't read.
 if (!l10n_info()[["UTF-8"]]) {
   for (locale in c("C.UTF-8", "en_US.UTF-8", "UTF-8")) {
     if (nzchar(suppressWarnings(Sys.setlocale("LC_CTYPE", locale)))) break
@@ -34,6 +33,20 @@ suppressMessages({
 # paths are from the project folder
 code <- c("global.R", sort(list.files("R", pattern = "\\.R$", full.names = TRUE)))
 
+# The code is read as the site reads it (shiny::loadSupport()): as UTF-8, so its strings ("·", "“") are
+# marked UTF-8. covr's own reader, file_coverage(), leaves them unmarked whatever the locale, and
+# order(method = "radix") refuses an unmarked string that isn't plain ASCII. The source is kept, which
+# covr needs to count lines.
+read_code <- function(files) {
+  env <- new.env(parent = globalenv())
+  for (file in files) {
+    lines <- readLines(file, warn = FALSE, encoding = "UTF-8")
+    source_file <- srcfilecopy(file, lines, file.mtime(file), isFile = TRUE)
+    for (expr in parse(text = lines, srcfile = source_file, keep.source = TRUE, encoding = "UTF-8")) eval(expr, env)
+  }
+  env
+}
+
 # covr runs each test file as a script, and the first test that failed would end the run. So it is
 # given one script instead, which has testthat run the folder (helpers first, as shiny::runTests()
 # does), carrying on past failures, in the environment covr has put the code in.
@@ -46,7 +59,7 @@ writeLines(c(
   "), envir = globalenv())"
 ), runner)
 
-coverage <- covr::file_coverage(code, runner)
+coverage <- covr::environment_coverage(read_code(code), runner)
 
 results <- as.data.frame(.test_results)
 failed <- sum(results$failed) + sum(results$error)
