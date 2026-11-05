@@ -22,8 +22,8 @@ questionnaire_component_entity <- list(
   ),
   update_about = "You're changing this questionnaire only. Other questionnaires that print the same block are not affected.",
   delete_about = paste0(
-    "This only removes the block from this questionnaire. The component stays in the database for ",
-    "any other questionnaire that prints it."
+    "This only removes the block from this questionnaire. The component stays in the database while ",
+    "another questionnaire prints it, a measurement scale lists it or a skip goes to it; otherwise it goes too."
   ),
   delete_start = function(snap, row) edit_placement_start(snap, row),
   reads = c("question", "component", "component_type", "wave", "wave_question", "variable", "question_category"),
@@ -65,7 +65,8 @@ questionnaire_question_entity <- list(
   delete_about = paste0(
     "This only removes the question from this questionnaire: its place in the outline, its numbers ",
     "in each wave, and its variables with their choices and MATR IDs. The question's wording ",
-    "stays in the database for any other questionnaire that asks it."
+    "stays in the database while another questionnaire asks it, a measurement scale lists it or a skip goes ",
+    "to it; otherwise it goes too."
   ),
   delete_start = function(snap, row) edit_placement_start(snap, row),
   reads = c(

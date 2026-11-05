@@ -135,8 +135,8 @@ test_that("a delete names the row picked, the one line the history keeps of it",
 
 test_that("a row with nothing but a key is still deleted", {
   built <- delete_items_for("option_set", "1")
-  rows <- built$items[built$items$entity_name == "answer_option_set", ]
-  expect_equal(item_lines(rows)[1], 'Delete answer_option_set {"answer_option_id":1,"option_set_id":1} NA: - -> -')
+  rows <- built$items[built$items$entity_name == "option_set", ]
+  expect_equal(item_lines(rows), 'Delete option_set {"option_set_id":1} NA: - -> -') # its name is worked out, not kept
   # a question's row is its key and its stem
   question <- delete_items_for("question", "3")$items
   expect_equal(item_lines(question[question$entity_name == "question", ]), 'Delete question {"component_id":3} question_stem_id: - -> -')
@@ -680,7 +680,8 @@ test_that("a lone check box is a variable with one choice, and a new answer choi
   expect_length(edit_service_check(form$fields, form$values)$problems, 0)
   lines <- item_lines(form_items(form)$items)
   expect_true('Insert answer_option {"answer_option_id":"new:answer_option:1"} standardized_label: - -> always' %in% lines)
-  expect_true('Insert option_set {"option_set_id":"new:option_set:1"} name: - -> always' %in% lines)
+  expect_true('Insert option_set {"option_set_id":"new:option_set:1"} NA: - -> -' %in% lines)
+  expect_true(any(grepl('^Insert answer_option_set .*"option_set_id":"new:option_set:1".* display_order: - -> 1$', lines)))
 })
 
 test_that("a question already in the database can be added, keeping its wording shared", {

@@ -12,8 +12,13 @@
 #           with (a study's lead investigator, which never changes)
 # A link can also say its parent can't be without these rows (`needs_child =
 # "remove_parent"`): the parent is deleted too, as a question asked in no wave
-# can't exist. A study can be left with no questionnaires, and a questionnaire
-# with no waves, until more are added.
+# can't exist, and a component no questionnaire prints is owned by nothing. Such
+# a parent stays while rows in `kept_by` still name it (a measurement scale
+# listing the component). A study can be left with no questionnaires, and a
+# questionnaire with no waves, until more are added.
+#
+# The database does the same (docs/sql/1_setup.sql, section 2 and "What nothing
+# owns"), so a delete made any other way leaves the same rows behind.
 #
 # A row's identity is its key columns joined with "|" (edit_key()).
 
@@ -26,12 +31,15 @@
 #' @param needs_child `"remove_parent"` if a parent left with none of these rows goes too; `NULL` otherwise.
 #' @param why,fix For a block: why the child's rows are in the way, and what to do.
 #' @param clears For a clear: what is emptied, e.g. `"contact investigator"`.
+#' @param kept_by With `needs_child`: the tables whose rows, while they stay, keep a parent left with none of these
+#'   rows; each names its columns as `by` does.
 #' @return A list.
-relation <- function(child, parent, by, on_delete, needs_child = NULL, why = NULL, fix = NULL, clears = NULL) {
+relation <- function(child, parent, by, on_delete, needs_child = NULL, why = NULL, fix = NULL, clears = NULL,
+                     kept_by = list()) {
   list(
     child = child, parent = parent,
     by = by, # the child's columns, named, each holding the parent's column of that name's value
-    on_delete = on_delete, needs_child = needs_child,
+    on_delete = on_delete, needs_child = needs_child, kept_by = kept_by,
     why = why, fix = fix, # a block: why the rows are in the way, and what to do
     clears = clears # a clear: what's emptied, e.g. "contact investigator"
   )
@@ -62,7 +70,17 @@ edit_relations <- list(
     fix = "Delete those components first."
   ),
   relation("questionnaire_component", "questionnaire", c(questionnaire_id = "questionnaire_id"), "remove"),
-  relation("questionnaire_component", "component", c(component_id = "component_id"), "remove"),
+  # A component no questionnaire prints any more goes too, unless a measurement scale lists it or a skip sends
+  # respondents to it.
+  relation("questionnaire_component", "component", c(component_id = "component_id"), "remove",
+    needs_child = "remove_parent",
+    kept_by = list(
+      question_scale = c(component_id = "component_id"),
+      questionnaire_component = c(skip_to_component_id = "component_id"),
+      response_option = c(skip_to_component_id = "component_id"),
+      open_ended = c(skip_to_component_id = "component_id")
+    )
+  ),
   # What's inside a section goes with it.
   relation(
     "questionnaire_component", "questionnaire_component",
@@ -74,8 +92,10 @@ edit_relations <- list(
     c(questionnaire_id = "questionnaire_id", component_id = "component_id"), "remove"
   ),
   relation("question", "component", c(component_id = "component_id"), "remove"),
-  # questions that shared a stem that goes no longer share it; their own words stay
-  relation("question", "question_stem", c(question_stem_id = "question_stem_id"), "clear", clears = "question stem"),
+  # questions that shared a stem that goes no longer share it; their own words stay. A stem no question has goes.
+  relation("question", "question_stem", c(question_stem_id = "question_stem_id"), "clear",
+    clears = "question stem", needs_child = "remove_parent"
+  ),
   relation("questionnaire_question", "question", c(component_id = "component_id"), "remove"),
   relation(
     "questionnaire_question", "questionnaire_component",
@@ -91,10 +111,12 @@ edit_relations <- list(
     )
   ),
   relation("wave_question", "wave", c(wave_id = "wave_id"), "remove"),
+  # A question asked in no wave goes, unless follow-ups that stay name it as theirs.
   relation(
     "wave_question", "questionnaire_question",
     c(questionnaire_id = "questionnaire_id", component_id = "component_id"), "remove",
-    needs_child = "remove_parent"
+    needs_child = "remove_parent",
+    kept_by = list(questionnaire_question = c(questionnaire_id = "questionnaire_id", parent_question_id = "component_id"))
   ),
   relation("question_category", "question", c(component_id = "component_id"), "remove"),
   relation("question_category", "category", c(mesh_id = "mesh_id"), "remove"),
@@ -114,8 +136,9 @@ edit_relations <- list(
   relation("response_option", "closed_ended", c(variable_key = "variable_key"), "remove"),
   # a choice that skips to a component that goes no longer skips anywhere; its printed words stay
   relation("response_option", "component", c(skip_to_component_id = "component_id"), "clear", clears = "question it skips to"),
-  # the same for a group that skips
+  # the same for a group that skips, and for a write-in
   relation("questionnaire_component", "component", c(skip_to_component_id = "component_id"), "clear", clears = "question its group skips to"),
+  relation("open_ended", "component", c(skip_to_component_id = "component_id"), "clear", clears = "question it skips to"),
   relation(
     "response_option", "answer_option", c(answer_option_id = "answer_option_id"), "block",
     why = "Variables already offer this answer choice.",
@@ -310,8 +333,19 @@ edit_left_empty <- function(snap, relation, removed) {
   staying <- children[!edit_key(children, edit_table_key(relation$child)) %in% removed[[relation$child]], , drop = FALSE]
   kept <- edit_key(staying[stats::complete.cases(staying[names(by)]), , drop = FALSE], names(by))
   empty <- parent_refs %in% setdiff(lost, kept)
+  for (table in names(relation$kept_by)) {
+    empty <- empty & !edit_still_named(snap, table, relation$kept_by[[table]], removed, parents)
+  }
   edit_key(parents[empty, , drop = FALSE], edit_table_key(relation$parent)) |>
     setdiff(removed[[relation$parent]])
+}
+
+# For each of `parents`, whether a row of `table` that isn't being removed names it (`by`, as a relation's).
+edit_still_named <- function(snap, table, by, removed, parents) {
+  rows <- snap[[table]]
+  staying <- rows[!edit_key(rows, edit_table_key(table)) %in% removed[[table]], , drop = FALSE]
+  staying <- staying[stats::complete.cases(staying[names(by)]), , drop = FALSE]
+  edit_key(parents, unname(by)) %in% edit_key(staying, names(by))
 }
 
 # Rows in the way: pointing at something that's going, but staying.
@@ -424,6 +458,9 @@ edit_label_needs <- list(
 #' @return Table names.
 edit_tables_to_read <- function(tables) {
   reached <- unique(unlist(lapply(tables, edit_descendant_tables)))
+  # and what keeps a parent that would otherwise go
+  keeping <- Filter(function(relation) relation$parent %in% reached && length(relation$kept_by) > 0, edit_relations)
+  reached <- unique(c(reached, unlist(lapply(keeping, function(relation) names(relation$kept_by)))))
   named_by <- unique(unlist(edit_label_needs[reached]))
   unique(c(reached, named_by, unlist(edit_label_needs[named_by])))
 }

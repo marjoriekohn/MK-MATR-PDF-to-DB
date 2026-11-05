@@ -379,17 +379,17 @@ test_that("a PDF is only shown: listed without + Add, its details without Edit o
   })
 })
 
-test_that("an option set is added with its choices", {
+test_that("an option set is added with its choices, and named by them", {
   me <- local_staff()
   choice <- local_row("answer_option", list(standardized_label = tolower(test_name("Choice"))), "answer_option_id") # a choice is in lower case
   made <- local_outcomes()
   page <- page_args(me)
-  name <- test_name("Option set")
+  name <- choice$standardized_label # a set's name is its choices (public.name(option_set))
   shiny::testServer(make_edit_server, args = page$args, {
     errors <- collect_errors(session)
     add(session, "option_set")
     draw_form()
-    session$setInputs(`change-option_set__name` = name, `change-option_set__answer_option_ids` = key_text(choice$answer_option_id))
+    session$setInputs(`change-option_set__answer_option_ids` = key_text(choice$answer_option_id))
     expect_true(change$ready())
     session$setInputs(submit = 1)
     expect_true(isTRUE(done()$applied), info = "the test project needs the option set rules of docs/sql/1_setup.sql")
@@ -401,5 +401,6 @@ test_that("an option set is added with its choices", {
   if (nrow(set) == 1) {
     members <- table_model_get(test_connection, "answer_option_set", list(option_set_id = database_eq(set$option_set_id)))
     expect_equal(members$answer_option_id, choice$answer_option_id)
+    expect_equal(members$display_order, 1)
   }
 })

@@ -40,15 +40,16 @@ read_fixture_table <- function(table) {
   if (is.null(spec)) {
     return(rows)
   }
-  for (column in names(spec$columns)) {
-    rows[[column]] <- switch(spec$columns[[column]],
+  kinds <- table_read_columns(spec)
+  for (column in names(kinds)) {
+    rows[[column]] <- switch(kinds[[column]],
       id = ,
       number = as.numeric(rows[[column]]),
       flag = as.logical(rows[[column]]),
       as.character(rows[[column]])
     )
   }
-  rows <- rows[names(spec$columns)]
+  rows <- rows[names(kinds)]
   rows[do.call(order, c(unname(as.list(rows[spec$order_by])), list(method = "radix"))), , drop = FALSE]
 }
 

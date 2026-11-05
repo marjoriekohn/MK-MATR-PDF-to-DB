@@ -6,7 +6,7 @@
 with_unused_set <- function(snap) {
   snap$answer_option <- rbind(snap$answer_option, data.frame(answer_option_id = c(40, 41), standardized_label = c("Agree", "Disagree")))
   snap$option_set <- rbind(snap$option_set, data.frame(option_set_id = 3, name = "Agree / Disagree"))
-  snap$answer_option_set <- rbind(snap$answer_option_set, data.frame(option_set_id = c(3, 3), answer_option_id = c(40, 41)))
+  snap$answer_option_set <- rbind(snap$answer_option_set, data.frame(option_set_id = c(3, 3), answer_option_id = c(40, 41), display_order = c(1, 2)))
   snap
 }
 unused_set_snap <- function() with_unused_set(test_snapshot(edit_service_tables(edit_entities$option_set)))
@@ -24,52 +24,53 @@ test_that("a field of several choices holds their values joined by commas, in or
 })
 
 # ------ Option sets --------------------------------------------------------------------------------
-test_that("every option set is a card, with its choices and how many variables offer it", {
+test_that("every option set is a card, named by its choices, with how many variables offer it", {
   entity <- edit_entities$option_set
   cards <- edit_service_cards(entity, test_snapshot(edit_service_tables(entity)))
   expect_equal(cards$title, c("Often / Sometimes / Rarely / Never", "Yes / No"))
-  expect_equal(cards$subtitle, c("Often / Sometimes / Rarely / Never", "Yes / No"))
+  expect_equal(cards$subtitle, c("4 choices", "2 choices"))
   expect_equal(cards$facts[[1]], c("offered by 3 variables", "expected by 1 scale item"))
   expect_equal(cards$facts[[2]], "offered by 3 variables")
 })
 
-test_that("a new option set needs a name not taken and some choices, and says if a set has them already", {
+test_that("a new option set needs some choices no other set has", {
   empty <- form_for("option_set", "add")
-  expect_equal(edit_service_check(empty$fields, empty$values)$missing, c("name", "answer choices"))
+  expect_equal(edit_service_check(empty$fields, empty$values)$missing, "answer choices")
+  expect_false("name" %in% vapply(empty$fields, function(field) field$name, character(1))) # its name is its choices
 
-  taken <- form_for("option_set", "add", option_set__name = " yes / NO ", option_set__answer_option_ids = "1")
-  expect_equal(edit_service_check(taken$fields, taken$values)$problems$option_set__name, "There's already an option set called “Yes / No”.")
-
-  same <- form_for("option_set", "add", option_set__name = "Yes or no", option_set__answer_option_ids = "2,1")
-  found <- edit_service_check(same$fields, same$values)
-  expect_length(found$problems, 0)
-  expect_match(found$warnings$option_set__answer_option_ids, "“Yes / No” already has exactly these choices")
+  same <- form_for("option_set", "add", option_set__answer_option_ids = "2,1")
+  expect_equal(
+    edit_service_check(same$fields, same$values)$problems$option_set__answer_option_ids,
+    "“Yes / No” already has exactly these choices: use that set."
+  )
+  fewer <- form_for("option_set", "add", option_set__answer_option_ids = "1")
+  expect_length(edit_service_check(fewer$fields, fewer$values)$problems, 0)
 })
 
-test_that("adding an option set adds it and its choices, which point at it before it has an ID", {
-  form <- form_for("option_set", "add", option_set__name = "Agreement", option_set__answer_option_ids = "13,1")
+test_that("adding an option set adds it and its choices in order, which point at it before it has an ID", {
+  form <- form_for("option_set", "add", option_set__answer_option_ids = "13,1")
   expect_equal(item_lines(form_items(form)$items), c(
-    "Insert option_set {\"option_set_id\":\"new:option_set:1\"} name: - -> Agreement",
-    "Insert answer_option_set {\"answer_option_id\":1,\"option_set_id\":\"new:option_set:1\"} NA: - -> -",
-    "Insert answer_option_set {\"answer_option_id\":13,\"option_set_id\":\"new:option_set:1\"} NA: - -> -"
+    "Insert option_set {\"option_set_id\":\"new:option_set:1\"} NA: - -> -",
+    "Insert answer_option_set {\"answer_option_id\":1,\"option_set_id\":\"new:option_set:1\"} display_order: - -> 1",
+    "Insert answer_option_set {\"answer_option_id\":13,\"option_set_id\":\"new:option_set:1\"} display_order: - -> 2"
   ))
-  expect_equal(form_items(form)$summary, "Added the option set “Agreement”")
+  expect_equal(form_items(form)$summary, "Added the option set “Yes / Often”")
 })
 
-test_that("a set variables offer keeps its choices, but can be renamed", {
-  form <- form_for("option_set", "update", "1", option_set__name = "Yes or No")
+test_that("a set variables offer keeps its choices, so there is nothing to change", {
+  form <- form_for("option_set", "update", "1")
   choices <- Filter(function(field) field$name == "answer_option_ids", form$fields)[[1]]
-  expect_match(choices$locked, "^3 variables offer exactly these choices")
+  expect_match(choices$locked, "^3 variables offer exactly these choices, so they can't change.$")
   expect_equal(form$initial$option_set__answer_option_ids, "1,2")
-  expect_equal(item_lines(form_items(form)$items), "Update option_set {\"option_set_id\":1} name: Yes / No -> Yes or No")
+  expect_equal(nrow(form_items(form)$items), 0)
 })
 
-test_that("a set no variable offers can change its choices: the ones taken out go, the new ones are added", {
+test_that("a set no variable offers can change its choices: the ones taken out go, the new ones follow the rest", {
   form <- form_for("option_set", "update", "3", snap = unused_set_snap(), option_set__answer_option_ids = "41,1")
   expect_null(Filter(function(field) field$name == "answer_option_ids", form$fields)[[1]]$locked)
   expect_equal(item_lines(form_items(form)$items), c(
-    "Delete answer_option_set {\"answer_option_id\":40,\"option_set_id\":3} NA: - -> -",
-    "Insert answer_option_set {\"answer_option_id\":1,\"option_set_id\":3} NA: - -> -"
+    "Delete answer_option_set {\"answer_option_id\":40,\"option_set_id\":3} display_order: 1 -> -",
+    "Insert answer_option_set {\"answer_option_id\":1,\"option_set_id\":3} display_order: - -> 3"
   ))
   expect_equal(form_items(form)$summary, "Changed the choices of the option set “Agree / Disagree”")
 })
@@ -90,9 +91,9 @@ test_that("deleting a set no variable offers takes its choices out of it, and sc
   expect_length(plan$blocked, 0)
   expect_equal(item_lines(edit_service_build(entity, "delete", snap, edit_service_row(entity, snap, "3"), plan = plan)$items), c(
     "Update question_scale {\"component_id\":9,\"scale_id\":1} expected_option_set_id: 3 -> -",
-    "Delete answer_option_set {\"answer_option_id\":40,\"option_set_id\":3} NA: - -> -",
-    "Delete answer_option_set {\"answer_option_id\":41,\"option_set_id\":3} NA: - -> -",
-    "Delete option_set {\"option_set_id\":3} name: Agree / Disagree -> -"
+    "Delete answer_option_set {\"answer_option_id\":40,\"option_set_id\":3} display_order: 1 -> -",
+    "Delete answer_option_set {\"answer_option_id\":41,\"option_set_id\":3} display_order: 2 -> -",
+    "Delete option_set {\"option_set_id\":3} NA: - -> -"
   ))
 })
 

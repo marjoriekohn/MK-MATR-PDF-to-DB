@@ -216,7 +216,7 @@ create table public.registry (
 create table public.principal_investigator (
   principal_investigator_id bigint primary key default private.random_id('principal_investigator', 'principal_investigator_id'),
   name   text not null,
-  email  text not null
+  email  text             -- may be empty, but not for a study's contact (contact_has_email, section 4)
 );
 
 create table public.study (
@@ -390,9 +390,11 @@ create table public.open_ended (
   constraint open_ended_skip_to_one_place check (not (skip_to_end and skip_to_component_id is not null))
 );
 
+-- A set is its choices (answer_option_set), one set for each combination of them (BR109:
+-- option_set_choices_unique, section 4). Its name is its choices in their order, worked out when it is read
+-- (public.name(option_set), section 4), so nobody types one and it can't fall out of step with them.
 create table public.option_set (
-  option_set_id bigint primary key default private.random_id('option_set', 'option_set_id'),
-  name          text   not null                                          -- unique, ignoring case and outer spaces (BR109): option_set_name_unique, section 3
+  option_set_id bigint primary key default private.random_id('option_set', 'option_set_id')
 );
 
 create table public.closed_ended (
@@ -416,9 +418,14 @@ create table public.answer_option_alias (
 );
 
 create table public.answer_option_set (
-  option_set_id    bigint not null,                                      -- BR105
-  answer_option_id bigint not null,                                      -- BR107, BR108
-  primary key (option_set_id, answer_option_id)
+  option_set_id    bigint  not null,                                     -- BR105
+  answer_option_id bigint  not null,                                     -- BR107, BR108
+  display_order    integer not null                                      -- the order its name lists them in
+    constraint answer_option_set_display_order_check check (display_order > 0),
+  primary key (option_set_id, answer_option_id),
+  -- deferrable so a change can swap one choice for another in its place
+  constraint answer_option_set_display_order_unique
+    unique (option_set_id, display_order) deferrable initially immediate
 );
 
 create table public.response_option (
@@ -639,6 +646,15 @@ create table public.applied_item (
 -- 2. ADD REFERENCES
 -- =====================================================================================================
 -- None cascade unless noted: deleting a row that others point at is refused.
+--
+-- What a questionnaire or a wave owns goes with it (on delete cascade): a questionnaire's waves and its
+-- placements of components, and through those its questions' settings, wave numbers and variables (with their
+-- choices and counts); a wave's record of the questions it asked. What is shared stays: a component, an answer
+-- choice, an option set, a subject, a scale. Deleting a shared row that something still uses is refused. What a
+-- delete leaves owned by nothing (a component no questionnaire prints, a question no wave asks, a stem no
+-- question has) goes when the change ends, unless something still names it (section 4, "What nothing owns").
+-- Above a questionnaire nothing cascades: a study or a registry that still holds anything can't be deleted.
+-- R/service_edit_relations.R lists the same, for what the site shows before a delete.
 
 alter table public.study
   add constraint study_registry_id_fkey
@@ -656,7 +672,7 @@ alter table public.questionnaire
 
 alter table public.wave
   add constraint wave_questionnaire_id_fkey
-    foreign key (questionnaire_id) references public.questionnaire (questionnaire_id);
+    foreign key (questionnaire_id) references public.questionnaire (questionnaire_id) on delete cascade;
 
 alter table public.component
   add constraint component_component_type_id_fkey
@@ -668,23 +684,24 @@ alter table public.question
 
 alter table public.questionnaire_component
   add constraint questionnaire_component_questionnaire_id_fkey
-    foreign key (questionnaire_id) references public.questionnaire (questionnaire_id),
+    foreign key (questionnaire_id) references public.questionnaire (questionnaire_id) on delete cascade,
   add constraint questionnaire_component_component_id_fkey
     foreign key (component_id) references public.component (component_id),
-  -- BR50-BR52: the parent is in the SAME questionnaire, because questionnaire_id is half of the key
+  -- BR50-BR52: the parent is in the SAME questionnaire, because questionnaire_id is half of the key; what is
+  -- inside a section or a group goes with it
   add constraint questionnaire_component_parent_fk
     foreign key (questionnaire_id, parent_component_id)
-    references public.questionnaire_component (questionnaire_id, component_id),
+    references public.questionnaire_component (questionnaire_id, component_id) on delete cascade,
   add constraint questionnaire_component_skip_to_component_id_fkey
     foreign key (skip_to_component_id) references public.component (component_id);
 
 alter table public.questionnaire_question
   add constraint questionnaire_question_component_id_fkey                -- BR58, BR59
     foreign key (component_id) references public.question (component_id),
-  -- BR56, BR57: a questionnaire question IS a questionnaire component
+  -- BR56, BR57: a questionnaire question IS a questionnaire component; its settings go with its placement
   add constraint questionnaire_question_component_fk
     foreign key (questionnaire_id, component_id)
-    references public.questionnaire_component (questionnaire_id, component_id),
+    references public.questionnaire_component (questionnaire_id, component_id) on delete cascade,
   -- BR60-BR62: the parent question is in the SAME questionnaire
   add constraint questionnaire_question_parent_fk
     foreign key (questionnaire_id, parent_question_id)
@@ -693,16 +710,16 @@ alter table public.questionnaire_question
 alter table public.wave_question
   -- BR66, BR67, BR70: the wave and the question share one questionnaire_id
   add constraint wave_question_wave_fk
-    foreign key (questionnaire_id, wave_id) references public.wave (questionnaire_id, wave_id),
+    foreign key (questionnaire_id, wave_id) references public.wave (questionnaire_id, wave_id) on delete cascade,
   add constraint wave_question_question_fk                               -- BR68, BR70
     foreign key (questionnaire_id, component_id)
-    references public.questionnaire_question (questionnaire_id, component_id);
+    references public.questionnaire_question (questionnaire_id, component_id) on delete cascade;
 
 alter table public.variable
   -- BR86: a variable records an answer for exactly one questionnaire question
   add constraint variable_questionnaire_question_fk
     foreign key (questionnaire_id, component_id)
-    references public.questionnaire_question (questionnaire_id, component_id),
+    references public.questionnaire_question (questionnaire_id, component_id) on delete cascade,
   add constraint variable_subject_fk
     foreign key (subject_id) references public.subject (subject_id);
 
@@ -747,9 +764,10 @@ alter table public.response_option_count
   add constraint response_option_count_response_option_fkey
     foreign key (variable_key, answer_option_id) references public.response_option (variable_key, answer_option_id) on delete cascade;
 
+-- A question's MeSH tags go with it.
 alter table public.question_category
   add constraint question_category_component_id_fkey
-    foreign key (component_id) references public.question (component_id),
+    foreign key (component_id) references public.question (component_id) on delete cascade,
   add constraint question_category_mesh_id_fkey
     foreign key (mesh_id) references public.category (mesh_id);
 
@@ -814,7 +832,6 @@ alter table public.applied_item
 create unique index staff_email_unique  on public.staff   (lower(email));          -- BR22
 create unique index subject_name_unique on public.subject (lower(btrim(name)));
 create unique index question_stem_text_unique on public.question_stem (btrim(regexp_replace(text, '[[:space:]]+', ' ', 'g')));
-create unique index option_set_name_unique                 on public.option_set (lower(btrim(name)));              -- BR109
 create unique index measurement_scale_name_unique          on public.measurement_scale (lower(btrim(name)));       -- BR78
 create unique index measurement_scale_abbreviation_unique  on public.measurement_scale (lower(btrim(abbreviation)));
 create unique index registry_name_unique                   on public.registry (lower(btrim(name)));
@@ -2187,17 +2204,18 @@ create constraint trigger response_option_count_in_wave
   for each row execute function public.response_option_count_in_wave();
 
 -- A PDF (the questionnaire's, or the file of Variable Names and Coding) that no draft and no wave uses
--- any more (its draft was discarded) goes too (its file in Storage is removed by the site). One a wave
--- was extracted from (wave_file) stays.
-create function public.extracted_draft_pdf_let_go()
+-- any more goes too: its draft was discarded, or its wave deleted or extracted again from another file (its
+-- file in Storage is removed by the site). One a draft or a wave still uses stays.
+create function public.pdf_file_let_go()
 returns trigger
 language plpgsql
 set search_path = public, pg_temp
 as $$
 declare
+  was jsonb := to_jsonb(old);   -- an extracted_draft or a wave_file row: each names its files its own way
   sha text;
 begin
-  foreach sha in array array_remove(array[old.pdf_sha256, old.supplement ->> 'sha256'], null) loop
+  foreach sha in array array_remove(array[was ->> 'pdf_sha256', was -> 'supplement' ->> 'sha256', was ->> 'supplement_sha256'], null) loop
     if not exists (select 1 from public.extracted_draft where pdf_sha256 = sha or supplement ->> 'sha256' = sha)
        and not exists (select 1 from public.wave_file where pdf_sha256 = sha or supplement_sha256 = sha) then
       delete from public.pdf_file where pdf_sha256 = sha;
@@ -2244,7 +2262,10 @@ create constraint trigger questionnaire_count_covers_waves
 
 create trigger extracted_draft_pdf_let_go
   after delete on public.extracted_draft
-  for each row execute function public.extracted_draft_pdf_let_go();
+  for each row execute function public.pdf_file_let_go();
+create trigger wave_file_pdf_let_go
+  after delete or update of pdf_sha256, supplement_sha256 on public.wave_file
+  for each row execute function public.pdf_file_let_go();
 
 -- Discarding an extraction deletes it, with its details and review events. Nobody approves it; only the
 -- person who prepared it can, and not once it is applied.
@@ -2346,6 +2367,51 @@ create constraint trigger answer_option_set_matches_variables
   after insert or update or delete on public.answer_option_set
   deferrable initially deferred
   for each row execute function public.choices_match_set_check();
+
+-- An option set's name: its choices in its order, "never / sometimes / often". The REST API offers it as the
+-- set's column name (a computed field: select=option_set_id,name), so the dashboard and the site read it as
+-- before; SQL reads it as s.name or public.name(s).
+create function public.name(s public.option_set)
+returns text
+language sql
+stable
+set search_path = ''
+as $$
+  select string_agg(a.standardized_label, ' / ' order by m.display_order)
+  from public.answer_option_set m join public.answer_option a on a.answer_option_id = m.answer_option_id
+  where m.option_set_id = s.option_set_id;
+$$;
+
+-- BR109: one set for each combination of choices, whatever their order: a set is its choices. A set with no
+-- choices (on its way in or out) is not compared.
+create function public.option_set_choices_unique()
+returns trigger
+language plpgsql
+set search_path = public, pg_temp
+as $$
+declare
+  v_set   bigint := case when tg_op = 'DELETE' then old.option_set_id else new.option_set_id end;
+  v_other public.option_set;
+begin
+  select o.* into v_other
+  from public.option_set o
+  where o.option_set_id <> v_set
+    and exists (select 1 from public.answer_option_set where option_set_id = v_set)
+    and array(select answer_option_id from public.answer_option_set where option_set_id = o.option_set_id order by 1)
+      = array(select answer_option_id from public.answer_option_set where option_set_id = v_set order by 1)
+  limit 1;
+  if found then
+    raise exception 'The option set "%" already has exactly these choices. A set is its choices, so there is one of each.',
+      public.name(v_other);
+  end if;
+  return null;
+end;
+$$;
+
+create constraint trigger option_set_choices_unique
+  after insert or update or delete on public.answer_option_set
+  deferrable initially deferred
+  for each row execute function public.option_set_choices_unique();
 
 -- M2 (BR45), M3 (BR53) and M4 (BR42): what a block of each kind may be, by the kind's name. The site relies on
 -- the same three names (Section, Question, Group) and Make an edit won't rename or delete them.
@@ -2471,6 +2537,90 @@ create constraint trigger component_kind_placements
   deferrable initially deferred
   for each row execute function public.component_placements_check();
 
+-- ------ What nothing owns ----------------------------------------------------------------------------------
+-- A delete can leave a shared row that nothing owns any more: a component no questionnaire prints, a question
+-- no wave asks, a stem no question has. Each goes when the change ends (deferred, so a change can take a block
+-- out and put it back, or move it), unless something still names it: a component that a measurement scale
+-- lists or a skip sends respondents to stays, and so does a question that follow-up questions name as theirs.
+-- None of them refuses anything. R/service_edit_relations.R shows staff the same before a delete.
+
+-- A component no questionnaire places any more. Its question row goes with it, and that row's MeSH tags.
+create function public.forget_unplaced_component()
+returns trigger
+language plpgsql
+set search_path = public, pg_temp
+as $$
+begin
+  delete from public.component c
+  where c.component_id = old.component_id
+    and not exists (select 1 from public.questionnaire_component p where p.component_id = c.component_id)
+    and not exists (select 1 from public.question_scale s where s.component_id = c.component_id)
+    and not exists (select 1 from public.questionnaire_component p where p.skip_to_component_id = c.component_id)
+    and not exists (select 1 from public.response_option r where r.skip_to_component_id = c.component_id)
+    and not exists (select 1 from public.open_ended o where o.skip_to_component_id = c.component_id);
+  return null;
+end;
+$$;
+
+create constraint trigger component_left_unplaced
+  after delete or update of component_id on public.questionnaire_component
+  deferrable initially deferred
+  for each row execute function public.forget_unplaced_component();
+
+-- A question its questionnaire asks in no wave (BR69): its placement goes, and with it its settings and
+-- variables (and then the component, if nothing else places it). A follow-up that goes may leave the question
+-- above it unasked and named by no one, so that one is looked at next, and so on up.
+create function public.forget_unasked_question()
+returns trigger
+language plpgsql
+set search_path = public, pg_temp
+as $$
+declare
+  v_question bigint := old.component_id;
+  v_parent   bigint;
+begin
+  while v_question is not null loop
+    select q.parent_question_id into v_parent from public.questionnaire_question q
+    where q.questionnaire_id = old.questionnaire_id and q.component_id = v_question;
+    delete from public.questionnaire_component p
+    where p.questionnaire_id = old.questionnaire_id and p.component_id = v_question
+      and exists (select 1 from public.questionnaire_question q
+                  where q.questionnaire_id = p.questionnaire_id and q.component_id = p.component_id)
+      and not exists (select 1 from public.wave_question w
+                      where w.questionnaire_id = p.questionnaire_id and w.component_id = p.component_id)
+      and not exists (select 1 from public.questionnaire_question f
+                      where f.questionnaire_id = p.questionnaire_id and f.parent_question_id = p.component_id);
+    exit when not found;
+    v_question := v_parent;
+  end loop;
+  return null;
+end;
+$$;
+
+create constraint trigger question_left_unasked
+  after delete or update of wave_id, component_id on public.wave_question
+  deferrable initially deferred
+  for each row execute function public.forget_unasked_question();
+
+-- A stem no question has.
+create function public.forget_unused_stem()
+returns trigger
+language plpgsql
+set search_path = public, pg_temp
+as $$
+begin
+  delete from public.question_stem t
+  where t.question_stem_id = old.question_stem_id
+    and not exists (select 1 from public.question q where q.question_stem_id = t.question_stem_id);
+  return null;
+end;
+$$;
+
+create constraint trigger question_stem_left_unused
+  after delete or update of question_stem_id on public.question
+  deferrable initially deferred
+  for each row execute function public.forget_unused_stem();
+
 -- M5 and D1: one row per person, respondent type and registry abbreviation, ignoring case and outer spaces.
 create unique index principal_investigator_email_unique on public.principal_investigator (lower(btrim(email)));
 create unique index respondent_type_name_unique         on public.respondent_type (lower(btrim(name)));
@@ -2487,7 +2637,6 @@ alter table public.questionnaire          add constraint questionnaire_name_not_
                                           add constraint questionnaire_abbreviation_not_blank    check (btrim(abbreviation) <> '');
 alter table public.wave                   add constraint wave_name_not_blank                     check (btrim(name) <> '');
 alter table public.component_type         add constraint component_type_name_not_blank          check (btrim(name) <> '');
-alter table public.option_set             add constraint option_set_name_not_blank               check (btrim(name) <> '');
 alter table public.measurement_scale      add constraint measurement_scale_name_not_blank        check (btrim(name) <> ''),
                                           add constraint measurement_scale_abbreviation_not_blank check (btrim(abbreviation) <> '');
 alter table public.category               add constraint category_term_not_blank                 check (btrim(term) <> '');
@@ -2517,6 +2666,38 @@ create trigger study_principal_investigator_immutable
   before update of principal_investigator_id on public.study
   for each row execute function public.study_principal_investigator_immutable();
 
+-- M8: an investigator may have no email, but a study's contact is someone who can be written to. Checked when the
+-- transaction ends, so a change can give someone an email and make them the contact in either order.
+create function public.contact_has_email()
+returns trigger
+language plpgsql
+set search_path = public, pg_temp
+as $$
+declare
+  v_name text;
+begin
+  select p.name into v_name
+  from public.study s join public.principal_investigator p on p.principal_investigator_id = s.contact_principal_investigator_id
+  where p.email is null
+    and case when tg_table_name = 'study' then s.study_id = new.study_id
+             else p.principal_investigator_id = new.principal_investigator_id end
+  limit 1;
+  if found then
+    raise exception '% has no email, so they can''t be a study''s contact.', v_name;
+  end if;
+  return null;
+end;
+$$;
+
+create constraint trigger contact_has_email
+  after insert or update of contact_principal_investigator_id on public.study
+  deferrable initially deferred
+  for each row execute function public.contact_has_email();
+create constraint trigger contact_keeps_email
+  after update of email on public.principal_investigator
+  deferrable initially deferred
+  for each row execute function public.contact_has_email();
+
 -- M7 (BR23): staff are never deleted; someone who leaves is set inactive.
 create function public.staff_never_deleted()
 returns trigger
@@ -2534,13 +2715,18 @@ create trigger staff_never_deleted
 
 -- The trigger functions above are for the database itself; nobody calls them over /rpc/.
 revoke all on function public.response_option_count_in_wave()         from public, anon, authenticated;
-revoke all on function public.extracted_draft_pdf_let_go()            from public, anon, authenticated;
+revoke all on function public.pdf_file_let_go()                      from public, anon, authenticated;
 revoke all on function public.wave_counts_within_questionnaire()      from public, anon, authenticated;
 revoke all on function public.choices_match_set_check()               from public, anon, authenticated;
 revoke all on function public.component_kind_check()                  from public, anon, authenticated;
 revoke all on function public.questionnaire_component_parent_check()  from public, anon, authenticated;
 revoke all on function public.component_placements_check()            from public, anon, authenticated;
 revoke all on function public.study_principal_investigator_immutable() from public, anon, authenticated;
+revoke all on function public.contact_has_email()                     from public, anon, authenticated;
+revoke all on function public.forget_unplaced_component()             from public, anon, authenticated;
+revoke all on function public.forget_unasked_question()               from public, anon, authenticated;
+revoke all on function public.forget_unused_stem()                    from public, anon, authenticated;
+revoke all on function public.option_set_choices_unique()             from public, anon, authenticated;
 revoke all on function public.staff_never_deleted()                   from public, anon, authenticated;
 revoke all on function private.normal_answer(text)                     from public, anon, authenticated;
 revoke all on function private.choices_match_set(bigint[])             from public, anon, authenticated;
@@ -2601,7 +2787,7 @@ declare
     'component_type', 'component', 'question', 'questionnaire_component', 'questionnaire_question',
     'wave_question', 'subject', 'variable', 'open_ended', 'closed_ended', 'option_set',
     'answer_option', 'answer_option_set', 'response_option', 'response_option_count', 'category', 'question_category',
-    'measurement_scale', 'question_scale', 'question_stem', 'answer_option_alias'
+    'measurement_scale', 'question_scale', 'question_stem', 'answer_option_alias', 'wave_file'
   ];
 begin
   foreach t in array dashboard_tables loop
@@ -2611,7 +2797,17 @@ begin
 end;
 $$;
 
+-- ...and the PDFs a wave was extracted from, but no others: the bucket is public, so a file is safe from
+-- anyone without its SHA-256 only while nothing lists it. A draft's PDF stays unlisted until its wave has it.
+create policy "Dashboard can read a wave's files" on public.pdf_file for select to anon, authenticated
+  using (exists (select 1 from public.wave_file f
+                 where f.pdf_sha256 = pdf_file.pdf_sha256 or f.supplement_sha256 = pdf_file.pdf_sha256));
+grant select on public.pdf_file to anon, authenticated;
+
 grant execute on function public.upvote_questionnaire(bigint) to anon, authenticated;
+-- an option set's name, read as its column
+revoke all on function public.name(public.option_set) from public;
+grant execute on function public.name(public.option_set) to anon, authenticated, service_role;
 
 -- ------ 5d. The site's server ------------------------------------------------------------------------
 grant select, insert, update, delete on all tables    in schema public to service_role;
@@ -2666,11 +2862,11 @@ comment on table public.subject                 is 'Who a variable can be about.
 comment on table public.variable                is 'One place an answer is recorded; one column in the response database.';
 comment on table public.open_ended              is 'Variable the respondent writes.';
 comment on table public.closed_ended            is 'Variable chosen from an option set.';
-comment on table public.option_set              is 'Named collection of answer options, independent of order and coding.';
+comment on table public.option_set              is 'A set of answer options, one for each combination; each variable offering it codes and orders them its own way. Its name (public.name(option_set), read as a column) is its choices in their order.';
 comment on table public.answer_option           is 'One answer choice, stored once for the whole registry. [subject] in its words stands for the variable''s subject ("describes [subject] very well").';
 comment on table public.answer_option_alias     is 'A wording merged into an answer choice on Make an edit. An extraction that reads it uses the choice instead.';
 comment on table public.response_option_count   is 'How many of a wave''s respondents gave one answer (response option) of one variable. Typed on Edit Extraction for the extraction''s wave.';
-comment on table public.answer_option_set       is 'Links answer options to option sets.';
+comment on table public.answer_option_set       is 'The answer options of an option set, in the order its name lists them.';
 comment on table public.response_option         is 'One answer option as it was printed for one closed-ended variable. A closed-ended variable has one or more (a lone check box has one).';
 comment on table public.category                is 'One MeSH term, keyed by its NLM unique identifier.';
 comment on table public.question_category       is 'Links questions to MeSH categories.';
@@ -2681,7 +2877,7 @@ comment on table public.draft                   is 'A change to the MATR data: a
 comment on table public.edit_draft              is 'The details of a draft that is an edit made on Make an edit.';
 comment on table public.extracted_draft         is 'The details of a draft that is an extraction of a questionnaire: typed by hand (Manual) or read from a PDF by an AI (AI-Powered, with its ai_extracted_draft).';
 comment on table public.ai_extracted_draft      is 'What an AI-Powered extraction has and a Manual one doesn''t: the reading of its PDF, what the AI returned, and what the reviewer changed in it.';
-comment on table public.pdf_file                is 'A PDF uploaded for an extraction (the questionnaire, or its file of Variable Names and Coding), once per file (by its SHA-256): its pages and size. The file itself is in Storage, bucket extraction-pdfs, as <hash>.pdf. Kept once a wave was extracted from it (wave_file); otherwise it goes when no extraction draft uses it any more.';
+comment on table public.pdf_file                is 'A PDF uploaded for an extraction (the questionnaire, or its file of Variable Names and Coding), once per file (by its SHA-256): its pages and size. The file itself is in Storage, bucket extraction-pdfs, as <hash>.pdf. Kept while a wave was extracted from it (wave_file) or an extraction draft uses it; the dashboard sees only a wave''s.';
 comment on column public.answer_option.standardized_label is
   'The answer in standard wording, kept normalized: lower case, straight quotes, one space between words, no question mark, no full stop or colon at the end.';
 comment on column public.extracted_draft.supplement is
@@ -2692,10 +2888,12 @@ comment on table public.applied_item            is 'What an applied draft did: f
 -- ------ Columns --------------------------------------------------------------------------------------
 comment on column public.study.status is 'Active: the study is ongoing. Ended: all data collections are finished. Empty when not known.';
 comment on column public.study.principal_investigator_id is 'The lead investigator. Empty when not known; never changes once recorded.';
+comment on column public.study.contact_principal_investigator_id is 'Who to contact about the study. Empty when not known; someone with an email.';
+comment on column public.principal_investigator.email is 'Unique, ignoring case and outer spaces. Empty when not known, but a study''s contact has one.';
 comment on column public.questionnaire.participant_count is
   'How many took it, across all its waves, for when the waves'' own counts aren''t known. The waves'' counts can''t add up to more.';
 comment on table public.wave_file is
-  'The PDF and the file of Variable Names and Coding a wave''s extraction was read from, written when the extraction is applied. Goes with the wave; private to staff.';
+  'The PDF and the file of Variable Names and Coding a wave''s extraction was read from, written when the extraction is applied. Goes with the wave (and the files with it, when nothing else uses them); the dashboard reads it.';
 comment on column public.wave_file.pdf_sha256 is 'The questionnaire''s PDF (pdf_file).';
 comment on column public.wave_file.pdf_name is 'That PDF''s name, as uploaded.';
 comment on column public.wave_file.supplement_name is 'The name of the file of Variable Names and Coding the extraction was given, if any.';
@@ -2846,13 +3044,15 @@ insert into public.subject (name) values
   ('Respondent'), ('Respondent''s Family'), ('Respondent''s Children'), ('Respondent''s Siblings'), ('Twin A'), ('Twin B');
 
 -- The PDFs' bucket: the extractions' PDFs (and PDF files of Variable Names and Coding) are kept in Storage, as
--- <sha256>.pdf (R/model_storage.R). Private: only the site's server reaches it, with the secret key, which Row
--- Level Security doesn't apply to, and no policy on storage.objects lets anyone else in. Up to 50 MB, as the site
--- accepts (shiny.maxRequestSize in global.R), and only PDFs. A project that has it keeps it as it is, with its
--- files, so this statement can also be run by itself.
+-- <sha256>.pdf (R/model_storage.R). Public: anyone can download a file by its address,
+-- <project URL>/storage/v1/object/public/extraction-pdfs/<sha256>.pdf, so the dashboard can link a wave's PDF
+-- (wave_file names it). Only the site's server writes to it, with the secret key: no policy on storage.objects
+-- lets anyone else add, change or remove a file. Up to 50 MB, as the site accepts (shiny.maxRequestSize in
+-- global.R), and only PDFs. A project that has it keeps its files, and the bucket is made public, so this
+-- statement can also be run by itself.
 insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
-values ('extraction-pdfs', 'extraction-pdfs', false, 50 * 1024 * 1024, array['application/pdf'])
-on conflict (id) do nothing;
+values ('extraction-pdfs', 'extraction-pdfs', true, 50 * 1024 * 1024, array['application/pdf'])
+on conflict (id) do update set public = true;
 
 commit;
 
@@ -3014,7 +3214,7 @@ do $$
 declare t text;
 begin
   foreach t in array array['staff', 'applied_item', 'draft', 'extracted_draft', 'edit_draft',
-                           'ai_extracted_draft', 'pdf_file', 'wave_file', 'draft_review_event'] loop
+                           'ai_extracted_draft', 'draft_review_event'] loop
     assert not has_table_privilege('anon', 'public.' || t, 'select, insert, update, delete'), t || ' is private to anon';
     assert not has_table_privilege('authenticated', 'public.' || t, 'select, insert, update, delete'), t || ' is private to signed-in users';
     assert has_table_privilege('service_role', 'public.' || t, 'select, insert, update, delete'), t || ' is the site''s';
@@ -3038,7 +3238,7 @@ begin
     'component_type', 'component', 'question', 'questionnaire_component', 'questionnaire_question', 'wave_question',
     'subject', 'variable', 'open_ended', 'closed_ended', 'option_set', 'answer_option', 'answer_option_set',
     'response_option', 'response_option_count', 'category', 'question_category', 'measurement_scale', 'question_scale',
-    'question_stem', 'answer_option_alias'] loop
+    'question_stem', 'answer_option_alias', 'wave_file', 'pdf_file'] loop
     assert has_table_privilege('anon', 'public.' || t, 'select'), t || ' is readable by the dashboard';
     assert not has_table_privilege('anon', 'public.' || t, 'insert, update, delete, truncate'), t || ' is read-only to the dashboard';
     assert (select count(*) from pg_policies where schemaname = 'public' and tablename = t) = 1, t || ' has its one policy';
@@ -3046,6 +3246,10 @@ begin
   end loop;
   assert (select count(*) from pg_class where relnamespace = 'public'::regnamespace and relkind = 'r') = 36, 'thirty-six tables';
   assert not exists (select 1 from pg_class where relnamespace = 'public'::regnamespace and relkind = 'r' and not relrowsecurity), 'RLS on all of them';
+  assert (select public from storage.buckets where id = 'extraction-pdfs'), 'the PDFs'' bucket is public';
+  assert not exists (select 1 from pg_policies where schemaname = 'storage' and tablename = 'objects'
+                     and roles && array['anon', 'authenticated', 'public']::name[] and cmd <> 'SELECT'
+                     and (qual like '%extraction-pdfs%' or with_check like '%extraction-pdfs%')), 'and only the site writes to it';
   assert has_function_privilege('anon', 'public.upvote_questionnaire(bigint)', 'execute'), 'the dashboard may upvote';
   assert not has_function_privilege('anon', 'public.draft_needs_approval(bigint)', 'execute'), 'but not ask about drafts';
   assert not has_schema_privilege('anon', 'private', 'usage') and not has_schema_privilege('authenticated', 'private', 'usage'), 'private is private';
@@ -3661,6 +3865,7 @@ do $$
 declare
   st bigint;
   other bigint;
+  no_email bigint;
   e bigint;
   w1 bigint;
   w2 bigint;
@@ -3671,6 +3876,31 @@ begin
     returning principal_investigator_id into other;
   perform pg_temp.expect_error(format('update public.study set principal_investigator_id = %s where study_id = %s', other, st), 'lead investigator can''t be changed');
   perform pg_temp.expect_error(format('update public.study set principal_investigator_id = null where study_id = %s', st), 'lead investigator can''t be changed');
+
+  -- an investigator needs no email, but a study's contact does (checked when the transaction ends)
+  insert into public.principal_investigator (name) values ('ZZ No Email PI') returning principal_investigator_id into no_email;
+  insert into public.study (registry_id, principal_investigator_id, name) values (pg_temp.id('registry'), no_email, 'ZZ Led Without Email');
+  begin
+    update public.study set contact_principal_investigator_id = no_email where study_id = st;
+    set constraints contact_has_email immediate;
+    raise exception 'went through';
+  exception when others then
+    assert sqlerrm = 'ZZ No Email PI has no email, so they can''t be a study''s contact.', 'a contact needs an email: ' || sqlerrm;
+  end;
+  update public.study set contact_principal_investigator_id = other where study_id = st;
+  begin
+    update public.principal_investigator set email = null where principal_investigator_id = other;
+    set constraints contact_keeps_email immediate;
+    raise exception 'went through';
+  exception when others then
+    assert sqlerrm = 'ZZ Other PI has no email, so they can''t be a study''s contact.', 'a contact keeps their email: ' || sqlerrm;
+  end;
+  -- given an email and made the contact in one change, in either order
+  set constraints contact_has_email, contact_keeps_email deferred;
+  update public.study set contact_principal_investigator_id = no_email where study_id = st;
+  update public.principal_investigator set email = 'noemail@drafts.test' where principal_investigator_id = no_email;
+  set constraints contact_has_email, contact_keeps_email immediate;
+  set constraints contact_has_email, contact_keeps_email deferred;
 
   -- two waves of 100 and 90 respondents, and the questionnaire's other waves none (earlier checks changed
   -- and deleted the test waves). The rule is checked when the transaction ends, so it is run here as that would.
@@ -3719,6 +3949,202 @@ begin
     'method', 'Manual', 'pdf_sha256', 'zzalone', 'supplement', jsonb_build_object('name', 'c.pdf', 'sha256', 'zzalone2')));
   perform public.discard_draft(e, pg_temp.id('ada'));
   assert not exists (select 1 from public.pdf_file where pdf_sha256 in ('zzalone', 'zzalone2')), 'and takes the ones nothing else uses';
+
+  -- the dashboard sees a wave's files, and no draft's
+  e := public.create_draft('Extraction', pg_temp.id('ada'), '{}'::jsonb, jsonb_build_object('method', 'Manual', 'pdf_sha256', 'zzdraftonly'));
+  set local role anon;
+  assert (select count(*) from public.pdf_file where pdf_sha256 in ('zzfiles', 'zzcodes')) = 2, 'the dashboard sees a wave''s files';
+  assert not exists (select 1 from public.pdf_file where pdf_sha256 = 'zzdraftonly'), 'but not a draft''s';
+  assert (select pdf_sha256 from public.wave_file where wave_id = w1) = 'zzfiles', 'and which file is the wave''s';
+  reset role;
+  perform public.discard_draft(e, pg_temp.id('ada'));
+
+  -- a deleted wave takes its files, once nothing else uses them
+  e := public.create_draft('Extraction', pg_temp.id('ada'), '{}'::jsonb, jsonb_build_object('method', 'Manual', 'pdf_sha256', 'zzfiles'));
+  delete from public.wave where wave_id = w1;
+  assert (select count(*) from public.pdf_file where pdf_sha256 = 'zzfiles') = 1, 'a file a draft still uses stays';
+  assert not exists (select 1 from public.pdf_file where pdf_sha256 = 'zzcodes'), 'one nothing else uses goes with the wave';
+  perform public.discard_draft(e, pg_temp.id('ada'));
+  assert not exists (select 1 from public.pdf_file where pdf_sha256 = 'zzfiles'), 'and the other goes with the last draft';
+end;
+$$;
+
+-- Deleting a wave, then its questionnaire: what only it owns goes, and what nothing owns afterwards; what anything
+-- else still uses stays. Last, because the clean-up runs when a change ends, and here it is run by hand: it then
+-- also clears what the checks above left without an owner.
+create function pg_temp.place_question(q bigint, parent bigint, n int, words text, stem bigint default null,
+                                       follows bigint default null) returns bigint
+language plpgsql as $$
+declare
+  c bigint;
+begin
+  insert into public.component (component_type_id, text)
+    select component_type_id, words from public.component_type where name = 'Question' returning component_id into c;
+  insert into public.question (component_id, question_stem_id) values (c, stem);
+  perform pg_temp.place_again(q, parent, n, c, follows);
+  return c;
+end;
+$$;
+create function pg_temp.place_again(q bigint, parent bigint, n int, c bigint, follows bigint default null) returns void
+language sql as $$
+  insert into public.questionnaire_component (questionnaire_id, component_id, parent_component_id, display_order) values (q, c, parent, n);
+  insert into public.questionnaire_question (questionnaire_id, component_id, parent_question_id, self_contained)
+    values (q, c, follows, follows is null);
+$$;
+create function pg_temp.ask(q bigint, w bigint, c bigint, n text) returns void
+language sql as $$
+  insert into public.wave_question (questionnaire_id, wave_id, component_id, question_number) values (q, w, c, n);
+$$;
+create function pg_temp.answer(q bigint, c bigint, matr text, skip_to bigint default null) returns bigint
+language sql as $$
+  with v as (
+    insert into public.variable (questionnaire_id, component_id, matr_id, display_order) values (q, c, matr, 1) returning variable_key
+  )
+  insert into public.open_ended (variable_key, answer_data_type, skip_to_component_id)
+  select variable_key, 'TEXT', skip_to from v returning variable_key;
+$$;
+create function pg_temp.tidy() returns void
+language plpgsql as $$
+begin
+  set constraints question_left_unasked, component_left_unplaced, question_stem_left_unused immediate;
+  set constraints question_left_unasked, component_left_unplaced, question_stem_left_unused deferred;
+end;
+$$;
+
+do $$
+declare
+  q bigint; other bigint; w1 bigint; w2 bigint; ow bigint;
+  sec bigint; once bigint; twice bigint; parent bigint; follow bigint; parent2 bigint; follow2 bigint;
+  shared bigint; scaled bigint; skipped_to bigint;
+  stem_alone bigint; stem_shared bigint; scale bigint;
+begin
+  insert into public.questionnaire (study_id, respondent_type_id, name, abbreviation)
+    select pg_temp.id('study'), pg_temp.id('respondent_type'), 'ZZ Owned', 'ZZO' returning questionnaire_id into q;
+  insert into public.questionnaire (study_id, respondent_type_id, name, abbreviation)
+    select pg_temp.id('study'), pg_temp.id('respondent_type'), 'ZZ Neighbour', 'ZZN' returning questionnaire_id into other;
+  insert into public.wave (questionnaire_id, name) values (q, 'W1') returning wave_id into w1;
+  insert into public.wave (questionnaire_id, name) values (q, 'W2') returning wave_id into w2;
+  insert into public.wave (questionnaire_id, name) values (other, 'W1') returning wave_id into ow;
+  insert into public.question_stem (text) values ('ZZ alone [subject]?') returning question_stem_id into stem_alone;
+  insert into public.question_stem (text) values ('ZZ shared [subject]?') returning question_stem_id into stem_shared;
+  insert into public.category (mesh_id, term) values ('Z9999999', 'ZZ term');
+  insert into public.measurement_scale (name, abbreviation) values ('ZZ Scale', 'ZZS') returning scale_id into scale;
+
+  insert into public.component (component_type_id, text) values (pg_temp.id('section_type'), 'ZZ Owned section') returning component_id into sec;
+  insert into public.questionnaire_component (questionnaire_id, component_id, display_order) values (q, sec, 1);
+  once       := pg_temp.place_question(q, sec, 1, 'ZZ Asked once?', stem_alone);
+  twice      := pg_temp.place_question(q, sec, 2, 'ZZ Asked twice?', stem_shared);
+  parent     := pg_temp.place_question(q, sec, 3, 'ZZ Parent?');
+  follow     := pg_temp.place_question(q, sec, 4, 'ZZ Follow-up?', null, parent);
+  shared     := pg_temp.place_question(q, sec, 5, 'ZZ Shared?', stem_shared);
+  scaled     := pg_temp.place_question(q, sec, 6, 'ZZ In a scale?');
+  skipped_to := pg_temp.place_question(q, sec, 7, 'ZZ Skipped to?');
+  parent2    := pg_temp.place_question(q, sec, 8, 'ZZ Parent kept?');
+  follow2    := pg_temp.place_question(q, sec, 9, 'ZZ Follow-up kept?', null, parent2);
+  perform pg_temp.place_again(other, null, 1, shared);
+  insert into public.question_category (component_id, mesh_id) values (once, 'Z9999999');
+  insert into public.question_scale (scale_id, component_id, item_number) values (scale, scaled, '1');
+  perform pg_temp.ask(q, w1, once, '1');   perform pg_temp.answer(q, once, 'ZZO1');
+  perform pg_temp.ask(q, w1, twice, '2');  perform pg_temp.ask(q, w2, twice, '1');
+  perform pg_temp.answer(q, twice, 'ZZO2', sec);   -- skips inside its own questionnaire
+  perform pg_temp.ask(q, w2, parent2, '6'); perform pg_temp.ask(q, w2, follow2, '7');
+  perform pg_temp.ask(q, w1, parent, '3'); perform pg_temp.ask(q, w2, follow, '2');
+  perform pg_temp.ask(q, w2, shared, '3'); perform pg_temp.ask(q, w2, scaled, '4'); perform pg_temp.ask(q, w2, skipped_to, '5');
+  perform pg_temp.ask(other, ow, shared, '1');
+  perform pg_temp.answer(other, shared, 'ZZN1', skipped_to);   -- the neighbour skips to a question only q prints
+  perform pg_temp.tidy();
+  assert (select count(*) from public.questionnaire_component where questionnaire_id = q) = 10, 'nothing goes before a delete';
+
+  -- a wave: what it asked goes, and a question asked in no other wave goes with it
+  delete from public.wave where wave_id = w1;
+  assert not exists (select 1 from public.wave_question where wave_id = w1), 'the wave''s questions go with it';
+  perform pg_temp.tidy();
+  assert not exists (select 1 from public.questionnaire_component where questionnaire_id = q and component_id = once), 'a question asked only in it goes';
+  assert not exists (select 1 from public.variable where matr_id = 'ZZO1' and questionnaire_id = q), 'with its variables';
+  assert not exists (select 1 from public.component where component_id = once), 'and its component, printed nowhere else';
+  assert not exists (select 1 from public.question_category where component_id = once), 'with its MeSH tags';
+  assert not exists (select 1 from public.question_stem where question_stem_id = stem_alone), 'and its stem, which no other question has';
+  assert exists (select 1 from public.category where mesh_id = 'Z9999999'), 'the MeSH category itself stays';
+  assert exists (select 1 from public.wave_question where wave_id = w2 and component_id = twice), 'a question another wave asks stays';
+  assert exists (select 1 from public.variable where matr_id = 'ZZO2'), 'with its variables';
+  assert exists (select 1 from public.questionnaire_question where questionnaire_id = q and component_id = parent),
+    'a question a follow-up names stays, though no wave asks it now';
+
+  -- the follow-up goes, and then the question above it, which nothing names any more
+  delete from public.wave_question where wave_id = w2 and component_id = follow;
+  perform pg_temp.tidy();
+  assert not exists (select 1 from public.questionnaire_component where questionnaire_id = q and component_id in (follow, parent)),
+    'a follow-up asked nowhere goes, and so does the question above it';
+
+  -- the questionnaire: its waves and everything placed in it, follow-ups and what they follow too
+  delete from public.questionnaire where questionnaire_id = q;
+  assert not exists (select 1 from public.wave where questionnaire_id = q), 'its waves go with it';
+  assert not exists (select 1 from public.questionnaire_component where questionnaire_id = q)
+     and not exists (select 1 from public.questionnaire_question where questionnaire_id = q)
+     and not exists (select 1 from public.wave_question where questionnaire_id = q)
+     and not exists (select 1 from public.variable where questionnaire_id = q), 'and everything placed in it';
+  perform pg_temp.tidy();
+  assert not exists (select 1 from public.component where component_id in (sec, twice, parent2, follow2)),
+    'components only it printed go, though one of its own variables skipped to the section';
+  assert exists (select 1 from public.component where component_id = shared)
+     and exists (select 1 from public.questionnaire_question where questionnaire_id = other and component_id = shared)
+     and exists (select 1 from public.variable where matr_id = 'ZZN1' and questionnaire_id = other), 'one another questionnaire prints stays, as it was there';
+  assert exists (select 1 from public.question_stem where question_stem_id = stem_shared), 'and so does the stem it has';
+  assert exists (select 1 from public.question_scale where component_id = scaled), 'one a measurement scale lists stays in the scale';
+  assert exists (select 1 from public.component where component_id = skipped_to), 'one another questionnaire skips to stays';
+  assert exists (select 1 from public.measurement_scale where scale_id = scale), 'and the shared lists stay';
+
+  -- a shared row something uses can't be deleted
+  perform pg_temp.expect_error(format('delete from public.component where component_id = %s', shared), 'violates foreign key');
+  perform pg_temp.expect_error(format('delete from public.study where study_id = %s', pg_temp.id('study')), 'violates foreign key');
+end;
+$$;
+
+-- An option set's name is its choices in its order, and there is one set for each combination of choices.
+do $$
+declare
+  never bigint; sometimes bigint; often bigint; always bigint;
+  s1 bigint; s2 bigint;
+begin
+  insert into public.answer_option (standardized_label) values ('zz never') returning answer_option_id into never;
+  insert into public.answer_option (standardized_label) values ('zz sometimes') returning answer_option_id into sometimes;
+  insert into public.answer_option (standardized_label) values ('zz often') returning answer_option_id into often;
+  insert into public.answer_option (standardized_label) values ('zz always') returning answer_option_id into always;
+  insert into public.option_set default values returning option_set_id into s1;
+  insert into public.answer_option_set (option_set_id, answer_option_id, display_order)
+    values (s1, often, 3), (s1, never, 1), (s1, sometimes, 2);
+  set constraints option_set_choices_unique immediate;
+  set constraints option_set_choices_unique deferred;
+  assert (select s.name from public.option_set s where s.option_set_id = s1) = 'zz never / zz sometimes / zz often',
+    'a set''s name is its choices, in its order';
+  assert not exists (select 1 from information_schema.columns where table_name = 'option_set' and column_name = 'name'),
+    'and nobody types it';
+  set local role anon;
+  assert (select public.name(s) from public.option_set s where s.option_set_id = s1) = 'zz never / zz sometimes / zz often',
+    'the dashboard reads it';
+  reset role;
+
+  -- the same choices in another order are the same set
+  begin
+    insert into public.option_set default values returning option_set_id into s2;
+    insert into public.answer_option_set (option_set_id, answer_option_id, display_order)
+      values (s2, often, 1), (s2, sometimes, 2), (s2, never, 3);
+    set constraints option_set_choices_unique immediate;
+    raise exception 'went through';
+  exception when others then
+    assert sqlerrm = 'The option set "zz never / zz sometimes / zz often" already has exactly these choices. A set is its choices, so there is one of each.',
+      'a second set with the same choices is refused: ' || sqlerrm;
+  end;
+  -- one more choice is another set
+  set constraints option_set_choices_unique deferred;
+  insert into public.option_set default values returning option_set_id into s2;
+  insert into public.answer_option_set (option_set_id, answer_option_id, display_order)
+    values (s2, never, 1), (s2, sometimes, 2), (s2, often, 3), (s2, always, 4);
+  set constraints option_set_choices_unique immediate;
+  set constraints option_set_choices_unique deferred;
+  -- a place in the order holds one choice
+  perform pg_temp.expect_error(format('insert into public.answer_option_set (option_set_id, answer_option_id, display_order) values (%s, %s, 1)', s1, always),
+    'answer_option_set_display_order_unique');
 end;
 $$;
 

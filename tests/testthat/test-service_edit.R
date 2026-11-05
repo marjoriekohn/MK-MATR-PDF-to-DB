@@ -171,6 +171,37 @@ test_that("a number, a date and an email are checked", {
   expect_length(edit_service_check(form$fields, form$values)$problems, 0)
 })
 
+test_that("an investigator needs no email, but a study's contact does", {
+  form <- form_for("investigator", "add", investigator__name = "A", investigator__email = "")
+  check <- edit_service_check(form$fields, form$values)
+  expect_length(check$missing, 0)
+  expect_length(check$problems, 0)
+
+  # Jo Park (4) is the Adult Health Study's contact, so can't lose their email
+  form <- form_for("investigator", "update", "4", investigator__email = " ")
+  expect_equal(
+    edit_service_check(form$fields, form$values)$problems$investigator__email,
+    "They're the contact for 1 study, so they need an email."
+  )
+  # Lee Morgan (3) is no one's contact
+  form <- form_for("investigator", "update", "3", investigator__email = "")
+  expect_length(edit_service_check(form$fields, form$values)$problems, 0)
+
+  no_email <- function(snap) {
+    snap$principal_investigator$email[snap$principal_investigator$principal_investigator_id == 3] <- NA
+    snap
+  }
+  snap <- test_snapshot(edit_service_tables(edit_entities$study), no_email)
+  form <- form_for("study", "update", "1", snap = snap, study__contact_principal_investigator_id = "3")
+  expect_equal(
+    edit_service_check(form$fields, form$values)$problems$study__contact_principal_investigator_id,
+    "Lee Morgan has no email, so they can't be a study's contact. Add their email first (Update, then Investigator)."
+  )
+  # with no email they can still lead it
+  form <- form_for("study", "add", snap = snap, study__registry_id = "1", study__name = "New", study__principal_investigator_id = "3")
+  expect_length(edit_service_check(form$fields, form$values)$problems, 0)
+})
+
 test_that("a wave's name must be new for its questionnaire", {
   form <- form_for("wave", "add", wave__questionnaire_id = "1", wave__name = " wave 2 ")
   expect_equal(edit_service_check(form$fields, form$values)$problems$wave__name, "AHP already has a Wave 2. Pick another name.")

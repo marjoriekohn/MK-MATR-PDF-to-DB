@@ -177,13 +177,16 @@ edit_merge_items <- function(snap, from, to) {
       for (j in seq_len(nrow(scale_items))) {
         add("question_scale", edit_row_identifier("question_scale", scale_items[j, ]), "Update", "expected_option_set_id", set, keep)
       }
-      for (choice in members$answer_option_id[members$option_set_id %in% set]) add("answer_option_set", member(set, choice), "Delete", NULL, NA, NA)
-      name <- edit_lookup(snap, "option_set", "option_set_id", set, "name")
-      add("option_set", edit_identifier(list(option_set_id = set)), "Delete", "name", name, NA)
+      for (choice in members$answer_option_id[members$option_set_id %in% set]) {
+        add("answer_option_set", member(set, choice), "Delete", "display_order", edit_set_place(snap, set, choice), NA)
+      }
+      add("option_set", edit_identifier(list(option_set_id = set)), "Delete", NULL, NA, NA)
       next
     }
-    add("answer_option_set", member(set, from), "Delete", NULL, NA, NA)
-    if (!any(members$option_set_id %in% set & members$answer_option_id %in% to)) add("answer_option_set", member(set, to), "Insert", NULL, NA, NA)
+    place <- edit_set_place(snap, set, from)
+    add("answer_option_set", member(set, from), "Delete", "display_order", place, NA)
+    # `to` takes `from`'s place, so the set's name reads as before but for the merged choice
+    if (!any(members$option_set_id %in% set & members$answer_option_id %in% to)) add("answer_option_set", member(set, to), "Insert", "display_order", NA, place)
   }
   # ---- the words: `from`'s, and those merged into it before, are `to`'s now
   merged <- snap$answer_option_alias

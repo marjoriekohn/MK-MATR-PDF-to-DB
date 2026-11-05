@@ -310,8 +310,12 @@ push_start <- function(ids, existing, options) {
       if (length(value) == 1 && !is.na(value)) edit_item(table, identifier, "Insert", column, NA, value)
     })
     rows <- Filter(Negate(is.null), rows)
-    # a row that is only its key still has to be said (a question is only its component)
-    if (length(rows) == 0) rows <- list(edit_item(table, identifier, "Insert", names(key)[1], NA, key[[1]]))
+    # a row that is only its key still has to be said (a question is only its component); one the database
+    # numbers (a new option set) is said with no column at all
+    if (length(rows) == 0) {
+      own <- grepl(paste0("^new:", table, ":"), as.character(key[[1]]))
+      rows <- list(if (own) edit_item(table, identifier, "Insert", NULL, NA, NA) else edit_item(table, identifier, "Insert", names(key)[1], NA, key[[1]]))
+    }
     items <<- c(items, rows)
   }
   # A change to a row that is there: only a reused question's stem (push_link_reused()).
@@ -515,7 +519,7 @@ push_answer_option <- function(push, label, uses = 0L) {
 }
 
 # The id (or the name) of an option set with exactly these choices, in any order: the one that is
-# there, or a new one named after its choices.
+# there, or a new one, its choices in the order read (which is its name: public.name(option_set)).
 push_option_set <- function(push, labels) {
   labels <- unique(push_answer_words(push$options, labels))
   key <- paste(sort(labels), collapse = "\r")
@@ -528,12 +532,12 @@ push_option_set <- function(push, labels) {
   there <- names(keys)[keys == key]
   if (is.null(push$made[[paste0("noted set:", key)]])) { # its name and choices, the first time it is come to
     push$made[[paste0("noted set:", key)]] <- TRUE
+    choices <- paste(labels, collapse = " / ")
     name <- if (length(there) > 0) {
       options$option_sets$name[match(there[1], as.character(options$option_sets$option_set_id))]
     } else {
-      push_option_set_name(labels, c(options$option_sets$name, push$made$set_names))
+      choices
     }
-    choices <- paste(labels, collapse = " / ")
     push$note(
       "option_sets", key, name, if (identical(tolower(trimws(name)), choices)) "" else choices,
       if (length(there) > 0) "Already in the database" else "New", length(there) == 0
@@ -553,11 +557,12 @@ push_option_set <- function(push, labels) {
     return(push$made[[made_key]])
   }
   name <- push$token("option_set")
-  set_name <- push_option_set_name(labels, c(options$option_sets$name, push$made$set_names))
-  push$insert("option_set", list(option_set_id = name), list(name = set_name))
-  push$made$set_names <- c(push$made$set_names, set_name)
-  for (label in labels) {
-    push$insert("answer_option_set", list(answer_option_id = push_answer_option(push, label), option_set_id = name))
+  push$insert("option_set", list(option_set_id = name))
+  for (i in seq_along(labels)) {
+    push$insert(
+      "answer_option_set", list(answer_option_id = push_answer_option(push, labels[i]), option_set_id = name),
+      list(display_order = i)
+    )
   }
   push$made[[made_key]] <- name
   push$summary$option_sets <- push$summary$option_sets + 1L
@@ -611,21 +616,6 @@ push_link_reused <- function(push, block, component) {
   push$update("question", list(component_id = component), "question_stem_id", NA, stem)
   push$summary$linked <- push$summary$linked + 1L
   invisible()
-}
-
-# "Yes / No", "Never / Sometimes / Often", with a number after it if the name is taken. A name is taken
-# whatever its capitals and outer spaces, as the database compares them (option_set_name_unique).
-push_option_set_name <- function(labels, taken) {
-  name <- paste(labels, collapse = " / ")
-  if (nchar(name) > 150) name <- paste0(substr(name, 1, 147), "...")
-  candidate <- name
-  taken <- tolower(trimws(taken))
-  n <- 1
-  while (tolower(trimws(candidate)) %in% taken) {
-    n <- n + 1
-    candidate <- paste0(name, " (", n, ")")
-  }
-  candidate
 }
 
 # For a new wave: which blocks of the draft are blocks the questionnaire already prints. A block is

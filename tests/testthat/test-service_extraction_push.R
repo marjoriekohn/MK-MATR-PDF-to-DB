@@ -128,8 +128,12 @@ test_that("a questionnaire with nothing printed yet gets every block, every ques
   expect_equal(sum(items$entity_name == "wave_question" & items$attribute_name == "question_number"), 2)
   expect_true(all(grepl('"wave_id":41', items$record_identifier[items$entity_name == "wave_question"])))
   expect_equal(sum(items$entity_name == "question"), 2)
-  # the answer choices yes and no make one set, named after them (choices are kept in lower case)
-  expect_true("Insert option_set {\"option_set_id\":\"new:option_set:1\"} name: - -> yes / no" %in% lines)
+  # the answer choices yes and no make one set, in the order read; the database names it by them
+  expect_true("Insert option_set {\"option_set_id\":\"new:option_set:1\"} NA: - -> -" %in% lines)
+  members <- items[items$entity_name == "answer_option_set", ]
+  expect_equal(members$attribute_name, c("display_order", "display_order"))
+  expect_equal(members$new_value, c("1", "2"))
+  expect_equal(built$rows$option_sets$text, "yes / no")
   # blocks are added section first, then what is inside it, numbered from 1 in their section
   orders <- items$new_value[items$entity_name == "questionnaire_component" & items$attribute_name == "display_order"]
   expect_equal(orders, c("1", "1", "2", "3"))
@@ -148,10 +152,8 @@ test_that("an answer choice and a set of choices that are there already are used
   expect_false("answer_option" %in% built$items$entity_name)
   expect_equal(built$items$record_identifier[built$items$entity_name == "response_option"][1], '{"answer_option_id":10,"variable_key":"new:variable:1"}')
 
-  # a different set of the same choices needs its own name if the first is taken
-  expect_equal(push_option_set_name(c("Yes", "No"), "Yes / No"), "Yes / No (2)")
-  expect_equal(push_option_set_name(c("yes", "no"), " Yes / No"), "yes / no (2)")
-  expect_equal(nchar(push_option_set_name(paste("choice", 1:60), character())), 150)
+  # it is listed by the name the database gives it
+  expect_equal(built$rows$option_sets$text, "No / Yes")
 })
 
 test_that("a choice worded the old way, or merged into another, is the one there; the exact words come first", {
@@ -213,7 +215,7 @@ test_that("how many of the wave's respondents gave an answer is added for the ex
   expect_equal(counts$new_value, "120")
   expect_match(counts$record_identifier, '"wave_id":41')
   expect_match(counts$record_identifier, '"variable_key":"new:variable:1"')
-  expect_false(any(items$attribute_name == "printed_label")) # how a choice was printed isn't kept
+  expect_false("printed_label" %in% items$attribute_name) # how a choice was printed isn't kept
 })
 
 test_that("a recorded questionnaire's blocks are found where it prints them, and the rest are added", {

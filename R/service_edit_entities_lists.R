@@ -82,24 +82,28 @@ edit_set_members <- function(snap, set_ids) {
   vapply(set_ids, function(id) edit_several_text(members$answer_option_id[members$option_set_id %in% id]), character(1), USE.NAMES = FALSE)
 }
 
-# A set's choices by name, in the order they were added to the list: "Yes / No".
-edit_set_words <- function(snap, set_ids) {
+# The places in a set's order that choices added to it take: after the ones it keeps, in the order given.
+edit_set_places <- function(snap, set_id, keeping, adding) {
   members <- snap$answer_option_set
-  vapply(set_ids, function(id) {
-    ids <- sort(members$answer_option_id[members$option_set_id %in% id])
-    labels <- edit_lookup(snap, "answer_option", "answer_option_id", ids, "standardized_label")
-    if (length(labels) == 0) "no choices" else paste(labels, collapse = " / ")
-  }, character(1), USE.NAMES = FALSE)
+  kept <- members$display_order[members$option_set_id %in% set_id & members$answer_option_id %in% keeping]
+  max(c(0, kept)) + seq_along(adding)
+}
+
+# The place a choice has in a set's order.
+edit_set_place <- function(snap, set_id, answer_option_id) {
+  members <- snap$answer_option_set
+  members$display_order[members$option_set_id %in% set_id & members$answer_option_id %in% answer_option_id][1]
 }
 
 option_set_entity <- list(
   label = "Option set", noun = "option set", plural = "option sets", article = "an",
   group = "Shared lists", table = "option_set",
   about = paste0(
-    "A named set of answer choices, kept once. A closed-ended variable offers exactly one set's choices, in its ",
-    "own order and with its own codes. An extraction uses the set that has the same choices, or adds one."
+    "A set of answer choices, kept once for each combination of them, and named by them. A closed-ended variable ",
+    "offers exactly one set's choices, in its own order and with its own codes. An extraction uses the set that has ",
+    "the same choices, or adds one."
   ),
-  update_about = "The name can always change. The choices can only change while no variable offers them.",
+  update_about = "The choices can only change while no variable offers them. The name is the choices, so it changes with them.",
   delete_about = paste0(
     "An option set can only be deleted once no variable offers it. Scale items that expected its choices stay in ",
     "their scale, expecting none."
@@ -109,9 +113,10 @@ option_set_entity <- list(
     rows <- snap$option_set
     offered <- count_in(snap$closed_ended$option_set_id, rows$option_set_id)
     expected <- count_in(snap$question_scale$expected_option_set_id, rows$option_set_id)
+    choices <- count_in(snap$answer_option_set$option_set_id, rows$option_set_id)
     edit_cards(
-      key_text(rows$option_set_id), rows$name,
-      subtitle = edit_set_words(snap, rows$option_set_id),
+      key_text(rows$option_set_id), ifelse(is.na(rows$name), "(no choices)", rows$name),
+      subtitle = vapply(choices, function(n) edit_count(n, "choice"), character(1)),
       facts = Map(function(v, e) {
         c(
           if (v > 0) paste("offered by", edit_count(v, "variable")) else "offered by no variables",
@@ -123,31 +128,23 @@ option_set_entity <- list(
   fields = function(snap, mode, row, scope) {
     offered <- if (!is.null(row)) sum(snap$closed_ended$option_set_id %in% row$option_set_id) else 0
     list(
-      edit_field("name", "Name",
-        required = TRUE, placeholder = "e.g. Often / Sometimes / Rarely / Never",
-        problem = function(value, values) {
-          same <- edit_taken(snap, "option_set", "name", value, row)
-          if (has_text(value) && nrow(same) > 0) sprintf("There's already an option set called “%s”.", same$name[1])
-        }
-      ),
       edit_field("answer_option_ids", "Answer choices", "several",
         required = TRUE, short = "choices",
         choices = edit_choices(snap, "answer_option"),
-        hint = "Their order and codes are each variable's own. Missing one? Add it under Answer Choices first.",
+        hint = paste(
+          "The set is named by them. Their order and codes are each variable's own.",
+          "Missing one? Add it under Answer Choices first."
+        ),
         locked = if (offered > 0) {
           sprintf(
-            "%s %s exactly these choices, so they can't change. The name can.",
+            "%s %s exactly these choices, so they can't change.",
             edit_count(offered, "variable"), if (offered == 1) "offers" else "offer"
           )
         },
-        warn = function(value, values) {
-          wanted <- edit_several_text(edit_several_ids(value))
-          sets <- snap$option_set
-          if (!is.null(row)) sets <- sets[sets$option_set_id != row$option_set_id, , drop = FALSE]
-          same <- sets$name[edit_set_members(snap, sets$option_set_id) == wanted]
-          if (length(same) > 0) {
-            sprintf("“%s” already has exactly these choices. An extraction uses the first set it finds with them.", same[1])
-          }
+        # (the database's rule too: option_set_choices_unique)
+        problem = function(value, values) {
+          same <- edit_sets_with(snap, value, row)
+          if (nrow(same) > 0) sprintf("“%s” already has exactly these choices: use that set.", same$name[1])
         }
       )
     )
@@ -155,11 +152,21 @@ option_set_entity <- list(
   initial = function(snap, row, scope) list(answer_option_ids = edit_set_members(snap, row$option_set_id)),
   build = function(mode, snap, row, scope, fields, values) edit_option_set_items(mode, snap, row, fields, values),
   duplicates = function(snap, values) {
-    Filter(Negate(is.null), list(
-      edit_duplicate_rows(snap, "option_set", "name", values$name, "An option set with this name")
-    ))
+    same <- edit_sets_with(snap, values$answer_option_ids)
+    if (nrow(same) > 0) list(list(rows = same, why = "An option set with these choices")) else list()
   }
 )
+
+# The other option sets with exactly these choices (a field's value: ids joined by commas), but `row`.
+edit_sets_with <- function(snap, value, row = NULL) {
+  sets <- snap$option_set
+  if (!is.null(row)) sets <- sets[sets$option_set_id != row$option_set_id, , drop = FALSE]
+  wanted <- edit_several_text(edit_several_ids(value))
+  if (!nzchar(wanted)) {
+    return(sets[0, , drop = FALSE])
+  }
+  sets[edit_set_members(snap, sets$option_set_id) == wanted, , drop = FALSE]
+}
 
 #' The items of adding or changing an option set: its own row, then the answer choices it gains and loses.
 #'
@@ -176,18 +183,21 @@ edit_option_set_items <- function(mode, snap, row, fields, values) {
   if (mode == "add") {
     set <- "new:option_set:1"
     was <- character()
-    items <- list(edit_add_items(entity, snap, own, values))
+    # the database numbers it; there is nothing else to say about it
+    items <- list(edit_item("option_set", edit_identifier(list(option_set_id = set)), "Insert", NULL, NA, NA))
   } else {
     set <- row$option_set_id
     was <- edit_several_ids(edit_set_members(snap, set))
-    items <- list(edit_update_items(entity, snap, row, own, values))
+    items <- list(if (length(own) > 0) edit_update_items(entity, snap, row, own, values))
   }
   now <- if (is.null(choices$locked)) edit_several_ids(values[[choices$id]]) else was
   member <- function(id) edit_identifier(list(answer_option_id = as.numeric(id), option_set_id = set))
+  adding <- setdiff(now, was)
+  places <- edit_set_places(snap, set, intersect(was, now), adding)
   items <- c(
     items,
-    lapply(setdiff(was, now), function(id) edit_item("answer_option_set", member(id), "Delete", NULL, NA, NA)),
-    lapply(setdiff(now, was), function(id) edit_item("answer_option_set", member(id), "Insert", NULL, NA, NA))
+    lapply(setdiff(was, now), function(id) edit_item("answer_option_set", member(id), "Delete", "display_order", edit_set_place(snap, set, id), NA)),
+    Map(function(id, place) edit_item("answer_option_set", member(id), "Insert", "display_order", NA, place), adding, places)
   )
   items <- Filter(Negate(is.null), items)
   if (length(items) == 0) NULL else do.call(rbind, items)

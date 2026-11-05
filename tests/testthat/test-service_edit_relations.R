@@ -61,19 +61,72 @@ test_that("a question's placement and its settings go as one", {
   expect_equal(sort(cascade$removed$wave_question), c("1|1|5", "1|2|5"))
   expect_equal(cascade$removed$variable, "3")
   expect_length(cascade$blocked, 0)
-  # the component itself stays: other questionnaires may print it
-  expect_null(cascade$removed[["component"]])
+  # no other questionnaire prints it, so the component goes too, with its MeSH tag
+  expect_equal(cascade$removed$component, "5")
+  expect_equal(cascade$removed$question, "5")
+  expect_equal(cascade$removed$question_category, "5|D012907")
 })
 
-test_that("deleting a questionnaire takes its waves, blocks and variables, but not the components", {
+test_that("deleting a questionnaire takes its waves, blocks and variables, and the components only it prints", {
   snap <- test_snapshot()
   cascade <- cascade_of(snap, questionnaire = "2")
 
   expect_equal(cascade$removed$wave, "3")
   expect_equal(sort(cascade$removed$questionnaire_component), c("2|10", "2|8", "2|9"))
   expect_equal(cascade$removed$variable, "5")
-  expect_null(cascade$removed[["component"]])
+  # KQP prints the section Mood (10) and question 9 too
+  expect_equal(cascade$removed$component, "8")
+  expect_null(cascade$removed[["question"]])
   expect_length(cascade$blocked, 0)
+})
+
+test_that("a component no questionnaire prints any more stays while a scale lists it or a skip goes to it", {
+  only_kq <- function(snap) {
+    # KQ alone prints question 9 (a scale item) and the section Mood
+    snap$questionnaire_component <- snap$questionnaire_component[snap$questionnaire_component$questionnaire_id != 3, ]
+    snap
+  }
+  snap <- test_snapshot(change = only_kq)
+  cascade <- cascade_of(snap, questionnaire = "2")
+  expect_equal(sort(cascade$removed$component), c("10", "8"))
+
+  # without the scale, question 9 goes too
+  unscaled <- test_snapshot(change = function(snap) {
+    snap <- only_kq(snap)
+    snap$question_scale <- snap$question_scale[0, ]
+    snap
+  })
+  expect_equal(sort(cascade_of(unscaled, questionnaire = "2")$removed$component), c("10", "8", "9"))
+
+  # ... unless a write-in elsewhere skips to it
+  skipped <- test_snapshot(change = function(snap) {
+    snap <- only_kq(snap)
+    snap$question_scale <- snap$question_scale[0, ]
+    snap$open_ended$skip_to_component_id[snap$open_ended$variable_key == 1] <- 9
+    snap
+  })
+  expect_equal(sort(cascade_of(skipped, questionnaire = "2")$removed$component), c("10", "8"))
+})
+
+test_that("a write-in that skips to a component that goes no longer skips there", {
+  snap <- test_snapshot(change = function(snap) {
+    snap$open_ended$skip_to_component_id[snap$open_ended$variable_key == 1] <- 9
+    snap
+  })
+  cascade <- cascade_of(snap, component = "9")
+  cleared <- Filter(function(clear) clear$table == "open_ended", cascade$cleared)
+  expect_equal(cleared[[1]]$keys, "1")
+  expect_equal(cleared[[1]]$columns, "skip_to_component_id")
+})
+
+test_that("a stem goes with the last question that has it", {
+  snap <- test_snapshot(change = function(snap) {
+    snap$question_stem <- data.frame(question_stem_id = 70, text = "How often in the past week did [subject] feel sad?")
+    snap$question$question_stem_id[snap$question$component_id %in% c(7, 9)] <- 70
+    snap
+  })
+  expect_null(cascade_of(snap, component = "9")$removed$question_stem)
+  expect_equal(cascade_of(snap, component = c("7", "9"))$removed$question_stem, "70")
 })
 
 test_that("a wave takes the questions that were asked in nothing else", {
@@ -88,6 +141,25 @@ test_that("a wave takes the questions that were asked in nothing else", {
   expect_equal(only_wave$removed$questionnaire_question, "2|9")
   expect_equal(only_wave$removed$questionnaire_component, "2|9")
   expect_equal(only_wave$removed$variable, "5")
+  expect_null(only_wave$removed$component) # KQP prints it too
+})
+
+test_that("a question no wave asks stays while a follow-up that stays names it", {
+  # in AHP, question 5 follows question 4; here Wave 2 asks only the follow-up
+  snap <- test_snapshot(change = function(snap) {
+    snap$wave_question <- snap$wave_question[!(snap$wave_question$wave_id == 2 & snap$wave_question$component_id == 4), ]
+    snap
+  })
+  cascade <- cascade_of(snap, wave = "1")
+  expect_false("1|4" %in% cascade$removed$questionnaire_question)
+  expect_length(cascade$blocked, 0)
+
+  # and goes once the follow-up goes too
+  both <- test_snapshot(change = function(snap) {
+    snap$wave_question <- snap$wave_question[!(snap$wave_question$wave_id == 2 & snap$wave_question$component_id %in% c(4, 5)), ]
+    snap
+  })
+  expect_true(all(c("1|4", "1|5") %in% cascade_of(both, wave = "1")$removed$questionnaire_question))
 })
 
 test_that("an investigator who leads a study can't be deleted, one who is only a contact can", {
@@ -212,9 +284,9 @@ test_that("the tables to read for a delete include the ones its names come from,
     "component",
     "component_type"
   ) %in% edit_tables_to_read("wave")))
-  # a registry reaches everything below it, though not what hangs off the global question
+  # a registry reaches everything below it, and the components only it prints, so what keeps one of those too
   expect_true(all(c("study", "questionnaire", "wave_question", "variable", "response_option") %in% edit_tables_to_read("registry")))
-  expect_false("question_scale" %in% edit_tables_to_read("registry"))
+  expect_true(all(c("component", "question_scale", "open_ended") %in% edit_tables_to_read("registry")))
 })
 
 test_that("a delete reaches the same rows whether the whole database was read or only the tables its kind reads", {

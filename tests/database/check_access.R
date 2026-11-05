@@ -23,9 +23,10 @@ publishable <- list(url = Sys.getenv("SUPABASE_URL"),
                     key = Sys.getenv("SUPABASE_PUBLISHABLE_KEY"))
 
 # Tables the public dashboard must NOT be able to read:
-# RLS on, no policy, no grant.
+# RLS on, no policy, no grant. (It reads pdf_file, but only the rows of the PDFs waves were
+# extracted from: a policy of its own.)
 private_tables <- c(
-  "staff", "draft", "extracted_draft", "ai_extracted_draft", "pdf_file", "edit_draft",
+  "staff", "draft", "extracted_draft", "ai_extracted_draft", "edit_draft",
   "draft_review_event", "applied_item"
 )
 
@@ -37,7 +38,7 @@ probe_columns <- lapply(database_tables, function(spec) {
        change = if (length(other) > 0) other[1] else spec$key[1])
 })
 other_tables <- list(
-  option_set = list(read = "option_set_id", change = "name"),
+  option_set = list(read = "option_set_id", change = "option_set_id"), # its name is worked out, not stored
   staff = list(read = "staff_id", change = "name"),
   draft = list(read = "draft_id", change = "summary"),
   extracted_draft = list(read = "draft_id", change = "pdf_name"),

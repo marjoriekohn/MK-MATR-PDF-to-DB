@@ -63,8 +63,9 @@ questionnaire_entity <- list(
   ),
   delete_about = paste0(
     "Deleting a questionnaire deletes its waves and everything printed in it: every placement of a ",
-    "component, every question's settings and numbers, and every variable with its choices. The ",
-    "components themselves stay, because other questionnaires may use them."
+    "component, every question's settings and numbers, and every variable with its choices. A component ",
+    "another questionnaire prints stays, and so does one a measurement scale lists or another questionnaire ",
+    "skips to; the rest go too."
   ),
   cards = function(snap, scope) {
     rows <- snap$questionnaire
@@ -170,7 +171,7 @@ wave_entity <- list(
   delete_about = paste0(
     "Deleting a wave deletes its record of which questions were asked and the number each had. A ",
     "question asked in no other wave can't stay in the questionnaire, so it goes too, with its ",
-    "variables."
+    "variables (unless follow-up questions still asked name it as theirs)."
   ),
   cards = function(snap, scope) {
     rows <- snap$wave

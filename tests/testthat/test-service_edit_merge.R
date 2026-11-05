@@ -11,7 +11,7 @@ merge_snap <- function() {
       skip_instruction = c("Go to 5", NA, NA), skip_to_component_id = NA_real_, skip_to_end = FALSE
     ),
     response_option_count = data.frame(wave_id = 40, variable_key = 10, answer_option_id = 1, respondent_count = 7),
-    answer_option_set = data.frame(option_set_id = c(100, 100, 200, 200), answer_option_id = c(1, 3, 2, 3)),
+    answer_option_set = data.frame(option_set_id = c(100, 100, 200, 200), answer_option_id = c(1, 3, 2, 3), display_order = c(1, 2, 1, 2)),
     option_set = data.frame(option_set_id = c(100, 200), name = c("1 to 2 / 3-4", "1-2 / 3-4")),
     closed_ended = data.frame(variable_key = c(10, 11, 12), option_set_id = c(100, 200, 200)),
     question_scale = data.frame(scale_id = 5, component_id = 50, expected_option_set_id = 100, item_number = "1"),
@@ -32,9 +32,9 @@ test_that("merging moves each response option, its counts, the sets and the merg
     # set 100 now has set 200's choices: its variable and scale item use 200, and it goes
     'Update closed_ended {"variable_key":10} option_set_id: 100 -> 200',
     'Update question_scale {"component_id":50,"scale_id":5} expected_option_set_id: 100 -> 200',
-    'Delete answer_option_set {"answer_option_id":1,"option_set_id":100} NA: - -> -',
-    'Delete answer_option_set {"answer_option_id":3,"option_set_id":100} NA: - -> -',
-    'Delete option_set {"option_set_id":100} name: 1 to 2 / 3-4 -> -',
+    'Delete answer_option_set {"answer_option_id":1,"option_set_id":100} display_order: 1 -> -',
+    'Delete answer_option_set {"answer_option_id":3,"option_set_id":100} display_order: 2 -> -',
+    'Delete option_set {"option_set_id":100} NA: - -> -',
     'Update answer_option_alias {"alias":"one to two"} answer_option_id: 1 -> 2',
     'Insert answer_option_alias {"alias":"1 to 2"} answer_option_id: - -> 2',
     'Delete answer_option {"answer_option_id":1} standardized_label: 1 to 2 -> -'
@@ -43,10 +43,11 @@ test_that("merging moves each response option, its counts, the sets and the merg
 
 test_that("a set that stays different gets the other choice in place of the merged one", {
   snap <- merge_snap()
-  snap$answer_option_set <- data.frame(option_set_id = c(100, 200, 200), answer_option_id = c(1, 2, 3))
+  snap$answer_option_set <- data.frame(option_set_id = c(100, 200, 200), answer_option_id = c(1, 2, 3), display_order = c(1, 1, 2))
   lines <- item_lines(edit_merge_items(snap, 1, 2))
-  expect_true('Delete answer_option_set {"answer_option_id":1,"option_set_id":100} NA: - -> -' %in% lines)
-  expect_true('Insert answer_option_set {"answer_option_id":2,"option_set_id":100} NA: - -> -' %in% lines)
+  # in its place, so the set's name reads as before
+  expect_true('Delete answer_option_set {"answer_option_id":1,"option_set_id":100} display_order: 1 -> -' %in% lines)
+  expect_true('Insert answer_option_set {"answer_option_id":2,"option_set_id":100} display_order: - -> 1' %in% lines)
   expect_false(any(grepl("^Delete option_set", lines)))
 })
 

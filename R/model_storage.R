@@ -1,12 +1,14 @@
 # ------ Files kept in Supabase Storage ---------------------------------------------
 # A copy of the site keeps its files on the disk of the server it runs on, and a hosted site loses
 # them when it restarts or is deployed again, and doesn't share them between its servers. So the files
-# a draft needs later (its PDF) are also kept in a private bucket in the project's Storage, which the
-# site's server reads and writes with the secret key (the same `connection` as the database, in the
-# apikey header). Nobody else can read the bucket: it isn't public, and no policy lets anyone in.
-# The bucket is made by docs/sql/1_setup.sql (section 7, "The PDFs' bucket").
+# a draft needs later (its PDF) are also kept in a bucket in the project's Storage, which the site's
+# server writes with the secret key (the same `connection` as the database, in the apikey header).
+# The bucket is public, so the dashboard can link the PDF each wave was extracted from (wave_file names
+# it): anyone can download a file by its address, but only the site's server can add or remove one.
+# A draft's PDF is unlisted (the dashboard only sees wave_file's), not hidden. The bucket is made by
+# docs/sql/1_setup.sql (section 7, "The PDFs' bucket").
 #
-#   curl "$SUPABASE_URL/storage/v1/object/extraction-pdfs/<sha256>.pdf" -H "apikey: $SUPABASE_SECRET_KEY"
+#   curl "$SUPABASE_URL/storage/v1/object/public/extraction-pdfs/<sha256>.pdf"
 
 # The bucket that keeps the PDFs, each named by its SHA-256.
 storage_pdf_bucket <- "extraction-pdfs"

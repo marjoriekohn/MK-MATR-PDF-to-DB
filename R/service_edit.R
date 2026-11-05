@@ -777,12 +777,13 @@ edit_chain_depth <- function(ids, parents, questionnaires) {
 }
 
 # ------ Sentences for the proposal ----------------------------------------------------------------------------------------------
-# The first thing typed that names the row, e.g. its name or wording.
+# The first thing typed that names the row, e.g. its name or wording (or, for an option set, its choices).
 edit_new_title <- function(fields, values) {
-  first_part <- Filter(function(field) field$part_index == 1 && field$type %in% c("text", "textarea"), edit_service_active(fields, values))
+  first_part <- Filter(function(field) field$part_index == 1 && field$type %in% c("text", "textarea", "several"), edit_service_active(fields, values))
   for (field in first_part) {
     value <- trimws(values[[field$id]] %||% "")
     if (nzchar(value)) {
+      if (field$type == "several") value <- edit_display_value(field, value)
       return(shorten(value, 60))
     }
   }

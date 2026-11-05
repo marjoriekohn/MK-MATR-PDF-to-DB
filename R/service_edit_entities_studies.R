@@ -58,7 +58,7 @@ investigator_entity <- list(
     contact <- count_in(snap$study$contact_principal_investigator_id, rows$principal_investigator_id)
     edit_cards(
       key_text(rows$principal_investigator_id), rows$name,
-      subtitle = rows$email,
+      subtitle = ifelse(has_text(rows$email), rows$email, "no email"),
       facts = Map(function(l, c) {
         c(
           if (l > 0) paste("leads", edit_count(l, "study", "studies")),
@@ -69,12 +69,21 @@ investigator_entity <- list(
     )
   },
   fields = function(snap, mode, row, scope) {
+    contact_for <- if (!is.null(row)) sum(snap$study$contact_principal_investigator_id %in% row$principal_investigator_id) else 0
     list(
       edit_field("name", "Name", required = TRUE),
       edit_field("email", "Email",
-        required = TRUE, placeholder = "name@vcu.edu",
+        placeholder = "name@vcu.edu",
+        hint = "Needed only for a study's contact.",
         problem = function(value, values) {
-          if (has_text(value) && !grepl("^[^@[:space:]]+@[^@[:space:]]+\\.[^@[:space:]]+$", trimws(value))) {
+          if (!has_text(value)) {
+            # (the database's rule too: contact_has_email)
+            if (contact_for > 0) {
+              return(sprintf("They're the contact for %s, so they need an email.", edit_count(contact_for, "study", "studies")))
+            }
+            return(NULL)
+          }
+          if (!grepl("^[^@[:space:]]+@[^@[:space:]]+\\.[^@[:space:]]+$", trimws(value))) {
             "Type a full email address, like name@vcu.edu."
           }
         }
@@ -128,7 +137,18 @@ study_entity <- list(
       ),
       edit_field("contact_principal_investigator_id", "Contact investigator", "select",
         choices = investigators,
-        hint = "Who to contact about this study."
+        hint = "Who to contact about this study. They need an email.",
+        problem = function(value, values) {
+          people <- snap$principal_investigator
+          person <- people[key_text(people$principal_investigator_id) %in% value, , drop = FALSE]
+          # (the database's rule too: contact_has_email)
+          if (nrow(person) == 1 && !has_text(person$email)) {
+            sprintf(
+              "%s has no email, so they can't be a study's contact. Add their email first (Update, then Investigator).",
+              person$name
+            )
+          }
+        }
       ),
       edit_field("name", "Name",
         required = TRUE, placeholder = "e.g. Adult Health Study",

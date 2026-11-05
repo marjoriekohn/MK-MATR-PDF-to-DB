@@ -13,6 +13,9 @@
 #   date    a day, as YYYY-MM-DD
 #   flag    TRUE or FALSE
 #
+# `derived` lists values the database works out when a row is read (an option set's name, from its
+# choices): they are read like columns, but never written.
+#
 # docs/sql/1_setup.sql builds the tables, and docs/database_tables.md lists
 # their columns as the live database describes them.
 
@@ -117,11 +120,12 @@ database_tables <- list(
   ),
   option_set = list(
     key = "option_set_id", order_by = "name",
-    columns = c(option_set_id = "id", name = "text")
+    columns = c(option_set_id = "id"),
+    derived = c(name = "text") # its choices in their order (public.name(option_set))
   ),
   answer_option_set = list(
-    key = c("option_set_id", "answer_option_id"), order_by = c("option_set_id", "answer_option_id"),
-    columns = c(option_set_id = "id", answer_option_id = "id")
+    key = c("option_set_id", "answer_option_id"), order_by = c("option_set_id", "display_order"),
+    columns = c(option_set_id = "id", answer_option_id = "id", display_order = "number")
   ),
   measurement_scale = list(
     key = "scale_id", order_by = "name",
@@ -147,7 +151,7 @@ database_tables <- list(
   ),
   open_ended = list(
     key = "variable_key", order_by = "variable_key",
-    columns = c(variable_key = "id", answer_data_type = "text")
+    columns = c(variable_key = "id", answer_data_type = "text", skip_to_component_id = "id")
   ),
   closed_ended = list(
     key = "variable_key", order_by = "variable_key",
@@ -188,6 +192,9 @@ database_tables <- list(
   )
 )
 
+# What is read of a table: its columns, then what the database works out.
+table_read_columns <- function(spec) c(spec$columns, spec$derived)
+
 #' Read a whole table as the edit pages see it.
 #'
 #' Every row of `table`, with every column listed in `database_tables`, as the kinds
@@ -201,9 +208,10 @@ database_tables <- list(
 table_model_get <- function(connection, table, filters = list()) {
   spec <- database_tables[[table]]
   if (is.null(spec)) stop("The edit pages don't know a table called ", table, ".", call. = FALSE)
-  rows <- database_model_get(connection, table, names(spec$columns), order_by = spec$order_by, filters = filters)
-  for (column in names(spec$columns)) {
-    rows[[column]] <- switch(spec$columns[[column]],
+  kinds <- table_read_columns(spec)
+  rows <- database_model_get(connection, table, names(kinds), order_by = spec$order_by, filters = filters)
+  for (column in names(kinds)) {
+    rows[[column]] <- switch(kinds[[column]],
       id = ,
       number = as.numeric(rows[[column]]),
       flag = as.logical(rows[[column]]),
