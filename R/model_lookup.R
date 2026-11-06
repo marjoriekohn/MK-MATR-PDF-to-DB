@@ -20,6 +20,14 @@ lookup_model_get_subjects <- function(connection) {
   database_model_get(connection, "subject", c("subject_id", "name"), order_by = "subject_id")
 }
 
+#' When a variable can be about: "in your lifetime", "in the past 12 months" and so on.
+#'
+#' @param connection The MATR database, `list(url, key)`; see `model_database.R`.
+#' @return A data frame with `time_frame_id` and `name`.
+lookup_model_get_time_frames <- function(connection) {
+  database_model_get(connection, "time_frame", c("time_frame_id", "name"), order_by = "name")
+}
+
 #' The standard answer choices.
 #'
 #' @param connection The MATR database, `list(url, key)`; see `model_database.R`.

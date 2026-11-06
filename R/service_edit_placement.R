@@ -1,16 +1,14 @@
 # ------ Components inside one questionnaire ---------------------------------------------
-# A questionnaire doesn't hold components, it holds placements of them: a row
-# of questionnaire_component says which component, under which section or question
-# group, in what position. Questions have a second row (questionnaire_question) for
-# what's true of them in this questionnaire, and a row per wave that asked them
-# (wave_question) with their place among the wave's questions and the number they
-# were printed with. Changing any of these changes that one questionnaire; the
-# component itself, and the other questionnaires placing it, are untouched.
+# A questionnaire doesn't hold components, it holds placements of them: a row of questionnaire_component
+# (placement_id) says which component, under which section or group (another placement), in what position. A
+# questionnaire can place a component more than once. Questions have a second row (questionnaire_question) for
+# what's true of them at that place, and a row per wave that asked them (wave_question) with their place among the
+# wave's questions and the number they were printed with. Changing any of these changes that one placement; the
+# component itself, and the other placements of it, are untouched.
 #
-# The exception is the component's words or kind. Those belong to the
-# component, so changing them for one questionnaire means a new component with
-# the new words, which this questionnaire then uses instead (see
-# edit_service_swap_items()).
+# The exception is the component's words or kind. Those belong to the component, kept once for each kind and
+# words, so changing them at one placement points that placement at the component with the new words (the one
+# there, or a new one): see edit_service_swap_items().
 
 #' Whether two parents are the same.
 #'
@@ -47,13 +45,13 @@ edit_service_placements <- function(snap, questionnaire_id) {
 edit_service_outline <- function(placed) {
   ordered <- list()
   walk <- function(parent, depth) {
-    siblings <- placed[same_parent(placed$parent_component_id, parent), , drop = FALSE]
+    siblings <- placed[same_parent(placed$parent_placement_id, parent), , drop = FALSE]
     siblings <- siblings[order(siblings$display_order), , drop = FALSE]
     for (i in seq_len(nrow(siblings))) {
       row <- siblings[i, , drop = FALSE]
       row$depth <- depth
       ordered[[length(ordered) + 1]] <<- row
-      walk(row$component_id, depth + 1)
+      walk(row$placement_id, depth + 1)
     }
   }
   walk(NA_real_, 0)
@@ -63,50 +61,47 @@ edit_service_outline <- function(placed) {
   do.call(rbind, ordered)
 }
 
-# Everything under a component, however deep: the rows of `rows` whose `parent`
-# column points at it, and the rows that point at those, and so on. `parent` is
-# "parent_component_id" for the blocks in a questionnaire, and "parent_question_id"
-# for the questions that follow up on a question.
-edit_service_descendants <- function(rows, component_id, parent = "parent_component_id") {
+# Everything under a placement, however deep: the rows of `rows` whose `parent` column points at it, and the rows
+# that point at those, and so on. `parent` is "parent_placement_id" for the blocks in a questionnaire, and
+# "parent_question_placement_id" for the questions that follow up on a question.
+edit_service_descendants <- function(rows, placement_id, parent = "parent_placement_id") {
   found <- numeric()
-  frontier <- component_id
+  frontier <- placement_id
   while (length(frontier) > 0) {
-    inside <- rows$component_id[rows[[parent]] %in% frontier]
+    inside <- rows$placement_id[rows[[parent]] %in% frontier]
     frontier <- setdiff(inside, found)
     found <- c(found, frontier)
   }
   found
 }
 
-# Where a placement goes: a new parent (NA for the top level) and a position
-# among that parent's contents, counting from 1. Returns what changes: the
-# placement, and every other one whose position moves up or down to make room
-# or close the gap, as (component_id, old_parent, new_parent, old_order,
-# new_order).
-edit_service_move <- function(placed, component_id, parent, position) {
-  moved <- placed[placed$component_id == component_id, , drop = FALSE]
-  others <- placed[placed$component_id != component_id, , drop = FALSE]
-  in_new_home <- others[same_parent(others$parent_component_id, parent), , drop = FALSE]
+# Where a placement goes: a new parent placement (NA for the top level) and a position among that parent's
+# contents, counting from 1. Returns what changes: the placement, and every other one whose position moves up or
+# down to make room or close the gap, as (placement_id, old_parent, new_parent, old_order, new_order).
+edit_service_move <- function(placed, placement_id, parent, position) {
+  moved <- placed[placed$placement_id == placement_id, , drop = FALSE]
+  others <- placed[placed$placement_id != placement_id, , drop = FALSE]
+  in_new_home <- others[same_parent(others$parent_placement_id, parent), , drop = FALSE]
   in_new_home <- in_new_home[order(in_new_home$display_order), , drop = FALSE]
   position <- max(1, min(position, nrow(in_new_home) + 1))
-  new_order <- append(in_new_home$component_id, component_id, after = position - 1)
+  new_order <- append(in_new_home$placement_id, placement_id, after = position - 1)
 
-  changes <- data.frame(component_id = new_order, new_parent = parent, new_order = seq_along(new_order))
-  if (!same_parent(moved$parent_component_id, parent)) {
+  changes <- data.frame(placement_id = new_order, new_parent = parent, new_order = seq_along(new_order))
+  if (!same_parent(moved$parent_placement_id, parent)) {
     # the old home closes up
-    in_old_home <- others[same_parent(others$parent_component_id, moved$parent_component_id), , drop = FALSE]
+    in_old_home <- others[same_parent(others$parent_placement_id, moved$parent_placement_id), , drop = FALSE]
     in_old_home <- in_old_home[order(in_old_home$display_order), , drop = FALSE]
     changes <- rbind(changes, data.frame(
-      component_id = in_old_home$component_id, new_parent = in_old_home$parent_component_id,
+      placement_id = in_old_home$placement_id, new_parent = in_old_home$parent_placement_id,
       new_order = seq_len(nrow(in_old_home))
     ))
   }
-  now <- placed[match(changes$component_id, placed$component_id), ]
-  changes$old_parent <- now$parent_component_id
+  now <- placed[match(changes$placement_id, placed$placement_id), ]
+  changes$old_parent <- now$parent_placement_id
   changes$old_order <- now$display_order
   changes <- changes[!same_parent(changes$old_parent, changes$new_parent) | changes$old_order != changes$new_order, ]
   rownames(changes) <- NULL
-  changes[c("component_id", "old_parent", "new_parent", "old_order", "new_order")]
+  changes[c("placement_id", "old_parent", "new_parent", "old_order", "new_order")]
 }
 
 #' How many placements are under a parent.
@@ -115,10 +110,10 @@ edit_service_move <- function(placed, component_id, parent, position) {
 #' it can take positions 1 to `n + 1`.
 #'
 #' @param placed One questionnaire's placements.
-#' @param parent The parent's component id; `NA` for the top level.
+#' @param parent The parent's placement id; `NA` for the top level.
 #' @return `n`.
 edit_service_room <- function(placed, parent) {
-  sum(same_parent(placed$parent_component_id, parent))
+  sum(same_parent(placed$parent_placement_id, parent))
 }
 
 # ------ Parents --------------------------------------------------------------------------
@@ -129,26 +124,29 @@ edit_service_room <- function(placed, parent) {
 #'
 #' @param snap The tables the kind needs, as `edit_service_load()` reads them: a list of data frames named after the tables.
 #' @param placed One questionnaire's placements.
-#' @param component_id The placement being moved, if any.
-#' @return A named character vector for a drop-down; see `edit_choices()`.
-edit_service_parent_choices <- function(snap, placed, component_id = NULL) {
+#' @param placement_id The placement being moved, if any.
+#' @return A named character vector for a drop-down, of placement ids; see `edit_choices()`.
+edit_service_parent_choices <- function(snap, placed, placement_id = NULL) {
   sections <- placed[is_container(placed$type), , drop = FALSE]
-  barred <- if (!is.null(component_id)) c(component_id, edit_service_descendants(placed, component_id))
-  sections <- sections[!sections$component_id %in% barred, , drop = FALSE]
+  barred <- if (!is.null(placement_id)) c(placement_id, edit_service_descendants(placed, placement_id))
+  sections <- sections[!sections$placement_id %in% barred, , drop = FALSE]
   outline <- edit_service_outline(placed)
-  sections <- sections[order(match(sections$component_id, outline$component_id)), , drop = FALSE]
-  depth <- outline$depth[match(sections$component_id, outline$component_id)]
+  sections <- sections[order(match(sections$placement_id, outline$placement_id)), , drop = FALSE]
+  depth <- outline$depth[match(sections$placement_id, outline$placement_id)]
   # a group has no words: it is named by the words of the first block inside it
-  first_inside <- vapply(sections$component_id, function(id) {
-    inside <- placed[placed$parent_component_id %in% id, , drop = FALSE]
+  first_inside <- vapply(sections$placement_id, function(id) {
+    inside <- placed[placed$parent_placement_id %in% id, , drop = FALSE]
     if (nrow(inside) == 0) "empty" else inside$text[which.min(inside$display_order)]
   }, character(1))
   words <- ifelse(
     sections$type == "Group", paste0("(group) ", first_inside),
-    ifelse(is.na(sections$text) | !nzchar(sections$text), "(untitled section)", sections$text)
+    ifelse(
+      sections$type == "Grid", paste0("(grid) ", sections$text),
+      ifelse(is.na(sections$text) | !nzchar(sections$text), "(untitled section)", sections$text)
+    )
   )
-  c("Top level (not inside a section or group)" = "", stats::setNames(
-    key_text(sections$component_id), paste0(strrep("— ", depth), words)
+  c("Top level (not inside a section, grid or group)" = "", stats::setNames(
+    key_text(sections$placement_id), paste0(strrep("— ", depth), words)
   ))
 }
 
@@ -158,31 +156,32 @@ edit_service_parent_choices <- function(snap, placed, component_id = NULL) {
 #'
 #' @param snap The tables the kind needs, as `edit_service_load()` reads them: a list of data frames named after the tables.
 #' @param questionnaire_id The questionnaire's id.
-#' @param component_id The question being edited, if any.
-#' @return A named character vector for a drop-down; see `edit_choices()`.
-edit_service_parent_question_choices <- function(snap, questionnaire_id, component_id = NULL) {
+#' @param placement_id The placement of the question being edited, if any.
+#' @return A named character vector for a drop-down, of placement ids; see `edit_choices()`.
+edit_service_parent_question_choices <- function(snap, questionnaire_id, placement_id = NULL) {
   placed <- edit_service_placements(snap, questionnaire_id)
   outline <- edit_service_outline(placed)
   questions <- snap$questionnaire_question[snap$questionnaire_question$questionnaire_id == questionnaire_id, , drop = FALSE]
-  asked <- outline[outline$component_id %in% questions$component_id, , drop = FALSE]
-  if (!is.null(component_id) && component_id %in% asked$component_id) {
-    asked <- asked[seq_len(match(component_id, asked$component_id) - 1), , drop = FALSE]
+  asked <- outline[outline$placement_id %in% questions$placement_id, , drop = FALSE]
+  if (!is.null(placement_id) && placement_id %in% asked$placement_id) {
+    asked <- asked[seq_len(match(placement_id, asked$placement_id) - 1), , drop = FALSE]
   }
-  followers <- if (!is.null(component_id)) edit_service_descendants(questions, component_id, parent = "parent_question_id")
-  asked <- asked[!asked$component_id %in% followers, , drop = FALSE]
-  stats::setNames(key_text(asked$component_id), asked$text)
+  followers <- if (!is.null(placement_id)) edit_service_descendants(questions, placement_id, parent = "parent_question_placement_id")
+  asked <- asked[!asked$placement_id %in% followers, , drop = FALSE]
+  stats::setNames(key_text(asked$placement_id), asked$text)
 }
 
 # ------ Where a component is used ----------------------------------------------------------
-#' Every questionnaire that places a component.
+#' Every place a questionnaire prints a component (a questionnaire can print it more than once).
 #'
-#' With where, the waves that asked it (when it is a question) and its variables.
+#' With where, the waves that asked it there (when it is a question) and its variables there.
 #'
 #' @param snap The tables the kind needs, as `edit_service_load()` reads them: a list of data frames named after the tables.
 #' @param component_id The component's id.
-#' @return A list with one list per questionnaire, by name; empty if none. Each has `questionnaire_id`,
-#'   `component_id`, `questionnaire` (its name), `section`, `position`, `numbers` (the number it was asked as, named by wave), `waves`,
-#'   `variables` (how many) and `boxes` (each variable: `matr_id`, `tags` and `coding`, see `edit_use_boxes()`).
+#' @return A list with one list per placement, by questionnaire name and position; empty if none. Each has
+#'   `questionnaire_id`, `placement_id`, `component_id`, `questionnaire` (its name), `section`, `position`, `numbers`
+#'   (the number it was asked as, named by wave), `waves`, `variables` (how many) and `boxes` (each variable:
+#'   `matr_id`, `tags` and `coding`, see `edit_use_boxes()`).
 edit_service_uses <- function(snap, component_id) {
   placed <- snap$questionnaire_component
   placed <- placed[placed$component_id == component_id, , drop = FALSE]
@@ -192,15 +191,15 @@ edit_service_uses <- function(snap, component_id) {
   uses <- lapply(seq_len(nrow(placed)), function(i) {
     row <- placed[i, ]
     q_id <- row$questionnaire_id
-    section <- edit_lookup(snap, "component", "component_id", row$parent_component_id, "text")
-    waves <- edit_placed_rows(snap, "wave_question", q_id, component_id)
+    section <- edit_lookup(snap, "component", "component_id", edit_placement_component(snap, row$parent_placement_id), "text")
+    waves <- edit_placed_rows(snap, "wave_question", row$placement_id)
     waves <- waves[order(edit_lookup(snap, "wave", "wave_id", waves$wave_id, "administered_date"), waves$wave_id), , drop = FALSE]
     wave_names <- edit_lookup(snap, "wave", "wave_id", waves$wave_id, "name")
-    boxes <- snap$variable[snap$variable$questionnaire_id == q_id & snap$variable$component_id == component_id, , drop = FALSE]
+    boxes <- snap$variable[snap$variable$placement_id %in% row$placement_id, , drop = FALSE]
     list(
-      questionnaire_id = q_id, component_id = component_id,
+      questionnaire_id = q_id, placement_id = row$placement_id, component_id = component_id,
       questionnaire = edit_label(snap, "questionnaire", snap$questionnaire[snap$questionnaire$questionnaire_id == q_id, ]),
-      section = if (is.na(row$parent_component_id)) NA_character_ else section,
+      section = if (is.na(row$parent_placement_id)) NA_character_ else section,
       position = row$display_order,
       numbers = stats::setNames(edit_called_number(waves), wave_names),
       waves = wave_names,
@@ -208,7 +207,10 @@ edit_service_uses <- function(snap, component_id) {
       boxes = edit_use_boxes(snap, boxes)
     )
   })
-  uses[order(tolower(vapply(uses, function(use) use$questionnaire, character(1))), method = "radix")]
+  uses[order(
+    tolower(vapply(uses, function(use) use$questionnaire, character(1))), vapply(uses, function(use) as.numeric(use$position), numeric(1)),
+    method = "radix"
+  )]
 }
 
 #' A question's variables in one questionnaire, as its card there shows them.
@@ -238,6 +240,16 @@ edit_use_boxes <- function(snap, boxes) {
   })
 }
 
+#' The component each placement prints.
+#'
+#' @param snap The tables the kind needs, as `edit_service_load()` reads them: a list of data frames named after the tables.
+#' @param placement_ids Placement ids (NA for none).
+#' @return The component ids, NA where there is no placement.
+edit_placement_component <- function(snap, placement_ids) {
+  placed <- snap$questionnaire_component
+  placed$component_id[match(placement_ids, placed$placement_id)]
+}
+
 #' How many questionnaires print each component.
 #'
 #' @param snap The tables the kind needs, as `edit_service_load()` reads them: a list of data frames named after the tables.
@@ -248,107 +260,45 @@ edit_service_questionnaire_count <- function(snap, component_ids) {
   vapply(component_ids, function(id) length(unique(placed$questionnaire_id[placed$component_id == id])), numeric(1))
 }
 
-# ------ Giving one questionnaire a different component -------------------------------------
-# Rows are written as items (edit_item()), in the order they must be applied:
-# the new component and what it needs exist before anything points at it, and
-# the old placement goes last. The apply step runs them in one transaction with
-# the display-order constraints deferred, since the new placement briefly
-# shares its position with the old.
+# ------ Giving one placement other words -------------------------------------------------------------
+# A component is a wording, kept once for each kind and words. New words (or a new kind) at one placement point that
+# placement at the component with them: the one the database has, or a new one, which takes the old one's stem (the
+# questions it is linked with stay linked) and MeSH categories. What the placement holds, its question settings
+# (which follow it in the database), its wave numbers and its variables are the placement's, so they stay as they
+# are. Measurement scale memberships aren't copied: each item number in a scale belongs to one question, so the
+# scale keeps pointing at the old wording. The old component goes when nothing places it any more.
 #
-# `new` is list(component_type_id, text). The new component takes over this
-# questionnaire's placement: where it is, `where` (list(parent, display_order);
-# the old placement's if left out), what's inside it and, for a question, its
-# stem (the questions it is linked with stay linked), its settings, its wave numbers, its variables and its MeSH
-# categories.
-# `between` is items that change the new rows (named by the new component's
-# `new:component:1`), written before the old placement goes. Measurement scale memberships aren't copied: each item number in
-# a scale belongs to one question, so the scale keeps pointing at the old
-# wording.
-edit_service_swap_items <- function(snap, questionnaire_id, component_id, new, where = NULL, is_question = FALSE,
-                                    between = NULL) {
-  q <- questionnaire_id
-  c_old <- component_id
-  placement <- snap$questionnaire_component[
-    snap$questionnaire_component$questionnaire_id == q & snap$questionnaire_component$component_id == c_old,
-  ]
-  token <- "new:component:1"
+# `new` is list(component_type_id, text). `between` is items that change the placement's other rows, written after
+# it points at the new words.
+edit_service_swap_items <- function(snap, placement_id, new, is_question = FALSE, between = NULL) {
+  placement <- snap$questionnaire_component[snap$questionnaire_component$placement_id == placement_id, ]
+  c_old <- placement$component_id
   items <- list()
   add <- function(...) items[[length(items) + 1]] <<- edit_item(...)
 
-  add("component", edit_identifier(list(component_id = token)), "Insert", "component_type_id", NA, new$component_type_id)
-  if (!is.na(new$text)) add("component", edit_identifier(list(component_id = token)), "Insert", "text", NA, new$text)
-  if (is_question) {
-    add("question", edit_identifier(list(component_id = token)), "Insert", "component_id", NA, token)
-    stem <- snap$question$question_stem_id[match(c_old, snap$question$component_id)]
-    if (length(stem) == 1 && !is.na(stem)) add("question", edit_identifier(list(component_id = token)), "Insert", "question_stem_id", NA, stem)
-  }
-
-  where <- where %||% list(parent = placement$parent_component_id, display_order = placement$display_order)
-  new_key <- edit_identifier(list(component_id = token, questionnaire_id = q))
-  if (!is.na(where$parent)) add("questionnaire_component", new_key, "Insert", "parent_component_id", NA, where$parent)
-  add("questionnaire_component", new_key, "Insert", "display_order", NA, where$display_order)
-
-  inside <- snap$questionnaire_component[
-    snap$questionnaire_component$questionnaire_id == q & snap$questionnaire_component$parent_component_id %in% c_old,
+  type <- if (is.na(new$component_type_id)) edit_lookup(snap, "component", "component_id", c_old, "component_type_id") else new$component_type_id
+  same <- snap$component$component_id[
+    snap$component$component_type_id %in% type & push_words(snap$component$text) == push_words(new$text) &
+      snap$component$component_id != c_old
   ]
-  for (child in inside$component_id) {
-    add(
-      "questionnaire_component", edit_identifier(list(component_id = child, questionnaire_id = q)),
-      "Update", "parent_component_id", c_old, token
-    )
-  }
-
-  if (is_question) items <- c(items, edit_swap_question_items(snap, q, c_old, token))
-  if (!is.null(between)) items <- c(items, list(between))
-
-  old_key <- edit_identifier(list(component_id = c_old, questionnaire_id = q))
-  if (is_question) {
-    old_question <- edit_placed_rows(snap, "questionnaire_question", q, c_old)
-    for (column in c("parent_question_id", "self_contained", "condition")) {
-      add("questionnaire_question", old_key, "Delete", column, old_question[[column]], NA)
+  target <- if (length(same) > 0) min(same) else "new:component:1"
+  if (identical(target, "new:component:1")) {
+    identifier <- edit_identifier(list(component_id = target))
+    add("component", identifier, "Insert", "component_type_id", NA, type)
+    if (!is.na(new$text)) add("component", identifier, "Insert", "text", NA, new$text)
+    if (is_question) {
+      add("question", identifier, "Insert", "component_id", NA, target)
+      stem <- snap$question$question_stem_id[match(c_old, snap$question$component_id)]
+      if (length(stem) == 1 && !is.na(stem)) add("question", identifier, "Insert", "question_stem_id", NA, stem)
+      tags <- snap$question_category[snap$question_category$component_id %in% c_old, , drop = FALSE]
+      for (mesh_id in tags$mesh_id) {
+        add("question_category", edit_identifier(list(component_id = target, mesh_id = mesh_id)), "Insert", "mesh_id", NA, mesh_id)
+      }
     }
   }
-  add("questionnaire_component", old_key, "Delete", "parent_component_id", placement$parent_component_id, NA)
-  add("questionnaire_component", old_key, "Delete", "display_order", placement$display_order, NA)
+  add("questionnaire_component", edit_identifier(list(placement_id = placement_id)), "Update", "component_id", c_old, target)
+  if (!is.null(between)) items <- c(items, list(between))
   do.call(rbind, items)
-}
-
-# The rows a question brings with it when its component changes.
-edit_swap_question_items <- function(snap, q, c_old, token) {
-  items <- list()
-  add <- function(...) items[[length(items) + 1]] <<- edit_item(...)
-  new_key <- edit_identifier(list(component_id = token, questionnaire_id = q))
-
-  settings <- edit_placed_rows(snap, "questionnaire_question", q, c_old)
-  for (column in c("parent_question_id", "self_contained", "condition")) {
-    if (!is.na(settings[[column]])) add("questionnaire_question", new_key, "Insert", column, NA, settings[[column]])
-  }
-
-  followers <- snap$questionnaire_question[
-    snap$questionnaire_question$questionnaire_id == q & snap$questionnaire_question$parent_question_id %in% c_old,
-  ]
-  for (follower in followers$component_id) {
-    add(
-      "questionnaire_question", edit_identifier(list(component_id = follower, questionnaire_id = q)),
-      "Update", "parent_question_id", c_old, token
-    )
-  }
-  asked <- edit_placed_rows(snap, "wave_question", q, c_old)
-  for (i in seq_len(nrow(asked))) {
-    add(
-      "wave_question", edit_identifier(list(component_id = c_old, questionnaire_id = q, wave_id = asked$wave_id[i])),
-      "Update", "component_id", c_old, token
-    )
-  }
-  boxes <- snap$variable[snap$variable$questionnaire_id == q & snap$variable$component_id == c_old, ]
-  for (key in boxes$variable_key) {
-    add("variable", edit_identifier(list(variable_key = key)), "Update", "component_id", c_old, token)
-  }
-  tags <- snap$question_category[snap$question_category$component_id == c_old, ]
-  for (mesh_id in tags$mesh_id) {
-    add("question_category", edit_identifier(list(component_id = token, mesh_id = mesh_id)), "Insert", "mesh_id", NA, mesh_id)
-  }
-  if (length(items) == 0) NULL else items
 }
 
 # ------ Writing a change to a block in one questionnaire -------------------------------------------
@@ -376,7 +326,7 @@ edit_placement_initial <- function(snap, row, scope) {
 #' @param scope The questionnaire's key.
 #' @return A named list by field name.
 edit_question_initial <- function(snap, row, scope) {
-  asked <- edit_placed_rows(snap, "wave_question", row$questionnaire_id, row$component_id)
+  asked <- edit_placed_rows(snap, "wave_question", row$placement_id)
   numbers <- stats::setNames(as.list(asked$printed_number), paste0("qn_", key_text(asked$wave_id)))
   c(list(text = edit_lookup(snap, "component", "component_id", row$component_id, "text")), numbers)
 }
@@ -421,7 +371,7 @@ edit_placement_items <- function(mode, snap, row, scope, fields, values) {
   items <- list()
   add <- function(items_to_add) if (!is.null(items_to_add)) items[[length(items) + 1]] <<- items_to_add
   value_of <- function(name) values[[paste0(prefix, "__", name)]]
-  parent <- if (nzchar(value_of("parent_component_id") %||% "")) as.numeric(value_of("parent_component_id")) else NA_real_
+  parent <- if (nzchar(value_of("parent_placement_id") %||% "")) as.numeric(value_of("parent_placement_id")) else NA_real_
 
   if (mode == "add") {
     return(edit_placement_add_items(snap, q, placed, fields, values, parent))
@@ -429,45 +379,28 @@ edit_placement_items <- function(mode, snap, row, scope, fields, values) {
 
   initial <- edit_service_initial(edit_entities[[prefix]], fields, snap, "update", row, scope)
   changes <- edit_service_changes(fields, initial, values)
-  c_old <- row$component_id
   position <- edit_whole_number(value_of("display_order"))
-  moved <- any(c("parent_component_id", "display_order") %in% changes$name)
-  moves <- if (moved) edit_service_move(placed, c_old, parent, position) else NULL
+  moved <- any(c("parent_placement_id", "display_order") %in% changes$name)
+  moves <- if (moved) edit_service_move(placed, row$placement_id, parent, position) else NULL
   new_component <- edit_new_component(changes, fields, values, prefix = prefix)
 
-  here <- if (moved) moves[moves$component_id == c_old, ] else NULL
-  where <- list(parent = parent, display_order = if (!is.null(here) && nrow(here) == 1) here$new_order else row$display_order)
-  if (!moved) where <- NULL
-
-  # a move puts the questions in a new order, so each wave numbers them again (before a swap renames them)
-  renumbered <- if (moved) edit_renumber_waves(snap, q, edit_moved_placements(placed, moves))
-  if (is.null(new_component)) {
-    # the same component, somewhere else
-    if (moved) {
-      for (i in seq_len(nrow(moves))) add(edit_move_items(q, moves[i, ]))
-    }
-    add(renumbered)
-  } else {
-    if (moved) for (i in seq_len(nrow(moves))) if (moves$component_id[i] != c_old) add(edit_move_items(q, moves[i, ]))
-    add(renumbered)
-    add(edit_service_swap_items(snap, q, c_old, new_component, where, is_question = edit_is_question(snap, c_old)))
+  if (moved) {
+    for (i in seq_len(nrow(moves))) add(edit_move_items(moves[i, ]))
+    # a move puts the questions in a new order, so each wave numbers them again
+    add(edit_renumber_waves(snap, q, edit_moved_placements(placed, moves)))
+  }
+  if (!is.null(new_component)) {
+    add(edit_service_swap_items(snap, row$placement_id, new_component, is_question = edit_is_question(snap, row$component_id)))
   }
   if (length(items) == 0) NULL else do.call(rbind, items)
 }
 
 # The Update items that put a placement in a new parent or position.
-edit_move_items <- function(q, move) {
-  identifier <- edit_identifier(list(questionnaire_id = q, component_id = move$component_id))
+edit_move_items <- function(move) {
+  identifier <- edit_identifier(list(placement_id = move$placement_id))
   rows <- list()
   if (!same_parent(move$old_parent, move$new_parent)) {
-    rows[[length(rows) + 1]] <- edit_item(
-      "questionnaire_component",
-      identifier,
-      "Update",
-      "parent_component_id",
-      move$old_parent,
-      move$new_parent
-    )
+    rows[[length(rows) + 1]] <- edit_item("questionnaire_component", identifier, "Update", "parent_placement_id", move$old_parent, move$new_parent)
   }
   if (move$old_order != move$new_order) {
     rows[[length(rows) + 1]] <- edit_item("questionnaire_component", identifier, "Update", "display_order", move$old_order, move$new_order)
@@ -475,8 +408,8 @@ edit_move_items <- function(q, move) {
   do.call(rbind, rows)
 }
 
-# Placing a component in a questionnaire: one that's there already, or a new
-# one, at the position asked (the end if none).
+# Placing a component in a questionnaire: one that's there already (it may be printed in this questionnaire
+# already), or a new one, at the position asked (the end if none).
 edit_placement_add_items <- function(snap, q, placed, fields, values, parent) {
   prefix <- "questionnaire_component"
   value_of <- function(name) values[[paste0(prefix, "__", name)]]
@@ -490,11 +423,7 @@ edit_placement_add_items <- function(snap, q, placed, fields, values, parent) {
     component <- "new:component:1"
     identifier <- edit_identifier(list(component_id = component))
     add(edit_item(
-      "component",
-      identifier,
-      "Insert",
-      "component_type_id",
-      NA,
+      "component", identifier, "Insert", "component_type_id", NA,
       edit_service_normalize(field("component_type_id"), value_of("component_type_id"))
     ))
     text <- edit_service_normalize(field("text"), value_of("text"))
@@ -505,16 +434,18 @@ edit_placement_add_items <- function(snap, q, placed, fields, values, parent) {
   position <- edit_whole_number(value_of("display_order"))
   position <- if (is.na(position)) room + 1 else max(1, min(position, room + 1))
   # room for it among its neighbours
-  later <- placed[same_parent(placed$parent_component_id, parent) & placed$display_order >= position, , drop = FALSE]
+  later <- placed[same_parent(placed$parent_placement_id, parent) & placed$display_order >= position, , drop = FALSE]
   for (i in seq_len(nrow(later))) {
     add(edit_item(
-      "questionnaire_component", edit_identifier(list(questionnaire_id = q, component_id = later$component_id[i])),
+      "questionnaire_component", edit_identifier(list(placement_id = later$placement_id[i])),
       "Update", "display_order", later$display_order[i], later$display_order[i] + 1
     ))
   }
 
-  identifier <- edit_identifier(list(questionnaire_id = q, component_id = component))
-  if (!is.na(parent)) add(edit_item("questionnaire_component", identifier, "Insert", "parent_component_id", NA, parent))
+  identifier <- edit_identifier(list(placement_id = "new:questionnaire_component:1"))
+  add(edit_item("questionnaire_component", identifier, "Insert", "questionnaire_id", NA, q))
+  add(edit_item("questionnaire_component", identifier, "Insert", "component_id", NA, component))
+  if (!is.na(parent)) add(edit_item("questionnaire_component", identifier, "Insert", "parent_placement_id", NA, parent))
   add(edit_item("questionnaire_component", identifier, "Insert", "display_order", NA, position))
   do.call(rbind, items)
 }
@@ -527,32 +458,21 @@ edit_placement_add_items <- function(snap, q, placed, fields, values, parent) {
 #' @inheritParams edit_placement_items
 #' @return A data frame of items; see `edit_item()`.
 edit_question_items <- function(mode, snap, row, scope, fields, values) {
-  q <- as.numeric(scope)
   prefix <- "questionnaire_question"
   initial <- edit_service_initial(edit_entities[[prefix]], fields, snap, "update", row, scope)
   changes <- edit_service_changes(fields, initial, values)
-  c_old <- row$component_id
   new_component <- edit_new_component(changes, fields, values, type_field = "none", prefix = prefix)
-  # After a swap the question is the new component, so the same changes name that.
-  target <- if (is.null(new_component)) c_old else "new:component:1"
-  identifier <- edit_identifier(list(questionnaire_id = q, component_id = target))
+  identifier <- edit_identifier(list(placement_id = row$placement_id))
   edits <- list()
   for (i in seq_len(nrow(changes))) {
     name <- changes$name[i]
-    if (name %in% c("self_contained", "parent_question_id", "condition")) {
-      edits[[length(edits) + 1]] <- edit_item(
-        "questionnaire_question",
-        identifier,
-        "Update",
-        name,
-        changes$old_value[i],
-        changes$new_value[i]
-      )
+    if (name %in% c("self_contained", "parent_question_placement_id", "condition")) {
+      edits[[length(edits) + 1]] <- edit_item("questionnaire_question", identifier, "Update", name, changes$old_value[i], changes$new_value[i])
     }
     if (startsWith(name, "qn_")) {
       wave <- as.numeric(sub("^qn_", "", name))
       edits[[length(edits) + 1]] <- edit_item(
-        "wave_question", edit_identifier(list(questionnaire_id = q, wave_id = wave, component_id = target)),
+        "wave_question", edit_identifier(list(placement_id = row$placement_id, wave_id = wave)),
         "Update", "printed_number", changes$old_value[i], changes$new_value[i]
       )
     }
@@ -563,7 +483,7 @@ edit_question_items <- function(mode, snap, row, scope, fields, values) {
     return(edits)
   }
   new_component$component_type_id <- edit_type_id(snap, "Question")
-  edit_service_swap_items(snap, q, c_old, new_component, is_question = TRUE, between = edits)
+  edit_service_swap_items(snap, row$placement_id, new_component, is_question = TRUE, between = edits)
 }
 
 #' The items for a new question's wording.
@@ -603,18 +523,18 @@ edit_called_number <- function(rows) {
 #' @param snap The tables the kind needs, as `edit_service_load()` reads them.
 #' @param q The questionnaire's id.
 #' @param wave The wave's id.
-#' @param placed The questionnaire's placements after the change (`component_id`, `parent_component_id`,
-#'   `display_order`), a new one named by its token ("new:component:1").
-#' @param also A question the change adds to the wave (its id or token), if any.
-#' @return The questions' keys (`key_text()`), in printed order.
+#' @param placed The questionnaire's placements after the change (`placement_id`, `parent_placement_id`,
+#'   `display_order`), a new one named by its token ("new:questionnaire_component:1").
+#' @param also A question placement the change adds to the wave (its id or token), if any.
+#' @return The question placements' keys (`key_text()`), in printed order.
 edit_wave_order <- function(snap, q, wave, placed, also = NULL) {
   keys <- function(ids) ifelse(is.na(ids), NA_character_, key_text(ids))
   asked <- snap$wave_question[snap$wave_question$questionnaire_id == q & snap$wave_question$wave_id == wave, , drop = FALSE]
-  outline <- placed[c("component_id", "parent_component_id", "display_order")]
-  outline$component_id <- keys(outline$component_id)
-  outline$parent_component_id <- keys(outline$parent_component_id)
-  printed <- edit_service_outline(outline)$component_id
-  questions <- unique(c(keys(asked$component_id), if (!is.null(also)) key_text(also)))
+  outline <- placed[c("placement_id", "parent_placement_id", "display_order")]
+  outline$placement_id <- keys(outline$placement_id)
+  outline$parent_placement_id <- keys(outline$parent_placement_id)
+  printed <- edit_service_outline(outline)$placement_id
+  questions <- unique(c(keys(asked$placement_id), if (!is.null(also)) key_text(also)))
   questions[order(match(questions, printed))]
 }
 
@@ -632,10 +552,10 @@ edit_wave_numbers <- function(snap, q, wave, order) {
   asked <- snap$wave_question[snap$wave_question$questionnaire_id == q & snap$wave_question$wave_id == wave, , drop = FALSE]
   items <- list()
   for (i in seq_len(nrow(asked))) {
-    key <- key_text(asked$component_id[i])
+    key <- key_text(asked$placement_id[i])
     if (!key %in% order || identical(as.character(asked$question_number[i]), numbers[[key]])) next
     items[[length(items) + 1]] <- edit_item(
-      "wave_question", edit_identifier(list(questionnaire_id = q, wave_id = wave, component_id = asked$component_id[i])),
+      "wave_question", edit_identifier(list(placement_id = asked$placement_id[i], wave_id = wave)),
       "Update", "question_number", asked$question_number[i], numbers[[key]]
     )
   }
@@ -661,8 +581,8 @@ edit_renumber_waves <- function(snap, q, placed) {
 #' @param moves From `edit_service_move()`.
 #' @return `placed`, with the moved placements' parents and positions changed.
 edit_moved_placements <- function(placed, moves) {
-  rows <- match(moves$component_id, placed$component_id)
-  placed$parent_component_id[rows] <- moves$new_parent
+  rows <- match(moves$placement_id, placed$placement_id)
+  placed$parent_placement_id[rows] <- moves$new_parent
   placed$display_order[rows] <- moves$new_order
   placed
 }

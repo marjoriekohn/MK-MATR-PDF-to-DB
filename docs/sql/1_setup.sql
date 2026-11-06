@@ -5,7 +5,7 @@
 -- Supabase project: a new one, or one to start over. Part 0 first removes whatever tables and functions
 -- are there, so the build starts clean, and the last part puts back these tables' rows:
 --
---   KEPT:  staff, component_type, subject, principal_investigator, respondent_type, registry, study,
+--   KEPT:  staff, component_type, subject, time_frame, principal_investigator, respondent_type, registry, study,
 --          questionnaire, wave, pdf_file and wave_file, with their IDs. They are copied to a schema of their own
 --          (matr_keep) before anything is removed, and back once the database is built.
 --   LOST:  every other row (what the questionnaires print, their variables, drafts, their history, ...).
@@ -57,6 +57,11 @@
 -- have checked which project this is, uncomment the next line to clear them anyway. EVERY ROW OF THEM
 -- IS LOST.
 -- set matr.clear_with_data = 'yes';
+--
+-- On the TEST project every table's rows are kept, unless the next line is uncommented: then the test project
+-- is rebuilt like any other, keeping only the tables listed at the top (its extracted questionnaires, drafts
+-- and history are lost), for a change to the tables that the old rows wouldn't fit.
+-- set matr.test_keep_only_lists = 'yes';
 
 begin;
 
@@ -67,9 +72,13 @@ declare
   holding text[] := array[]::text[];
   has_row boolean;
 begin
-  -- the test project keeps every row (the next block), so nothing is lost there
+  -- the test project keeps every row (the next block), so nothing is lost there, unless asked to keep only the lists
   if (select system_identifier::text from pg_control_system()) = '7692131729119822239' then
-    raise notice 'This is the MATR test database: keeping every table''s rows.';
+    if coalesce(current_setting('matr.test_keep_only_lists', true), '') = 'yes' then
+      raise notice 'This is the MATR test database: keeping only the listed tables, as matr.test_keep_only_lists asks.';
+    else
+      raise notice 'This is the MATR test database: keeping every table''s rows.';
+    end if;
     return;
   end if;
   for t in
@@ -77,7 +86,7 @@ begin
     where c.relnamespace in (select oid from pg_namespace where nspname in ('public', 'private'))
       and c.relkind in ('r', 'p')
       and not (c.relnamespace = 'public'::regnamespace
-               and c.relname in ('staff', 'component_type', 'subject', 'principal_investigator', 'respondent_type',
+               and c.relname in ('staff', 'component_type', 'subject', 'time_frame', 'principal_investigator', 'respondent_type',
                                  'registry', 'study', 'questionnaire', 'wave', 'pdf_file', 'wave_file'))   -- kept
     order by 1
   loop
@@ -103,14 +112,15 @@ do $$
 declare
   t    text;
   n    bigint;
-  kept text[] := array['staff', 'component_type', 'subject', 'principal_investigator', 'respondent_type',
+  kept text[] := array['staff', 'component_type', 'subject', 'time_frame', 'principal_investigator', 'respondent_type',
                        'registry', 'study', 'questionnaire', 'wave', 'pdf_file', 'wave_file'];
 begin
   if to_regnamespace('matr_keep') is not null then
     raise notice 'matr_keep is already there (an earlier run stopped before putting its rows back): keeping those rows.';
     return;
   end if;
-  if (select system_identifier::text from pg_control_system()) = '7692131729119822239' then
+  if (select system_identifier::text from pg_control_system()) = '7692131729119822239'
+     and coalesce(current_setting('matr.test_keep_only_lists', true), '') <> 'yes' then
     kept := kept || array(select c.relname::text from pg_class c
                           where c.relnamespace = 'public'::regnamespace and c.relkind in ('r', 'p')
                             and c.relname <> all (kept)
@@ -283,6 +293,9 @@ create table public.component_type (
   description       text
 );
 
+-- A component is a wording, kept once: one for each kind and words (but for runs of spaces), however many
+-- questionnaires print it and however often (component_words_unique, section 3). A Group has no words, so there
+-- is one Group, placed wherever a questionnaire holds blocks together.
 create table public.component (
   component_id      bigint primary key default private.random_id('component', 'component_id'),
   component_type_id bigint not null,                                     -- BR39, BR40
@@ -299,6 +312,8 @@ create table public.question (
 -- What questions that differ only in who they ask about have in common: "Has [subject] ever repeated a grade?"
 -- for "Has Twin A ever repeated a grade?" and "Has Twin B ever repeated a grade?". Each question keeps its own
 -- printed words, number and variables; [subject] is filled in with a variable's subject when the stem is shown.
+-- So do questions that differ only in when they ask about ("... in your lifetime?", "... during the last 12
+-- months?"): "on how many occasions have you smoked cigarettes [time frame]?", filled in with a variable's time frame.
 -- One stem for each wording, but for runs of spaces: question_stem_text_unique, section 3.
 create table public.question_stem (
   question_stem_id bigint primary key default private.random_id('question_stem', 'question_stem_id'),
@@ -306,10 +321,16 @@ create table public.question_stem (
     constraint question_stem_text_not_blank check (btrim(text) <> '')
 );
 
+-- Where a questionnaire prints a component: a placement. A questionnaire can print the same component more than
+-- once (an instruction repeated before each battery, the same item in Twin A's part and Twin B's), so a placement
+-- has a number of its own, and everything about a place in the questionnaire (what holds it, its order, a
+-- question's number, follow-ups and variables, where a skip sends respondents) names the placement, not the
+-- component. The component is the wording, shared by every place that prints it.
 create table public.questionnaire_component (
+  placement_id        bigint  primary key default private.random_id('questionnaire_component', 'placement_id'),
   questionnaire_id    bigint  not null,                                  -- BR46, BR47
   component_id        bigint  not null,                                  -- BR48, BR49
-  parent_component_id bigint,
+  parent_placement_id bigint,            -- the Section or Group it is in, in the same questionnaire
   display_order       integer not null
     constraint questionnaire_component_display_order_check check (display_order > 0),
   -- a Group can skip on the answers to the questions in it ("If you answered No to items 22a-d, go to Question 28")
@@ -317,37 +338,42 @@ create table public.questionnaire_component (
   skip_when           text               -- every question in the group gets it, or any
     constraint questionnaire_component_skip_when_check check (skip_when in ('every', 'any')),
   skip_instruction    text,              -- the routing printed for it
-  skip_to_component_id bigint,           -- where it sends respondents
+  skip_to_placement_id bigint,           -- where it sends respondents
   skip_to_end         boolean not null default false, -- or to the end of the questionnaire
-  constraint questionnaire_component_skip_to_one_place check (not (skip_to_end and skip_to_component_id is not null)),
-  primary key (questionnaire_id, component_id),
+  constraint questionnaire_component_skip_to_one_place check (not (skip_to_end and skip_to_placement_id is not null)),
+  -- what the foreign keys below name: a placement and its questionnaire (and component)
+  constraint questionnaire_component_in_questionnaire unique (questionnaire_id, placement_id),
+  constraint questionnaire_component_places unique (placement_id, questionnaire_id, component_id),
   -- BR54, the direct case (a trigger catches longer cycles)
-  constraint questionnaire_component_not_own_parent check (parent_component_id <> component_id),
+  constraint questionnaire_component_not_own_parent check (parent_placement_id <> placement_id),
   -- BR55: display order unique among siblings; NULLS NOT DISTINCT makes the top level one group.
   -- Deferrable so a change can move components past each other.
   constraint questionnaire_component_display_order_unique
-    unique nulls not distinct (questionnaire_id, parent_component_id, display_order)
+    unique nulls not distinct (questionnaire_id, parent_placement_id, display_order)
     deferrable initially immediate
 );
 
+-- A placement of a question: its settings there. Keyed by the placement; questionnaire_id and component_id say
+-- which questionnaire and question it is (the foreign key keeps them the placement's).
 create table public.questionnaire_question (
-  questionnaire_id   bigint  not null,
-  component_id       bigint  not null,
-  parent_question_id bigint,
-  self_contained     boolean not null default true,
-  condition          text,
-  primary key (questionnaire_id, component_id),
+  placement_id                bigint  primary key,
+  questionnaire_id            bigint  not null,
+  component_id                bigint  not null,
+  parent_question_placement_id bigint, -- the question it follows, placed in the same questionnaire
+  self_contained              boolean not null default true,
+  condition                   text,
+  constraint questionnaire_question_in_questionnaire unique (questionnaire_id, placement_id),
   -- BR63, the direct case (a trigger catches longer cycles)
-  constraint questionnaire_question_not_own_parent check (parent_question_id <> component_id)
+  constraint questionnaire_question_not_own_parent check (parent_question_placement_id <> placement_id)
 );
 
 create table public.wave_question (
   questionnaire_id bigint not null,
   wave_id          bigint not null,
-  component_id     bigint not null,
+  placement_id     bigint not null,
   question_number  text   not null,      -- its place among the wave's questions (1, 2, 3...), worked out by the site
   printed_number   text,                 -- the number printed beside it (1a, 12, Q7); can repeat, or be empty
-  primary key (questionnaire_id, wave_id, component_id),
+  primary key (wave_id, placement_id),
   -- BR71: question number (its place) unique within a wave (deferrable for renumbering)
   constraint wave_question_number_unique unique (wave_id, question_number) deferrable initially immediate
 );
@@ -358,7 +384,22 @@ create table public.subject (
   subject_id bigint primary key default private.random_id('subject', 'subject_id'),
   name       text   not null
     constraint subject_name_not_blank check (btrim(name) <> '')
+    -- straight quotes only, as the site writes a reading's ("Respondent's Siblings", never "Respondent’s
+    -- Siblings"), so a name read either way is the one name (R/service_draft.R, straight_quotes())
+    constraint subject_name_straight_quotes check (name !~ '[‘’“”]')
   -- one subject for each name, ignoring case and outer spaces: subject_name_unique, section 3
+);
+
+-- When a variable's answer is about, written one way (R/service_draft.R, normal_time_frame()): "in your lifetime",
+-- "in the past 12 months", "in the past 30 days". The forms print each in many ways ("during the last 12 months",
+-- "over the past twelve months"); keeping one wording lets the dashboard find every past-30-day question across the
+-- registries. It belongs to the variable, as one question often has a variable for each time frame, and it fills
+-- [time frame] in a question stem ("on how many occasions have you smoked cigarettes [time frame]?").
+create table public.time_frame (
+  time_frame_id bigint primary key default private.random_id('time_frame', 'time_frame_id'),
+  name          text   not null
+    constraint time_frame_name_written_one_way check (btrim(name) <> '' and name = lower(btrim(name)))
+  -- one time frame for each name: time_frame_name_unique, section 3
 );
 
 -- variable_key is deliberately NOT called variable_id: matr_id holds what MATR staff call the
@@ -366,17 +407,18 @@ create table public.subject (
 create table public.variable (
   variable_key     bigint  primary key default private.random_id('variable', 'variable_key'),
   questionnaire_id bigint  not null,
-  component_id     bigint  not null,
+  placement_id     bigint  not null,     -- the placement of the question it records an answer to
   matr_id          text    not null,
   display_order    integer not null
     constraint variable_display_order_check check (display_order > 0),
   label            text,
   subject_id       bigint,
+  time_frame_id    bigint,               -- when its answer is about; empty when the question names no time
   -- BR93: matr_id unique within its questionnaire, may repeat across questionnaires
   constraint variable_matr_id_unique_in_questionnaire unique (questionnaire_id, matr_id),
   -- BR94: display order unique within its questionnaire question
   constraint variable_display_order_unique
-    unique (questionnaire_id, component_id, display_order) deferrable initially immediate
+    unique (placement_id, display_order) deferrable initially immediate
 );
 
 create table public.open_ended (
@@ -385,9 +427,9 @@ create table public.open_ended (
     constraint open_ended_answer_data_type_check check (answer_data_type in ('NUMBER', 'TEXT', 'DATE', 'TIME')),
   skip_condition   text,                 -- the answer that skips ("None")
   skip_instruction text,                 -- the routing printed for it
-  skip_to_component_id bigint,           -- where it sends respondents
+  skip_to_placement_id bigint,           -- where it sends respondents
   skip_to_end      boolean not null default false, -- or to the end of the questionnaire
-  constraint open_ended_skip_to_one_place check (not (skip_to_end and skip_to_component_id is not null))
+  constraint open_ended_skip_to_one_place check (not (skip_to_end and skip_to_placement_id is not null))
 );
 
 -- A set is its choices (answer_option_set), one set for each combination of them (BR109:
@@ -435,9 +477,9 @@ create table public.response_option (
     constraint response_option_display_order_check check (display_order > 0),
   code_value       text    not null,     -- text: codes may be 1, 0, -9, A ...
   skip_instruction text,
-  skip_to_component_id bigint,           -- where the skip instruction sends respondents
+  skip_to_placement_id bigint,           -- where the skip instruction sends respondents
   skip_to_end      boolean not null default false, -- or to the end of the questionnaire
-  constraint response_option_skip_to_one_place check (not (skip_to_end and skip_to_component_id is not null)),
+  constraint response_option_skip_to_one_place check (not (skip_to_end and skip_to_placement_id is not null)),
   primary key (variable_key, answer_option_id),
   -- BR103 (and BR104: the same answer option may carry different codes on different variables)
   constraint response_option_display_order_unique
@@ -648,7 +690,8 @@ create table public.applied_item (
 -- None cascade unless noted: deleting a row that others point at is refused.
 --
 -- What a questionnaire or a wave owns goes with it (on delete cascade): a questionnaire's waves and its
--- placements of components, and through those its questions' settings, wave numbers and variables (with their
+-- placements of components (what holds a placement takes it along), and through those its questions' settings,
+-- wave numbers and variables (with their
 -- choices and counts); a wave's record of the questions it asked. What is shared stays: a component, an answer
 -- choice, an option set, a subject, a scale. Deleting a shared row that something still uses is refused. What a
 -- delete leaves owned by nothing (a component no questionnaire prints, a question no wave asks, a stem no
@@ -687,47 +730,55 @@ alter table public.questionnaire_component
     foreign key (questionnaire_id) references public.questionnaire (questionnaire_id) on delete cascade,
   add constraint questionnaire_component_component_id_fkey
     foreign key (component_id) references public.component (component_id),
-  -- BR50-BR52: the parent is in the SAME questionnaire, because questionnaire_id is half of the key; what is
-  -- inside a section or a group goes with it
+  -- BR50-BR52: the parent is placed in the SAME questionnaire, because questionnaire_id is half of the key; what
+  -- is inside a section or a group goes with it
   add constraint questionnaire_component_parent_fk
-    foreign key (questionnaire_id, parent_component_id)
-    references public.questionnaire_component (questionnaire_id, component_id) on delete cascade,
-  add constraint questionnaire_component_skip_to_component_id_fkey
-    foreign key (skip_to_component_id) references public.component (component_id);
+    foreign key (questionnaire_id, parent_placement_id)
+    references public.questionnaire_component (questionnaire_id, placement_id) on delete cascade,
+  -- a group skips to a place in its own questionnaire. A place a skip names can't be deleted while it does (Make an
+  -- edit empties the skip first, keeping its printed words); a whole questionnaire goes with its skips, which is
+  -- why this is checked when the change ends, once the cascade has taken them too.
+  add constraint questionnaire_component_skip_to_fk
+    foreign key (questionnaire_id, skip_to_placement_id)
+    references public.questionnaire_component (questionnaire_id, placement_id) deferrable initially deferred;
 
 alter table public.questionnaire_question
   add constraint questionnaire_question_component_id_fkey                -- BR58, BR59
     foreign key (component_id) references public.question (component_id),
-  -- BR56, BR57: a questionnaire question IS a questionnaire component; its settings go with its placement
-  add constraint questionnaire_question_component_fk
-    foreign key (questionnaire_id, component_id)
-    references public.questionnaire_component (questionnaire_id, component_id) on delete cascade,
-  -- BR60-BR62: the parent question is in the SAME questionnaire
+  -- BR56, BR57: a questionnaire question IS a placement (of that question, in that questionnaire); its settings
+  -- go with it, and follow it to new words (a placement pointed at another question)
+  add constraint questionnaire_question_placement_fk
+    foreign key (placement_id, questionnaire_id, component_id)
+    references public.questionnaire_component (placement_id, questionnaire_id, component_id)
+    on update cascade on delete cascade,
+  -- BR60-BR62: the question it follows is placed in the SAME questionnaire
   add constraint questionnaire_question_parent_fk
-    foreign key (questionnaire_id, parent_question_id)
-    references public.questionnaire_question (questionnaire_id, component_id);
+    foreign key (questionnaire_id, parent_question_placement_id)
+    references public.questionnaire_question (questionnaire_id, placement_id);
 
 alter table public.wave_question
   -- BR66, BR67, BR70: the wave and the question share one questionnaire_id
   add constraint wave_question_wave_fk
     foreign key (questionnaire_id, wave_id) references public.wave (questionnaire_id, wave_id) on delete cascade,
   add constraint wave_question_question_fk                               -- BR68, BR70
-    foreign key (questionnaire_id, component_id)
-    references public.questionnaire_question (questionnaire_id, component_id) on delete cascade;
+    foreign key (questionnaire_id, placement_id)
+    references public.questionnaire_question (questionnaire_id, placement_id) on delete cascade;
 
 alter table public.variable
-  -- BR86: a variable records an answer for exactly one questionnaire question
+  -- BR86: a variable records an answer for exactly one questionnaire question (one placement of it)
   add constraint variable_questionnaire_question_fk
-    foreign key (questionnaire_id, component_id)
-    references public.questionnaire_question (questionnaire_id, component_id) on delete cascade,
+    foreign key (questionnaire_id, placement_id)
+    references public.questionnaire_question (questionnaire_id, placement_id) on delete cascade,
   add constraint variable_subject_fk
-    foreign key (subject_id) references public.subject (subject_id);
+    foreign key (subject_id) references public.subject (subject_id),
+  add constraint variable_time_frame_fk
+    foreign key (time_frame_id) references public.time_frame (time_frame_id);
 
 alter table public.open_ended
   add constraint open_ended_variable_key_fkey
     foreign key (variable_key) references public.variable (variable_key) on delete cascade,
-  add constraint open_ended_skip_to_component_id_fkey
-    foreign key (skip_to_component_id) references public.component (component_id);
+  add constraint open_ended_skip_to_placement_id_fkey                    -- as a group's skip, above
+    foreign key (skip_to_placement_id) references public.questionnaire_component (placement_id) deferrable initially deferred;
 
 alter table public.closed_ended
   add constraint closed_ended_variable_key_fkey
@@ -755,8 +806,8 @@ alter table public.response_option
     foreign key (variable_key) references public.closed_ended (variable_key) on delete cascade,
   add constraint response_option_answer_option_id_fkey
     foreign key (answer_option_id) references public.answer_option (answer_option_id),
-  add constraint response_option_skip_to_component_id_fkey
-    foreign key (skip_to_component_id) references public.component (component_id);
+  add constraint response_option_skip_to_placement_id_fkey               -- as a group's skip, above
+    foreign key (skip_to_placement_id) references public.questionnaire_component (placement_id) deferrable initially deferred;
 
 alter table public.response_option_count
   add constraint response_option_count_wave_id_fkey
@@ -831,7 +882,12 @@ alter table public.applied_item
 -- insert's ON CONFLICT names the expression as its target, not a constraint)
 create unique index staff_email_unique  on public.staff   (lower(email));          -- BR22
 create unique index subject_name_unique on public.subject (lower(btrim(name)));
+create unique index time_frame_name_unique on public.time_frame (name);
 create unique index question_stem_text_unique on public.question_stem (btrim(regexp_replace(text, '[[:space:]]+', ' ', 'g')));
+-- one component for each kind and words (but for runs of spaces), and one Group (the one kind with no words)
+create unique index component_words_unique on public.component (component_type_id, btrim(regexp_replace(text, '[[:space:]]+', ' ', 'g')))
+  where text is not null;
+create unique index component_one_group on public.component (component_type_id) where text is null;
 create unique index measurement_scale_name_unique          on public.measurement_scale (lower(btrim(name)));       -- BR78
 create unique index measurement_scale_abbreviation_unique  on public.measurement_scale (lower(btrim(abbreviation)));
 create unique index registry_name_unique                   on public.registry (lower(btrim(name)));
@@ -847,19 +903,21 @@ create index questionnaire_study_id_idx            on public.questionnaire (stud
 create index questionnaire_respondent_type_idx     on public.questionnaire (respondent_type_id);
 create index component_component_type_id_idx       on public.component (component_type_id);
 create index questionnaire_component_component_idx on public.questionnaire_component (component_id);
-create index questionnaire_component_skip_to_idx  on public.questionnaire_component (skip_to_component_id);
+create index questionnaire_component_skip_to_idx  on public.questionnaire_component (skip_to_placement_id);
 create index questionnaire_question_component_idx  on public.questionnaire_question (component_id);
-create index questionnaire_question_parent_idx     on public.questionnaire_question (questionnaire_id, parent_question_id);
-create index wave_question_question_idx            on public.wave_question (questionnaire_id, component_id);
+create index questionnaire_question_parent_idx     on public.questionnaire_question (questionnaire_id, parent_question_placement_id);
+create index wave_question_question_idx            on public.wave_question (questionnaire_id, placement_id);
+create index variable_placement_idx                on public.variable (questionnaire_id, placement_id);
 create index variable_subject_id_idx               on public.variable (subject_id);
+create index variable_time_frame_id_idx            on public.variable (time_frame_id);
 create index closed_ended_option_set_id_idx        on public.closed_ended (option_set_id);
 create index answer_option_set_answer_option_idx   on public.answer_option_set (answer_option_id);
 create index answer_option_alias_answer_option_idx on public.answer_option_alias (answer_option_id);
 create index question_question_stem_idx            on public.question (question_stem_id);
 create index response_option_answer_option_idx     on public.response_option (answer_option_id);
-create index response_option_skip_to_idx           on public.response_option (skip_to_component_id);
+create index response_option_skip_to_idx           on public.response_option (skip_to_placement_id);
 create index response_option_count_choice_idx      on public.response_option_count (variable_key, answer_option_id);
-create index open_ended_skip_to_idx                on public.open_ended (skip_to_component_id);
+create index open_ended_skip_to_idx                on public.open_ended (skip_to_placement_id);
 create index question_category_mesh_id_idx         on public.question_category (mesh_id);
 create index question_scale_component_id_idx       on public.question_scale (component_id);
 create index question_scale_expected_set_idx       on public.question_scale (expected_option_set_id);
@@ -906,30 +964,29 @@ create trigger wave_questionnaire_immutable
   before update of questionnaire_id on public.wave
   for each row execute function public.wave_questionnaire_immutable();
 
--- BR54: a questionnaire component is not its own ancestor.
+-- BR54: a placement is not its own ancestor.
 create function public.questionnaire_component_no_cycle()
 returns trigger
 language plpgsql
 set search_path = ''
 as $$
 begin
-  if new.parent_component_id is null then
+  if new.parent_placement_id is null then
     return new;
   end if;
   if exists (
-    with recursive ancestors (component_id) as (
-      select new.parent_component_id
+    with recursive ancestors (placement_id) as (
+      select new.parent_placement_id
       union
-      select qc.parent_component_id
+      select qc.parent_placement_id
       from public.questionnaire_component qc
-      join ancestors a on qc.component_id = a.component_id
-      where qc.questionnaire_id = new.questionnaire_id
-        and qc.parent_component_id is not null
+      join ancestors a on qc.placement_id = a.placement_id
+      where qc.parent_placement_id is not null
     )
-    select 1 from ancestors where component_id = new.component_id
+    select 1 from ancestors where placement_id = new.placement_id
   ) then
-    raise exception 'Component % would become its own ancestor in questionnaire % (BR54)',
-      new.component_id, new.questionnaire_id
+    raise exception 'Placement % would become its own ancestor in questionnaire % (BR54)',
+      new.placement_id, new.questionnaire_id
       using errcode = 'check_violation';
   end if;
   return new;
@@ -937,33 +994,32 @@ end;
 $$;
 
 create trigger questionnaire_component_no_cycle
-  before insert or update of parent_component_id on public.questionnaire_component
+  before insert or update of parent_placement_id on public.questionnaire_component
   for each row execute function public.questionnaire_component_no_cycle();
 
--- BR63: a questionnaire question is not its own ancestor through the parent chain.
+-- BR63: a placed question does not follow itself through the questions it follows.
 create function public.questionnaire_question_no_cycle()
 returns trigger
 language plpgsql
 set search_path = ''
 as $$
 begin
-  if new.parent_question_id is null then
+  if new.parent_question_placement_id is null then
     return new;
   end if;
   if exists (
-    with recursive ancestors (component_id) as (
-      select new.parent_question_id
+    with recursive ancestors (placement_id) as (
+      select new.parent_question_placement_id
       union
-      select qq.parent_question_id
+      select qq.parent_question_placement_id
       from public.questionnaire_question qq
-      join ancestors a on qq.component_id = a.component_id
-      where qq.questionnaire_id = new.questionnaire_id
-        and qq.parent_question_id is not null
+      join ancestors a on qq.placement_id = a.placement_id
+      where qq.parent_question_placement_id is not null
     )
-    select 1 from ancestors where component_id = new.component_id
+    select 1 from ancestors where placement_id = new.placement_id
   ) then
-    raise exception 'Question % would become its own ancestor in questionnaire % (BR63)',
-      new.component_id, new.questionnaire_id
+    raise exception 'Question placement % would become its own ancestor in questionnaire % (BR63)',
+      new.placement_id, new.questionnaire_id
       using errcode = 'check_violation';
   end if;
   return new;
@@ -971,7 +1027,7 @@ end;
 $$;
 
 create trigger questionnaire_question_no_cycle
-  before insert or update of parent_question_id on public.questionnaire_question
+  before insert or update of parent_question_placement_id on public.questionnaire_question
   for each row execute function public.questionnaire_question_no_cycle();
 
 -- BR93: matr_id does not change once recorded.
@@ -1501,14 +1557,14 @@ declare
   editable constant text[] := array[
     'registry', 'principal_investigator', 'study', 'respondent_type', 'questionnaire', 'wave',
     'component_type', 'component', 'questionnaire_component', 'question', 'questionnaire_question',
-    'wave_question', 'category', 'question_category', 'answer_option', 'subject', 'option_set', 'answer_option_set',
+    'wave_question', 'category', 'question_category', 'answer_option', 'subject', 'time_frame', 'option_set', 'answer_option_set',
     'measurement_scale', 'question_scale', 'variable', 'open_ended', 'closed_ended', 'response_option', 'response_option_count',
     'question_stem', 'answer_option_alias'
   ];
   loadable constant text[] := array[
     'questionnaire', 'wave', 'component', 'questionnaire_component', 'question', 'questionnaire_question',
     'wave_question', 'variable', 'open_ended', 'closed_ended', 'option_set', 'answer_option',
-    'answer_option_set', 'response_option', 'response_option_count', 'subject', 'question_stem'
+    'answer_option_set', 'response_option', 'response_option_count', 'subject', 'time_frame', 'question_stem'
   ];
   token_pattern constant text := '^new:[a-z_]+:[0-9]+$';
 
@@ -2189,7 +2245,7 @@ begin
   if not exists (
     select 1 from public.variable v
     join public.wave_question wq
-      on wq.questionnaire_id = v.questionnaire_id and wq.component_id = v.component_id and wq.wave_id = new.wave_id
+      on wq.placement_id = v.placement_id and wq.wave_id = new.wave_id
     where v.variable_key = new.variable_key
   ) then
     raise exception 'A count of respondents is for a wave that asks the variable''s question.';
@@ -2414,7 +2470,7 @@ create constraint trigger option_set_choices_unique
   for each row execute function public.option_set_choices_unique();
 
 -- M2 (BR45), M3 (BR53) and M4 (BR42): what a block of each kind may be, by the kind's name. The site relies on
--- the same three names (Section, Question, Group) and Make an edit won't rename or delete them.
+-- the same four names (Section, Question, Grid, Group) and Make an edit won't rename or delete them.
 create function private.component_kind(p_component_id bigint)
 returns text
 language sql
@@ -2460,39 +2516,48 @@ create constraint trigger question_is_a_question
   deferrable initially deferred
   for each row execute function public.component_kind_check();
 
--- M3: where a questionnaire places a block, its parent is a Section or a Group, and a Section is never inside
--- a Group. Only a Group skips (on the answers to the questions in it).
-create function private.placement_check(p_questionnaire_id bigint, p_component_id bigint)
+-- M3: where a questionnaire places a block, its parent is a Section, a Grid or a Group. A Section is never
+-- inside a Group or a Grid, and a Grid holds only its questions with their instructions and definitions: no
+-- Section, Grid or Group. Only a Group or a Grid skips (on the answers to the questions in it). The site
+-- keeps the same rules in can_hold() (R/service_draft.R).
+create function private.placement_check(p_placement_id bigint)
 returns void
 language plpgsql
 set search_path = public, pg_temp
 as $$
 declare
+  v_component   bigint;
   v_parent      bigint;
+  v_kind        text;
   v_parent_kind text;
   v_skips       boolean;
 begin
-  select parent_component_id,
+  select component_id, parent_placement_id,
          skip_condition is not null or skip_when is not null or skip_instruction is not null
-           or skip_to_component_id is not null or skip_to_end
-    into v_parent, v_skips
+           or skip_to_placement_id is not null or skip_to_end
+    into v_component, v_parent, v_skips
   from public.questionnaire_component
-  where questionnaire_id = p_questionnaire_id and component_id = p_component_id;
+  where placement_id = p_placement_id;
   if not found then
     return;
   end if;
-  if v_skips and private.component_kind(p_component_id) is distinct from 'Group' then
-    raise exception 'Component % skips, but only a Group skips on the answers to the questions in it.', p_component_id;
+  v_kind := private.component_kind(v_component);
+  if v_skips and v_kind is distinct from 'Group' and v_kind is distinct from 'Grid' then
+    raise exception 'Placement % skips, but only a Group or a Grid skips on the answers to the questions in it.', p_placement_id;
   end if;
   if v_parent is null then
     return;
   end if;
-  v_parent_kind := private.component_kind(v_parent);
-  if v_parent_kind is distinct from 'Section' and v_parent_kind is distinct from 'Group' then
-    raise exception 'Component % is inside a %: only a Section or a Group holds other blocks.', p_component_id, coalesce(v_parent_kind, 'block that is gone');
+  select private.component_kind(component_id) into v_parent_kind
+  from public.questionnaire_component where placement_id = v_parent;
+  if v_parent_kind is null or v_parent_kind not in ('Section', 'Grid', 'Group') then
+    raise exception 'Placement % is inside a %: only a Section, a Grid or a Group holds other blocks.', p_placement_id, coalesce(v_parent_kind, 'block that is gone');
   end if;
-  if v_parent_kind = 'Group' and private.component_kind(p_component_id) = 'Section' then
-    raise exception 'Section % is inside a Group: a Section is never inside a Group.', p_component_id;
+  if v_parent_kind in ('Group', 'Grid') and v_kind = 'Section' then
+    raise exception 'Section placement % is inside a %: a Section is never inside a Group or a Grid.', p_placement_id, v_parent_kind;
+  end if;
+  if v_parent_kind = 'Grid' and v_kind in ('Grid', 'Group') then
+    raise exception '% placement % is inside a Grid: a Grid holds only its questions, with their instructions and definitions.', v_kind, p_placement_id;
   end if;
 end;
 $$;
@@ -2503,7 +2568,7 @@ language plpgsql
 set search_path = public, pg_temp
 as $$
 begin
-  perform private.placement_check(new.questionnaire_id, new.component_id);
+  perform private.placement_check(new.placement_id);
   return null;
 end;
 $$;
@@ -2513,7 +2578,7 @@ create constraint trigger questionnaire_component_parent_kind
   deferrable initially deferred
   for each row execute function public.questionnaire_component_parent_check();
 
--- ... and a block whose kind changes is checked where it is placed, and where blocks sit inside it.
+-- ... and a block whose kind changes is checked wherever it is placed, and where blocks sit inside it.
 create function public.component_placements_check()
 returns trigger
 language plpgsql
@@ -2523,10 +2588,11 @@ declare
   p record;
 begin
   for p in
-    select questionnaire_id, component_id from public.questionnaire_component
-    where component_id = new.component_id or parent_component_id = new.component_id
+    select c.placement_id from public.questionnaire_component c
+    where c.component_id = new.component_id
+       or c.parent_placement_id in (select placement_id from public.questionnaire_component where component_id = new.component_id)
   loop
-    perform private.placement_check(p.questionnaire_id, p.component_id);
+    perform private.placement_check(p.placement_id);
   end loop;
   return null;
 end;
@@ -2541,7 +2607,8 @@ create constraint trigger component_kind_placements
 -- A delete can leave a shared row that nothing owns any more: a component no questionnaire prints, a question
 -- no wave asks, a stem no question has. Each goes when the change ends (deferred, so a change can take a block
 -- out and put it back, or move it), unless something still names it: a component that a measurement scale
--- lists or a skip sends respondents to stays, and so does a question that follow-up questions name as theirs.
+-- lists stays, and so does a question placement that follow-up questions name as theirs or a skip sends
+-- respondents to.
 -- None of them refuses anything. R/service_edit_relations.R shows staff the same before a delete.
 
 -- A component no questionnaire places any more. Its question row goes with it, and that row's MeSH tags.
@@ -2554,10 +2621,7 @@ begin
   delete from public.component c
   where c.component_id = old.component_id
     and not exists (select 1 from public.questionnaire_component p where p.component_id = c.component_id)
-    and not exists (select 1 from public.question_scale s where s.component_id = c.component_id)
-    and not exists (select 1 from public.questionnaire_component p where p.skip_to_component_id = c.component_id)
-    and not exists (select 1 from public.response_option r where r.skip_to_component_id = c.component_id)
-    and not exists (select 1 from public.open_ended o where o.skip_to_component_id = c.component_id);
+    and not exists (select 1 from public.question_scale s where s.component_id = c.component_id);
   return null;
 end;
 $$;
@@ -2567,29 +2631,29 @@ create constraint trigger component_left_unplaced
   deferrable initially deferred
   for each row execute function public.forget_unplaced_component();
 
--- A question its questionnaire asks in no wave (BR69): its placement goes, and with it its settings and
--- variables (and then the component, if nothing else places it). A follow-up that goes may leave the question
--- above it unasked and named by no one, so that one is looked at next, and so on up.
+-- A question placement no wave asks (BR69): it goes, and with it its settings and variables (and then the
+-- component, if nothing else places it). A follow-up that goes may leave the question it follows unasked and
+-- followed by none, so that one is looked at next, and so on up.
 create function public.forget_unasked_question()
 returns trigger
 language plpgsql
 set search_path = public, pg_temp
 as $$
 declare
-  v_question bigint := old.component_id;
+  v_question bigint := old.placement_id;
   v_parent   bigint;
 begin
   while v_question is not null loop
-    select q.parent_question_id into v_parent from public.questionnaire_question q
-    where q.questionnaire_id = old.questionnaire_id and q.component_id = v_question;
+    select q.parent_question_placement_id into v_parent from public.questionnaire_question q
+    where q.placement_id = v_question;
     delete from public.questionnaire_component p
-    where p.questionnaire_id = old.questionnaire_id and p.component_id = v_question
-      and exists (select 1 from public.questionnaire_question q
-                  where q.questionnaire_id = p.questionnaire_id and q.component_id = p.component_id)
-      and not exists (select 1 from public.wave_question w
-                      where w.questionnaire_id = p.questionnaire_id and w.component_id = p.component_id)
-      and not exists (select 1 from public.questionnaire_question f
-                      where f.questionnaire_id = p.questionnaire_id and f.parent_question_id = p.component_id);
+    where p.placement_id = v_question
+      and exists (select 1 from public.questionnaire_question q where q.placement_id = p.placement_id)
+      and not exists (select 1 from public.wave_question w where w.placement_id = p.placement_id)
+      and not exists (select 1 from public.questionnaire_question f where f.parent_question_placement_id = p.placement_id)
+      and not exists (select 1 from public.questionnaire_component g where g.skip_to_placement_id = p.placement_id)
+      and not exists (select 1 from public.response_option r where r.skip_to_placement_id = p.placement_id)
+      and not exists (select 1 from public.open_ended o where o.skip_to_placement_id = p.placement_id);
     exit when not found;
     v_question := v_parent;
   end loop;
@@ -2598,7 +2662,7 @@ end;
 $$;
 
 create constraint trigger question_left_unasked
-  after delete or update of wave_id, component_id on public.wave_question
+  after delete or update of wave_id, placement_id on public.wave_question
   deferrable initially deferred
   for each row execute function public.forget_unasked_question();
 
@@ -2676,12 +2740,19 @@ as $$
 declare
   v_name text;
 begin
-  select p.name into v_name
-  from public.study s join public.principal_investigator p on p.principal_investigator_id = s.contact_principal_investigator_id
-  where p.email is null
-    and case when tg_table_name = 'study' then s.study_id = new.study_id
-             else p.principal_investigator_id = new.principal_investigator_id end
-  limit 1;
+  -- one query for each table: PL/pgSQL looks up every new.<field> a query names, so a study's field can't be named
+  -- when an investigator changes
+  if tg_table_name = 'study' then
+    select p.name into v_name
+    from public.study s join public.principal_investigator p on p.principal_investigator_id = s.contact_principal_investigator_id
+    where p.email is null and s.study_id = new.study_id
+    limit 1;
+  else
+    select p.name into v_name
+    from public.study s join public.principal_investigator p on p.principal_investigator_id = s.contact_principal_investigator_id
+    where p.email is null and p.principal_investigator_id = new.principal_investigator_id
+    limit 1;
+  end if;
   if found then
     raise exception '% has no email, so they can''t be a study''s contact.', v_name;
   end if;
@@ -2731,12 +2802,12 @@ revoke all on function public.staff_never_deleted()                   from publi
 revoke all on function private.normal_answer(text)                     from public, anon, authenticated;
 revoke all on function private.choices_match_set(bigint[])             from public, anon, authenticated;
 revoke all on function private.component_kind(bigint)                  from public, anon, authenticated;
-revoke all on function private.placement_check(bigint, bigint)         from public, anon, authenticated;
+revoke all on function private.placement_check(bigint)                 from public, anon, authenticated;
 -- the site's server runs apply_draft_items() as itself, and it fires these
 grant execute on function private.normal_answer(text)          to service_role;
 grant execute on function private.choices_match_set(bigint[])  to service_role;
 grant execute on function private.component_kind(bigint)       to service_role;
-grant execute on function private.placement_check(bigint, bigint) to service_role;
+grant execute on function private.placement_check(bigint)       to service_role;
 
 
 -- =====================================================================================================
@@ -2785,7 +2856,7 @@ declare
   dashboard_tables constant text[] := array[
     'registry', 'principal_investigator', 'study', 'respondent_type', 'questionnaire', 'wave',
     'component_type', 'component', 'question', 'questionnaire_component', 'questionnaire_question',
-    'wave_question', 'subject', 'variable', 'open_ended', 'closed_ended', 'option_set',
+    'wave_question', 'subject', 'time_frame', 'variable', 'open_ended', 'closed_ended', 'option_set',
     'answer_option', 'answer_option_set', 'response_option', 'response_option_count', 'category', 'question_category',
     'measurement_scale', 'question_scale', 'question_stem', 'answer_option_alias', 'wave_file'
   ];
@@ -2851,14 +2922,15 @@ comment on table public.respondent_type         is 'The population a questionnai
 comment on table public.questionnaire           is 'What stays true across every administration of an instrument.';
 comment on table public.wave                    is 'One round of data collection for a questionnaire.';
 comment on table public.component_type          is 'Kind of building block: Section, Question, Instruction, ...';
-comment on table public.component               is 'One piece of printed material, held once for the whole registry.';
+comment on table public.component               is 'One piece of printed material, held once for the whole registry: one for each kind and wording, however many times it is printed. The one Group is shared by every group.';
 comment on table public.question                is 'Subtype of component that requests one or more answers.';
-comment on table public.question_stem           is 'What questions that differ only in who they ask about share, e.g. "Has [subject] ever repeated a grade?". [subject] is filled in with each variable''s subject when shown.';
+comment on table public.question_stem           is 'What questions that differ only in who or when they ask about share, e.g. "Has [subject] ever repeated a grade?", "on how many occasions have you smoked cigarettes [time frame]?". [subject] and [time frame] are filled in with each variable''s subject and time frame when shown.';
 comment on column public.question.question_stem_id is 'The stem this question shares with the questions that differ from it only in who they ask about (Twin A, Twin B). Empty when it shares none.';
-comment on table public.questionnaire_component is 'Where a questionnaire printed a component: parent and display order.';
-comment on table public.questionnaire_question  is 'A question as printed in one questionnaire; variables attach here.';
+comment on table public.questionnaire_component is 'A placement: one place where a questionnaire printed a component, with what holds it and its order. A questionnaire can print a component more than once; each place is a placement of its own.';
+comment on table public.questionnaire_question  is 'A placement of a question: its settings there. Variables attach here.';
 comment on table public.wave_question           is 'That a wave actually asked a question: its place among the wave''s questions, and the number printed beside it.';
 comment on table public.subject                 is 'Who a variable can be about. Kept by staff (Make an edit, kind Subject); read by the dashboard.';
+comment on table public.time_frame              is 'When a variable''s answer can be about, written one way, e.g. "in the past 12 months". Fills [time frame] in a question stem; read by the dashboard.';
 comment on table public.variable                is 'One place an answer is recorded; one column in the response database.';
 comment on table public.open_ended              is 'Variable the respondent writes.';
 comment on table public.closed_ended            is 'Variable chosen from an option set.';
@@ -2899,22 +2971,27 @@ comment on column public.wave_file.pdf_name is 'That PDF''s name, as uploaded.';
 comment on column public.wave_file.supplement_name is 'The name of the file of Variable Names and Coding the extraction was given, if any.';
 comment on column public.wave_file.supplement_sha256 is 'That file, when it is a PDF (pdf_file).';
 comment on column public.wave_file.supplement_text is 'That file''s text, when it is a CSV or text file.';
-comment on column public.questionnaire_component.display_order is 'Position among components sharing the same parent, counting from 1.';
+comment on column public.questionnaire_component.placement_id is 'System key: this place in the questionnaire.';
+comment on column public.questionnaire_component.parent_placement_id is 'The placement of the Section or Group it is in. Empty at the top level.';
+comment on column public.questionnaire_component.display_order is 'Position among the placements sharing the same parent, counting from 1.';
+comment on column public.questionnaire_question.parent_question_placement_id is 'The placement of the question it follows (a follow-up, or one reached by routing). Empty when it follows none.';
+comment on column public.variable.placement_id is 'The placement of the question whose answer it records.';
 comment on column public.questionnaire_component.skip_condition is
   'For a Group that skips: the answer that skips, e.g. No for "If you answered No to items 22a-d, go to Question 28". Empty when it doesn''t skip.';
 comment on column public.questionnaire_component.skip_when is
   'For a Group that skips: every (the skip happens when every question in the group gets the answer) or any (when any of them does).';
 comment on column public.questionnaire_component.skip_instruction is
   'For a Group that skips: the routing as printed, e.g. "Go to Question 28".';
-comment on column public.questionnaire_component.skip_to_component_id is
+comment on column public.questionnaire_component.skip_to_placement_id is
   'For a Group that skips: where it sends respondents, the question, section or group it names. Empty when nothing is linked, or when it ends the questionnaire (skip_to_end).';
 comment on column public.questionnaire_component.skip_to_end is
   'For a Group that skips: it sends respondents to the end of the questionnaire.';
 comment on column public.variable.variable_key is 'System key. Deliberately not "variable_id"; see matr_id.';
 comment on column public.variable.matr_id is 'What MATR staff call the variable ID, e.g. AH25LF. Unique within a questionnaire; never changes.';
 comment on column public.variable.subject_id is 'Who the variable is about (public.subject). Null when not known.';
+comment on column public.variable.time_frame_id is 'When the variable''s answer is about (public.time_frame), e.g. "in the past 30 days". Null when its question names no time.';
 comment on column public.response_option.code_value is 'Stored value for this option in the response data, e.g. 1 for Yes.';
-comment on column public.response_option.skip_to_component_id is
+comment on column public.response_option.skip_to_placement_id is
   'Where the skip instruction sends respondents: the question, section or question group it names. Empty when nothing is linked, or when it ends the questionnaire (skip_to_end).';
 comment on column public.response_option.skip_to_end is
   'The skip instruction sends respondents to the end of the questionnaire.';
@@ -2922,7 +2999,7 @@ comment on column public.open_ended.skip_condition is
   'The answer that skips, e.g. None for "If none, go to Question 57". Empty when the write-in has no skip.';
 comment on column public.open_ended.skip_instruction is
   'The routing printed for the write-in, e.g. "Go to Question 57".';
-comment on column public.open_ended.skip_to_component_id is
+comment on column public.open_ended.skip_to_placement_id is
   'Where the skip sends respondents: the question, section or question group it names. Empty when nothing is linked, or when it ends the questionnaire (skip_to_end).';
 comment on column public.open_ended.skip_to_end is
   'The skip sends respondents to the end of the questionnaire.';
@@ -3037,11 +3114,17 @@ insert into public.component_type (name, description) values
   ('Definition',         'Printed explanation of a term used in the questionnaire.'),
   ('Interviewer Script', 'Text an interviewer reads aloud or follows.'),
   ('Note',               'Any other printed remark.'),
-  ('Group',              'Holds blocks that belong together but have no printed heading: a battery, a definition with its question, a question with its follow-up. Has no text.');
+  ('Group',              'Holds blocks that belong together but have no printed heading: a battery, a definition with its question, a question with its follow-up. Has no text, so there is one Group component, placed wherever a questionnaire groups blocks.'),
+  ('Grid',               'A lead-in its questions share, printed once above them (a table of rows, or a stem with several items): "In the past month, how often did you...". Holds those questions, each with only its own words, and any instruction or definition among them; a question''s full wording is the lead-in followed by its words. Questions that are whole without a lead-in go in a Group instead.');
 
 -- Who a variable can be about; staff keep this list on Make an edit.
 insert into public.subject (name) values
   ('Respondent'), ('Respondent''s Family'), ('Respondent''s Children'), ('Respondent''s Siblings'), ('Twin A'), ('Twin B');
+
+-- When a variable can be about, as normal_time_frame() writes them; an extraction adds any other it finds.
+insert into public.time_frame (name) values
+  ('in your lifetime'), ('in the past year'), ('in the past 12 months'), ('in the past 6 months'), ('in the past month'),
+  ('in the past 30 days'), ('in the past 4 weeks'), ('in the past 2 weeks'), ('in the past week');
 
 -- The PDFs' bucket: the extractions' PDFs (and PDF files of Variable Names and Coding) are kept in Storage, as
 -- <sha256>.pdf (R/model_storage.R). Public: anyone can download a file by its address,
@@ -3160,8 +3243,11 @@ with made as (
   insert into public.component (component_type_id, text) select pg_temp.id('section_type'), 'Section A' returning component_id
 )
 insert into ctx select 'section_a', component_id from made;
-insert into public.questionnaire_component (questionnaire_id, component_id, display_order)
-  select pg_temp.id('questionnaire'), pg_temp.id('section_a'), 1;
+with placed as (
+  insert into public.questionnaire_component (questionnaire_id, component_id, display_order)
+    select pg_temp.id('questionnaire'), pg_temp.id('section_a'), 1 returning placement_id
+)
+insert into ctx select 'section_a_place', placement_id from placed;
 
 -- ------ The migrations themselves ---------------------------------------------------------
 do $$
@@ -3191,7 +3277,7 @@ begin
   assert to_regprocedure('public.apply_pending_edit(bigint)') is null, 'and its functions';
   -- every table's own ID is a random 9-digit number the database picks
   assert (select count(*) from pg_attrdef ad join pg_class c on c.oid = ad.adrelid
-          where c.relnamespace = 'public'::regnamespace and pg_get_expr(ad.adbin, ad.adrelid) like '%random_id(%') = 16, 'sixteen tables number their rows';
+          where c.relnamespace = 'public'::regnamespace and pg_get_expr(ad.adbin, ad.adrelid) like '%random_id(%') = 19, 'nineteen tables number their rows (a placement, a question stem and a time frame are three of them)';
   assert not exists (select 1 from information_schema.columns where table_schema = 'public' and is_identity = 'YES'), 'none counts 1, 2, 3';
   assert (select bool_and(staff_id between 100000000 and 999999999) from public.staff), 'staff IDs have 9 digits';
   assert (select bool_and(component_type_id between 100000000 and 999999999) from public.component_type), 'and so do the starting component types';
@@ -3206,6 +3292,12 @@ begin
   assert has_table_privilege('anon', 'public.subject', 'select'), 'the dashboard reads subject';
   assert not has_table_privilege('anon', 'public.subject', 'insert, update, delete'), 'but can''t change it';
   assert (select count(*) from pg_policies where tablename = 'subject' and policyname = 'Dashboard can read') = 1, 'with the one policy the other tables have';
+  -- a subject's name has straight quotes
+  perform pg_temp.expect_error($q$insert into public.subject (name) values ('ZZ Respondent’s Cousin')$q$, 'subject_name_straight_quotes');
+  -- and time frames the same way
+  assert exists (select 1 from information_schema.columns where table_name = 'variable' and column_name = 'time_frame_id'), 'variable.time_frame_id';
+  assert has_table_privilege('anon', 'public.time_frame', 'select'), 'the dashboard reads time_frame';
+  assert not has_table_privilege('anon', 'public.time_frame', 'insert, update, delete'), 'but can''t change it';
 end;
 $$;
 
@@ -3236,7 +3328,7 @@ begin
   -- the dashboard reads every MATR table, with one policy each, and writes none
   foreach t in array array['registry', 'principal_investigator', 'study', 'respondent_type', 'questionnaire', 'wave',
     'component_type', 'component', 'question', 'questionnaire_component', 'questionnaire_question', 'wave_question',
-    'subject', 'variable', 'open_ended', 'closed_ended', 'option_set', 'answer_option', 'answer_option_set',
+    'subject', 'time_frame', 'variable', 'open_ended', 'closed_ended', 'option_set', 'answer_option', 'answer_option_set',
     'response_option', 'response_option_count', 'category', 'question_category', 'measurement_scale', 'question_scale',
     'question_stem', 'answer_option_alias', 'wave_file', 'pdf_file'] loop
     assert has_table_privilege('anon', 'public.' || t, 'select'), t || ' is readable by the dashboard';
@@ -3244,7 +3336,7 @@ begin
     assert (select count(*) from pg_policies where schemaname = 'public' and tablename = t) = 1, t || ' has its one policy';
     assert has_table_privilege('service_role', 'public.' || t, 'select, insert, update, delete'), t || ' is the site''s to change';
   end loop;
-  assert (select count(*) from pg_class where relnamespace = 'public'::regnamespace and relkind = 'r') = 36, 'thirty-six tables';
+  assert (select count(*) from pg_class where relnamespace = 'public'::regnamespace and relkind = 'r') = 37, 'thirty-seven tables';
   assert not exists (select 1 from pg_class where relnamespace = 'public'::regnamespace and relkind = 'r' and not relrowsecurity), 'RLS on all of them';
   assert (select public from storage.buckets where id = 'extraction-pdfs'), 'the PDFs'' bucket is public';
   assert not exists (select 1 from pg_policies where schemaname = 'storage' and tablename = 'objects'
@@ -3499,53 +3591,59 @@ declare
   e bigint := pg_temp.edit(pg_temp.id('ben'), 'add', jsonb_build_array(
     pg_temp.item(1, 'component', jsonb_build_object('component_id', 'new:component:1'), 'Insert', 'component_type_id', null, pg_temp.id('section_type')::text),
     pg_temp.item(2, 'component', jsonb_build_object('component_id', 'new:component:1'), 'Insert', 'text', null, 'Section B'),
-    pg_temp.item(3, 'questionnaire_component', jsonb_build_object('component_id', 'new:component:1', 'questionnaire_id', pg_temp.id('questionnaire')), 'Insert', 'display_order', null, '2'),
-    pg_temp.item(4, 'subject', jsonb_build_object('subject_id', 'new:subject:1'), 'Insert', 'name', null, 'ZZ Test Subject')), 'Draft');
+    pg_temp.item(3, 'questionnaire_component', jsonb_build_object('placement_id', 'new:questionnaire_component:1'), 'Insert', 'questionnaire_id', null, pg_temp.id('questionnaire')::text),
+    pg_temp.item(4, 'questionnaire_component', jsonb_build_object('placement_id', 'new:questionnaire_component:1'), 'Insert', 'component_id', null, 'new:component:1'),
+    pg_temp.item(5, 'questionnaire_component', jsonb_build_object('placement_id', 'new:questionnaire_component:1'), 'Insert', 'display_order', null, '2'),
+    pg_temp.item(6, 'subject', jsonb_build_object('subject_id', 'new:subject:1'), 'Insert', 'name', null, 'ZZ Test Subject')), 'Draft');
   made bigint;
   new_component bigint;
+  new_place bigint;
 begin
   made := public.apply_draft(e, pg_temp.id('ben'));
   select component_id into new_component from public.component where text = 'Section B';
   assert new_component between 100000000 and 999999999, 'the component was added, with a random 9-digit ID';
-  assert (select count(*) from public.questionnaire_component where questionnaire_id = pg_temp.id('questionnaire') and component_id = new_component and display_order = 2) = 1,
-    'the placement points at the number the database gave the new component';
+  select placement_id into new_place from public.questionnaire_component
+  where questionnaire_id = pg_temp.id('questionnaire') and component_id = new_component and display_order = 2;
+  assert new_place is not null, 'the placement points at the number the database gave the new component';
   assert (select count(*) from public.subject where name = 'ZZ Test Subject') = 1, 'the subject was added';
   assert (select edit_kind from public.edit_draft where draft_id = made) = 'Add', 'kind Add';
   assert (select record_identifier from public.applied_item where draft_id = made and item_number = 3)
-    = format('{"component_id":%s,"questionnaire_id":%s}', new_component, pg_temp.id('questionnaire')), 'history: the real number in the key';
+    = format('{"placement_id":%s}', new_place), 'history: the real number in the key';
   assert not exists (select 1 from public.applied_item where draft_id = made and record_identifier like '%new:%'), 'no placeholder is left';
-  insert into ctx values ('section_b', new_component);
+  insert into ctx values ('section_b', new_component), ('section_b_place', new_place);
 end;
 $$;
 
 -- ------ apply_draft: a change that points an existing row at a new one ---------------------------------------
--- Like changing a section's words: a new component takes the old one's place, what was inside is moved to it.
+-- Like changing a section's words: its placement is pointed at a new component; what is inside stays inside it,
+-- and the old wording, printed nowhere else now, goes.
 do $$
 declare
   edit bigint;
   child bigint;
+  child_place bigint;
   made bigint;
   new_component bigint;
 begin
   insert into public.component (component_type_id, text) values (pg_temp.id('section_type'), 'Child') returning component_id into child;
-  insert into public.questionnaire_component (questionnaire_id, component_id, parent_component_id, display_order)
-    values (pg_temp.id('questionnaire'), child, pg_temp.id('section_b'), 1);
+  insert into public.questionnaire_component (questionnaire_id, component_id, parent_placement_id, display_order)
+    values (pg_temp.id('questionnaire'), child, pg_temp.id('section_b_place'), 1) returning placement_id into child_place;
   edit := pg_temp.edit(pg_temp.id('cy'), 'update', jsonb_build_array(
     pg_temp.item(1, 'component', jsonb_build_object('component_id', 'new:component:1'), 'Insert', 'component_type_id', null, pg_temp.id('section_type')::text),
     pg_temp.item(2, 'component', jsonb_build_object('component_id', 'new:component:1'), 'Insert', 'text', null, 'Section B, reworded'),
-    pg_temp.item(3, 'questionnaire_component', jsonb_build_object('component_id', 'new:component:1', 'questionnaire_id', pg_temp.id('questionnaire')), 'Insert', 'display_order', null, '2'),
-    pg_temp.item(4, 'questionnaire_component', jsonb_build_object('component_id', child, 'questionnaire_id', pg_temp.id('questionnaire')), 'Update', 'parent_component_id', pg_temp.id('section_b')::text, 'new:component:1'),
-    pg_temp.item(5, 'questionnaire_component', jsonb_build_object('component_id', pg_temp.id('section_b'), 'questionnaire_id', pg_temp.id('questionnaire')), 'Delete', 'parent_component_id', null, null),
-    pg_temp.item(6, 'questionnaire_component', jsonb_build_object('component_id', pg_temp.id('section_b'), 'questionnaire_id', pg_temp.id('questionnaire')), 'Delete', 'display_order', '2', null)),
+    pg_temp.item(3, 'questionnaire_component', jsonb_build_object('placement_id', pg_temp.id('section_b_place')), 'Update', 'component_id', pg_temp.id('section_b')::text, 'new:component:1')),
     'Draft');
-  -- both rows hold display order 2 for a moment; the unique constraint is deferred until the change is done
   made := public.apply_draft(edit, pg_temp.id('cy'));
+  set constraints component_left_unplaced immediate;
+  set constraints component_left_unplaced deferred;
 
   select component_id into new_component from public.component where text = 'Section B, reworded';
-  assert (select parent_component_id from public.questionnaire_component where questionnaire_id = pg_temp.id('questionnaire') and component_id = child) = new_component,
-    'the child now points at the new component';
-  assert not exists (select 1 from public.questionnaire_component where component_id = pg_temp.id('section_b')), 'the old placement is gone';
-  assert (select new_value from public.applied_item where draft_id = made and item_number = 4) = new_component::text, 'history: the real number as the new value';
+  assert (select component_id from public.questionnaire_component where placement_id = pg_temp.id('section_b_place')) = new_component,
+    'the placement now prints the new wording';
+  assert (select parent_placement_id from public.questionnaire_component where placement_id = child_place) = pg_temp.id('section_b_place'),
+    'and what was inside it is still inside it';
+  assert not exists (select 1 from public.component where component_id = pg_temp.id('section_b')), 'the old wording, printed nowhere, is gone';
+  assert (select new_value from public.applied_item where draft_id = made and item_number = 3) = new_component::text, 'history: the real number as the new value';
 end;
 $$;
 
@@ -3662,7 +3760,7 @@ begin
 
   -- a new row mentioned before it is added
   e := pg_temp.edit(pg_temp.id('ana'), 'add', jsonb_build_array(
-    pg_temp.item(1, 'questionnaire_component', jsonb_build_object('component_id', 'new:component:9', 'questionnaire_id', pg_temp.id('questionnaire')), 'Insert', 'display_order', null, '5')), 'Draft');
+    pg_temp.item(1, 'questionnaire_component', jsonb_build_object('placement_id', 'new:questionnaire_component:1'), 'Insert', 'component_id', null, 'new:component:9')), 'Draft');
   perform pg_temp.expect_error(format('select public.apply_draft(%s, %s)', e, pg_temp.id('ana')), 'before that row is added');
 
   -- a rule of the database (a wave name can't repeat) stops the whole change
@@ -3694,19 +3792,26 @@ begin
     pg_temp.item(6, 'wave', jsonb_build_object('wave_id', 'new:wave:1'), 'Insert', 'name', null, 'Wave 1'),
     pg_temp.item(7, 'component', jsonb_build_object('component_id', 'new:component:1'), 'Insert', 'component_type_id', null, pg_temp.id('section_type')::text),
     pg_temp.item(8, 'component', jsonb_build_object('component_id', 'new:component:1'), 'Insert', 'text', null, 'Pushed section'),
-    pg_temp.item(9, 'questionnaire_component', jsonb_build_object('component_id', 'new:component:1', 'questionnaire_id', 'new:questionnaire:1'), 'Insert', 'display_order', null, '1'),
-    pg_temp.item(10, 'component', jsonb_build_object('component_id', 'new:component:2'), 'Insert', 'component_type_id', null, (select component_type_id from public.component_type where name = 'Question')::text),
-    pg_temp.item(11, 'component', jsonb_build_object('component_id', 'new:component:2'), 'Insert', 'text', null, 'Pushed question?'),
-    pg_temp.item(12, 'question', jsonb_build_object('component_id', 'new:component:2'), 'Insert', 'component_id', null, 'new:component:2'),
-    pg_temp.item(13, 'questionnaire_component', jsonb_build_object('component_id', 'new:component:2', 'questionnaire_id', 'new:questionnaire:1'), 'Insert', 'parent_component_id', null, 'new:component:1'),
-    pg_temp.item(14, 'questionnaire_component', jsonb_build_object('component_id', 'new:component:2', 'questionnaire_id', 'new:questionnaire:1'), 'Insert', 'display_order', null, '1'),
-    pg_temp.item(15, 'questionnaire_question', jsonb_build_object('component_id', 'new:component:2', 'questionnaire_id', 'new:questionnaire:1'), 'Insert', 'self_contained', null, 'true'),
-    pg_temp.item(16, 'wave_question', jsonb_build_object('component_id', 'new:component:2', 'questionnaire_id', 'new:questionnaire:1', 'wave_id', 'new:wave:1'), 'Insert', 'question_number', null, '1'),
-    pg_temp.item(17, 'variable', jsonb_build_object('variable_key', 'new:variable:1'), 'Insert', 'questionnaire_id', null, 'new:questionnaire:1'),
-    pg_temp.item(18, 'variable', jsonb_build_object('variable_key', 'new:variable:1'), 'Insert', 'component_id', null, 'new:component:2'),
-    pg_temp.item(19, 'variable', jsonb_build_object('variable_key', 'new:variable:1'), 'Insert', 'matr_id', null, 'ZZP1'),
-    pg_temp.item(20, 'variable', jsonb_build_object('variable_key', 'new:variable:1'), 'Insert', 'display_order', null, '1'),
-    pg_temp.item(21, 'open_ended', jsonb_build_object('variable_key', 'new:variable:1'), 'Insert', 'answer_data_type', null, 'TEXT'));
+    pg_temp.item(9, 'questionnaire_component', jsonb_build_object('placement_id', 'new:questionnaire_component:1'), 'Insert', 'questionnaire_id', null, 'new:questionnaire:1'),
+    pg_temp.item(10, 'questionnaire_component', jsonb_build_object('placement_id', 'new:questionnaire_component:1'), 'Insert', 'component_id', null, 'new:component:1'),
+    pg_temp.item(11, 'questionnaire_component', jsonb_build_object('placement_id', 'new:questionnaire_component:1'), 'Insert', 'display_order', null, '1'),
+    pg_temp.item(12, 'component', jsonb_build_object('component_id', 'new:component:2'), 'Insert', 'component_type_id', null, (select component_type_id from public.component_type where name = 'Question')::text),
+    pg_temp.item(13, 'component', jsonb_build_object('component_id', 'new:component:2'), 'Insert', 'text', null, 'Pushed question?'),
+    pg_temp.item(14, 'question', jsonb_build_object('component_id', 'new:component:2'), 'Insert', 'component_id', null, 'new:component:2'),
+    pg_temp.item(15, 'questionnaire_component', jsonb_build_object('placement_id', 'new:questionnaire_component:2'), 'Insert', 'questionnaire_id', null, 'new:questionnaire:1'),
+    pg_temp.item(16, 'questionnaire_component', jsonb_build_object('placement_id', 'new:questionnaire_component:2'), 'Insert', 'component_id', null, 'new:component:2'),
+    pg_temp.item(17, 'questionnaire_component', jsonb_build_object('placement_id', 'new:questionnaire_component:2'), 'Insert', 'parent_placement_id', null, 'new:questionnaire_component:1'),
+    pg_temp.item(18, 'questionnaire_component', jsonb_build_object('placement_id', 'new:questionnaire_component:2'), 'Insert', 'display_order', null, '1'),
+    pg_temp.item(19, 'questionnaire_question', jsonb_build_object('placement_id', 'new:questionnaire_component:2'), 'Insert', 'questionnaire_id', null, 'new:questionnaire:1'),
+    pg_temp.item(20, 'questionnaire_question', jsonb_build_object('placement_id', 'new:questionnaire_component:2'), 'Insert', 'component_id', null, 'new:component:2'),
+    pg_temp.item(21, 'questionnaire_question', jsonb_build_object('placement_id', 'new:questionnaire_component:2'), 'Insert', 'self_contained', null, 'true'),
+    pg_temp.item(22, 'wave_question', jsonb_build_object('placement_id', 'new:questionnaire_component:2', 'wave_id', 'new:wave:1'), 'Insert', 'questionnaire_id', null, 'new:questionnaire:1'),
+    pg_temp.item(23, 'wave_question', jsonb_build_object('placement_id', 'new:questionnaire_component:2', 'wave_id', 'new:wave:1'), 'Insert', 'question_number', null, '1'),
+    pg_temp.item(24, 'variable', jsonb_build_object('variable_key', 'new:variable:1'), 'Insert', 'questionnaire_id', null, 'new:questionnaire:1'),
+    pg_temp.item(25, 'variable', jsonb_build_object('variable_key', 'new:variable:1'), 'Insert', 'placement_id', null, 'new:questionnaire_component:2'),
+    pg_temp.item(26, 'variable', jsonb_build_object('variable_key', 'new:variable:1'), 'Insert', 'matr_id', null, 'ZZP1'),
+    pg_temp.item(27, 'variable', jsonb_build_object('variable_key', 'new:variable:1'), 'Insert', 'display_order', null, '1'),
+    pg_temp.item(28, 'open_ended', jsonb_build_object('variable_key', 'new:variable:1'), 'Insert', 'answer_data_type', null, 'TEXT'));
 
   -- an extraction by a STAFF member needs approval; the rows come with the approval
   e := public.create_draft('Extraction', pg_temp.id('ana'), jsonb_build_object('status', 'Awaiting Review', 'summary', 'Push ZZP'), jsonb_build_object('method', 'Manual'));
@@ -3725,7 +3830,9 @@ begin
   select wave_id into w from public.wave where questionnaire_id = q and name = 'Wave 1';
   assert q is not null and w is not null, 'the questionnaire and its wave were added';
   assert (select count(*) from public.questionnaire_component where questionnaire_id = q) = 2, 'the section and the question are placed';
-  assert (select parent_component_id from public.questionnaire_component qc join public.component c using (component_id) where qc.questionnaire_id = q and c.text = 'Pushed question?')
+  assert (select p.component_id from public.questionnaire_component qc join public.component c using (component_id)
+          join public.questionnaire_component p on p.placement_id = qc.parent_placement_id
+          where qc.questionnaire_id = q and c.text = 'Pushed question?')
        = (select component_id from public.component where text = 'Pushed section'), 'the question sits in the section';
   assert (select question_number from public.wave_question where wave_id = w) = '1', 'the wave asked it';
   select variable_key into v from public.variable where questionnaire_id = q and matr_id = 'ZZP1';
@@ -3760,7 +3867,9 @@ begin
   begin
     perform public.apply_draft(e, pg_temp.id('ada'), jsonb_build_array(
       pg_temp.item(1, 'variable', jsonb_build_object('variable_key', 'new:variable:1'), 'Insert', 'questionnaire_id', null, q::text),
-      pg_temp.item(2, 'variable', jsonb_build_object('variable_key', 'new:variable:1'), 'Insert', 'component_id', null, (select component_id from public.component where text = 'Pushed question?')::text),
+      pg_temp.item(2, 'variable', jsonb_build_object('variable_key', 'new:variable:1'), 'Insert', 'placement_id', null,
+        (select qc.placement_id from public.questionnaire_component qc join public.component c using (component_id)
+         where qc.questionnaire_id = q and c.text = 'Pushed question?')::text),
       pg_temp.item(3, 'variable', jsonb_build_object('variable_key', 'new:variable:1'), 'Insert', 'matr_id', null, 'ZZP9'),
       pg_temp.item(4, 'variable', jsonb_build_object('variable_key', 'new:variable:1'), 'Insert', 'display_order', null, '9')));
     set constraints all immediate;
@@ -3959,13 +4068,20 @@ begin
   reset role;
   perform public.discard_draft(e, pg_temp.id('ada'));
 
-  -- a deleted wave takes its files, once nothing else uses them
-  e := public.create_draft('Extraction', pg_temp.id('ada'), '{}'::jsonb, jsonb_build_object('method', 'Manual', 'pdf_sha256', 'zzfiles'));
+  -- a deleted wave takes its files once nothing else names them. The extraction it was read from was applied, and an
+  -- applied extraction is kept as the record of what it was read from, so its files stay.
   delete from public.wave where wave_id = w1;
-  assert (select count(*) from public.pdf_file where pdf_sha256 = 'zzfiles') = 1, 'a file a draft still uses stays';
-  assert not exists (select 1 from public.pdf_file where pdf_sha256 = 'zzcodes'), 'one nothing else uses goes with the wave';
-  perform public.discard_draft(e, pg_temp.id('ada'));
-  assert not exists (select 1 from public.pdf_file where pdf_sha256 = 'zzfiles'), 'and the other goes with the last draft';
+  assert (select count(*) from public.pdf_file where pdf_sha256 in ('zzfiles', 'zzcodes')) = 2, 'files the applied extraction names stay';
+  -- a wave whose files nothing else names takes them with it
+  declare
+    w3 bigint;
+  begin
+    insert into public.pdf_file (pdf_sha256) values ('zzwaveonly');
+    insert into public.wave (questionnaire_id, name) values (pg_temp.id('questionnaire'), 'Wave Only Files') returning wave_id into w3;
+    insert into public.wave_file (wave_id, pdf_sha256, pdf_name) values (w3, 'zzwaveonly', 'w.pdf');
+    delete from public.wave where wave_id = w3;
+    assert not exists (select 1 from public.pdf_file where pdf_sha256 = 'zzwaveonly'), 'one nothing else uses goes with the wave';
+  end;
 end;
 $$;
 
@@ -3981,28 +4097,36 @@ begin
   insert into public.component (component_type_id, text)
     select component_type_id, words from public.component_type where name = 'Question' returning component_id into c;
   insert into public.question (component_id, question_stem_id) values (c, stem);
-  perform pg_temp.place_again(q, parent, n, c, follows);
-  return c;
+  return pg_temp.place_again(q, parent, n, c, follows);
 end;
 $$;
-create function pg_temp.place_again(q bigint, parent bigint, n int, c bigint, follows bigint default null) returns void
-language sql as $$
-  insert into public.questionnaire_component (questionnaire_id, component_id, parent_component_id, display_order) values (q, c, parent, n);
-  insert into public.questionnaire_question (questionnaire_id, component_id, parent_question_id, self_contained)
-    values (q, c, follows, follows is null);
+-- places question c in questionnaire q (again); parent and follows are placements; returns the new placement
+create function pg_temp.place_again(q bigint, parent bigint, n int, c bigint, follows bigint default null) returns bigint
+language plpgsql as $$
+declare
+  p bigint;
+begin
+  insert into public.questionnaire_component (questionnaire_id, component_id, parent_placement_id, display_order)
+    values (q, c, parent, n) returning placement_id into p;
+  insert into public.questionnaire_question (placement_id, questionnaire_id, component_id, parent_question_placement_id, self_contained)
+    values (p, q, c, follows, follows is null);
+  return p;
+end;
 $$;
-create function pg_temp.ask(q bigint, w bigint, c bigint, n text) returns void
+create function pg_temp.ask(q bigint, w bigint, p bigint, n text) returns void
 language sql as $$
-  insert into public.wave_question (questionnaire_id, wave_id, component_id, question_number) values (q, w, c, n);
+  insert into public.wave_question (questionnaire_id, wave_id, placement_id, question_number) values (q, w, p, n);
 $$;
-create function pg_temp.answer(q bigint, c bigint, matr text, skip_to bigint default null) returns bigint
+create function pg_temp.answer(q bigint, p bigint, matr text, skip_to bigint default null) returns bigint
 language sql as $$
   with v as (
-    insert into public.variable (questionnaire_id, component_id, matr_id, display_order) values (q, c, matr, 1) returning variable_key
+    insert into public.variable (questionnaire_id, placement_id, matr_id, display_order) values (q, p, matr, 1) returning variable_key
   )
-  insert into public.open_ended (variable_key, answer_data_type, skip_to_component_id)
+  insert into public.open_ended (variable_key, answer_data_type, skip_to_placement_id)
   select variable_key, 'TEXT', skip_to from v returning variable_key;
 $$;
+create function pg_temp.component_of(p bigint) returns bigint
+language sql as $$ select component_id from public.questionnaire_component where placement_id = p $$;
 create function pg_temp.tidy() returns void
 language plpgsql as $$
 begin
@@ -4011,11 +4135,91 @@ begin
 end;
 $$;
 
+-- M3 and M4 with a Grid: it has words (its lead-in), holds questions with their instructions and definitions,
+-- and skips like a Group; a Section, Grid or Group never goes inside it, and a Section never inside a Group.
+-- Everything here is undone at the end, so the checks after it see the data as it was.
+do $$
+declare
+  q bigint := pg_temp.id('questionnaire');
+  kinds jsonb;
+  grid_c bigint; grid bigint; asked bigint; told_c bigint; group_c bigint; grp bigint; inner_grid_c bigint;
+begin
+  begin
+    select jsonb_object_agg(name, component_type_id) into kinds from public.component_type;
+    assert kinds ? 'Grid', 'there is a Grid kind of block';
+    -- M4 waits for the change to end (a question's component goes in before its question row), so ask it now
+    begin
+      insert into public.component (component_type_id, text) values ((kinds ->> 'Grid')::bigint, null);
+      set constraints component_kind_rules immediate;
+      raise exception 'A Grid with no words went through';
+    exception when others then
+      if sqlerrm !~ 'only a Group has no words' then
+        raise;
+      end if;
+    end;
+    set constraints component_kind_rules deferred;
+    set constraints questionnaire_component_parent_kind immediate;
+
+    insert into public.component (component_type_id, text) values ((kinds ->> 'Grid')::bigint, 'ZZ In the past month, how often did you')
+      returning component_id into grid_c;
+    insert into public.questionnaire_component (questionnaire_id, component_id, parent_placement_id, display_order, skip_to_end)
+      values (q, grid_c, pg_temp.id('section_a_place'), 90, true) returning placement_id into grid;
+    asked := pg_temp.place_question(q, grid, 1, 'ZZ feel tired?');
+    insert into public.component (component_type_id, text) values ((kinds ->> 'Instruction')::bigint, 'ZZ Tick one box per row.')
+      returning component_id into told_c;
+    insert into public.questionnaire_component (questionnaire_id, component_id, parent_placement_id, display_order)
+      values (q, told_c, grid, 2);
+    assert (select count(*) from public.questionnaire_component where parent_placement_id = grid) = 2,
+      'a grid holds its questions and instructions, and skips';
+
+    perform pg_temp.expect_error(format(
+      'insert into public.questionnaire_component (questionnaire_id, component_id, parent_placement_id, display_order) values (%s, %s, %s, 3)',
+      q, pg_temp.id('section_a'), grid),
+      'a Section is never inside a Group or a Grid');
+    insert into public.component (component_type_id, text) values ((kinds ->> 'Grid')::bigint, 'ZZ How much do you agree that')
+      returning component_id into inner_grid_c;
+    perform pg_temp.expect_error(format(
+      'insert into public.questionnaire_component (questionnaire_id, component_id, parent_placement_id, display_order) values (%s, %s, %s, 3)',
+      q, inner_grid_c, grid),
+      'Grid placement .* is inside a Grid');
+    select component_id into group_c from public.component where component_type_id = (kinds ->> 'Group')::bigint;
+    if group_c is null then
+      insert into public.component (component_type_id, text) values ((kinds ->> 'Group')::bigint, null) returning component_id into group_c;
+    end if;
+    perform pg_temp.expect_error(format(
+      'insert into public.questionnaire_component (questionnaire_id, component_id, parent_placement_id, display_order) values (%s, %s, %s, 3)',
+      q, group_c, grid),
+      'Group placement .* is inside a Grid');
+    perform pg_temp.expect_error(format(
+      'update public.questionnaire_component set skip_to_end = true where questionnaire_id = %s and component_id = %s', q, told_c),
+      'only a Group or a Grid skips');
+
+    insert into public.questionnaire_component (questionnaire_id, component_id, parent_placement_id, display_order)
+      values (q, group_c, pg_temp.id('section_a_place'), 91) returning placement_id into grp;
+    insert into public.questionnaire_component (questionnaire_id, component_id, parent_placement_id, display_order)
+      values (q, grid_c, grp, 1);
+    assert (select count(*) from public.questionnaire_component where component_id = grid_c) = 2,
+      'a grid can be inside a group, and placed twice';
+    perform pg_temp.expect_error(format(
+      'insert into public.questionnaire_component (questionnaire_id, component_id, parent_placement_id, display_order) values (%s, %s, %s, 2)',
+      q, pg_temp.id('section_a'), grp),
+      'a Section is never inside a Group or a Grid');
+    raise exception 'zz grid checks done';
+  exception when raise_exception then
+    if sqlerrm <> 'zz grid checks done' then
+      raise;
+    end if;
+  end;
+  set constraints questionnaire_component_parent_kind deferred;
+end;
+$$;
+
 do $$
 declare
   q bigint; other bigint; w1 bigint; w2 bigint; ow bigint;
   sec bigint; once bigint; twice bigint; parent bigint; follow bigint; parent2 bigint; follow2 bigint;
-  shared bigint; scaled bigint; skipped_to bigint;
+  shared bigint; shared_there bigint; scaled bigint; skipped_to bigint; again bigint;
+  once_c bigint; twice_c bigint; parent2_c bigint; follow2_c bigint; shared_c bigint; scaled_c bigint; sec_c bigint;
   stem_alone bigint; stem_shared bigint; scale bigint;
 begin
   insert into public.questionnaire (study_id, respondent_type_id, name, abbreviation)
@@ -4030,8 +4234,8 @@ begin
   insert into public.category (mesh_id, term) values ('Z9999999', 'ZZ term');
   insert into public.measurement_scale (name, abbreviation) values ('ZZ Scale', 'ZZS') returning scale_id into scale;
 
-  insert into public.component (component_type_id, text) values (pg_temp.id('section_type'), 'ZZ Owned section') returning component_id into sec;
-  insert into public.questionnaire_component (questionnaire_id, component_id, display_order) values (q, sec, 1);
+  insert into public.component (component_type_id, text) values (pg_temp.id('section_type'), 'ZZ Owned section') returning component_id into sec_c;
+  insert into public.questionnaire_component (questionnaire_id, component_id, display_order) values (q, sec_c, 1) returning placement_id into sec;
   once       := pg_temp.place_question(q, sec, 1, 'ZZ Asked once?', stem_alone);
   twice      := pg_temp.place_question(q, sec, 2, 'ZZ Asked twice?', stem_shared);
   parent     := pg_temp.place_question(q, sec, 3, 'ZZ Parent?');
@@ -4041,39 +4245,59 @@ begin
   skipped_to := pg_temp.place_question(q, sec, 7, 'ZZ Skipped to?');
   parent2    := pg_temp.place_question(q, sec, 8, 'ZZ Parent kept?');
   follow2    := pg_temp.place_question(q, sec, 9, 'ZZ Follow-up kept?', null, parent2);
-  perform pg_temp.place_again(other, null, 1, shared);
-  insert into public.question_category (component_id, mesh_id) values (once, 'Z9999999');
-  insert into public.question_scale (scale_id, component_id, item_number) values (scale, scaled, '1');
+  once_c := pg_temp.component_of(once);     twice_c := pg_temp.component_of(twice);     shared_c := pg_temp.component_of(shared);
+  scaled_c := pg_temp.component_of(scaled); parent2_c := pg_temp.component_of(parent2); follow2_c := pg_temp.component_of(follow2);
+  shared_there := pg_temp.place_again(other, null, 1, shared_c);
+  insert into public.question_category (component_id, mesh_id) values (once_c, 'Z9999999');
+  insert into public.question_scale (scale_id, component_id, item_number) values (scale, scaled_c, '1');
   perform pg_temp.ask(q, w1, once, '1');   perform pg_temp.answer(q, once, 'ZZO1');
   perform pg_temp.ask(q, w1, twice, '2');  perform pg_temp.ask(q, w2, twice, '1');
-  perform pg_temp.answer(q, twice, 'ZZO2', sec);   -- skips inside its own questionnaire
+  perform pg_temp.answer(q, twice, 'ZZO2', skipped_to);   -- skips to a place in its own questionnaire
   perform pg_temp.ask(q, w2, parent2, '6'); perform pg_temp.ask(q, w2, follow2, '7');
   perform pg_temp.ask(q, w1, parent, '3'); perform pg_temp.ask(q, w2, follow, '2');
   perform pg_temp.ask(q, w2, shared, '3'); perform pg_temp.ask(q, w2, scaled, '4'); perform pg_temp.ask(q, w2, skipped_to, '5');
-  perform pg_temp.ask(other, ow, shared, '1');
-  perform pg_temp.answer(other, shared, 'ZZN1', skipped_to);   -- the neighbour skips to a question only q prints
+  perform pg_temp.ask(other, ow, shared_there, '1');
+  perform pg_temp.answer(other, shared_there, 'ZZN1');
   perform pg_temp.tidy();
   assert (select count(*) from public.questionnaire_component where questionnaire_id = q) = 10, 'nothing goes before a delete';
+
+  -- the same question printed twice in one questionnaire: one component, two placements, each with its own
+  -- number and variables
+  again := pg_temp.place_again(q, sec, 10, shared_c);
+  perform pg_temp.ask(q, w2, again, '8');
+  perform pg_temp.answer(q, again, 'ZZO3');
+  assert (select count(*) from public.questionnaire_component where questionnaire_id = q and component_id = shared_c) = 2,
+    'a questionnaire can print a component twice';
+  assert (select placement_id from public.variable where questionnaire_id = q and matr_id = 'ZZO3') = again,
+    'each placement has its own variables';
+  -- one component for each kind and words (but for runs of spaces)
+  perform pg_temp.expect_error(
+    'insert into public.component (component_type_id, text) select component_type_id, ''ZZ  Shared?'' from public.component_type where name = ''Question''',
+    'component_words_unique');
+  delete from public.wave_question where placement_id = again;
+  perform pg_temp.tidy();
+  assert not exists (select 1 from public.questionnaire_component where placement_id = again)
+     and exists (select 1 from public.questionnaire_component where placement_id = shared), 'a placement no wave asks goes; the other stays';
 
   -- a wave: what it asked goes, and a question asked in no other wave goes with it
   delete from public.wave where wave_id = w1;
   assert not exists (select 1 from public.wave_question where wave_id = w1), 'the wave''s questions go with it';
   perform pg_temp.tidy();
-  assert not exists (select 1 from public.questionnaire_component where questionnaire_id = q and component_id = once), 'a question asked only in it goes';
+  assert not exists (select 1 from public.questionnaire_component where placement_id = once), 'a question asked only in it goes';
   assert not exists (select 1 from public.variable where matr_id = 'ZZO1' and questionnaire_id = q), 'with its variables';
-  assert not exists (select 1 from public.component where component_id = once), 'and its component, printed nowhere else';
-  assert not exists (select 1 from public.question_category where component_id = once), 'with its MeSH tags';
+  assert not exists (select 1 from public.component where component_id = once_c), 'and its component, printed nowhere else';
+  assert not exists (select 1 from public.question_category where component_id = once_c), 'with its MeSH tags';
   assert not exists (select 1 from public.question_stem where question_stem_id = stem_alone), 'and its stem, which no other question has';
   assert exists (select 1 from public.category where mesh_id = 'Z9999999'), 'the MeSH category itself stays';
-  assert exists (select 1 from public.wave_question where wave_id = w2 and component_id = twice), 'a question another wave asks stays';
+  assert exists (select 1 from public.wave_question where wave_id = w2 and placement_id = twice), 'a question another wave asks stays';
   assert exists (select 1 from public.variable where matr_id = 'ZZO2'), 'with its variables';
-  assert exists (select 1 from public.questionnaire_question where questionnaire_id = q and component_id = parent),
+  assert exists (select 1 from public.questionnaire_question where placement_id = parent),
     'a question a follow-up names stays, though no wave asks it now';
 
   -- the follow-up goes, and then the question above it, which nothing names any more
-  delete from public.wave_question where wave_id = w2 and component_id = follow;
+  delete from public.wave_question where wave_id = w2 and placement_id = follow;
   perform pg_temp.tidy();
-  assert not exists (select 1 from public.questionnaire_component where questionnaire_id = q and component_id in (follow, parent)),
+  assert not exists (select 1 from public.questionnaire_component where placement_id in (follow, parent)),
     'a follow-up asked nowhere goes, and so does the question above it';
 
   -- the questionnaire: its waves and everything placed in it, follow-ups and what they follow too
@@ -4084,18 +4308,17 @@ begin
      and not exists (select 1 from public.wave_question where questionnaire_id = q)
      and not exists (select 1 from public.variable where questionnaire_id = q), 'and everything placed in it';
   perform pg_temp.tidy();
-  assert not exists (select 1 from public.component where component_id in (sec, twice, parent2, follow2)),
-    'components only it printed go, though one of its own variables skipped to the section';
-  assert exists (select 1 from public.component where component_id = shared)
-     and exists (select 1 from public.questionnaire_question where questionnaire_id = other and component_id = shared)
+  assert not exists (select 1 from public.component where component_id in (sec_c, twice_c, parent2_c, follow2_c)),
+    'components only it printed go, though one of its own variables skipped inside it';
+  assert exists (select 1 from public.component where component_id = shared_c)
+     and exists (select 1 from public.questionnaire_question where questionnaire_id = other and component_id = shared_c)
      and exists (select 1 from public.variable where matr_id = 'ZZN1' and questionnaire_id = other), 'one another questionnaire prints stays, as it was there';
   assert exists (select 1 from public.question_stem where question_stem_id = stem_shared), 'and so does the stem it has';
-  assert exists (select 1 from public.question_scale where component_id = scaled), 'one a measurement scale lists stays in the scale';
-  assert exists (select 1 from public.component where component_id = skipped_to), 'one another questionnaire skips to stays';
+  assert exists (select 1 from public.question_scale where component_id = scaled_c), 'one a measurement scale lists stays in the scale';
   assert exists (select 1 from public.measurement_scale where scale_id = scale), 'and the shared lists stay';
 
   -- a shared row something uses can't be deleted
-  perform pg_temp.expect_error(format('delete from public.component where component_id = %s', shared), 'violates foreign key');
+  perform pg_temp.expect_error(format('delete from public.component where component_id = %s', shared_c), 'violates foreign key');
   perform pg_temp.expect_error(format('delete from public.study where study_id = %s', pg_temp.id('study')), 'violates foreign key');
 end;
 $$;
@@ -4142,9 +4365,12 @@ begin
     values (s2, never, 1), (s2, sometimes, 2), (s2, often, 3), (s2, always, 4);
   set constraints option_set_choices_unique immediate;
   set constraints option_set_choices_unique deferred;
-  -- a place in the order holds one choice
+  -- a place in the order holds one choice (checked at once here: apply_draft(), run by the checks above, deferred
+  -- every constraint for the rest of the transaction)
+  set constraints answer_option_set_display_order_unique immediate;
   perform pg_temp.expect_error(format('insert into public.answer_option_set (option_set_id, answer_option_id, display_order) values (%s, %s, 1)', s1, always),
     'answer_option_set_display_order_unique');
+  set constraints answer_option_set_display_order_unique deferred;
 end;
 $$;
 
@@ -4200,7 +4426,7 @@ $$;
 commit;
 
 -- =====================================================================================================
--- PUT BACK THE KEPT ROWS: staff, component_type, subject, principal_investigator, respondent_type,
+-- PUT BACK THE KEPT ROWS: staff, component_type, subject, time_frame, principal_investigator, respondent_type,
 -- registry, study, questionnaire, wave, pdf_file and wave_file, as part 0 saved them in matr_keep
 -- =====================================================================================================
 -- After the checks, which expect a clean build. Rows come back with their IDs, each table after the ones
@@ -4231,23 +4457,45 @@ begin
 
   if to_regclass('matr_keep.component_type') is not null then
     if exists (select 1 from matr_keep.component_type) then
+      -- the kinds the site is built around come back even if the kept list predates one (Grid)
+      create temp table built_in_kind on commit drop as
+        select name, description from public.component_type where name in ('Section', 'Question', 'Grid', 'Group');
       delete from public.component_type;
       insert into public.component_type (component_type_id, name, description)
       select (kept ->> 'component_type_id')::bigint, kept ->> 'name', kept ->> 'description'
       from matr_keep.component_type;
       get diagnostics n = row_count;
       raise notice 'Put back % component type(s).', n;
+      insert into public.component_type (name, description)
+      select b.name, b.description from built_in_kind b
+      where not exists (select 1 from public.component_type t where t.name = b.name);
+      get diagnostics n = row_count;
+      if n > 0 then
+        raise notice 'Added % built-in component type(s) the kept list did not have.', n;
+      end if;
     end if;
   end if;
 
   if to_regclass('matr_keep.subject') is not null then
     if exists (select 1 from matr_keep.subject) then
       delete from public.subject;
+      -- with straight quotes: a name kept from before the rule had them curly
       insert into public.subject (subject_id, name)
-      select (kept ->> 'subject_id')::bigint, kept ->> 'name'
+      select (kept ->> 'subject_id')::bigint, translate(kept ->> 'name', '‘’“”', '''''""')
       from matr_keep.subject;
       get diagnostics n = row_count;
       raise notice 'Put back % subject(s).', n;
+    end if;
+  end if;
+
+  if to_regclass('matr_keep.time_frame') is not null then
+    if exists (select 1 from matr_keep.time_frame) then
+      delete from public.time_frame;
+      insert into public.time_frame (time_frame_id, name)
+      select (kept ->> 'time_frame_id')::bigint, kept ->> 'name'
+      from matr_keep.time_frame;
+      get diagnostics n = row_count;
+      raise notice 'Put back % time frame(s).', n;
     end if;
   end if;
 
@@ -4337,7 +4585,7 @@ begin
   -- The test project's other tables, each after the ones it points at
   rest := array(select c.relname::text from pg_class c
                 where c.relnamespace = 'matr_keep'::regnamespace and c.relkind = 'r'
-                  and c.relname <> all (array['staff', 'component_type', 'subject', 'principal_investigator',
+                  and c.relname <> all (array['staff', 'component_type', 'subject', 'time_frame', 'principal_investigator',
                                               'respondent_type', 'registry', 'study', 'questionnaire', 'wave',
                                               'pdf_file', 'wave_file'])
                 order by 1);

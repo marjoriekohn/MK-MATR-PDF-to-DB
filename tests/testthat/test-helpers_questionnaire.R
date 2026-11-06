@@ -6,10 +6,10 @@ test_that("the questionnaire is a table: a row for each variable with its MATR I
   rows <- questionnaire_preview_rows(draft)
   questions <- draft$components[draft$components$component_type == "Question", ]
   expect_equal(sum(rows$kind == "Question"), nrow(draft$variables))
-  # blocks that aren't questions have a row each, with their kind; sections and groups head the rows instead
-  others <- draft$components[!draft$components$component_type %in% c("Question", "Section", "Group"), ]
+  # blocks that aren't questions have a row each, with their kind; sections, grids and groups head the rows instead
+  others <- draft$components[!draft$components$component_type %in% c("Question", container_types), ]
   expect_equal(sum(rows$kind != "Question"), nrow(others))
-  expect_false(any(rows$kind %in% c("Section", "Group")))
+  expect_false(any(rows$kind %in% container_types))
   # the question's words, without its number, then who the variable is about in square brackets (nothing
   # for the respondent)
   first <- draft$variables[draft$variables$component_id == questions$id[1], ][1, ]

@@ -48,7 +48,7 @@ component_type_entity <- list(
 )
 
 # Kinds of block the site treats specially (BR42, BR45, BR53).
-edit_core_types <- c("Section", "Question", "Group")
+edit_core_types <- c("Section", "Question", "Group", "Grid")
 
 # ------ Printed content: shared by every questionnaire that prints it ------------------------------
 #' Whether components are questions.
@@ -89,12 +89,13 @@ edit_shared_warning <- function(snap, component_ids) {
   ifelse(n >= 2, paste("Shared: changes show in", n, "questionnaires"), NA_character_)
 }
 
-# A component's text field. Every kind has words but a group, which has none of its own (BR42).
+# A component's text field, kept in lower case (normal_text()). Every kind has words but a group, which has none of
+# its own (BR42).
 edit_text_field <- function(snap, mode, row, label = "Printed words", type_field = TRUE) {
   group <- edit_type_id(snap, "Group")
   edit_field(
     "text", label, "textarea",
-    required = !type_field, rows = 3, short = if (type_field) "words" else "wording",
+    required = !type_field, rows = 3, short = if (type_field) "words" else "wording", normalize = normal_text,
     problem = function(value, values) {
       is_group <- identical(as.numeric(values$component_type_id %||% NA), group)
       if (type_field && !has_text(value) && !is_group) {
@@ -185,7 +186,7 @@ question_entity <- list(
   ),
   cards = function(snap, scope) {
     rows <- snap$component[edit_is_question(snap, snap$component$component_id), , drop = FALSE]
-    boxes <- count_in(snap$variable$component_id, rows$component_id)
+    boxes <- count_in(edit_placement_component(snap, snap$variable$placement_id), rows$component_id)
     edit_cards(
       key_text(rows$component_id), edit_component_text(snap, rows$component_id),
       subtitle = "",

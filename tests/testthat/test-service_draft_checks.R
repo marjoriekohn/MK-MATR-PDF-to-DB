@@ -120,3 +120,60 @@ test_that("a count of respondents can't be below 0, and a choice without one is 
   expect_true(any(grepl("can't be below 0", problems$message)))
   expect_false(any(grepl("can't be below 0", draft_service_check(draft_service_update(draft, "response_options", "o1", "respondent_count", "0"), test_lookups())$message)))
 })
+
+test_that("each variable of a question with several has a label of its own, so the rows of a grid can be told apart", {
+  closed <- function(label = NULL, choices = c("often", "never"), subject = NULL) {
+    options <- lapply(choices, function(words) list(answer_option = words))
+    list(variable_type = "closed_ended", label = label, subject = subject, response_options = options)
+  }
+  asked <- function(...) {
+    draft <- draft_service_from_json(list(questionnaire = list(), components = list(list(
+      component_type = "Question", text = "How often did you do each of the following?", printed_number = "5", variables = list(...)
+    ))))
+    with_matr_ids(draft)
+  }
+  problems_of <- function(draft) draft_service_check(draft, test_lookups())
+  # a single question needs no label; a grid's rows are each labelled with their words
+  expect_equal(nrow(problems_of(asked(closed()))), 0)
+  expect_equal(nrow(problems_of(asked(closed("Walked to work"), closed("Rode a bike")))), 0)
+  # a lone check box says what it records itself ("these symptoms haven't stopped")
+  expect_equal(nrow(problems_of(asked(closed("Walked to work"), closed(choices = "never did any of these")))), 0)
+  # the same words for someone else are another row ("Age" of Twin A and of Twin B)
+  expect_equal(nrow(problems_of(asked(closed("Age", subject = "Twin A"), closed("Age", subject = "Twin B")))), 0)
+
+  unlabelled <- problems_of(asked(closed("Walked to work"), closed()))
+  expect_equal(
+    unlabelled$message, "Variable 2: label it with its row's words, so it can be told apart from the question's other variables."
+  )
+  expect_equal(unlabelled$field, "label")
+  twice <- problems_of(asked(closed("Walked to work"), closed("walked to work ")))
+  expect_equal(twice$message, sprintf("Variable %d: give it a label the question's other variables don't have.", 1:2))
+})
+
+test_that("a grid needs the lead-in its questions share, and holds nothing but them and what explains them", {
+  question <- list(component_type = "Question", text = "have you felt calm?", printed_number = "1a", variables = list(list(
+    variable_type = "open_ended", answer_data_type = "TEXT", matr_id = "m1"
+  )))
+  checked <- function(grid) {
+    draft <- draft_service_from_json(list(questionnaire = list(), components = list(grid)))
+    draft_service_check(draft, test_lookups_with_grid())
+  }
+  test_lookups_with_grid <- function() {
+    lookups <- test_lookups()
+    lookups$component_types <- union(lookups$component_types, "Grid")
+    lookups
+  }
+  fine <- checked(list(component_type = "Grid", text = "In the past 4 weeks, how often", children = list(
+    list(component_type = "Instruction", text = "Mark one."), question
+  )))
+  expect_equal(nrow(fine), 0)
+
+  bare <- checked(list(component_type = "Grid", children = list(question)))
+  expect_equal(bare$message, "Add the lead-in its questions share. Questions that are whole without one go in a Group instead.")
+  expect_equal(bare$field, "text")
+
+  holding <- checked(list(component_type = "Grid", text = "In the past 4 weeks,", children = list(
+    list(component_type = "Group", children = list(question))
+  )))
+  expect_equal(holding$message, "A grid holds only its questions, with their instructions and definitions. Move this out of it.")
+})

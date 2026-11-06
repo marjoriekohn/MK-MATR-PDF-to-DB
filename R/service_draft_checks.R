@@ -66,9 +66,13 @@ block_problems <- function(draft, lookups) {
       !is.na(blocks$text) & is_group,
       "A group has no words of its own. Put them in an Instruction inside it."
     ),
+    text_problem(
+      is.na(blocks$text) & blocks$component_type == "Grid",
+      "Add the lead-in its questions share. Questions that are whole without one go in a Group instead."
+    ),
     problems_where(
-      blocks$id, blocks$component_type == "Section" & parent_type %in% "Group",
-      "A section can't be inside a group. Move it out, or make it a group." # BR53
+      blocks$id, !can_hold(parent_type, blocks$component_type),
+      vapply(parent_type, cant_hold_message, character(1)) # BR53
     )
   )
 }
@@ -77,7 +81,7 @@ block_problems <- function(draft, lookups) {
 # section have to be linked to it, the link has to point past the group, and it says which answer skips.
 group_skip_problems <- function(draft) {
   blocks <- draft$components
-  groups <- blocks[blocks$component_type %in% "Group", , drop = FALSE]
+  groups <- blocks[blocks$component_type %in% skipping_types, , drop = FALSE]
   printed <- draft_service_printed_order(draft)
   words <- groups$skip_instruction
   names_a_place <- !is.na(words) & (!is.na(skip_number(words)) | !is.na(skip_section(words)))
@@ -158,6 +162,13 @@ variable_problems <- function(draft, matr_ids = TRUE) {
   said <- sprintf("choice “%s”", ifelse(is.na(choices$answer_option), "(blank)", choices$answer_option))
   # a write-in's skip, the same way, and it says which answer skips
   box_place <- match(boxes$component_id, printed)
+  # A question with several variables is a grid or battery: each row is labelled with its own words, so it can be
+  # found and told apart, but for a lone check box, whose one choice says what it records. Two rows can share
+  # words only when they are about different people ("Age" of Twin A and of Twin B).
+  label <- trimws(boxes$label)
+  label[!nzchar(label)] <- NA
+  in_grid <- ave(seq_along(boxes$id), boxes$component_id, FUN = length) > 1
+  row_key <- ifelse(is.na(label), NA, paste(tolower(label), tolower(blank_respondent(boxes$subject)), sep = "\r"))
   box_names_a_place <- !is.na(boxes$skip_instruction) & (!is.na(skip_number(boxes$skip_instruction)) | !is.na(skip_section(boxes$skip_instruction)))
   rbind(
     box_problem(!is_choice_box & box_names_a_place & is.na(boxes$skip_to_id), "pick where it skips to.", "skip_to_id"),
@@ -172,6 +183,11 @@ variable_problems <- function(draft, matr_ids = TRUE) {
       paste0(said, " skips back to something printed before it. Pick where it skips to."), "skip_to_id"
     ),
     box_problem(is_choice_box & n_choices < 1, "add its choices."), # BR99: a lone check box has one
+    box_problem(
+      in_grid & is.na(label) & !(is_choice_box & n_choices == 1),
+      "label it with its row's words, so it can be told apart from the question's other variables.", "label"
+    ),
+    box_problem(duplicated_within(row_key, boxes$component_id), "give it a label the question's other variables don't have.", "label"),
     choice_problem(is.na(choices$answer_option), "fill in the blank choice.", "answer_option"),
     choice_problem(duplicated_within(choices$answer_option, choices$variable_id), "list each choice once.", "answer_option"),
     choice_problem(

@@ -85,12 +85,12 @@ test_that("where a shared question appears lists each questionnaire, its place a
   usage <- edit_service_usage(edit_entities$question, snap, row)
   where <- text_of(edit_usage_ui(edit_entities$question, usage))
   expect_false(grepl("Where this appears|Everything below changes", where))
-  expect_false(grepl("“Do you now smoke cigarettes?”", where, fixed = TRUE)) # the details' title says it already
+  expect_false(grepl("“do you now smoke cigarettes?”", where, fixed = TRUE)) # the details' title says it already
   expect_match(where, "position [0-9]+")
   expect_match(where, "2 questionnaires use this question")
   # each questionnaire's card: the number it was asked as in each wave, its variables and their choices
   expect_match(where, "Wave 1 · question 2", fixed = TRUE)
-  expect_match(where, "AH02SM [Smokes now] [Respondent]", fixed = TRUE)
+  expect_match(where, "AH02SM [smokes now] [Respondent]", fixed = TRUE)
   expect_match(where, "1 = Yes", fixed = TRUE)
   expect_match(where, "Open in this questionnaire")
 })
@@ -100,7 +100,7 @@ test_that("a questionnaire lists its components in printed order by kind, and a 
   snap <- test_snapshot(edit_service_tables(entity))
   usage <- edit_service_usage(entity, snap, edit_service_row(entity, snap, "1"))
   placed <- Filter(function(line) line$table == "questionnaire_component", usage$pointing)[[1]]
-  expect_equal(placed$labels[1], "Section · A. About you")
+  expect_equal(placed$labels[1], "Section · a. about you")
   expect_false(any(grepl("^AHP ·|^Group ·|untitled group", placed$labels)))
   expect_null(placed$groups) # all in this questionnaire: not said again
   entity <- edit_entities$wave
@@ -108,7 +108,7 @@ test_that("a questionnaire lists its components in printed order by kind, and a 
   usage <- edit_service_usage(entity, snap, edit_service_row(entity, snap, "1"))
   asked <- Filter(function(line) line$table == "wave_question", usage$pointing)[[1]]
   expect_equal(asked$text, "4 questions asked")
-  expect_equal(asked$labels[2], "2 · Do you now smoke cigarettes? [Smokes now] [Respondent]")
+  expect_equal(asked$labels[2], "2 · do you now smoke cigarettes? [smokes now] [Respondent]")
   expect_false(any(grepl("AHP|Wave 1", asked$labels)))
 })
 
@@ -199,16 +199,16 @@ test_that("a delete says what goes with it, what is only changed, and how it fal
   row <- edit_service_row(entity, snap, "3")
   plan <- edit_service_delete_plan(entity, snap, row)
   html <- text_of(edit_delete_ui(entity, row$text, plan))
-  expect_match(html, "You're proposing to delete this component What is your date of birth?", fixed = TRUE)
+  expect_match(html, "You're proposing to delete this component what is your date of birth?", fixed = TRUE)
   expect_match(html, "5 other records will be deleted with it")
   expect_match(html, "When this is applied, all of it is removed together.")
-  expect_match(html, "Deleted along with it 1 component in a questionnaire AHP · What is your date of birth?", fixed = TRUE)
+  expect_match(html, "Deleted along with it 1 component in a questionnaire AHP · what is your date of birth?", fixed = TRUE)
   expect_match(html, "2 questions in waves AHP Wave 1 · question 1", fixed = TRUE)
   expect_match(html, "How it falls on each questionnaire AHP 1 component in a questionnaire · 1 question in a questionnaire", fixed = TRUE)
 
   shared <- edit_service_delete_plan(entity, snap, edit_service_row(entity, snap, "9"))
   expect_match(text_of(edit_delete_ui(entity, "Felt sad", shared)), "18 other records will be deleted with it")
-  expect_match(text_of(edit_delete_ui(entity, "Felt sad", shared)), "KQ · How often in the past week did you feel sad?", fixed = TRUE)
+  expect_match(text_of(edit_delete_ui(entity, "Felt sad", shared)), "KQ · how often in the past week did you feel sad?", fixed = TRUE)
 })
 
 test_that("a delete that something stands in the way of lists what, and offers no confirmation", {
@@ -225,7 +225,7 @@ test_that("each item of a kind is a row of Make an edit's list, which picks it, 
   cards <- edit_service_cards(edit_entities$component, snap, NULL)
   shared <- cards[cards$key == "1", ]
   html <- paste(as.character(make_edit_item("component", shared)), collapse = "")
-  expect_match(text_of(html), "A. About you", fixed = TRUE)
+  expect_match(text_of(html), "a. about you", fixed = TRUE)
   expect_match(html, 'class="outline-row edit-item" tabindex="0" data-action="select"', fixed = TRUE)
   expect_match(html, 'data-kind="component" data-key="1" data-scope=""', fixed = TRUE)
   expect_match(html, "btn-open") # the arrow that opens it

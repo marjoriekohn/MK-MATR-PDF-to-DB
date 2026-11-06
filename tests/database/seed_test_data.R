@@ -590,12 +590,12 @@ scales <- list(
 lookups <- lookup_service_get_all(connection)
 context <- extraction_service_push_context(connection)
 empty <- list(
-  placements = data.frame(component_id = numeric(), parent_component_id = numeric(), display_order = numeric()),
+  placements = data.frame(placement_id = numeric(), component_id = numeric(), parent_placement_id = numeric(), display_order = numeric()),
   components = data.frame(component_id = numeric(), component_type_id = numeric(), text = character()),
-  questions = data.frame(component_id = numeric()),
-  variables = data.frame(variable_key = numeric(), component_id = numeric(), matr_id = character(), display_order = numeric()),
+  questions = data.frame(placement_id = numeric()),
+  variables = data.frame(variable_key = numeric(), placement_id = numeric(), matr_id = character(), display_order = numeric()),
   waves = data.frame(wave_id = 1, name = "Wave 1"),
-  wave_questions = data.frame(wave_id = numeric(), component_id = numeric())
+  wave_questions = data.frame(wave_id = numeric(), placement_id = numeric())
 )
 drafts <- list()
 for (q in questionnaires) {
@@ -736,9 +736,11 @@ tryCatch(
 log_info("Adding MeSH categories and measurement scales")
 seeded <- vapply(questionnaires, function(q) format(q$row$questionnaire_id, scientific = FALSE), character(1))
 variables <- database_model_get(
-  connection, "variable", c("variable_key", "matr_id", "component_id"),
+  connection, "variable", c("variable_key", "matr_id", "placement_id"),
   order_by = "variable_key", filters = list(questionnaire_id = database_in(seeded))
 )
+placed <- push_model_by_ids(connection, "questionnaire_component", c("placement_id", "component_id"), "placement_id", variables$placement_id)
+variables$component_id <- placed$component_id[match(variables$placement_id, placed$placement_id)]
 component_of <- function(matr_ids) {
   found <- variables$component_id[match(matr_ids, variables$matr_id)]
   if (anyNA(found)) stop("No variable has the MATR ID ", paste(matr_ids[is.na(found)], collapse = ", "), call. = FALSE)

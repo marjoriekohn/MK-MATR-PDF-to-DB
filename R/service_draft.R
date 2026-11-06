@@ -33,37 +33,202 @@
 # The version of the reviewed copy's JSON. A copy without one is what the reading job returned.
 draft_schema_version <- 2L
 
-# The kinds of block that hold others. A section has a printed heading; a group is only a
-# container (a battery, a definition with its question, a question with its follow-up) and has no words
-# of its own. A section sits at the top level or inside another section, never inside a group.
-container_types <- c("Section", "Group")
+# The kinds of block that hold others:
+#   Section  a part of the questionnaire under a printed heading (its words).
+#   Grid     questions that share a printed lead-in which is part of each one: the lead-in is its words, and each
+#            question's words are the rest ("In the past 4 weeks, how often" + "have you felt calm and peaceful?";
+#            draft_service_full_question()). It holds only its questions, with their instructions and definitions.
+#   Group    blocks that belong together with no words of their own: an instruction or definition with the
+#            questions it is about, or questions that route together. Each question in it is whole on its own.
+# A group or a grid can skip on the answers to the questions in it ("If you answered No to items 22a-d, go to
+# Question 28"). A component is a wording kept once, so every group (having none) is the one Group component, placed
+# wherever a questionnaire groups blocks; a group's place, order and skip are its placement's.
+container_types <- c("Section", "Grid", "Group")
+skipping_types <- c("Grid", "Group")
+
+# What each kind of container can't hold: a section is never inside a group or a grid, and a grid holds only its
+# questions and what explains them.
+not_held_by <- list(Section = character(), Group = "Section", Grid = c("Section", "Group", "Grid"))
+
+#' Whether blocks of these kinds can sit in blocks of those.
+#'
+#' @param outer The kinds of what would hold them; NA for the top level.
+#' @param inner Their kinds.
+#' @return A logical vector.
+can_hold <- function(outer, inner) {
+  vapply(seq_along(inner), function(k) {
+    holder <- outer[k]
+    is.na(holder) || (is_container(holder) && !inner[k] %in% not_held_by[[holder]])
+  }, logical(1))
+}
+
+# Why a block of kind `inner` can't be in one of kind `outer`, in a sentence.
+cant_hold_message <- function(outer) {
+  if (identical(outer, "Grid")) {
+    "A grid holds only its questions, with their instructions and definitions. Move this out of it."
+  } else {
+    "A section can't be inside a group. Move it out, or make it a group."
+  }
+}
 
 # An answer choice as the database keeps it (answer_option.standardized_label): lower case, with straight quotes,
 # one space between words, and no question mark, or full stop or colon at the end ("Yes." and "YES" are "yes").
 # The printed words aren't kept: a choice is its standard wording, so wordings that only look different are
-# written one way: a range of numbers with a hyphen ("1 to 2", "1 - 2" and "1–2" are "1-2"), a dash as a hyphen,
-# and "hrs", "hr" and "mins" in full. The database checks less (private.normal_answer()), so what this gives
-# always passes.
+# written one way: a range of numbers with a hyphen ("1 to 2", "1 - 2", "1–2" and "between 1 and 2" are "1-2"), "4+"
+# as "4 or more", a
+# dash as a hyphen, abbreviations in full (answer_abbreviations), and a choice printed as "?" as "uncertain" (what
+# the forms that print it say it means). What qualifies a choice comes after it in brackets (answer_qualified()), so
+# the choices that share an answer are found together. The database checks less (private.normal_answer()), so
+# what this gives always passes.
+#
+# The printed words aren't needed: the dashboard links each questionnaire's PDF, and the database is a guide to
+# finding questions, not a copy of the page.
 normal_answer <- function(text) {
-  text <- as.character(text)
-  text <- gsub("[\u2018\u2019]", "'", text)
-  text <- gsub("[\u201c\u201d]", '"', text)
+  text <- straight_quotes(as.character(text))
   text <- gsub("[\u2013\u2014]", "-", text)
+  text[grepl("^[[:space:]]*[?]+[[:space:]]*$", text)] <- "uncertain"
   text <- gsub("?", "", text, fixed = TRUE)
   text <- tolower(trimws(gsub("[[:space:]]+", " ", text)))
+  text <- gsub("([0-9])\\+", "\\1 or more", text, perl = TRUE)
+  text <- gsub("\\bbetween ([0-9][0-9.,]*) and (?=[0-9])", "\\1-", text, perl = TRUE)
   text <- gsub("([0-9]) ?(?:-|to) ?(?=[0-9])", "\\1-", text, perl = TRUE)
-  text <- gsub("\\bhrs\\b", "hours", text, perl = TRUE)
-  text <- gsub("\\bhr\\b", "hour", text, perl = TRUE)
-  text <- gsub("\\bmins\\b", "minutes", text, perl = TRUE)
-  text <- sub("[.:[:space:]]+$", "", text)
+  for (short in names(answer_abbreviations)) {
+    text <- gsub(paste0("(?<![[:alnum:]/])", short, "(?![[:alnum:]/])"), answer_abbreviations[[short]], text, perl = TRUE)
+  }
+  whole <- text %in% names(answer_letters)
+  text[whole] <- answer_letters[text[whole]]
+  text <- answer_qualified(sub("[.:[:space:]]+$", "", text))
   text[!is.na(text) & !nzchar(text)] <- NA
   text
+}
+
+# Curly quotes as straight ones ("Respondent’s Siblings" is "Respondent's Siblings"), so words and names typed or
+# read either way are the same words.
+straight_quotes <- function(text) {
+  text <- gsub("[\u2018\u2019]", "'", text)
+  gsub("[\u201c\u201d]", '"', text)
+}
+
+# A questionnaire's words as the database keeps them (a block's words, a variable's label, a condition, routing):
+# lower case, so the same words are written one way however the form capitalised them ("NEVER", "Section A:
+# Your Health"), and without a figure in brackets that only repeats the number word before it ("more than five
+# (5) children" is "more than five children"). Names the database lists (subjects), printed numbers and MATR IDs
+# aren't a form's words, and keep their capitals.
+normal_text <- function(text) {
+  if (is.null(text)) {
+    return(NULL)
+  }
+  text <- tolower(straight_quotes(as.character(text)))
+  for (i in seq_along(number_words)) {
+    text <- gsub(sprintf("\\b%s \\(%d\\)", number_words[i], i), number_words[i], text, perl = TRUE)
+  }
+  text
+}
+
+number_words <- c(
+  "one", "two", "three", "four", "five", "six", "seven", "eight", "nine", "ten",
+  "eleven", "twelve", "thirteen", "fourteen", "fifteen", "sixteen", "seventeen", "eighteen", "nineteen", "twenty"
+)
+
+# Abbreviations written out wherever they are whole words in a choice ("R first" is "respondent first", as TSA
+# uses "R"), and letters that are a whole choice ("M" is "male").
+answer_abbreviations <- c(
+  r = "respondent", dk = "don't know", hh = "household", "n/a" = "not applicable",
+  hrs = "hours", hr = "hour", mins = "minutes", wks = "weeks", wk = "week", mos = "months", yrs = "years", yr = "year"
+)
+answer_letters <- c(m = "male", f = "female")
+
+# A choice as "answer [qualifier]": "yes, all episodes" is "yes [all episodes]", "no - never" is "no [never]",
+# "1-2 hours" is "1-2 [hours]" and "biological (blood)" is "biological [blood]". Only a short answer (up to three
+# words, not just numbers) is split off at a comma, semicolon or spaced dash, and not before "or" ("never, or almost
+# never" is one answer); an amount (a number, range, "once" or "twice", perhaps "or more", perhaps after "less than",
+# "about", "at least", ...) is split from what it counts ("less than 21 [days]", "4 or more [times a week]", "more than
+# once [a week]"), but not from "and", "to", "of", "out" or "in" ("1 in 10"). Words with brackets already are only tidied, so writing them twice changes nothing.
+# `text` is lower case, with one space between words.
+answer_qualified <- function(text) {
+  # an amount: 21, 2.5, 1,200, once or twice; a range of them (1-2); "or more", "or less" or "or" another (1 or 2)
+  number <- "(?:(?:[0-9]{1,3}(?:,[0-9]{3})+|[0-9]+)(?:\\.[0-9]+)?|once|twice)"
+  amount <- paste0(number, "(?:-", number, ")*(?: or (?:more|less|fewer|", number, "))?")
+  rules <- c(
+    "^([^()]*[^ (]) ?\\(([^()]+)\\)$", # a closing remark in brackets
+    # a short answer, then more (a comma between digits is a thousands separator: "1,000")
+    "^((?=[^,;]*[a-z])(?:[^ ,;]+ ){0,2}?[^ ,;]+)(?: ?(?:;|(?<![0-9]),|,(?![0-9])) ?| - )(?!or\\b)(\\S.*)$",
+    # an amount, then what it counts: "1-2 hours", "less than 21 days", "about 1,200 dollars"
+    paste0(
+      "^((?:(?:less|more|fewer|greater) than |at (?:least|most) |up to |about |approximately |around |nearly |almost |over ",
+      "|under |within )?", amount, ") (?!(?:or|and|to|of|out|in)\\b)([a-z].*)$"
+    )
+  )
+  plain <- !is.na(text) & !grepl("[][]", text)
+  # the same amount again in other units says nothing more: "21-35 days (3-5 weeks)" is "21-35 days"
+  restated <- "^(.*[0-9].*[^ (]) ?\\([0-9][0-9.,/]*(?:-[0-9][0-9.,/]*)? [a-z]+\\)$"
+  text[plain] <- sub(restated, "\\1", text[plain], perl = TRUE)
+  for (rule in rules) {
+    split <- plain & grepl(rule, text, perl = TRUE)
+    text[split] <- sub(rule, "\\1 [\\2]", text[split], perl = TRUE)
+    plain <- plain & !split
+  }
+  # typed with brackets: one space before them, none inside, no full stop or colon at the end of the qualifier; and a
+  # qualifier that only repeats the answer ("don't know (DK)") is left out
+  text <- sub("^(.*[^ ]) ?\\[ ?([^][]*?)[.: ]*\\]$", "\\1 [\\2]", text, perl = TRUE)
+  sub("^(.+) \\[\\1\\]$", "\\1", text, perl = TRUE)
 }
 
 # What stands for who a variable is about, in an answer choice ("describes [subject] very well") or a question
 # stem ("Has [subject] ever repeated a grade?"), so the questions about Twin A and Twin B share them. It is
 # filled in with the variable's subject where the words are shown (service_normalize.R).
 subject_placeholder <- "[subject]"
+
+# What stands for when a question asks about, in a question stem ("on how many occasions have you smoked
+# cigarettes [time frame]?"), so the questions about a lifetime, the past 12 months and the past 30 days share it. It
+# is filled in with the variable's time frame where the words are shown (service_normalize.R).
+time_frame_placeholder <- "[time frame]"
+
+# A time frame in words, as the forms print it: "in your lifetime", "during the last 12 months", "over the past
+# year", "within the past thirty days". In a question's words it starts with "in", "during", "over", "within" or
+# "for" (so "on the last day you smoked" isn't one); a field that holds only a time frame can leave that out ("past
+# week"). `normal_time_frame()` writes each of them one way.
+time_frame_unit <- "(day|week|month|year)s?"
+time_frame_lifetime <- "(?:ever\\s+)?(?:in|during|over|throughout)\\s+your\\s+(?:entire\\s+|whole\\s+)?life(?:time)?"
+time_frame_past <- paste0(
+  "(?:the\\s+)?(?:past|last|previous)\\s+(?:([0-9]+|", paste(number_words, collapse = "|"), ")\\s+)?", time_frame_unit
+)
+time_frame_preposition <- "(?:in|during|over|within|for)\\s+"
+time_frame_pattern <- paste0("(?:", time_frame_lifetime, "|", time_frame_preposition, time_frame_past, ")")
+
+#' Time frames written one way.
+#'
+#' The time a variable's answer is about, as the database keeps it, so the questions about the same time are found
+#' together whatever words the forms use: "in your lifetime" ("in your life", "during your whole lifetime"), and "in
+#' the past" a number of days, weeks, months or years ("during the last 12 months" and "over the past twelve
+#' months" are "in the past 12 months"; "in the last year" is "in the past year"). Any other is kept as typed, in
+#' lower case ("since your last birthday").
+#'
+#' @param text Time frames as printed or typed.
+#' @return The time frames, with `NA` for a blank.
+normal_time_frame <- function(text) {
+  text <- trimws(gsub("[[:space:]]+", " ", normal_text(as.character(text))))
+  text[!is.na(text) & !nzchar(text)] <- NA
+  whole <- paste0(
+    "(?i)^(?:", time_frame_lifetime, "|(?:in\\s+)?your\\s+lifetime|lifetime|(?:", time_frame_preposition, ")?",
+    time_frame_past, ")[.,:?]*$"
+  )
+  known <- !is.na(text) & grepl(whole, text, perl = TRUE)
+  text[known] <- vapply(text[known], time_frame_words, character(1))
+  text
+}
+
+# One printed time frame in the database's words.
+time_frame_words <- function(found) {
+  past <- regmatches(found, regexec(paste0("(?i)(?:past|last|previous)\\s+(?:([0-9]+|[a-z]+)\\s+)?", time_frame_unit), found, perl = TRUE))[[1]]
+  if (length(past) == 0) {
+    return("in your lifetime")
+  }
+  count <- tolower(past[2])
+  count <- if (!nzchar(count)) 1L else if (count %in% number_words) match(count, number_words) else as.integer(count)
+  unit <- tolower(past[3])
+  if (count == 1) paste("in the past", unit) else paste("in the past", count, paste0(unit, "s"))
+}
 
 #' Whether blocks of these kinds hold other blocks.
 #'
@@ -81,9 +246,9 @@ respondent_names <- c("Respondent", "Self")
 #'
 #' @param subjects Subjects as typed or read; "Respondent" or "Self" in any capitals, or a blank, is the
 #'   respondent.
-#' @return The subjects, trimmed, with `NA` for the respondent.
+#' @return The subjects, trimmed and with straight quotes, with `NA` for the respondent.
 blank_respondent <- function(subjects) {
-  subjects <- trimws(as.character(subjects))
+  subjects <- trimws(straight_quotes(as.character(subjects)))
   subjects[!is.na(subjects) & (!nzchar(subjects) | tolower(subjects) %in% tolower(respondent_names))] <- NA
   subjects
 }
@@ -111,7 +276,7 @@ new_row_defaults <- list(
   ),
   variables = data.frame(
     id = NA_character_, component_id = NA_character_, display_order = Inf,
-    variable_type = "closed_ended", label = NA_character_, subject = NA_character_,
+    variable_type = "closed_ended", label = NA_character_, subject = NA_character_, time_frame = NA_character_,
     answer_data_type = NA_character_, matr_id = NA_character_, ref = NA_character_,
     skip_condition = NA_character_, skip_instruction = NA_character_, skip_to_id = NA_character_
   ),
@@ -241,6 +406,7 @@ draft_service_from_json <- function(json) {
       variable_type = pluck(boxes, "variable_type"),
       label = pluck(boxes, "label"),
       subject = blank_respondent(pluck(boxes, "subject")),
+      time_frame = normal_time_frame(pluck(boxes, "time_frame")),
       answer_data_type = pluck(boxes, "answer_data_type"),
       matr_id = pluck(boxes, "matr_id"),
       ref = refs(boxes, ids_for("v", seq_along(boxes))),
@@ -364,7 +530,7 @@ blocks_json <- function(draft, parent_id) {
     if (is_container(block$component_type)) {
       json$children <- blocks_json(draft, block$id)
     }
-    if (block$component_type == "Group") {
+    if (block$component_type %in% skipping_types) {
       json$skip_condition <- block$skip_condition
       json$skip_when <- block$skip_when
       json$skip_instruction <- block$skip_instruction
@@ -393,6 +559,7 @@ boxes_json <- function(draft, component_id) {
       display_order = as.integer(box$display_order),
       label = box$label,
       subject = box$subject,
+      time_frame = box$time_frame,
       matr_id = box$matr_id
     )
     if (box$variable_type == "closed_ended") {
@@ -491,6 +658,24 @@ draft_service_ancestors <- function(draft, id) {
     return(character())
   }
   c(parent_id, draft_service_ancestors(draft, parent_id))
+}
+
+#' Questions as a researcher reads them: a question in a grid is the grid's lead-in, a space, and its own words.
+#'
+#' @param draft A draft: `list(questionnaire, components, variables, response_options)`; see the top of `service_draft.R`.
+#' @param ids Questions' ids.
+#' @return A character vector, one for each id.
+draft_service_full_question <- function(draft, ids) {
+  blocks <- draft$components
+  vapply(ids, function(id) {
+    words <- blocks$text[match(id, blocks$id)]
+    for (holder in draft_service_ancestors(draft, id)) {
+      if (identical(blocks$component_type[match(holder, blocks$id)], "Grid")) {
+        words <- paste(trimws(blocks$text[match(holder, blocks$id)]), trimws(words))
+      }
+    }
+    words
+  }, character(1), USE.NAMES = FALSE)
 }
 
 #' The id the next new rows of a table get.

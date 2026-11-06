@@ -90,6 +90,15 @@ body.is-resizing { cursor: col-resize; user-select: none; }
   > .outline-list { margin: 0.15rem 0 0; padding-left: 0; border-left: 0; }
 }
 .outline-node.is-group.is-collapsed { padding-bottom: 0.15rem; }
+// A grid: the same box, dashed, around its questions; its row shows the lead-in they share, as a section's shows
+// its heading
+.outline-node.is-grid {
+  padding: 0.15rem 0.35rem 0.35rem;
+  border: 2px dashed $vcu-gold;
+  border-radius: $border-radius;
+  > .outline-list { margin: 0.15rem 0 0; padding-left: 0; border-left: 0; }
+}
+.outline-node.is-grid.is-collapsed { padding-bottom: 0.15rem; }
 // the toolbar's filter: what it leaves out is hidden, and on Edit Extraction sections stay open while it is on (Make an
 // edit's search looks only in the kinds that are open: opening every one would read them all from the database)
 .edit-extraction-page .outline-tree.is-filtered .outline-node.is-collapsed > .outline-list { display: flex; }

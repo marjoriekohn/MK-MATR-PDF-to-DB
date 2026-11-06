@@ -102,6 +102,20 @@ test_that("what staff type is stored as the column's type, blanks as NA", {
   expect_identical(draft_service_update(draft, "response_options", "o1", "code_value", " b ")$response_options$code_value[1], "b")
   expect_false(draft_service_update(draft, "components", "c3", "self_contained", "FALSE")$components$self_contained[3])
   expect_true(is.na(draft_service_update(draft, "components", "c3", "condition", "  ")$components$condition[3]))
+  # words are kept in lower case, however they are typed
+  expect_identical(draft_service_update(draft, "components", "c3", "text", "Are You a WORRIER?")$components$text[3], "are you a worrier?")
+  expect_identical(draft_service_update(draft, "components", "c3", "condition", "If Yes")$components$condition[3], "if yes")
+  expect_identical(draft_service_update(draft, "variables", "v1", "label", "Child A")$variables$label[1], "child a")
+  expect_identical(draft_service_update(draft, "variables", "v1", "skip_condition", "None")$variables$skip_condition[1], "none")
+  expect_identical(
+    draft_service_update(draft, "response_options", "o1", "skip_instruction", "Go to Question 9")$response_options$skip_instruction[1],
+    "go to question 9"
+  )
+  expect_identical(draft_service_update(draft, "variables", "v1", "matr_id", "Q1A")$variables$matr_id[1], "Q1A") # not words
+  expect_identical(
+    draft_service_update(draft, "variables", "v1", "time_frame", "Over the past twelve months")$variables$time_frame[1],
+    "in the past 12 months"
+  )
   expect_error(draft_service_update(draft, "components", "c3", "id", "c9"), "can't be changed")
 })
 
@@ -138,8 +152,8 @@ test_that("every choice is printed: there is no field to say one isn't, and a lo
   draft <- draft_service_update(draft, "response_options", "o1", "answer_option", " Yes, OFTEN? ")
   draft <- draft_service_update(draft, "response_options", "o1", "skip_instruction", "Go to Q5")
   choice <- draft$response_options[draft$response_options$id == "o1", ]
-  expect_equal(choice$answer_option, "yes, often") # kept as the database keeps it
-  expect_equal(choice$skip_instruction, "Go to Q5")
+  expect_equal(choice$answer_option, "yes [often]") # kept as the database keeps it
+  expect_equal(choice$skip_instruction, "go to q5")
 
   # a draft saved with a choice that wasn't printed (a lone check box's "No") opens without it
   json <- list(components = list(list(
@@ -306,7 +320,7 @@ test_that("changing a checked block's words takes the check off that block, and 
   before <- checked_gold()
   after <- draft_service_uncheck_edited(before, draft_service_update(before, "components", "c3", "text", "Do you worry a lot?"))
   expect_equal(checked_blocks(after), c("c1", "c2", "c4", "c5"))
-  expect_equal(component(after, "c3")$text, "Do you worry a lot?")
+  expect_equal(component(after, "c3")$text, "do you worry a lot?")
 })
 
 test_that("each field of a block, when changed, takes its check off", {
@@ -640,7 +654,7 @@ test_that("a question's variables share their choices when they all offer the sa
 
   first <- draft_service_children(draft, "response_options", shared[1])$id
   changed <- draft_service_update_shared(draft, shared, first[2], "skip_instruction", "Go to 4")
-  expect_equal(unique(changed$response_options$skip_instruction[changed$response_options$variable_id %in% shared & changed$response_options$display_order == 2]), "Go to 4")
+  expect_equal(unique(changed$response_options$skip_instruction[changed$response_options$variable_id %in% shared & changed$response_options$display_order == 2]), "go to 4")
   expect_equal(draft_service_shared_choices(changed, q), shared) # still the same as each other
 
   added <- draft_service_add_choice_shared(draft, shared)

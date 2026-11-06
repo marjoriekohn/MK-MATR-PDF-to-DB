@@ -317,7 +317,7 @@ edit_use_card <- function(use, entity) {
         "Open in this questionnaire", "jump",
         `data-kind` = if (entity$key == "question") "questionnaire_question" else "questionnaire_component",
         `data-verb` = "view", `data-scope` = key_text(use$questionnaire_id),
-        `data-key` = paste(key_text(use$questionnaire_id), key_text(use$component_id), sep = "|"),
+        `data-key` = key_text(use$placement_id),
         class = "btn btn-sm btn-outline-dark"
       )
     ),

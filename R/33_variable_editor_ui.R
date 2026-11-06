@@ -35,11 +35,11 @@ variable_editor_body <- function(block, draft, view, lookups, ns) {
   )
 }
 
-#' The words a variable's fields offer as they are typed: the answer choices, who a variable can be about, the
-#' labels the draft's variables have, and MATR IDs (the uploaded ones no variable has yet).
+#' The words a variable's fields offer as they are typed: the answer choices, who and when a variable can be about,
+#' the labels the draft's variables have, and MATR IDs (the uploaded ones no variable has yet).
 #'
 #' @param ns The module's namespace function.
-#' @param lookups The pick lists: `answer_options` and `subjects`.
+#' @param lookups The pick lists: `answer_options`, `subjects` and `time_frames`.
 #' @param draft A draft.
 #' @param matr_ids The MATR IDs to offer.
 #' @return A tag list of `datalist`s.
@@ -47,6 +47,7 @@ variable_editor_lists <- function(ns, lookups, draft, matr_ids = character()) {
   tagList(
     suggestions(ns("answer-options"), lookups$answer_options),
     suggestions(ns("subjects"), lookups$subjects),
+    suggestions(ns("time-frames"), lookups$time_frames),
     suggestions(ns("labels"), label_suggestions(draft)),
     suggestions(matr_id_list_id(ns), matr_ids)
   )
@@ -86,11 +87,11 @@ variable_cards <- function(block, draft, view, lookups, ns) {
   boxes <- draft_service_children(draft, "variables", block$id)
   shared <- if (block$id %in% view$split) character() else draft_service_shared_choices(draft, block$id)
   list_id <- ns(paste0("boxes-", block$id))
-  # the About and Label columns, once one of the variables shows it
-  columns <- intersect(c("subject", "label"), unlist(map_rows(boxes, shown_optional, optional_variable_fields, view)))
+  # the About, Time frame and Label columns, once one of the variables shows it
+  columns <- intersect(c("subject", "time_frame", "label"), unlist(map_rows(boxes, shown_optional, optional_variable_fields, view)))
   if (any(!is.na(boxes$skip_to_id))) view$targets <- skip_targets(draft) # to name where write-ins skip to
   div(
-    class = c("variable-cards", paste0("has-", columns, recycle0 = TRUE)),
+    class = c("variable-cards", paste0("has-", columns, recycle0 = TRUE), paste0("optional-", length(columns))),
     if (nrow(boxes) > 0) {
       div(
         class = "variable-line variable-head", `aria-hidden` = "true",
@@ -164,7 +165,10 @@ variable_line <- function(box, draft, view, lookups, ns, shared = character(), c
       span(
         class = "variable-add",
         if (length(addable) > 0) {
-          add_field_menu(box, addable, optional_variable_fields, if (is_choice_box) "Add who it's about, or a label" else "Add who it's about, a label, or where it skips to")
+          add_field_menu(
+            box, addable, optional_variable_fields,
+            if (is_choice_box) "Add who or when it's about, or a label" else "Add who or when it's about, a label, or where it skips to"
+          )
         }
       ),
       review_button(
@@ -179,9 +183,9 @@ variable_line <- function(box, draft, view, lookups, ns, shared = character(), c
 }
 
 # The optional fields of a variable, by what its "+" menu calls them: who it's about (blank is the
-# respondent), its label, and for a write-in where it skips to. A variable shows one when it has something in
-# it, or once it is added.
-optional_variable_fields <- c(subject = "About", label = "Label", skip = "Skip to")
+# respondent), when it's about ("in the past 30 days"), its label, and for a write-in where it skips to. A
+# variable shows one when it has something in it, or once it is added.
+optional_variable_fields <- c(subject = "About", time_frame = "Time frame", label = "Label", skip = "Skip to")
 
 # A write-in's skip, under its line: the answer that skips, and where it sends respondents (a question, section,
 # group or the end, picked like a choice's), with the delete button that takes it away.
@@ -201,12 +205,17 @@ write_in_skip <- function(box, view, ns) {
   )
 }
 
-# A variable's About or label, with its delete button that takes it away.
+# A variable's About, time frame or label, with its delete button that takes it away.
 variable_optional <- function(box, name, view, ns) {
   input <- switch(name,
     subject = field_text(
       "variables", box, "subject",
       placeholder = "Who it's about", list = ns("subjects"), label = "About: who it's about (blank for the respondent)",
+      problems = view$problems
+    ),
+    time_frame = field_text(
+      "variables", box, "time_frame",
+      placeholder = "e.g. in the past 30 days", list = ns("time-frames"), label = "Time frame: when its answer is about",
       problems = view$problems
     ),
     label = field_text("variables", box, "label", placeholder = "Label", list = ns("labels"), label = "Label")
@@ -441,7 +450,7 @@ apply_codes_dialog <- function(ns, draft, boxes, codes) {
 # ------ Add Skip Logic ---------------------------------------------------------------------
 # A dialog that asks which kind of skip logic, then one for each kind (the outline's server saves them).
 
-# The labels the draft's variables have, each once, offered as a label is typed ("First child", "Second child").
+# The labels the draft's variables have, each once, offered as a label is typed ("child a", "child b").
 label_suggestions <- function(draft) {
   labels <- trimws(draft$variables$label)
   sort(unique(labels[!is.na(labels) & nzchar(labels)]))

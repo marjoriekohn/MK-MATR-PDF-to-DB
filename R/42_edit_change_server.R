@@ -268,8 +268,8 @@ edit_change_server <- function(
             "warning",
             title = paste("Shared by", use$shared, "questionnaires"),
             p(paste(
-              "If only one questionnaire should have the new words, change it there instead: press Open in this",
-              "questionnaire on its card below. That edits just that questionnaire's copy."
+              "If only one place should have the new words, change it there instead: press Open in this",
+              "questionnaire on its card below. That changes just that place."
             ))
           )
         },
@@ -277,15 +277,16 @@ edit_change_server <- function(
           elsewhere <- length(edit_service_uses(ctx$snap, ctx$row$component_id)) - 1
           edit_callout(
             "warning",
-            title = "New words mean a new component",
+            title = "New words change this place only",
             p(paste0(
-              "The words and the kind of block belong to the component, which other questionnaires share. So ",
-              "this questionnaire gets its own new component with your words, and stops using the old one."
+              "The words and the kind of block belong to the component, which every place that prints them shares. ",
+              "So this place prints the component with your words (the one the database has, or a new one), and ",
+              "stops printing the old one."
             )),
             p(if (elsewhere > 0) {
-              paste0("The old one stays, for the ", edit_count(elsewhere, "other questionnaire"), " that still print it.")
+              paste0("The old one stays, for the ", edit_count(elsewhere, "other place"), " that still print it.")
             } else {
-              "Nothing else prints the old one, so it's left unused in the database."
+              "Nothing else prints the old one, so it goes."
             })
           )
         },

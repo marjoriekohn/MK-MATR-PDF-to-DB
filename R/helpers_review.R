@@ -17,6 +17,7 @@
 type_chip <- function(component_type) {
   kind <- switch(component_type,
     Section = "section",
+    Grid = "section is-grid",
     `Group` = "section is-group",
     Question = "question",
     "instruction"

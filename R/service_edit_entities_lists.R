@@ -1,4 +1,4 @@
-# Make an edit's other kinds in the group Shared lists: MeSH categories, subjects, option sets, measurement
+# Make an edit's other kinds in the group Shared lists: MeSH categories, subjects, time frames, option sets, measurement
 # scales and their items. The kinds are listed together in edit_entities (service_edit_kinds.R).
 
 # ------ MeSH categories and subjects ------------------------------------------------------------------
@@ -60,10 +60,41 @@ subject_entity <- list(
   fields = function(snap, mode, row, scope) {
     list(
       edit_field("name", "Subject",
-        required = TRUE, placeholder = "e.g. Respondent's Parents",
+        required = TRUE, placeholder = "e.g. Respondent's Parents", normalize = straight_quotes,
         hint = if (mode == "update") "A draft that still has the old name is told to pick from the list again.",
         problem = function(value, values) {
-          same <- edit_taken(snap, "subject", "name", value, row)
+          same <- edit_taken(snap, "subject", "name", straight_quotes(value), row)
+          if (has_text(value) && nrow(same) > 0) sprintf("“%s” is already in the list.", same$name[1])
+        }
+      )
+    )
+  }
+)
+
+time_frame_entity <- list(
+  label = "Time Frame", noun = "time frame", plural = "time frames", article = "a",
+  group = "Shared lists", table = "time_frame",
+  about = paste0(
+    "When a variable's answer can be about, like “in your lifetime” or “in the past 30 days”, written one way however ",
+    "a form prints it (“during the last 12 months” is “in the past 12 months”). It fills [time frame] in a question ",
+    "stem. The Edit Extraction page offers these, and an extraction adds any other it finds."
+  ),
+  delete_about = "A time frame can only be deleted once no variable is about it.",
+  cards = function(snap, scope) {
+    rows <- snap$time_frame
+    about <- count_in(snap$variable$time_frame_id, rows$time_frame_id)
+    edit_cards(
+      key_text(rows$time_frame_id), rows$name,
+      facts = lapply(about, function(n) if (n > 0) paste("about", edit_count(n, "variable", "variables")) else "about no variables")
+    )
+  },
+  fields = function(snap, mode, row, scope) {
+    list(
+      edit_field("name", "Time frame",
+        required = TRUE, placeholder = "e.g. in the past 6 months", normalize = normal_time_frame,
+        hint = "Written one way: “during the last 12 months” is saved as “in the past 12 months”.",
+        problem = function(value, values) {
+          same <- edit_taken(snap, "time_frame", "name", normal_time_frame(value), row)
           if (has_text(value) && nrow(same) > 0) sprintf("“%s” is already in the list.", same$name[1])
         }
       )

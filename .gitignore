@@ -10,3 +10,4 @@ logs/
 docs/audit.*
 uploads/*
 tests/testthat/uploads/*
+edge-case-pdfs/*

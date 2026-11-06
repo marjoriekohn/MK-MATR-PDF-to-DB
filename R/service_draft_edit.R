@@ -10,8 +10,17 @@ editable_fields <- list(
     "condition", "parent_question_id", "checked",
     "skip_condition", "skip_when", "skip_instruction", "skip_to_id" # a group's skip
   ),
-  variables = c("variable_type", "label", "subject", "answer_data_type", "matr_id", "skip_condition", "skip_instruction", "skip_to_id"),
+  variables = c(
+    "variable_type", "label", "subject", "time_frame", "answer_data_type", "matr_id", "skip_condition", "skip_instruction", "skip_to_id"
+  ),
   response_options = c("answer_option", "code_value", "respondent_count", "skip_instruction", "skip_to_id")
+)
+
+# The fields that hold the form's words, kept in lower case (normal_text()).
+word_fields <- list(
+  components = c("text", "condition", "skip_condition", "skip_instruction"),
+  variables = c("label", "skip_condition", "skip_instruction"),
+  response_options = "skip_instruction"
 )
 
 #' Change one field of one row.
@@ -30,6 +39,7 @@ draft_service_update <- function(draft, table, id, field, value) {
   row <- which(draft[[table]]$id == id)
   if (length(row) != 1) stop("That's no longer in the draft.")
   value <- as_field_value(value, typeof(draft[[table]][[field]]))
+  if (field %in% word_fields[[table]]) value <- normal_text(value)
   switch(field,
     component_type = set_component_type(draft, row, value),
     variable_type = set_variable_type(draft, row, value),
@@ -46,6 +56,10 @@ draft_service_update <- function(draft, table, id, field, value) {
     },
     subject = {
       draft$variables$subject[row] <- blank_respondent(value)
+      draft
+    },
+    time_frame = {
+      draft$variables$time_frame[row] <- normal_time_frame(value)
       draft
     },
     answer_option = {
@@ -66,9 +80,8 @@ as_field_value <- function(value, type) {
   suppressWarnings(as.vector(value, type))
 }
 
-# A block's kind decides what else it holds: only sections and groups hold blocks (BR53), a
-# section is never inside a group, a group has no words of its own, and only a
-# Question has a number and variables (BR45).
+# A block's kind decides what else it holds: only sections, grids and groups hold blocks (BR53), and what each
+# holds (can_hold()); a group has no words of its own, and only a Question has a number and variables (BR45).
 set_component_type <- function(draft, row, type) {
   blocks <- draft$components
   block <- blocks[row, ]
@@ -77,18 +90,21 @@ set_component_type <- function(draft, row, type) {
   if (!is_container(type) && length(inside) > 0) {
     stop("Move the blocks out of it first, then change its kind.")
   }
+  if (!all(can_hold(rep(type, length(inside)), inside))) {
+    stop(if (type == "Grid") "A grid holds only its questions, with their instructions and definitions. Move the rest out of it first."
+         else "A section can't be inside a group. Move the sections out of it first.")
+  }
+  holder <- blocks$component_type[match(block$parent_id, blocks$id)]
+  if (!can_hold(holder, type)) {
+    stop(if (identical(holder, "Grid")) "A grid holds only its questions, with their instructions and definitions."
+         else "A section can't be inside a group. Move it out of the group first.")
+  }
   if (type == "Group" && !is.na(block$text)) {
     stop("A group has no words of its own. Move these words into an Instruction first, then make it a group.")
   }
-  if (type == "Group" && "Section" %in% inside) {
-    stop("A section can't be inside a group. Move the sections out of it first.")
-  }
-  if (type == "Section" && !is.na(block$parent_id) && !blocks$component_type[match(block$parent_id, blocks$id)] %in% "Section") {
-    stop("A section can't be inside a group. Move it out of the group first.")
-  }
   draft$components$component_type[row] <- type
-  # only a group skips on the answers to the questions in it
-  if (type != "Group") draft$components[row, c("skip_condition", "skip_when", "skip_instruction", "skip_to_id")] <- NA
+  # only a group or a grid skips on the answers to the questions in it
+  if (!type %in% skipping_types) draft$components[row, c("skip_condition", "skip_when", "skip_instruction", "skip_to_id")] <- NA
   if (type == "Question") {
     if (is.na(block$self_contained)) draft$components$self_contained[row] <- TRUE
     return(draft)
@@ -245,11 +261,13 @@ draft_service_apply_order <- function(draft, ids, parent_ids) {
     stop("The outline was out of date. Try that again.") # a parent the draft doesn't have
   }
   if (any(!is.na(parent_ids) & !is_container(parent_types))) {
-    stop("Only sections and groups can hold other blocks.")
+    stop("Only sections, grids and groups can hold other blocks.")
   }
   moved_types <- blocks$component_type[match(ids, blocks$id)]
-  if (any(moved_types == "Section" & !is.na(parent_ids) & !parent_types %in% "Section")) {
-    stop("A section can't go inside a group.")
+  misplaced <- !can_hold(parent_types, moved_types)
+  if (any(misplaced)) {
+    stop(if (any(parent_types[misplaced] %in% "Grid")) "A grid holds only its questions, with their instructions and definitions."
+         else "A section can't go inside a group.")
   }
   rows <- match(ids, blocks$id)
   blocks$parent_id[rows] <- parent_ids
@@ -291,13 +309,17 @@ draft_service_add_block <- function(draft, component_type, id, near_id = NULL) {
   blocks <- draft$components
   near <- blocks[blocks$id %in% near_id, ]
   has_near <- nrow(near) == 1
-  if (has_near && component_type == "Section") {
-    # climb out of groups, so the section lands at the top level or in a section
-    while (!is.na(near$parent_id) && !blocks$component_type[match(near$parent_id, blocks$id)] %in% "Section") {
+  # a block goes inside the selected section, grid or group (a section only next to it), if that can hold it
+  fits_inside <- function(block) {
+    is_container(block$component_type) && component_type != "Section" && can_hold(block$component_type, component_type)
+  }
+  if (has_near) {
+    # climb out of what can't hold it (a section out of groups, a group out of a grid), so it lands where it can
+    while (!fits_inside(near) && !is.na(near$parent_id) && !can_hold(blocks$component_type[match(near$parent_id, blocks$id)], component_type)) {
       near <- blocks[blocks$id == near$parent_id, ]
     }
   }
-  goes_inside <- has_near && is_container(near$component_type) && component_type != "Section"
+  goes_inside <- has_near && fits_inside(near)
   add_rows(draft, "components", data.frame(
     id = id,
     parent_id = if (goes_inside) near$id else if (has_near) near$parent_id else NA_character_,
@@ -342,6 +364,7 @@ add_box <- function(draft, component_id, id) {
     component_id = component_id,
     variable_type = template$variable_type,
     subject = template$subject,
+    time_frame = template$time_frame,
     answer_data_type = template$answer_data_type
   ))
   choices <- draft_service_children(draft, "response_options", template$id)

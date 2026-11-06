@@ -1,10 +1,10 @@
-variable_key,questionnaire_id,component_id,matr_id,display_order,label,subject_id
-1,1,3,AH01DB,1,Date of birth,1
-2,1,4,AH02SM,1,Smokes now,1
-3,1,5,AH02CG,1,Cigarettes per day,1
-4,1,7,AH03DR,1,Doctor visits,
-5,2,9,KQ01SD,1,Felt sad,1
-6,3,9,KP01SD,1,Felt sad,1
-7,4,11,MQ01SP,1,Smoked while pregnant,1
-8,4,4,MQ02SM,1,Smokes now,1
-9,4,14,MQ03CH,1,Number of children,3
+variable_key,questionnaire_id,placement_id,matr_id,display_order,label,subject_id,time_frame_id
+1,1,103,AH01DB,1,date of birth,1,
+2,1,104,AH02SM,1,smokes now,1,
+3,1,105,AH02CG,1,cigarettes per day,1,
+4,1,107,AH03DR,1,doctor visits,,
+5,2,209,KQ01SD,1,felt sad,1,
+6,3,309,KP01SD,1,felt sad,1,
+7,4,411,MQ01SP,1,smoked while pregnant,1,
+8,4,404,MQ02SM,1,smokes now,1,
+9,4,414,MQ03CH,1,number of children,3,

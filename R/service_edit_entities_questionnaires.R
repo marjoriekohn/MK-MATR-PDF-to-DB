@@ -144,7 +144,7 @@ questionnaire_entity <- list(
       return(NULL)
     }
     placed <- edit_service_outline(edit_service_placements(snap, row$questionnaire_id))
-    placed <- placed[placed$component_id %in% rows$component_id & !placed$type %in% "Group", , drop = FALSE]
+    placed <- placed[placed$placement_id %in% rows$placement_id & !placed$type %in% "Group", , drop = FALSE]
     list(
       rows = placed, text = edit_count(nrow(placed), "component"),
       labels = paste0(ifelse(is.na(placed$type), "Component", placed$type), " · ", edit_component_text(snap, placed$component_id))
@@ -166,7 +166,7 @@ wave_entity <- list(
   label = "Wave", noun = "wave", plural = "waves", article = "a",
   group = "Questionnaires", table = "wave",
   # the details name the questionnaire's study, its registry and investigators, and who it is for
-  reads = c("study", "registry", "principal_investigator", "respondent_type", "variable", "subject"),
+  reads = c("study", "registry", "principal_investigator", "respondent_type", "variable", "subject", "questionnaire_component", "component"),
   about = "One time a questionnaire was given. It records when, and how many people answered.",
   delete_about = paste0(
     "Deleting a wave deletes its record of which questions were asked and the number each had. A ",
@@ -250,14 +250,14 @@ wave_entity <- list(
     }
     rows <- rows[order(suppressWarnings(as.numeric(rows$question_number)), rows$question_number), , drop = FALSE]
     tags <- vapply(seq_len(nrow(rows)), function(i) {
-      boxes <- snap$variable[snap$variable$questionnaire_id %in% rows$questionnaire_id[i] & snap$variable$component_id %in% rows$component_id[i], , drop = FALSE]
+      boxes <- snap$variable[snap$variable$placement_id %in% rows$placement_id[i], , drop = FALSE]
       boxes <- boxes[order(boxes$display_order), , drop = FALSE]
       tags <- edit_variable_tags(snap, boxes)
       paste(tags[nzchar(tags)], collapse = " · ")
     }, character(1))
     list(
       rows = rows, text = paste(edit_count(nrow(rows), "question"), "asked"),
-      labels = trimws(paste0(edit_called_number(rows), " · ", edit_component_text(snap, rows$component_id), " ", tags))
+      labels = trimws(paste0(edit_called_number(rows), " · ", edit_component_text(snap, edit_placement_component(snap, rows$placement_id)), " ", tags))
     )
   }
 )

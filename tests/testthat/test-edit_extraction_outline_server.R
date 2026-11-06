@@ -78,7 +78,7 @@ test_that("every block's words are in its row, a section's and a text block's ty
     expect_match(html, 'data-suggest="[^"]*suggest-Instruction"')
     expect_match(html, 'class="outline-group-note"') # a group has no words to type
     expect_match(html, 'data-table="components" data-id="c3" data-field="text"')
-    expect_match(html, "Would you call yourself a nervous person?", fixed = TRUE)
+    expect_match(html, "would you call yourself a nervous person?", fixed = TRUE)
     expect_match(html, 'id="[^"]*answer-options"')
     expect_match(html, 'id="[^"]*conditions"')
     expect_true(has_class(html, "is-editable", "c2")) # an instruction's words are typed in the list
@@ -112,10 +112,10 @@ test_that("typing in a field changes the draft and says it was typed; a pick or 
     errors <- collect_errors(session)
     before <- tree_html(output)
     session$setInputs(edit = list(table = "components", id = "c3", field = "text", value = "Do you worry a lot?", typed = TRUE))
-    expect_equal(component(page$draft(), "c3")$text, "Do you worry a lot?")
+    expect_equal(component(page$draft(), "c3")$text, "do you worry a lot?")
     expect_equal(tree_html(output), before) # typing never redraws the tree
     session$setInputs(edit = list(table = "components", id = "c3", field = "condition", value = "If yes"))
-    expect_equal(component(page$draft(), "c3")$condition, "If yes")
+    expect_equal(component(page$draft(), "c3")$condition, "if yes")
     expect_equal(page$log$typed, c(TRUE, FALSE))
     expect_length(errors(), 0)
   })
@@ -612,7 +612,7 @@ test_that("variables with the same choices show them once, edited for all of the
     shared <- paste0("v1,", added)
     session$setInputs(edit = list(table = "response_options", id = "o1", field = "answer_option", value = "Yes, often", shared = shared))
     both <- page$draft()$response_options
-    expect_equal(both$answer_option[both$display_order == 1 & both$variable_id %in% c("v1", added)], c("yes, often", "yes, often")) # kept in its standard form
+    expect_equal(both$answer_option[both$display_order == 1 & both$variable_id %in% c("v1", added)], c("yes [often]", "yes [often]")) # kept in its standard form
     session$setInputs(action = list(action = "add_choice", id = "v1", shared = shared))
     expect_equal(nrow(draft_service_children(page$draft(), "response_options", added)), 3)
     suppressMessages(session$setInputs(action = list(action = "delete", table = "response_options", id = "o1", shared = shared)))
@@ -664,7 +664,7 @@ test_that("a write-in variable has the same + for its About and label, and one f
   # a write-in with a skip shows it
   skips <- draft_service_update(draft_service_update(draft, "variables", "v1", "skip_condition", "None"), "variables", "v1", "skip_to_id", skip_to_end_id)
   html <- line_of(skips, utils::modifyList(view, list(targets = skip_targets(skips))))
-  expect_match(html, 'value="None"')
+  expect_match(html, 'value="none"')
   expect_match(html, 'value="End of Questionnaire"')
 })
 
@@ -683,7 +683,7 @@ test_that("Skip to is a pick of where the choice sends respondents, its printed 
     expect_match(html, 'placeholder="Skips to"[^>]*data-pick[^>]*data-id="o2" data-field="skip_to_id"')
     expect_match(html, 'value="1c · [^"]*"[^>]*data-id="o2" data-field="skip_to_id"|data-id="o2" data-field="skip_to_id"[^>]*value="1c · ')
     expect_false(grepl('data-field="skip_instruction"|As printed', html))
-    expect_match(html, 'title="Printed: Go to Question 1c"')
+    expect_match(html, 'title="Printed: go to question 1c"')
     session$setInputs(action = list(action = "hide_field", id = "o2", name = "skip_instruction"))
     choice <- component_choice(page$draft(), "o2")
     expect_true(is.na(choice$skip_instruction))
@@ -794,7 +794,7 @@ test_that("the picked block's details are drawn: its words, its skip logic, then
     expect_match(html, 'class="block-detail" data-id="c3"')
     expect_match(html, 'data-field="text" data-id="c3"')
     expect_false(grepl('data-field="component_type"', html)) # its kind isn't changed here
-    expect_match(html, 'class="variable-cards"')
+    expect_match(html, 'class="variable-cards optional-0"')
     expect_lt(regexpr("Skip Conditions &amp; Logic", html), regexpr("<h3>Variables</h3>", html))
     expect_match(html, 'data-action="check" disabled data-id="c3"') # it has no MATR ID yet
     # a question's variables are in its details: its arrow picks it
@@ -825,7 +825,7 @@ test_that("Add Skip Logic makes a question depend on an answer to an earlier one
     expect_equal(of("c4")$condition, "yes")
     html <- detail_html(output)
     # the earlier question by its words, in full, and no number
-    expect_match(text_of(html), "This question is only shown to respondents if they answered “yes” to “Would you call yourself a nervous person?”", fixed = TRUE)
+    expect_match(text_of(html), "This question is only shown to respondents if they answered “yes” to “would you call yourself a nervous person?”", fixed = TRUE)
     expect_match(html, 'data-action="select" data-id="c3"') # the sentence goes to that question
     expect_match(regmatches(html, regexpr('<button[^>]*data-action="remove_logic".*?</button>', html)), "fa-trash") # deleted like everything else
     session$setInputs(action = list(action = "remove_logic", id = "c4", kind = "answer"))
@@ -848,9 +848,9 @@ test_that("Add Skip Logic can show a question only to some respondents, which ta
     session$setInputs(logic_condition = 1)
     expect_match(seen$modals[[2]], "This question is only shown to respondents who are:")
     session$setInputs(logic_condition_text = "Twins", logic_condition_save = 1)
-    expect_equal(of("c4")$condition, "Twins")
+    expect_equal(of("c4")$condition, "twins")
     expect_true(is.na(of("c4")$parent_question_id))
-    expect_match(text_of(detail_html(output)), "This question is only shown to respondents who are: Twins", fixed = TRUE)
+    expect_match(text_of(detail_html(output)), "This question is only shown to respondents who are: twins", fixed = TRUE)
     session$setInputs(action = list(action = "remove_logic", id = "c4", kind = "condition"))
     expect_true(is.na(of("c4")$condition))
   })
@@ -864,7 +864,7 @@ test_that("a Skip to on a choice or a write-in shows in the skip logic of the qu
   view <- list(problems = draft_service_check(draft, test_lookups()))
   detail_of <- function(draft, id) htmltools::renderTags(block_detail(component(draft, id), draft, view, test_lookups(), shiny::NS("x")))$html
   html <- detail_of(draft, "c4")
-  expect_match(text_of(html), "only shown to respondents if they answered “yes” to “Would you call yourself a nervous person?”", fixed = TRUE) # No skips past it
+  expect_match(text_of(html), "only shown to respondents if they answered “yes” to “would you call yourself a nervous person?”", fixed = TRUE) # No skips past it
   expect_match(text_of(html), "from a Skip to in that question")
   expect_match(html, 'data-action="select" data-id="c3"') # the sentence goes to that question
   expect_false(grepl('data-action="remove_logic"', html)) # it goes when the Skip to does
@@ -876,7 +876,7 @@ test_that("a Skip to on a choice or a write-in shows in the skip logic of the qu
   write_in <- draft_service_update(write_in, "variables", "v1", "skip_condition", "None")
   write_in <- draft_service_skip_parents(draft_service_update(write_in, "variables", "v1", "skip_to_id", "1c"))
   expect_true(component(write_in, "c4")$parent_from_skip)
-  expect_match(text_of(detail_of(write_in, "c4")), "if they answered anything but “None” to “Would you call yourself a nervous person?”", fixed = TRUE)
+  expect_match(text_of(detail_of(write_in, "c4")), "if they answered anything but “none” to “would you call yourself a nervous person?”", fixed = TRUE)
   expect_false(grepl("“”", text_of(detail_of(draft, "c4")), fixed = TRUE)) # no write-in skip: no empty quotes
 })
 
@@ -923,9 +923,15 @@ test_that("a variable's line is its MATR ID and response, with About and Label c
   # one variable with an About gives the table an About column; the other's cell there is empty
   about <- draft_service_update(draft, "variables", "v1", "subject", "Respondent's Family")
   html <- cards(about)
-  expect_match(html, 'class="variable-cards has-subject"')
+  expect_match(html, 'class="variable-cards has-subject optional-1"')
   expect_match(regmatches(html, regexpr('<div class="variable-line variable-head".*?</div>', html)), "<span>About</span>")
   expect_equal(lengths(regmatches(html, gregexpr('class="variable-cell is-subject"', html))), 2)
+  # and a time frame a Time frame column, written one way
+  timed <- draft_service_update(about, "variables", "v1", "time_frame", "During the last 30 days")
+  html <- cards(timed)
+  expect_match(html, 'class="variable-cards has-subject has-time_frame optional-2"')
+  expect_match(regmatches(html, regexpr('<div class="variable-line variable-head".*?</div>', html)), "<span>Time frame</span>")
+  expect_match(html, 'value="in the past 30 days"')
 })
 
 test_that("+ Variable asks for choices or a write-in, each said in a box, and adds the kind picked", {
@@ -1026,7 +1032,7 @@ test_that("a variable's choices have Printed as and Skip to columns once one of 
 test_that("a parent the AI read without saying which answers is said as depending on how they answered", {
   draft <- draft_service_update(short_gold_draft(), "components", "c4", "parent_question_id", "c3")
   html <- htmltools::renderTags(block_detail(component(draft, "c4"), draft, list(problems = draft_service_check(draft, test_lookups())), test_lookups(), shiny::NS("x")))$html
-  expect_match(text_of(html), "This question is only shown to respondents depending on how they answered “Would you call yourself a nervous person?”", fixed = TRUE)
+  expect_match(text_of(html), "This question is only shown to respondents depending on how they answered “would you call yourself a nervous person?”", fixed = TRUE)
 })
 
 test_that("a parent the AI read, with a Skip to from it that passes the question, is the skip's, and says the answers that reach it", {
@@ -1034,5 +1040,5 @@ test_that("a parent the AI read, with a Skip to from it that passes the question
   draft <- draft_service_skip_parents(draft_service_update(draft, "response_options", "o2", "skip_instruction", "Go to Question 1c"))
   expect_true(component(draft, "c4")$parent_from_skip) # said once, from the Skip to
   html <- htmltools::renderTags(block_detail(component(draft, "c4"), draft, list(problems = draft_service_check(draft, test_lookups())), test_lookups(), shiny::NS("x")))$html
-  expect_match(text_of(html), "if they answered “yes” to “Would you call yourself a nervous person?”", fixed = TRUE)
+  expect_match(text_of(html), "if they answered “yes” to “would you call yourself a nervous person?”", fixed = TRUE)
 })

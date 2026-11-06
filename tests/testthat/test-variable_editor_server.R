@@ -58,7 +58,7 @@ test_that("on Make an edit Skip to is the words printed for it, a write-in can s
     html <- cards_html(output)
     # the write-in's skip: the answer, then the words printed for where it goes
     expect_match(html, 'data-table="variables" data-id="v1" data-field="skip_condition"')
-    expect_match(html, 'value="Go to Question 57"[^>]*data-table="variables" data-id="v1" data-field="skip_instruction"')
+    expect_match(html, 'value="go to question 57"[^>]*data-table="variables" data-id="v1" data-field="skip_instruction"')
     # the choice's: the same, not a pick of a question to link to
     expect_match(html, 'data-table="response_options" data-id="o1" data-field="skip_instruction"')
     expect_false(grepl('data-field="skip_to_id"', html))

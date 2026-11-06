@@ -56,7 +56,7 @@ test_that("a row keeps its ref however the draft changes, and a row added has no
 
 test_that("blocks are flattened in printed order, numbered within their section", {
   draft <- gold_draft()
-  expect_equal(nrow(draft$components), 130)
+  expect_equal(nrow(draft$components), 128)
   expect_equal(nrow(draft$variables), 251)
   expect_equal(nrow(draft$response_options), 330) # printed choices only
 
@@ -142,7 +142,7 @@ test_that("variables are listed question by question in printed order", {
   called <- function(draft, ids) draft_service_question_number(draft$components[match(ids, draft$components$id), ])
   numbers <- called(draft, boxes$component_id)
   expect_equal(head(numbers, 2), c("1a", "1b"))
-  expect_equal(tail(numbers, 2), c("17a", "17b"))
+  expect_equal(tail(numbers, 2), c("17", "112")) # the follow-up of 17 has no printed number: its place
 
   # Moving a question (a drag and drop in the outline) moves its boxes with it.
   q1a <- block_numbered(draft, "1a")$id
@@ -189,3 +189,71 @@ test_that("a save is refused if someone saved the draft after the person opened 
   )
 })
 
+
+# ------ Grids --------------------------------------------------------------------------------------------------------
+# Questions that share a printed lead-in which is part of each question: the lead-in is the Grid's words, each
+# question's are the rest.
+grid_draft <- function(lead_in = "In the past 4 weeks, how often", children = NULL) {
+  question <- function(text, number) {
+    list(component_type = "Question", text = text, printed_number = number, variables = list(list(
+      variable_type = "closed_ended", response_options = list(list(answer_option = "Often"), list(answer_option = "Never"))
+    )))
+  }
+  draft_service_from_json(list(questionnaire = list(), components = list(
+    list(component_type = "Section", text = "Part A", children = list(
+      list(component_type = "Grid", text = lead_in, children = children %||% list(
+        list(component_type = "Instruction", text = "Mark one for each line."),
+        question("have you felt calm and peaceful?", "20a"),
+        question("have you had a lot of energy?", "20b")
+      )),
+      question("Overall, how is your health?", "21")
+    ))
+  )))
+}
+
+test_that("a question in a grid is its grid's lead-in and its own words; one in no grid is its own words", {
+  draft <- grid_draft()
+  questions <- draft$components$id[draft$components$component_type == "Question"]
+  expect_equal(draft_service_full_question(draft, questions), c(
+    "In the past 4 weeks, how often have you felt calm and peaceful?",
+    "In the past 4 weeks, how often have you had a lot of energy?",
+    "Overall, how is your health?"
+  ))
+  # a lead-in ending with a comma or a question mark joins the same way
+  comma <- grid_draft("In the last 12 months,")
+  expect_match(draft_service_full_question(comma, comma$components$id[comma$components$component_type == "Question"][1]),
+    "^In the last 12 months, have you felt calm and peaceful\\?$")
+})
+
+test_that("a grid keeps its words and its skip when saved and opened again", {
+  draft <- grid_draft()
+  grid <- draft$components$id[draft$components$component_type == "Grid"]
+  draft <- draft_service_update(draft, "components", grid, "skip_condition", "No")
+  draft <- draft_service_update(draft, "components", grid, "skip_instruction", "Go to Question 21")
+  again <- draft_service_from_json(draft_service_to_json(draft))
+  kept <- again$components[again$components$component_type == "Grid", ]
+  expect_equal(kept$text, "In the past 4 weeks, how often")
+  expect_equal(kept$skip_condition, "no")
+  expect_equal(kept$skip_instruction, "go to question 21")
+})
+
+test_that("a grid holds only its questions with their instructions and definitions, and a section holds a grid", {
+  draft <- grid_draft()
+  grid <- draft$components$id[draft$components$component_type == "Grid"]
+  part <- draft$components$id[draft$components$component_type == "Section"]
+  instruction <- draft$components$id[draft$components$component_type == "Instruction"]
+  expect_error(draft_service_update(draft, "components", instruction, "component_type", "Section"), "A grid holds only")
+  expect_error(draft_service_update(draft, "components", instruction, "component_type", "Group"), "A grid holds only")
+  # a grid with a section in it can't be made, nor one holding a group
+  expect_error(draft_service_update(draft, "components", part, "component_type", "Grid"), "A grid holds only")
+  # its skip stays when it changes kind to a group, and goes when it becomes a section
+  draft <- draft_service_update(draft, "components", grid, "skip_condition", "No")
+  expect_equal(draft_service_update(draft, "components", grid, "component_type", "Section")$components$skip_condition[draft$components$id == grid], NA_character_)
+})
+
+test_that("who a variable is about and the form's words are written with straight quotes, however they are typed", {
+  expect_equal(blank_respondent(c("Respondent’s Siblings", " “Twin A” ", "Respondent")), c("Respondent's Siblings", '"Twin A"', NA))
+  expect_equal(normal_text("the child’s “sex”"), "the child's \"sex\"")
+  draft <- draft_service_update(gold_draft(), "variables", "v1", "subject", "Respondent’s Twin")
+  expect_equal(draft$variables$subject[1], "Respondent's Twin")
+})

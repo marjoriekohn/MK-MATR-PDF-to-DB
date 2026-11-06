@@ -34,7 +34,7 @@ test_that("changing a shared question's words is one item on the component", {
   built <- form_items(form)
   expect_equal(
     item_lines(built$items),
-    'Update component {"component_id":4} text: Do you now smoke cigarettes? -> Do you currently smoke cigarettes?'
+    'Update component {"component_id":4} text: do you now smoke cigarettes? -> do you currently smoke cigarettes?'
   )
 })
 
@@ -85,7 +85,7 @@ test_that("a new question is a component of the kind Question, and its question 
   built <- form_items(form_for("question", "add", question__text = "Do you exercise?"))
   expect_equal(item_lines(built$items), c(
     'Insert component {"component_id":"new:component:1"} component_type_id: - -> 2',
-    'Insert component {"component_id":"new:component:1"} text: - -> Do you exercise?',
+    'Insert component {"component_id":"new:component:1"} text: - -> do you exercise?',
     'Insert question {"component_id":"new:component:1"} component_id: - -> new:component:1'
   ))
 })
@@ -111,15 +111,15 @@ test_that("a delete lists every field of every row that goes, children before pa
   renumbered <- built$items[built$items$action != "Delete", ]
   expect_true(all(renumbered$entity_name == "wave_question" & renumbered$attribute_name == "question_number"))
   expect_gt(min(renumbered$item_number), max(deleted$item_number))
-  expect_true('Update wave_question {"component_id":4,"questionnaire_id":1,"wave_id":1} question_number: 2 -> 1' %in% item_lines(built$items))
-  expect_true('Update wave_question {"component_id":7,"questionnaire_id":1,"wave_id":2} question_number: 4 -> 3' %in% item_lines(built$items))
+  expect_true('Update wave_question {"placement_id":104,"wave_id":1} question_number: 2 -> 1' %in% item_lines(built$items))
+  expect_true('Update wave_question {"placement_id":107,"wave_id":2} question_number: 4 -> 3' %in% item_lines(built$items))
 
   variable <- built$items[built$items$entity_name == "variable", ]
   expect_equal(
     variable$attribute_name,
-    c("questionnaire_id", "component_id", "matr_id", "display_order", "label", "subject_id")
+    c("questionnaire_id", "placement_id", "matr_id", "display_order", "label", "subject_id", "time_frame_id")
   )
-  expect_equal(variable$old_value, c("1", "3", "AH01DB", "1", "Date of birth", "1"))
+  expect_equal(variable$old_value, c("1", "103", "AH01DB", "1", "date of birth", "1", NA)) # no time frame
   expect_equal(unique(variable$record_identifier), '{"variable_key":1}')
 })
 
@@ -130,7 +130,7 @@ test_that("a delete names the row picked, the one line the history keeps of it",
   )
   # a wave by its questionnaire's name and its own, as the Edit History says it
   expect_equal(delete_items_for("wave", "1")$plan$deleted$name, "Adult Health and Personality Wave 1")
-  expect_equal(delete_items_for("questionnaire_component", "1|1", scope = "1")$plan$deleted$table, "questionnaire_component")
+  expect_equal(delete_items_for("questionnaire_component", "101", scope = "1")$plan$deleted$table, "questionnaire_component")
 })
 
 test_that("a row with nothing but a key is still deleted", {
@@ -152,11 +152,11 @@ test_that("what's emptied rather than deleted is written first", {
 })
 
 test_that("what's inside a section is deleted before the section", {
-  built <- delete_items_for("questionnaire_component", "1|1", scope = "1")
+  built <- delete_items_for("questionnaire_component", "101", scope = "1")
   placed <- built$items[built$items$entity_name == "questionnaire_component" & built$items$attribute_name == "display_order", ]
-  ids <- sub('.*"component_id":([0-9]+).*', "\\1", placed$record_identifier)
-  expect_equal(ids[length(ids)], "1")
-  expect_equal(sort(ids), sort(c("1", "2", "3", "4", "5")))
+  ids <- sub('.*"placement_id":([0-9]+).*', "\\1", placed$record_identifier)
+  expect_equal(ids[length(ids)], "101")
+  expect_equal(sort(ids), sort(c("101", "102", "103", "104", "105")))
 })
 
 test_that("a delete's plan says what's in the way, and whether anything else goes", {
@@ -167,10 +167,10 @@ test_that("a delete's plan says what's in the way, and whether anything else goe
   unused <- delete_items_for("component", "15")
   expect_length(unused$plan$blocked, 0)
   expect_false(unused$plan$far_reaching)
-  expect_equal(unused$summary, "Deleted the component “Thank you for taking part.”")
+  expect_equal(unused$summary, "Deleted the component “thank you for taking part.”")
 
   shared <- delete_items_for("question", "9")
-  expect_equal(shared$summary, "Deleted the question “How often in the past week did you feel sad?” and 18 connected records")
+  expect_equal(shared$summary, "Deleted the question “how often in the past week did you feel sad?” and 18 connected records")
 })
 
 test_that("the two built-in component types can't be deleted", {
@@ -182,11 +182,11 @@ test_that("the two built-in component types can't be deleted", {
 })
 
 test_that("deleting a question from one questionnaire leaves the component for the others", {
-  built <- delete_items_for("questionnaire_question", "2|9", scope = "2")
+  built <- delete_items_for("questionnaire_question", "209", scope = "2")
   expect_false("component" %in% built$items$entity_name)
   expect_true(all(c("questionnaire_component", "questionnaire_question", "wave_question", "variable") %in% built$items$entity_name))
   expect_true(all(grepl(
-    '"questionnaire_id":2',
+    '"placement_id":209',
     built$items$record_identifier[built$items$entity_name %in% c("questionnaire_component", "questionnaire_question")]
   )))
 })
@@ -199,198 +199,206 @@ placed_of <- function(q) {
 
 test_that("a block moved to another section makes room there and closes the gap behind it", {
   placed <- placed_of(1)
-  move <- edit_service_move(placed, 7, 1, 2)
-  expect_equal(move$component_id, c(7, 3, 4, 5))
-  expect_equal(move$new_parent, c(1, 1, 1, 1))
+  move <- edit_service_move(placed, 107, 101, 2)
+  expect_equal(move$placement_id, c(107, 103, 104, 105))
+  expect_equal(move$new_parent, c(101, 101, 101, 101))
   expect_equal(move$old_order, c(1, 2, 3, 4))
   expect_equal(move$new_order, c(2, 3, 4, 5))
 })
 
 test_that("a block moved up its own section shifts the ones it passes", {
   placed <- placed_of(1)
-  move <- edit_service_move(placed, 5, 1, 2)
-  expect_equal(move$component_id, c(5, 3, 4))
+  move <- edit_service_move(placed, 105, 101, 2)
+  expect_equal(move$placement_id, c(105, 103, 104))
   expect_equal(move$new_order, c(2, 3, 4))
   expect_equal(move$old_order, c(4, 2, 3))
 })
 
 test_that("a block moved down shifts the ones it passes the other way", {
   placed <- placed_of(1)
-  move <- edit_service_move(placed, 2, 1, 3)
-  expect_equal(move$component_id, c(3, 4, 2))
+  move <- edit_service_move(placed, 102, 101, 3)
+  expect_equal(move$placement_id, c(103, 104, 102))
   expect_equal(move$new_order, c(1, 2, 3))
 })
 
 test_that("a block put back where it was moves nothing", {
-  expect_equal(nrow(edit_service_move(placed_of(1), 3, 1, 2)), 0)
+  expect_equal(nrow(edit_service_move(placed_of(1), 103, 101, 2)), 0)
 })
 
 test_that("a position past the end means last, and the top level takes sections out of a section", {
   placed <- placed_of(1)
-  expect_equal(edit_service_move(placed, 2, 1, 50)$new_order[edit_service_move(placed, 2, 1, 50)$component_id == 2], 4)
-  out <- edit_service_move(placed, 2, NA, 1)
-  expect_equal(out$component_id[1:3], c(2, 1, 6))
+  expect_equal(edit_service_move(placed, 102, 101, 50)$new_order[edit_service_move(placed, 102, 101, 50)$placement_id == 102], 4)
+  out <- edit_service_move(placed, 102, NA, 1)
+  expect_equal(out$placement_id[1:3], c(102, 101, 106))
   expect_equal(out$new_order[1:3], c(1, 2, 3))
-  # the section it left closes up: 3, 4, 5 are now 1, 2, 3
-  expect_equal(out$new_order[out$component_id %in% c(3, 4, 5)], c(1, 2, 3))
+  # the section it left closes up: 103, 104, 105 are now 1, 2, 3
+  expect_equal(out$new_order[out$placement_id %in% c(103, 104, 105)], c(1, 2, 3))
 })
 
 test_that("a block can't go inside itself or what's inside it", {
   snap <- test_snapshot(c("questionnaire_component", "component", "component_type"))
   placed <- edit_service_placements(snap, 1)
-  expect_equal(edit_service_descendants(placed, 1), c(2, 3, 4, 5))
-  choices <- edit_service_parent_choices(snap, placed, 1)
-  expect_equal(unname(choices), c("", "6"))
-  expect_equal(unname(edit_service_parent_choices(snap, placed)), c("", "1", "6"))
+  expect_equal(edit_service_descendants(placed, 101), c(102, 103, 104, 105))
+  choices <- edit_service_parent_choices(snap, placed, 101)
+  expect_equal(unname(choices), c("", "106"))
+  expect_equal(unname(edit_service_parent_choices(snap, placed)), c("", "101", "106"))
 })
 
 test_that("a question can only follow up on one printed before it, and not on its own follow-ups", {
   snap <- test_snapshot(c("questionnaire_component", "component", "component_type", "questionnaire_question"))
-  expect_equal(unname(edit_service_parent_question_choices(snap, 1, 4)), "3")
-  expect_equal(unname(edit_service_parent_question_choices(snap, 1, 5)), c("3", "4"))
-  expect_equal(unname(edit_service_parent_question_choices(snap, 1, 3)), character())
+  expect_equal(unname(edit_service_parent_question_choices(snap, 1, 104)), "103")
+  expect_equal(unname(edit_service_parent_question_choices(snap, 1, 105)), c("103", "104"))
+  expect_equal(unname(edit_service_parent_question_choices(snap, 1, 103)), character())
 })
 
 # ------ A questionnaire component ---------------------------------------------------------------------------------
 test_that("moving a block is Update items for it and for the ones that move over", {
-  form <- form_for("questionnaire_component", "update", "1|7",
+  form <- form_for("questionnaire_component", "update", "107",
     scope = "1",
-    questionnaire_component__parent_component_id = "1", questionnaire_component__display_order = "2"
+    questionnaire_component__parent_placement_id = "101", questionnaire_component__display_order = "2"
   )
   built <- form_items(form)
   expect_equal(item_lines(built$items), c(
-    'Update questionnaire_component {"component_id":7,"questionnaire_id":1} parent_component_id: 6 -> 1',
-    'Update questionnaire_component {"component_id":7,"questionnaire_id":1} display_order: 1 -> 2',
-    'Update questionnaire_component {"component_id":3,"questionnaire_id":1} display_order: 2 -> 3',
-    'Update questionnaire_component {"component_id":4,"questionnaire_id":1} display_order: 3 -> 4',
-    'Update questionnaire_component {"component_id":5,"questionnaire_id":1} display_order: 4 -> 5',
+    'Update questionnaire_component {"placement_id":107} parent_placement_id: 106 -> 101',
+    'Update questionnaire_component {"placement_id":107} display_order: 1 -> 2',
+    'Update questionnaire_component {"placement_id":103} display_order: 2 -> 3',
+    'Update questionnaire_component {"placement_id":104} display_order: 3 -> 4',
+    'Update questionnaire_component {"placement_id":105} display_order: 4 -> 5',
     # question 7 now comes first, so each wave numbers its questions again
-    'Update wave_question {"component_id":3,"questionnaire_id":1,"wave_id":1} question_number: 1 -> 2',
-    'Update wave_question {"component_id":4,"questionnaire_id":1,"wave_id":1} question_number: 2 -> 3',
-    'Update wave_question {"component_id":5,"questionnaire_id":1,"wave_id":1} question_number: 3 -> 4',
-    'Update wave_question {"component_id":7,"questionnaire_id":1,"wave_id":1} question_number: 4 -> 1',
-    'Update wave_question {"component_id":3,"questionnaire_id":1,"wave_id":2} question_number: 1 -> 2',
-    'Update wave_question {"component_id":4,"questionnaire_id":1,"wave_id":2} question_number: 2 -> 3',
-    'Update wave_question {"component_id":5,"questionnaire_id":1,"wave_id":2} question_number: 3 -> 4',
-    'Update wave_question {"component_id":7,"questionnaire_id":1,"wave_id":2} question_number: 4 -> 1'
+    'Update wave_question {"placement_id":103,"wave_id":1} question_number: 1 -> 2',
+    'Update wave_question {"placement_id":104,"wave_id":1} question_number: 2 -> 3',
+    'Update wave_question {"placement_id":105,"wave_id":1} question_number: 3 -> 4',
+    'Update wave_question {"placement_id":107,"wave_id":1} question_number: 4 -> 1',
+    'Update wave_question {"placement_id":103,"wave_id":2} question_number: 1 -> 2',
+    'Update wave_question {"placement_id":104,"wave_id":2} question_number: 2 -> 3',
+    'Update wave_question {"placement_id":105,"wave_id":2} question_number: 3 -> 4',
+    'Update wave_question {"placement_id":107,"wave_id":2} question_number: 4 -> 1'
   ))
 })
 
-test_that("changing a block's words in one questionnaire adds a component and swaps it in", {
-  form <- form_for("questionnaire_component", "update", "1|2",
+test_that("changing a block's words in one place points that place at a new component", {
+  form <- form_for("questionnaire_component", "update", "102",
     scope = "1",
     questionnaire_component__text = "Please answer every question."
   )
   built <- form_items(form)
   expect_equal(item_lines(built$items), c(
     'Insert component {"component_id":"new:component:1"} component_type_id: - -> 4',
-    'Insert component {"component_id":"new:component:1"} text: - -> Please answer every question.',
-    'Insert questionnaire_component {"component_id":"new:component:1","questionnaire_id":1} parent_component_id: - -> 1',
-    'Insert questionnaire_component {"component_id":"new:component:1","questionnaire_id":1} display_order: - -> 1',
-    'Delete questionnaire_component {"component_id":2,"questionnaire_id":1} parent_component_id: 1 -> -',
-    'Delete questionnaire_component {"component_id":2,"questionnaire_id":1} display_order: 1 -> -'
+    'Insert component {"component_id":"new:component:1"} text: - -> please answer every question.',
+    'Update questionnaire_component {"placement_id":102} component_id: 2 -> new:component:1'
   ))
-  # the old component stays for anyone else who prints it
+  # the old component isn't deleted here: the database lets it go if nothing else prints it
   expect_false(any(built$items$entity_name == "component" & built$items$action == "Delete"))
 })
 
-test_that("a new section keeps what was inside the old one", {
-  form <- form_for("questionnaire_component", "update", "1|1", scope = "1", questionnaire_component__text = "A. About you and your family")
-  lines <- item_lines(form_items(form)$items)
-  expect_true('Update questionnaire_component {"component_id":3,"questionnaire_id":1} parent_component_id: 1 -> new:component:1' %in% lines)
-  expect_equal(sum(grepl("parent_component_id: 1 -> new:component:1", lines)), 4)
-  # a top-level section has no parent to insert
-  expect_false(any(grepl("Insert questionnaire_component .* parent_component_id", lines)))
-  expect_equal(lines[length(lines)], 'Delete questionnaire_component {"component_id":1,"questionnaire_id":1} display_order: 1 -> -')
+test_that("words another component of that kind has already are that component, not a copy", {
+  form <- form_for("questionnaire_component", "update", "106", scope = "1", questionnaire_component__text = "A. About you")
+  expect_equal(item_lines(form_items(form)$items), 'Update questionnaire_component {"placement_id":106} component_id: 6 -> 1')
 })
 
-test_that("changing a shared question's words in one questionnaire carries its settings, numbers and variables to the new one", {
+test_that("a reworded section keeps what is inside it", {
+  form <- form_for("questionnaire_component", "update", "101", scope = "1", questionnaire_component__text = "A. About you and your family")
+  lines <- item_lines(form_items(form)$items)
+  expect_equal(lines[length(lines)], 'Update questionnaire_component {"placement_id":101} component_id: 1 -> new:component:1')
+  # what is inside it is inside the placement, which stays where it is
+  expect_false(any(grepl("parent_placement_id", lines)))
+})
+
+test_that("a shared question reworded in one place keeps its settings, numbers and variables there", {
   form <- form_for(
     "questionnaire_component",
     "update",
-    "4|4",
+    "404",
     scope = "4",
     questionnaire_component__text = "Do you currently smoke cigarettes?"
   )
   lines <- item_lines(form_items(form)$items)
   expect_equal(lines[1:3], c(
     'Insert component {"component_id":"new:component:1"} component_type_id: - -> 2',
-    'Insert component {"component_id":"new:component:1"} text: - -> Do you currently smoke cigarettes?',
+    'Insert component {"component_id":"new:component:1"} text: - -> do you currently smoke cigarettes?',
     'Insert question {"component_id":"new:component:1"} component_id: - -> new:component:1'
   ))
-  expect_true('Insert questionnaire_question {"component_id":"new:component:1","questionnaire_id":4} self_contained: - -> true' %in% lines)
-  expect_true('Update wave_question {"component_id":4,"questionnaire_id":4,"wave_id":5} component_id: 4 -> new:component:1' %in% lines)
-  expect_true('Update variable {"variable_key":8} component_id: 4 -> new:component:1' %in% lines)
   expect_true('Insert question_category {"component_id":"new:component:1","mesh_id":"D012907"} mesh_id: - -> D012907' %in% lines)
-  # only MQ's rows are touched: AHP still has the original wording
-  expect_false(any(grepl('"questionnaire_id":1', lines)))
-  expect_false(any(grepl("variable_key\":2", lines)))
-  # the old rows go last
-  expect_match(lines[length(lines)], "Delete questionnaire_component")
-  expect_true(all(startsWith(lines[(length(lines) - 4):length(lines)], "Delete")))
+  expect_equal(lines[length(lines)], 'Update questionnaire_component {"placement_id":404} component_id: 4 -> new:component:1')
+  # its settings, numbers in each wave and variables are the placement's: none of them moves
+  expect_false(any(grepl("wave_question|variable|questionnaire_question", lines)))
+  # only MQ's placement is touched: AHP still prints the original wording
+  expect_false(any(grepl('"placement_id":104', lines)))
 })
 
 test_that("a question reworded in one questionnaire stays linked with the questions it shares a stem with", {
   entity <- edit_entities$questionnaire_component
   snap <- test_snapshot(edit_service_tables(entity))
   snap$question$question_stem_id[snap$question$component_id == 4] <- 77
-  form <- form_for("questionnaire_component", "update", "4|4", scope = "4", snap = snap, questionnaire_component__text = "Do you currently smoke cigarettes?")
+  form <- form_for("questionnaire_component", "update", "404", scope = "4", snap = snap, questionnaire_component__text = "Do you currently smoke cigarettes?")
   lines <- item_lines(form_items(form)$items)
   expect_equal(lines[3:4], c(
     'Insert question {"component_id":"new:component:1"} component_id: - -> new:component:1',
     'Insert question {"component_id":"new:component:1"} question_stem_id: - -> 77'
   ))
   # a question that shares no stem gets none
-  plain <- item_lines(form_items(form_for("questionnaire_component", "update", "4|4", scope = "4", questionnaire_component__text = "Do you currently smoke cigarettes?"))$items)
+  plain <- item_lines(form_items(form_for("questionnaire_component", "update", "404", scope = "4", questionnaire_component__text = "Do you currently smoke cigarettes?"))$items)
   expect_false(any(grepl("question_stem_id", plain)))
 })
 
-test_that("the follow-ups of a reworded question follow the new one", {
-  form <- form_for("questionnaire_component", "update", "1|4", scope = "1", questionnaire_component__text = "Do you currently smoke?")
+test_that("the follow-ups of a reworded question still follow it", {
+  form <- form_for("questionnaire_component", "update", "104", scope = "1", questionnaire_component__text = "Do you currently smoke?")
   lines <- item_lines(form_items(form)$items)
-  expect_true('Update questionnaire_question {"component_id":5,"questionnaire_id":1} parent_question_id: 4 -> new:component:1' %in% lines)
+  expect_false(any(grepl("parent_question_placement_id", lines))) # they follow the placement, which stays
 })
 
 test_that("a question can't change kind from its placement, nor a section with blocks inside", {
-  question <- form_for("questionnaire_component", "update", "1|4", scope = "1")
+  question <- form_for("questionnaire_component", "update", "104", scope = "1")
   kind <- Filter(function(field) field$name == "component_type_id", question$fields)[[1]]
   expect_match(kind$locked, "A question stays a question")
-  section <- form_for("questionnaire_component", "update", "1|1", scope = "1")
+  section <- form_for("questionnaire_component", "update", "101", scope = "1")
   kind <- Filter(function(field) field$name == "component_type_id", section$fields)[[1]]
   expect_match(kind$locked, "blocks inside")
-  instruction <- form_for("questionnaire_component", "update", "1|2", scope = "1")
+  instruction <- form_for("questionnaire_component", "update", "102", scope = "1")
   expect_null(Filter(function(field) field$name == "component_type_id", instruction$fields)[[1]]$locked)
 })
 
 test_that("a block's new section can't be itself or something inside it", {
-  form <- form_for("questionnaire_component", "update", "1|1", scope = "1")
-  parent <- Filter(function(field) field$name == "parent_component_id", form$fields)[[1]]
-  expect_equal(unname(parent$choices), c("", "6"))
+  form <- form_for("questionnaire_component", "update", "101", scope = "1")
+  parent <- Filter(function(field) field$name == "parent_placement_id", form$fields)[[1]]
+  expect_equal(unname(parent$choices), c("", "106"))
 })
 
 test_that("a position past the end is warned about", {
-  form <- form_for("questionnaire_component", "update", "1|2", scope = "1", questionnaire_component__display_order = "9")
+  form <- form_for("questionnaire_component", "update", "102", scope = "1", questionnaire_component__display_order = "9")
   expect_match(edit_service_check(form$fields, form$values)$warnings$questionnaire_component__display_order, "only 4 places there")
 })
 
 test_that("an existing component is placed at the end unless a position is given", {
   form <- form_for("questionnaire_component", "add", scope = "1", questionnaire_component__component_id = "15")
   lines <- item_lines(form_items(form)$items)
-  expect_equal(lines, 'Insert questionnaire_component {"component_id":15,"questionnaire_id":1} display_order: - -> 3')
+  expect_equal(lines, c(
+    'Insert questionnaire_component {"placement_id":"new:questionnaire_component:1"} questionnaire_id: - -> 1',
+    'Insert questionnaire_component {"placement_id":"new:questionnaire_component:1"} component_id: - -> 15',
+    'Insert questionnaire_component {"placement_id":"new:questionnaire_component:1"} display_order: - -> 3'
+  ))
+})
+
+test_that("a block this questionnaire prints already can be placed again", {
+  form <- form_for("questionnaire_component", "add", scope = "1", questionnaire_component__component_id = "2")
+  lines <- item_lines(form_items(form)$items)
+  expect_true('Insert questionnaire_component {"placement_id":"new:questionnaire_component:1"} component_id: - -> 2' %in% lines)
 })
 
 test_that("a block placed among others pushes the ones after it along", {
   form <- form_for("questionnaire_component", "add",
     scope = "1", questionnaire_component__component_id = "15",
-    questionnaire_component__parent_component_id = "1", questionnaire_component__display_order = "2"
+    questionnaire_component__parent_placement_id = "101", questionnaire_component__display_order = "2"
   )
   lines <- item_lines(form_items(form)$items)
   expect_equal(lines, c(
-    'Update questionnaire_component {"component_id":3,"questionnaire_id":1} display_order: 2 -> 3',
-    'Update questionnaire_component {"component_id":4,"questionnaire_id":1} display_order: 3 -> 4',
-    'Update questionnaire_component {"component_id":5,"questionnaire_id":1} display_order: 4 -> 5',
-    'Insert questionnaire_component {"component_id":15,"questionnaire_id":1} parent_component_id: - -> 1',
-    'Insert questionnaire_component {"component_id":15,"questionnaire_id":1} display_order: - -> 2'
+    'Update questionnaire_component {"placement_id":103} display_order: 2 -> 3',
+    'Update questionnaire_component {"placement_id":104} display_order: 3 -> 4',
+    'Update questionnaire_component {"placement_id":105} display_order: 4 -> 5',
+    'Insert questionnaire_component {"placement_id":"new:questionnaire_component:1"} questionnaire_id: - -> 1',
+    'Insert questionnaire_component {"placement_id":"new:questionnaire_component:1"} component_id: - -> 15',
+    'Insert questionnaire_component {"placement_id":"new:questionnaire_component:1"} parent_placement_id: - -> 101',
+    'Insert questionnaire_component {"placement_id":"new:questionnaire_component:1"} display_order: - -> 2'
   ))
 })
 
@@ -398,65 +406,62 @@ test_that("a block that's new is added as a component and placed", {
   form <- form_for("questionnaire_component", "add",
     scope = "2", questionnaire_component__source = "new",
     questionnaire_component__component_type_id = "4", questionnaire_component__text = "Answer for each twin.",
-    questionnaire_component__parent_component_id = "10", questionnaire_component__display_order = "1"
+    questionnaire_component__parent_placement_id = "210", questionnaire_component__display_order = "1"
   )
   lines <- item_lines(form_items(form)$items)
   expect_equal(lines[1:2], c(
     'Insert component {"component_id":"new:component:1"} component_type_id: - -> 4',
-    'Insert component {"component_id":"new:component:1"} text: - -> Answer for each twin.'
+    'Insert component {"component_id":"new:component:1"} text: - -> answer for each twin.'
   ))
   expect_match(lines[3], "Update questionnaire_component")
-  expect_true(paste0(
-    'Insert questionnaire_component {"component_id":"new:component:1","questionnaire_id":2} ',
-    "parent_component_id: - -> 10"
-  ) %in% lines)
-  expect_true('Update questionnaire_component {"component_id":8,"questionnaire_id":2} display_order: 1 -> 2' %in% lines)
+  expect_true('Insert questionnaire_component {"placement_id":"new:questionnaire_component:1"} parent_placement_id: - -> 210' %in% lines)
+  expect_true('Update questionnaire_component {"placement_id":208} display_order: 1 -> 2' %in% lines)
 })
 
 # ------ A questionnaire question -----------------------------------------------------------------------------------------
 test_that("a follow-up made to stand on its own loses its parent", {
-  form <- form_for("questionnaire_question", "update", "1|5", scope = "1", questionnaire_question__self_contained = "TRUE")
+  form <- form_for("questionnaire_question", "update", "105", scope = "1", questionnaire_question__self_contained = "TRUE")
   lines <- item_lines(form_items(form)$items)
   expect_equal(lines, c(
-    'Update questionnaire_question {"component_id":5,"questionnaire_id":1} self_contained: false -> true',
-    'Update questionnaire_question {"component_id":5,"questionnaire_id":1} parent_question_id: 4 -> -'
+    'Update questionnaire_question {"placement_id":105} self_contained: false -> true',
+    'Update questionnaire_question {"placement_id":105} parent_question_placement_id: 104 -> -'
   ))
 })
 
 test_that("a question made a follow-up needs its parent", {
-  form <- form_for("questionnaire_question", "update", "1|7", scope = "1", questionnaire_question__self_contained = "FALSE")
+  form <- form_for("questionnaire_question", "update", "107", scope = "1", questionnaire_question__self_contained = "FALSE")
   expect_equal(edit_service_check(form$fields, form$values)$missing, "which question does it follow up on?")
   form <- form_for(
     "questionnaire_question",
     "update",
-    "1|7",
+    "107",
     scope = "1",
     questionnaire_question__self_contained = "FALSE",
-    questionnaire_question__parent_question_id = "4"
+    questionnaire_question__parent_question_placement_id = "104"
   )
   expect_equal(item_lines(form_items(form)$items), c(
-    'Update questionnaire_question {"component_id":7,"questionnaire_id":1} self_contained: true -> false',
-    'Update questionnaire_question {"component_id":7,"questionnaire_id":1} parent_question_id: - -> 4'
+    'Update questionnaire_question {"placement_id":107} self_contained: true -> false',
+    'Update questionnaire_question {"placement_id":107} parent_question_placement_id: - -> 104'
   ))
 })
 
 test_that("a question's condition and its number in a wave are changed one by one", {
-  form <- form_for("questionnaire_question", "update", "1|5",
+  form <- form_for("questionnaire_question", "update", "105",
     scope = "1",
     questionnaire_question__condition = "If yes", questionnaire_question__qn_2 = "2b"
   )
   lines <- item_lines(form_items(form)$items)
   expect_equal(lines, c(
     paste0(
-      'Update questionnaire_question {"component_id":5,"questionnaire_id":1} condition: If you ',
-      "answered Yes to the previous question -> If yes"
+      'Update questionnaire_question {"placement_id":105} condition: if you ',
+      "answered yes to the previous question -> if yes"
     ),
-    'Update wave_question {"component_id":5,"questionnaire_id":1,"wave_id":2} printed_number: 3 -> 2b'
+    'Update wave_question {"placement_id":105,"wave_id":2} printed_number: 3 -> 2b'
   ))
 })
 
 test_that("each wave that asked a question has its own printed number to change", {
-  form <- form_for("questionnaire_question", "update", "1|4", scope = "1")
+  form <- form_for("questionnaire_question", "update", "104", scope = "1")
   ids <- vapply(form$fields, function(field) field$id, character(1))
   expect_true(all(c("questionnaire_question__qn_1", "questionnaire_question__qn_2") %in% ids))
   labels <- vapply(Filter(function(field) startsWith(field$name, "qn_"), form$fields), function(field) field$label, character(1))
@@ -464,35 +469,32 @@ test_that("each wave that asked a question has its own printed number to change"
 })
 
 test_that("a printed number can repeat in a wave, or be left empty", {
-  form <- form_for("questionnaire_question", "update", "1|5", scope = "1", questionnaire_question__qn_2 = "2")
+  form <- form_for("questionnaire_question", "update", "105", scope = "1", questionnaire_question__qn_2 = "2")
   expect_length(edit_service_check(form$fields, form$values)$problems, 0)
-  form <- form_for("questionnaire_question", "update", "1|5", scope = "1", questionnaire_question__qn_2 = "")
+  form <- form_for("questionnaire_question", "update", "105", scope = "1", questionnaire_question__qn_2 = "")
   expect_length(edit_service_check(form$fields, form$values)$problems, 0)
-  expect_true('Update wave_question {"component_id":5,"questionnaire_id":1,"wave_id":2} printed_number: 3 -> -' %in% item_lines(form_items(form)$items))
+  expect_true('Update wave_question {"placement_id":105,"wave_id":2} printed_number: 3 -> -' %in% item_lines(form_items(form)$items))
 })
 
 test_that("changing a question's wording and its number together changes the new question's number", {
-  form <- form_for("questionnaire_question", "update", "4|11",
+  form <- form_for("questionnaire_question", "update", "411",
     scope = "4",
     questionnaire_question__text = "Did you smoke while pregnant?", questionnaire_question__qn_5 = "1a"
   )
   lines <- item_lines(form_items(form)$items)
   expect_equal(lines[1:3], c(
     'Insert component {"component_id":"new:component:1"} component_type_id: - -> 2',
-    'Insert component {"component_id":"new:component:1"} text: - -> Did you smoke while pregnant?',
+    'Insert component {"component_id":"new:component:1"} text: - -> did you smoke while pregnant?',
     'Insert question {"component_id":"new:component:1"} component_id: - -> new:component:1'
   ))
-  expect_true(paste0(
-    'Update wave_question {"component_id":"new:component:1","questionnaire_id":4,"wave_id":5} ',
-    "printed_number: 1 -> 1a"
-  ) %in% lines)
+  expect_true('Update wave_question {"placement_id":411,"wave_id":5} printed_number: 1 -> 1a' %in% lines)
 })
 
 test_that("a question's new questionnaire-only wording keeps its MeSH categories but not its scale membership", {
   form <- form_for(
     "questionnaire_question",
     "update",
-    "2|9",
+    "209",
     scope = "2",
     questionnaire_question__text = "How often this week did you feel sad?"
   )
@@ -555,31 +557,26 @@ test_that("another open proposal that changes the same row is a conflict", {
   expect_length(edit_service_conflicts(list(another_add), adding("First Registry")), 0)
 })
 
-test_that("the changes to a swapped-in question come before the old rows are removed", {
-  form <- form_for("questionnaire_question", "update", "1|5",
+test_that("a reworded question's other changes are made at its placement, after it points at the new words", {
+  form <- form_for("questionnaire_question", "update", "105",
     scope = "1",
     questionnaire_question__text = "On a typical day, how many cigarettes do you smoke?",
     questionnaire_question__self_contained = "TRUE", questionnaire_question__qn_2 = "3b"
   )
   built <- form_items(form)
-  actions <- built$items$action
-  last_new <- max(which(actions != "Delete"))
-  first_delete <- min(which(actions == "Delete"))
-  expect_lt(last_new, first_delete)
-  expect_true(all(actions[first_delete:length(actions)] == "Delete"))
-  expect_equal(
-    item_lines(built$items)[(first_delete - 3):(first_delete - 1)],
-    c(
-      'Update questionnaire_question {"component_id":"new:component:1","questionnaire_id":1} self_contained: false -> true',
-      'Update questionnaire_question {"component_id":"new:component:1","questionnaire_id":1} parent_question_id: 4 -> -',
-      'Update wave_question {"component_id":"new:component:1","questionnaire_id":1,"wave_id":2} printed_number: 3 -> 3b'
-    )
-  )
+  expect_false(any(built$items$action == "Delete"))
+  lines <- item_lines(built$items)
+  expect_equal(lines[(length(lines) - 3):length(lines)], c(
+    'Update questionnaire_component {"placement_id":105} component_id: 5 -> new:component:1',
+    'Update questionnaire_question {"placement_id":105} self_contained: false -> true',
+    'Update questionnaire_question {"placement_id":105} parent_question_placement_id: 104 -> -',
+    'Update wave_question {"placement_id":105,"wave_id":2} printed_number: 3 -> 3b'
+  ))
   expect_equal(
     built$summary,
     paste0(
       "Changed the wording, whether it stands on its own, the question it follows up on and number ",
-      "printed in Wave 2 of the questionnaire question “AHP · How many cigarettes do you smoke on a ",
+      "printed in Wave 2 of the questionnaire question “AHP · how many cigarettes do you smoke on a ",
       "typical day?”"
     )
   )
@@ -600,12 +597,12 @@ test_that("a question can be added to a questionnaire, whole: no sentence says t
   expect_true(all(c("subject", "answer_option", "option_set", "answer_option_set") %in% edit_service_tables(entity)))
   form <- form_for("questionnaire_question", "add", scope = "1")
   names <- vapply(form$fields, function(field) field$name, character(1))
-  expect_true(all(c("source", "text", "component_id", "parent_component_id", "display_order", "self_contained",
-                    "parent_question_id", "condition", "asked_1", "qn_1", "asked_2", "qn_2", "variables") %in% names))
-  # an existing question can be picked, but not one the questionnaire asks already
+  expect_true(all(c("source", "text", "component_id", "parent_placement_id", "display_order", "self_contained",
+                    "parent_question_placement_id", "condition", "asked_1", "qn_1", "asked_2", "qn_2", "variables") %in% names))
+  # an existing question can be picked, even one the questionnaire asks already (it can ask it again elsewhere)
   existing <- Filter(function(field) field$name == "component_id", form$fields)[[1]]
   expect_true("11" %in% existing$choices) # Mother Questionnaire's pregnancy question
-  expect_false(any(c("3", "4", "5", "7") %in% existing$choices))
+  expect_true(all(c("3", "4", "5", "7") %in% existing$choices))
 })
 
 test_that("a question added here offers the choice a wording was merged into, as an extraction would", {
@@ -616,7 +613,7 @@ test_that("a question added here offers the choice a wording was merged into, as
   form <- form_for(
     "questionnaire_question", "add", scope = "1", snap = snap,
     questionnaire_question__text = "Do you exercise?",
-    questionnaire_question__parent_component_id = "6", questionnaire_question__display_order = "1",
+    questionnaire_question__parent_placement_id = "106", questionnaire_question__display_order = "1",
     questionnaire_question__asked_2 = "yes", questionnaire_question__qn_2 = "1a4",
     questionnaire_question__variables = variables_json(yes_no_variable(choices = choices))
   )
@@ -630,7 +627,7 @@ test_that("a new question is added with its place, its numbers in each wave that
   form <- form_for(
     "questionnaire_question", "add", scope = "1",
     questionnaire_question__text = "Do you exercise?",
-    questionnaire_question__parent_component_id = "6", questionnaire_question__display_order = "1",
+    questionnaire_question__parent_placement_id = "106", questionnaire_question__display_order = "1",
     questionnaire_question__asked_2 = "yes", questionnaire_question__qn_2 = "1a4",
     questionnaire_question__variables = variables_json(
       yes_no_variable(),
@@ -643,20 +640,22 @@ test_that("a new question is added with its place, its numbers in each wave that
   built <- form_items(form)
   lines <- item_lines(built$items)
   expect_match(built$summary, "^Added the question “Do you exercise\\?” to AHP$")
-  expect_true('Insert component {"component_id":"new:component:1"} text: - -> Do you exercise?' %in% lines)
+  expect_true('Insert component {"component_id":"new:component:1"} text: - -> do you exercise?' %in% lines)
   expect_true('Insert question {"component_id":"new:component:1"} component_id: - -> new:component:1' %in% lines)
   # it goes first in section B, and what was there moves over
-  expect_true('Update questionnaire_component {"component_id":7,"questionnaire_id":1} display_order: 1 -> 2' %in% lines)
-  expect_true('Insert questionnaire_component {"component_id":"new:component:1","questionnaire_id":1} parent_component_id: - -> 6' %in% lines)
-  expect_true('Insert questionnaire_question {"component_id":"new:component:1","questionnaire_id":1} self_contained: - -> true' %in% lines)
+  expect_true('Update questionnaire_component {"placement_id":107} display_order: 1 -> 2' %in% lines)
+  expect_true('Insert questionnaire_component {"placement_id":"new:questionnaire_component:1"} parent_placement_id: - -> 106' %in% lines)
+  expect_true('Insert questionnaire_component {"placement_id":"new:questionnaire_component:1"} component_id: - -> new:component:1' %in% lines)
+  expect_true('Insert questionnaire_question {"placement_id":"new:questionnaire_component:1"} self_contained: - -> true' %in% lines)
   # asked only in the wave that asks it: its place among the wave's questions (question 7 after it moves
   # down one), and the number printed beside it
   waves <- built$items[built$items$entity_name == "wave_question", ]
   expect_true(all(grepl('"wave_id":2', waves$record_identifier)))
   expect_equal(item_lines(waves), c(
-    'Update wave_question {"component_id":7,"questionnaire_id":1,"wave_id":2} question_number: 4 -> 5',
-    'Insert wave_question {"component_id":"new:component:1","questionnaire_id":1,"wave_id":2} question_number: - -> 4',
-    'Insert wave_question {"component_id":"new:component:1","questionnaire_id":1,"wave_id":2} printed_number: - -> 1a4'
+    'Update wave_question {"placement_id":107,"wave_id":2} question_number: 4 -> 5',
+    'Insert wave_question {"placement_id":"new:questionnaire_component:1","wave_id":2} questionnaire_id: - -> 1',
+    'Insert wave_question {"placement_id":"new:questionnaire_component:1","wave_id":2} question_number: - -> 4',
+    'Insert wave_question {"placement_id":"new:questionnaire_component:1","wave_id":2} printed_number: - -> 1a4'
   ))
   # its variables, as an extraction adds them: Yes and No are used again, and so is the set they make
   expect_true('Insert variable {"variable_key":"new:variable:1"} matr_id: - -> AH05EX' %in% lines)
@@ -688,7 +687,7 @@ test_that("a question already in the database can be added, keeping its wording 
   form <- form_for(
     "questionnaire_question", "add", scope = "1",
     questionnaire_question__source = "existing", questionnaire_question__component_id = "11",
-    questionnaire_question__self_contained = "FALSE", questionnaire_question__parent_question_id = "4",
+    questionnaire_question__self_contained = "FALSE", questionnaire_question__parent_question_placement_id = "104",
     questionnaire_question__condition = "Women only", questionnaire_question__asked_1 = "yes", questionnaire_question__qn_1 = "2b",
     questionnaire_question__variables = variables_json(yes_no_variable())
   )
@@ -696,10 +695,11 @@ test_that("a question already in the database can be added, keeping its wording 
   built <- form_items(form)
   lines <- item_lines(built$items)
   expect_false("component" %in% built$items$entity_name) # the wording is the one that is there
-  expect_true('Insert questionnaire_component {"component_id":11,"questionnaire_id":1} display_order: - -> 3' %in% lines)
-  expect_true('Insert questionnaire_question {"component_id":11,"questionnaire_id":1} parent_question_id: - -> 4' %in% lines)
-  expect_true('Insert questionnaire_question {"component_id":11,"questionnaire_id":1} condition: - -> Women only' %in% lines)
-  expect_match(built$summary, "Did you smoke during your pregnancy")
+  expect_true('Insert questionnaire_component {"placement_id":"new:questionnaire_component:1"} component_id: - -> 11' %in% lines)
+  expect_true('Insert questionnaire_component {"placement_id":"new:questionnaire_component:1"} display_order: - -> 3' %in% lines)
+  expect_true('Insert questionnaire_question {"placement_id":"new:questionnaire_component:1"} parent_question_placement_id: - -> 104' %in% lines)
+  expect_true('Insert questionnaire_question {"placement_id":"new:questionnaire_component:1"} condition: - -> women only' %in% lines)
+  expect_match(built$summary, "did you smoke during your pregnancy")
 })
 
 test_that("what stops a question being added is said under the field at fault", {
@@ -759,19 +759,22 @@ test_that("the variables start as one, about the respondent, with one blank choi
 test_that("the variables go from the form's JSON to a draft and back unchanged, a write-in's skip and a choice's too", {
   json <- variables_json(
     list(
-      variable_type = "open_ended", matr_id = "AH9", subject = "Siblings", label = "Age", answer_data_type = "NUMBER",
-      skip_condition = "None", skip_instruction = "Go to Question 57"
+      variable_type = "open_ended", matr_id = "AH9", subject = "Siblings", label = "age", answer_data_type = "NUMBER",
+      skip_condition = "none", skip_instruction = "go to question 57"
     ),
     list(
       variable_type = "closed_ended", matr_id = "AH10", subject = "", label = "",
       response_options = list(
-        list(code_value = "1", answer_option = "yes", skip_instruction = "Go to Question 12"),
+        list(code_value = "1", answer_option = "yes", skip_instruction = "go to question 12"),
         list(code_value = "b", answer_option = "no", skip_instruction = "") # a code can be a letter
       )
     )
   )
   draft <- edit_variables_draft(edit_variables_parse(json))
-  expect_equal(draft$variables$skip_condition[1], "None")
+  expect_equal(draft$variables$skip_condition[1], "none")
+  # the form's words are kept in lower case, as typed in any case
+  typed <- edit_variables_draft(list(list(variable_type = "open_ended", label = "Age", skip_condition = "None", skip_instruction = "Go to Question 57")))
+  expect_equal(unlist(typed$variables[1, c("label", "skip_condition", "skip_instruction")]), c(label = "age", skip_condition = "none", skip_instruction = "go to question 57"))
   expect_equal(jsonlite::fromJSON(edit_variables_json(draft), simplifyVector = FALSE), jsonlite::fromJSON(json, simplifyVector = FALSE))
   # the default, and none at all
   expect_equal(edit_variables_json(edit_variables_draft(edit_variables_parse(edit_variables_default(NULL)))), edit_variables_default(NULL))
@@ -788,25 +791,43 @@ test_that("a block goes in a section or group, but a section never goes inside a
   entity <- edit_entities$questionnaire_component
   snap <- test_snapshot(edit_service_tables(entity), change = as_group)
   choices <- edit_service_parent_choices(snap, edit_service_placements(snap, 1))
-  expect_equal(unname(choices), c("", "1", "6"))
+  expect_equal(unname(choices), c("", "101", "106"))
   expect_match(names(choices)[2], "^\\(group\\) ")
 
-  section_b <- form_for("questionnaire_component", "update", "1|6", scope = "1", snap = snap, questionnaire_component__parent_component_id = "1")
-  expect_match(edit_service_check(section_b$fields, section_b$values)$problems$questionnaire_component__parent_component_id, "can't be inside a group")
-  question <- form_for("questionnaire_component", "update", "1|7", scope = "1", snap = snap, questionnaire_component__parent_component_id = "1")
-  expect_null(edit_service_check(question$fields, question$values)$problems$questionnaire_component__parent_component_id)
+  section_b <- form_for("questionnaire_component", "update", "106", scope = "1", snap = snap, questionnaire_component__parent_placement_id = "101")
+  expect_match(edit_service_check(section_b$fields, section_b$values)$problems$questionnaire_component__parent_placement_id, "can't be inside a group")
+  question <- form_for("questionnaire_component", "update", "107", scope = "1", snap = snap, questionnaire_component__parent_placement_id = "101")
+  expect_null(edit_service_check(question$fields, question$values)$problems$questionnaire_component__parent_placement_id)
 })
 
-test_that("deleting a component a choice skips to empties the link, and keeps the printed words", {
-  entity <- edit_entities$component
+test_that("a grid holds questions, but no section", {
+  # section A (component 1) of AHP as a grid: a lead-in its questions share
+  as_grid <- function(snap) {
+    snap$component_type <- rbind(snap$component_type, data.frame(component_type_id = 9, name = "Grid", description = NA))
+    snap$component$component_type_id[snap$component$component_id == 1] <- 9
+    snap$component$text[snap$component$component_id == 1] <- "In the past month, how often did you"
+    snap
+  }
+  snap <- test_snapshot(edit_service_tables(edit_entities$questionnaire_component), change = as_grid)
+  choices <- edit_service_parent_choices(snap, edit_service_placements(snap, 1))
+  expect_equal(names(choices)[unname(choices) == "101"], "(grid) In the past month, how often did you")
+
+  section_b <- form_for("questionnaire_component", "update", "106", scope = "1", snap = snap, questionnaire_component__parent_placement_id = "101")
+  expect_match(edit_service_check(section_b$fields, section_b$values)$problems$questionnaire_component__parent_placement_id, "A grid holds only its questions")
+  question <- form_for("questionnaire_component", "update", "107", scope = "1", snap = snap, questionnaire_component__parent_placement_id = "101")
+  expect_null(edit_service_check(question$fields, question$values)$problems$questionnaire_component__parent_placement_id)
+})
+
+test_that("deleting the place a choice skips to empties the link, and keeps the printed words", {
+  entity <- edit_entities$questionnaire_question
   snap <- test_snapshot(edit_service_tables(entity), change = function(snap) {
     if (!is.null(snap$response_option)) {
-      snap$response_option$skip_to_component_id[snap$response_option$variable_key == 2 & snap$response_option$answer_option_id == 2] <- 7
+      snap$response_option$skip_to_placement_id[snap$response_option$variable_key == 2 & snap$response_option$answer_option_id == 2] <- 107
     }
     snap
   })
   expect_true("response_option" %in% edit_service_tables(entity))
-  built <- edit_service_build(entity, "delete", snap, edit_service_row(entity, snap, "7"))
-  expect_true('Update response_option {"answer_option_id":2,"variable_key":2} skip_to_component_id: 7 -> -' %in% item_lines(built$items))
+  built <- edit_service_build(entity, "delete", snap, edit_service_row(entity, snap, "107"))
+  expect_true('Update response_option {"answer_option_id":2,"variable_key":2} skip_to_placement_id: 107 -> -' %in% item_lines(built$items))
   expect_false(any(grepl('response_option {"answer_option_id":2,"variable_key":2} skip_instruction', item_lines(built$items), fixed = TRUE)))
 })

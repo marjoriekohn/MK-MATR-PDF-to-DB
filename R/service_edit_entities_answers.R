@@ -146,7 +146,7 @@ edit_merge_items <- function(snap, from, to) {
     add("response_option", edit_row_identifier("response_option", option), "Delete", NULL, NA, NA)
     insert_row("response_option", list(answer_option_id = to, variable_key = option$variable_key), list(
       display_order = option$display_order, code_value = option$code_value, skip_instruction = option$skip_instruction,
-      skip_to_component_id = option$skip_to_component_id, skip_to_end = option$skip_to_end
+      skip_to_placement_id = option$skip_to_placement_id, skip_to_end = option$skip_to_end
     ))
     for (j in seq_len(nrow(mine))) {
       insert_row(

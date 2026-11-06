@@ -31,7 +31,7 @@ review_edit_fields <- list(
     "component_type", "text", "printed_number", "self_contained", "condition", "parent_question_id",
     "skip_condition", "skip_when", "skip_instruction" # a group's skip
   ),
-  variables = c("variable_type", "label", "subject", "answer_data_type", "skip_condition", "skip_instruction"),
+  variables = c("variable_type", "label", "subject", "time_frame", "answer_data_type", "skip_condition", "skip_instruction"),
   response_options = c("answer_option", "skip_instruction")
 )
 review_edit_items <- c(components = "block", variables = "variable", response_options = "choice")

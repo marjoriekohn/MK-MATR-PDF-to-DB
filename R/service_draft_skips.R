@@ -225,9 +225,11 @@ set_skip_to <- function(draft, row, value, table = "response_options") {
   draft
 }
 
-# What a section and a group are called in the list of places a choice can skip to:
-# "Section · Part B. Your habits", "Group · 12 · How often do you…" (by its first question).
+# What a section, a grid and a group are called in the list of places a choice can skip to:
+# "Section · Part B. Your habits", "Grid · In the past 4 weeks, how often", "Group · 12 · How often do you…" (by
+# its first question).
 skip_section_prefix <- "Section · "
+skip_grid_prefix <- "Grid · "
 skip_group_prefix <- "Group · "
 
 #' The places a choice or write-in can skip to, as the list on the page names them.
@@ -248,12 +250,16 @@ skip_targets <- function(draft) {
     inside <- draft_service_printed_order(draft, id)
     inside[blocks$component_type[match(inside, blocks$id)] %in% "Question"][1]
   }, character(1))
-  keep <- blocks$component_type == "Question" | (blocks$component_type == "Section" & !is.na(blocks$text)) | !is.na(first_question)
+  worded <- blocks$component_type %in% c("Section", "Grid") & !is.na(blocks$text)
+  keep <- blocks$component_type == "Question" | worded | !is.na(first_question)
   label <- ifelse(
     blocks$component_type == "Question", questions$label[match(blocks$id, questions$id)],
     ifelse(
       blocks$component_type == "Section", paste0(skip_section_prefix, shorten(blocks$text, 50)),
-      paste0(skip_group_prefix, questions$label[match(first_question, questions$id)])
+      ifelse(
+        blocks$component_type == "Grid", paste0(skip_grid_prefix, shorten(blocks$text, 50)),
+        paste0(skip_group_prefix, questions$label[match(first_question, questions$id)])
+      )
     )
   )
   data.frame(
@@ -281,7 +287,7 @@ unlink_skips <- function(draft, ids) {
 draft_service_group_skipped <- function(draft) {
   blocks <- draft$components
   printed <- draft_service_printed_order(draft)
-  groups <- blocks$id[blocks$component_type %in% "Group" & !is.na(blocks$skip_to_id)]
+  groups <- blocks$id[blocks$component_type %in% skipping_types & !is.na(blocks$skip_to_id)]
   questions <- printed[blocks$component_type[match(printed, blocks$id)] %in% "Question"]
   place <- match(questions, printed)
   skipped_by <- rep(NA_character_, length(questions))

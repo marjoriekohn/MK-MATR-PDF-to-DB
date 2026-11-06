@@ -10,7 +10,10 @@
 #                   people, can be linked. Each keeps its own words, number and variables; linking gives them a
 #                   stem with [subject] for who they ask about (subject_placeholder), sets their variables'
 #                   subjects to who each asks about, and writes a choice that names its variable's subject with
-#                   [subject] too ("describes [subject] very well"), so both share one set of choices.
+#                   [subject] too ("describes [subject] very well"), so both share one set of choices. So can
+#                   questions that differ only in when they ask about ("... in your lifetime?", "... during the
+#                   last 12 months?"): their stem has [time frame] (time_frame_placeholder), and each variable is
+#                   about its question's time frame, written one way (normal_time_frame()).
 #
 # Who a question can ask about is a subject the database has, or one a variable of the draft names, found in its
 # words as whole words, whatever their capitals ("Twin A"). The respondent isn't: they are a blank.
@@ -29,9 +32,10 @@ normalize_look_alikes <- function(label, labels) {
 }
 
 # Words as they are compared to find look-alikes: as normal_answer() writes them, "&" as "and", without
-# punctuation, and without the "s" at the end of a longer word.
+# punctuation (a qualifier's brackets too, but not [subject]'s), and without the "s" at the end of a longer word.
 normalize_loose_words <- function(text) {
   text <- gsub("&", " and ", normal_answer(text), fixed = TRUE)
+  text <- gsub("\\[(?!subject\\])|(?<!\\[subject)\\]", " ", text, perl = TRUE)
   text <- gsub("[^a-z0-9 \\[\\]]", " ", text, perl = TRUE)
   text <- trimws(gsub("[[:space:]]+", " ", text))
   gsub("\\b([a-z]{3,})s\\b", "\\1", text, perl = TRUE)
@@ -132,54 +136,86 @@ normalize_with_placeholder <- function(text, subject, patterns) {
   gsub(patterns[[subject]], subject_placeholder, text, perl = TRUE)
 }
 
-#' Words with [subject] filled in.
+#' Words with [subject] and [time frame] filled in.
 #'
 #' @param text A question stem or an answer choice.
 #' @param subject Who it is about: a subject's name; blank for the respondent.
-#' @return `text` with [subject] as `subject` (or "the respondent").
-normalize_service_fill <- function(text, subject) {
+#' @param time_frame When it is about: a time frame; with none, [time frame] stays.
+#' @return `text` with [subject] as `subject` (or "the respondent"), and [time frame] as `time_frame`.
+normalize_service_fill <- function(text, subject, time_frame = NA) {
   subject <- if (is.na(subject) || !nzchar(trimws(subject))) "the respondent" else trimws(subject)
-  gsub(subject_placeholder, subject, text, fixed = TRUE)
+  text <- gsub(subject_placeholder, subject, text, fixed = TRUE)
+  if (!is.na(time_frame) && nzchar(trimws(time_frame))) text <- gsub(time_frame_placeholder, trimws(time_frame), text, fixed = TRUE)
+  text
 }
 
-#' The questions of a draft that differ only in who they ask about.
+# ------ Questions about different times --------------------------------------------------------------------------
+# The time frames some words ask about, as the database writes them: one character vector for each text.
+normalize_time_frames_in <- function(texts) {
+  lapply(texts, function(text) {
+    if (is.na(text)) {
+      return(character())
+    }
+    found <- regmatches(text, gregexpr(normalize_time_frame_words, text, perl = TRUE))[[1]]
+    unique(normal_time_frame(found))
+  })
+}
+
+# A time frame as whole words, in any capitals.
+normalize_time_frame_words <- paste0("(?i)(?<![[:alnum:]])", time_frame_pattern, "(?![[:alnum:]])")
+
+# Words with the time frame they ask about as [time frame].
+normalize_with_time_placeholder <- function(text) {
+  gsub(normalize_time_frame_words, time_frame_placeholder, text, perl = TRUE)
+}
+
+#' The questions of a draft that differ only in who or when they ask about.
 #'
-#' Questions whose words are the same once each names who it asks about as [subject], each naming someone else;
-#' or worded the same, where each is in a part about someone else (its section's heading, or failing that the
-#' nearest block before it, names one subject, and they all differ).
+#' Questions whose words are the same once each names who it asks about as [subject] and when as [time frame], each
+#' asking about someone else, another time, or both ("in your lifetime", "during the last 12 months"); or worded the
+#' same, where each is in a part about someone else (its section's heading, or failing that the nearest block before
+#' it, names one subject, and they all differ).
 #'
 #' @param draft A draft: `list(questionnaire, components, variables, response_options)`; see the top of `service_draft.R`.
 #' @param subjects Who a variable can be about besides the respondent (the database's subjects); those the draft's
 #'   variables name are added.
 #' @return A list of groups, in printed order, each a list: `stem` (the words they share), `ids` (the questions' ids,
-#'   in printed order), `subjects` (who each asks about) and `linked` (whether they share that stem already).
+#'   in printed order), `subjects` (who each asks about; `NA` when they all ask about the respondent),
+#'   `time_frames` (when each asks about; `NA` when the stem has no [time frame]) and `linked` (whether they share
+#'   that stem already).
 normalize_service_question_groups <- function(draft, subjects) {
   patterns <- normalize_subject_patterns(c(subjects, blank_respondent(draft$variables$subject)))
-  if (length(patterns) == 0) {
-    return(list())
-  }
   printed <- draft_service_printed_order(draft)
   blocks <- draft$components[match(printed, draft$components$id), , drop = FALSE]
   named <- normalize_named(blocks$text, patterns)
-  is_question <- blocks$component_type %in% "Question" & !is.na(blocks$text)
-  one <- lengths(named) == 1
+  times <- normalize_time_frames_in(blocks$text)
+  # a question naming two people compares them, and one naming two times asks about both: they are no one's
+  is_question <- blocks$component_type %in% "Question" & !is.na(blocks$text) & lengths(named) <= 1
   stems <- rep(NA_character_, nrow(blocks))
-  stems[is_question & one] <- vapply(which(is_question & one), function(i) {
-    normalize_with_placeholder(blocks$text[i], named[[i]], patterns)
+  stems[is_question] <- vapply(which(is_question), function(i) {
+    text <- blocks$text[i]
+    if (length(named[[i]]) == 1) text <- normalize_with_placeholder(text, named[[i]], patterns)
+    if (length(times[[i]]) == 1) text <- normalize_with_time_placeholder(text)
+    text
   }, character(1))
-  stems[is_question & lengths(named) == 0] <- blocks$text[is_question & lengths(named) == 0]
-  about <- ifelse(one, vapply(named, function(n) n[1] %||% NA_character_, character(1)), NA_character_)
+  about <- vapply(named, function(n) if (length(n) == 1) n else NA_character_, character(1))
+  when <- vapply(times, function(t) if (length(t) == 1) t else NA_character_, character(1))
   keys <- tolower(push_words(stems))
   groups <- list()
   for (key in unique(keys[!is.na(stems) & duplicated(keys) & nzchar(keys)])) {
     members <- which(keys == key & !is.na(stems))
-    who <- about[members]
-    if (all(is.na(who))) who <- vapply(members, function(i) normalize_context_subject(draft, blocks, named, i), character(1))
-    if (anyNA(who) || anyDuplicated(tolower(who)) > 0) next
-    ids <- blocks$id[members]
     stem <- stems[members[1]]
+    timed <- grepl(time_frame_placeholder, stem, fixed = TRUE)
+    who <- about[members]
+    if (!grepl(subject_placeholder, stem, fixed = TRUE) && !timed) {
+      who <- vapply(members, function(i) normalize_context_subject(draft, blocks, named, i), character(1))
+      if (anyNA(who)) next
+    }
+    times_of <- if (timed) when[members] else rep(NA_character_, length(members))
+    if (anyDuplicated(paste(tolower(who), times_of)) > 0) next
+    ids <- blocks$id[members]
     groups[[length(groups) + 1]] <- list(
-      stem = stem, ids = ids, subjects = who,
+      stem = stem, ids = ids, subjects = who, time_frames = times_of,
       linked = all(push_words(draft$components$stem[match(ids, draft$components$id)]) == push_words(stem))
     )
   }
@@ -201,11 +237,12 @@ normalize_context_subject <- function(draft, blocks, named, i) {
   if (is.na(hit)) NA_character_ else named[[hit]]
 }
 
-#' Link questions that differ only in who they ask about.
+#' Link questions that differ only in who or when they ask about.
 #'
-#' Each gets the stem, each of its variables is about who it asks about, and a choice that names its variable's
-#' subject has [subject] there instead, unless the variable's choices name someone else too ("twin a much more"
-#' beside "twin b much more" compares them).
+#' Each gets the stem, and each of its variables is about when it asks about. When they ask about different people,
+#' each variable is about who its question asks about, and a choice that names its variable's subject has [subject]
+#' there instead, unless the variable's choices name someone else too ("twin a much more" beside "twin b much more"
+#' compares them).
 #'
 #' @param draft A draft: `list(questionnaire, components, variables, response_options)`; see the top of `service_draft.R`.
 #' @param group One of `normalize_service_question_groups()`.
@@ -213,11 +250,15 @@ normalize_context_subject <- function(draft, blocks, named, i) {
 #' @return The draft.
 normalize_service_link <- function(draft, group, subjects) {
   patterns <- normalize_subject_patterns(c(subjects, group$subjects, blank_respondent(draft$variables$subject)))
+  about_people <- !all(is.na(group$subjects))
   for (k in seq_along(group$ids)) {
     id <- group$ids[k]
     subject <- group$subjects[k]
     draft$components$stem[draft$components$id %in% id] <- group$stem
     boxes <- draft$variables$id[draft$variables$component_id %in% id]
+    time_frame <- (group$time_frames %||% NA_character_)[k]
+    if (!is.na(time_frame)) draft$variables$time_frame[draft$variables$id %in% boxes] <- time_frame
+    if (!about_people) next
     draft$variables$subject[draft$variables$id %in% boxes] <- subject
     for (box in boxes) {
       mine <- which(draft$response_options$variable_id %in% box)

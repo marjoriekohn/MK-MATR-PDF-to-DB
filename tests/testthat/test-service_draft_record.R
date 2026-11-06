@@ -14,12 +14,12 @@ test_that("a copy that is what the AI returned has no differences, however often
 })
 
 test_that("a changed field is one entry with what the AI returned, what the copy has, which row and where", {
-  reviewed <- draft_service_update(original(), "components", q(original(), "1a"), "text", "Would you describe yourself as nervous?")
+  reviewed <- draft_service_update(original(), "components", q(original(), "1a"), "text", "would you describe yourself as nervous?")
   edits <- edits_of(reviewed)
   expect_length(edits, 1)
   expect_equal(edits[[1]], list(
     change = "edited", item = "block", ref = q(original(), "1a"), where = "Question 1a", field = "text",
-    before = "Would you call yourself a nervous person?", after = "Would you describe yourself as nervous?"
+    before = "would you call yourself a nervous person?", after = "would you describe yourself as nervous?"
   ))
 })
 
@@ -29,20 +29,21 @@ test_that("a value changed several times is one difference, and a value changed 
   twice <- draft_service_update(reopened(once), "components", q(reopened(once), "1a"), "text", "Second try")
   edits <- edits_of(twice)
   expect_length(edits, 1)
-  expect_equal(c(edits[[1]]$before, edits[[1]]$after), c("Would you call yourself a nervous person?", "Second try"))
+  expect_equal(c(edits[[1]]$before, edits[[1]]$after), c("would you call yourself a nervous person?", "second try"))
 
   back <- draft_service_update(twice, "components", q(twice, "1a"), "text", "Would you call yourself a nervous person?")
   expect_equal(edits_of(back), list())
   expect_equal(edits_of(reopened(back)), list())
 })
 
-test_that("values are compared exactly: capitals, punctuation and spaces inside count; blank and missing don't differ", {
+test_that("values are compared exactly: punctuation and spaces inside count; capitals, blank and missing don't differ", {
   q1a <- q(original(), "1a")
-  expect_length(edits_of(draft_service_update(original(), "components", q1a, "text", "would you call yourself a nervous person?")), 1)
-  expect_length(edits_of(draft_service_update(original(), "components", q1a, "text", "Would you call yourself a nervous person")), 1)
-  expect_length(edits_of(draft_service_update(original(), "components", q1a, "text", "Would you call yourself a  nervous person?")), 1)
-  # spaces at the ends are dropped as staff type, and an emptied field is the same as one never filled
-  expect_equal(edits_of(draft_service_update(original(), "components", q1a, "text", " Would you call yourself a nervous person? ")), list())
+  expect_length(edits_of(draft_service_update(original(), "components", q1a, "text", "would you call yourself a nervous person")), 1)
+  expect_length(edits_of(draft_service_update(original(), "components", q1a, "text", "would you call yourself a  nervous person?")), 1)
+  # words are kept in lower case, spaces at the ends are dropped as staff type, and an emptied field is the same as
+  # one never filled
+  expect_equal(edits_of(draft_service_update(original(), "components", q1a, "text", "Would you call yourself a nervous person?")), list())
+  expect_equal(edits_of(draft_service_update(original(), "components", q1a, "text", " would you call yourself a nervous person? ")), list())
   expect_equal(edits_of(draft_service_update(original(), "components", q1a, "condition", "")), list())
 })
 
@@ -52,7 +53,7 @@ test_that("a field that was empty or is emptied has no before or no after", {
   added <- edits_of(with_condition)
   expect_equal(added[[1]]$field, "condition")
   expect_null(added[[1]]$before)
-  expect_equal(added[[1]]$after, "If you smoke")
+  expect_equal(added[[1]]$after, "if you smoke")
 
   # emptied again, it is as the AI returned it
   expect_equal(edits_of(draft_service_update(with_condition, "components", q1a, "condition", "")), list())
@@ -80,7 +81,7 @@ test_that("a block that was added or deleted is an entry that says what it was; 
   expect_equal(deleted[[1]]$item, "block")
   expect_equal(deleted[[1]]$where, "Question 1b")
   expect_equal(deleted[[1]]$ref, q1b$id)
-  expect_match(deleted[[1]]$before, "text: Are you a worrier\\?")
+  expect_match(deleted[[1]]$before, "text: are you a worrier\\?")
   expect_null(deleted[[1]]$after)
   expect_true(all(c("variable", "choice") %in% vapply(deleted, function(edit) edit$item, character(1)))) # its variables went with it
 
@@ -160,9 +161,11 @@ test_that("a follow-up's parent is compared by which question it is, and shown b
 })
 
 test_that("the questionnaire's printed name and abbreviation are compared", {
-  reviewed <- original()
+  printed <- original()
+  printed$questionnaire$abbreviation <- "GNA"
+  reviewed <- printed
   reviewed$questionnaire$abbreviation <- "GNA-2"
-  edit <- edits_of(reviewed)[[1]]
+  edit <- draft_service_review_edits(printed, reviewed)[[1]]
   expect_equal(c(edit$item, edit$field, edit$before, edit$after), c("questionnaire", "abbreviation", "GNA", "GNA-2"))
 })
 

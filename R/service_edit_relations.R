@@ -70,40 +70,24 @@ edit_relations <- list(
     fix = "Delete those components first."
   ),
   relation("questionnaire_component", "questionnaire", c(questionnaire_id = "questionnaire_id"), "remove"),
-  # A component no questionnaire prints any more goes too, unless a measurement scale lists it or a skip sends
-  # respondents to it.
+  # A component no questionnaire prints any more goes too, unless a measurement scale lists it.
   relation("questionnaire_component", "component", c(component_id = "component_id"), "remove",
     needs_child = "remove_parent",
-    kept_by = list(
-      question_scale = c(component_id = "component_id"),
-      questionnaire_component = c(skip_to_component_id = "component_id"),
-      response_option = c(skip_to_component_id = "component_id"),
-      open_ended = c(skip_to_component_id = "component_id")
-    )
+    kept_by = list(question_scale = c(component_id = "component_id"))
   ),
   # What's inside a section goes with it.
-  relation(
-    "questionnaire_component", "questionnaire_component",
-    c(questionnaire_id = "questionnaire_id", parent_component_id = "component_id"), "remove"
-  ),
+  relation("questionnaire_component", "questionnaire_component", c(parent_placement_id = "placement_id"), "remove"),
   # A question's settings and its placement are one block: neither outlives the other.
-  relation(
-    "questionnaire_component", "questionnaire_question",
-    c(questionnaire_id = "questionnaire_id", component_id = "component_id"), "remove"
-  ),
+  relation("questionnaire_component", "questionnaire_question", c(placement_id = "placement_id"), "remove"),
   relation("question", "component", c(component_id = "component_id"), "remove"),
   # questions that shared a stem that goes no longer share it; their own words stay. A stem no question has goes.
   relation("question", "question_stem", c(question_stem_id = "question_stem_id"), "clear",
     clears = "question stem", needs_child = "remove_parent"
   ),
   relation("questionnaire_question", "question", c(component_id = "component_id"), "remove"),
+  relation("questionnaire_question", "questionnaire_component", c(placement_id = "placement_id"), "remove"),
   relation(
-    "questionnaire_question", "questionnaire_component",
-    c(questionnaire_id = "questionnaire_id", component_id = "component_id"), "remove"
-  ),
-  relation(
-    "questionnaire_question", "questionnaire_question",
-    c(questionnaire_id = "questionnaire_id", parent_question_id = "component_id"), "block",
+    "questionnaire_question", "questionnaire_question", c(parent_question_placement_id = "placement_id"), "block",
     why = "These follow-up questions need the question above them as their parent.",
     fix = paste0(
       "Delete the follow-ups first, or make them stand on their own (Update, then Questionnaire ",
@@ -111,34 +95,41 @@ edit_relations <- list(
     )
   ),
   relation("wave_question", "wave", c(wave_id = "wave_id"), "remove"),
-  # A question asked in no wave goes, unless follow-ups that stay name it as theirs.
+  # A question placement asked in no wave goes, unless follow-ups that stay name it as theirs, or a skip sends
+  # respondents to it.
   relation(
-    "wave_question", "questionnaire_question",
-    c(questionnaire_id = "questionnaire_id", component_id = "component_id"), "remove",
+    "wave_question", "questionnaire_question", c(placement_id = "placement_id"), "remove",
     needs_child = "remove_parent",
-    kept_by = list(questionnaire_question = c(questionnaire_id = "questionnaire_id", parent_question_id = "component_id"))
+    kept_by = list(
+      questionnaire_question = c(parent_question_placement_id = "placement_id"),
+      questionnaire_component = c(skip_to_placement_id = "placement_id"),
+      response_option = c(skip_to_placement_id = "placement_id"),
+      open_ended = c(skip_to_placement_id = "placement_id")
+    )
   ),
   relation("question_category", "question", c(component_id = "component_id"), "remove"),
   relation("question_category", "category", c(mesh_id = "mesh_id"), "remove"),
   relation("question_scale", "question", c(component_id = "component_id"), "remove"),
   relation("question_scale", "measurement_scale", c(scale_id = "scale_id"), "remove"),
-  relation(
-    "variable", "questionnaire_question",
-    c(questionnaire_id = "questionnaire_id", component_id = "component_id"), "remove"
-  ),
+  relation("variable", "questionnaire_question", c(placement_id = "placement_id"), "remove"),
   relation(
     "variable", "subject", c(subject_id = "subject_id"), "block",
     why = "Variables are about this subject.",
     fix = "Change those variables to another subject first. Until then the subject can be renamed instead."
   ),
+  relation(
+    "variable", "time_frame", c(time_frame_id = "time_frame_id"), "block",
+    why = "Variables are about this time frame.",
+    fix = "Change those variables to another time frame first. Until then the time frame can be renamed instead."
+  ),
   relation("open_ended", "variable", c(variable_key = "variable_key"), "remove"),
   relation("closed_ended", "variable", c(variable_key = "variable_key"), "remove"),
   relation("response_option", "closed_ended", c(variable_key = "variable_key"), "remove"),
-  # a choice that skips to a component that goes no longer skips anywhere; its printed words stay
-  relation("response_option", "component", c(skip_to_component_id = "component_id"), "clear", clears = "question it skips to"),
+  # a choice that skips to a place that goes no longer skips anywhere; its printed words stay
+  relation("response_option", "questionnaire_component", c(skip_to_placement_id = "placement_id"), "clear", clears = "question it skips to"),
   # the same for a group that skips, and for a write-in
-  relation("questionnaire_component", "component", c(skip_to_component_id = "component_id"), "clear", clears = "question its group skips to"),
-  relation("open_ended", "component", c(skip_to_component_id = "component_id"), "clear", clears = "question it skips to"),
+  relation("questionnaire_component", "questionnaire_component", c(skip_to_placement_id = "placement_id"), "clear", clears = "question its group skips to"),
+  relation("open_ended", "questionnaire_component", c(skip_to_placement_id = "placement_id"), "clear", clears = "question it skips to"),
   relation(
     "response_option", "answer_option", c(answer_option_id = "answer_option_id"), "block",
     why = "Variables already offer this answer choice.",
@@ -174,7 +165,7 @@ edit_delete_order <- c(
   "questionnaire_component", "question", "component", "answer_option_set",
   "option_set", "answer_option_alias", "answer_option", "wave", "questionnaire", "study", "registry",
   "principal_investigator", "respondent_type", "component_type", "category",
-  "measurement_scale", "subject", "question_stem"
+  "measurement_scale", "subject", "time_frame", "question_stem"
 )
 
 # ------ Rows and their identity -------------------------------------------------------
@@ -393,6 +384,7 @@ edit_nouns <- list(
   question_stem = c("question stem", "question stems"),
   response_option_count = c("count of answers", "counts of answers"),
   subject = c("subject", "subjects"),
+  time_frame = c("time frame", "time frames"),
   answer_option_set = c("choice in an option set", "choices in option sets"),
   option_set = c("option set", "option sets"),
   measurement_scale = c("measurement scale", "measurement scales"),
@@ -426,7 +418,7 @@ edit_display_order <- c(
   "questionnaire_question", "wave_question", "variable", "response_option",
   "question_category", "question_scale", "category", "measurement_scale", "answer_option",
   "answer_option_set", "answer_option_alias", "option_set", "question_stem", "principal_investigator", "respondent_type", "component_type", "subject",
-  "pdf_file", "extracted_draft"
+  "time_frame", "pdf_file", "extracted_draft"
 )
 
 # Naming a row can take other tables (a wave's name starts with its
@@ -437,7 +429,7 @@ edit_label_needs <- list(
   question = c("component", "component_type"),
   questionnaire_component = c("questionnaire", "component", "component_type"),
   questionnaire_question = c("questionnaire", "component", "component_type"),
-  wave_question = c("questionnaire", "wave", "component", "component_type"),
+  wave_question = c("questionnaire", "wave", "questionnaire_component", "component", "component_type"),
   question_category = c("category", "component", "component_type"),
   question_scale = c("measurement_scale", "component", "component_type"),
   open_ended = "variable",
@@ -492,18 +484,18 @@ edit_lookup <- function(snap, table, id_column, ids, column) {
   snap[[table]][[column]][match(ids, snap[[table]][[id_column]])]
 }
 
-#' The rows of a table for one component as printed in one questionnaire.
+#' The rows of a table for one placement: one place a questionnaire prints a block.
 #'
-#' What a block carries in a questionnaire: a question's settings (`questionnaire_question`), or the
-#' number it was given in each wave (`wave_question`).
+#' What a block carries there: a question's settings (`questionnaire_question`), or the number it was given in
+#' each wave (`wave_question`).
 #'
 #' @param snap The tables the kind needs, as `edit_service_load()` reads them: a list of data frames named after the tables.
 #' @param table `"questionnaire_question"` or `"wave_question"`.
-#' @param questionnaire_id,component_id Which questionnaire, and which component in it.
+#' @param placement_id The placement.
 #' @return The matching rows of `table`.
-edit_placed_rows <- function(snap, table, questionnaire_id, component_id) {
+edit_placed_rows <- function(snap, table, placement_id) {
   rows <- snap[[table]]
-  rows[rows$questionnaire_id == questionnaire_id & rows$component_id == component_id, , drop = FALSE]
+  rows[rows$placement_id %in% placement_id, , drop = FALSE]
 }
 
 #' Questionnaires' short names.
@@ -562,7 +554,7 @@ edit_labels <- list(
     waves <- edit_lookup(snap, "wave", "wave_id", rows$wave_id, "name")
     paste0(
       edit_questionnaire_short(snap, rows$questionnaire_id), " ", waves, " · question ", edit_called_number(rows),
-      " · ", edit_component_text(snap, rows$component_id)
+      " · ", edit_component_text(snap, edit_placement_component(snap, rows$placement_id))
     )
   },
   category = function(snap, rows) paste0(rows$term, " (", rows$mesh_id, ")"),
@@ -581,6 +573,7 @@ edit_labels <- list(
     paste0(matr_id, " · ", shown, ": ", rows$respondent_count)
   },
   subject = function(snap, rows) rows$name,
+  time_frame = function(snap, rows) rows$name,
   answer_option_set = function(snap, rows) {
     set <- edit_lookup(snap, "option_set", "option_set_id", rows$option_set_id, "name")
     paste0(

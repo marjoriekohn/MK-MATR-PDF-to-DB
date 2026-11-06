@@ -3,14 +3,17 @@
 # calls the Gemini API (a few minutes and a few cents a questionnaire), so it
 # isn't one of the unit tests. From the project folder:
 #
-#   Rscript tests/golden/golden.R              every questionnaire
-#   Rscript tests/golden/golden.R gna out/     just GNA, saving the reading in out/
+#   Rscript tests/gemini/golden.R              every questionnaire
+#   Rscript tests/gemini/golden.R gna out/     just GNA, saving the reading in out/
 #
 # A reading saved earlier can be compared again without calling Gemini:
-#   Rscript tests/golden/golden.R gna out/ --saved
+#   Rscript tests/gemini/golden.R gna out/ --saved
+#
+# The PDFs are in edge-case-pdfs/ (kept out of git). The prompt's lists (kinds of block, subjects, answer
+# choices) come from the test project, which gets a new kind such as Grid before live does.
 
 golden <- list(
-  gna = list(pdf = "tests/testthat/fixtures/gna_redacted.pdf",
+  gna = list(pdf = "edge-case-pdfs/GNA_Redacted.pdf",
              answer = "tests/testthat/fixtures/gna_gold.json")
 )
 
@@ -49,7 +52,7 @@ golden_compare <- function(reading, answer) {
     g <- got$questions[[number]]
     w <- want$questions[[number]]
     where <- paste0("Q", number)
-    for (field in c("text", "self_contained", "condition", "parent_question", "section")) {
+    for (field in c("text", "self_contained", "condition", "parent_question", "section", "grid")) {
       same(where, field, g[[field]], w[[field]])
     }
     same(where, "variables", length(g$variables), length(w$variables))
@@ -76,18 +79,25 @@ golden_compare <- function(reading, answer) {
   list(differences = differences, score = n_same / n_fields, n_fields = n_fields)
 }
 
-# Questions by number, each noting the section it's in (named by its first
-# child); and every other block as "Type: text".
-golden_blocks <- function(blocks, section = "top level", questions = list(), others = character()) {
+# Questions by printed number, each noting the section it's in (named by its first
+# child) and the lead-in of the grid it's in; every other block as "Type: text". A group is
+# looked inside, and isn't compared itself (it has no words).
+golden_blocks <- function(blocks, section = "top level", questions = list(), others = character(), grid = NULL) {
   for (block in blocks) {
     if (block$component_type == "Question") {
       block$section <- section
-      questions[[block$question_number]] <- block
+      block$grid <- grid
+      questions[[block$printed_number %||% paste0("(unnumbered) ", block$text)]] <- block
+    } else if (block$component_type %in% c("Group", "Grid")) {
+      if (block$component_type == "Grid") others <- c(others, paste0("Grid: ", block$text))
+      inner <- golden_blocks(block$children, section, questions, others, if (block$component_type == "Grid") block$text else grid)
+      questions <- inner$questions
+      others <- inner$others
     } else if (block$component_type == "Section") {
       first <- if (length(block$children)) block$children[[1]] else list(text = "nothing (empty)")
       label <- paste0(
         "section starting ",
-        if (is.null(first$question_number)) substr(first$text %||% "", 1, 40) else paste0("Q", first$question_number)
+        if (is.null(first$printed_number)) substr(first$text %||% "", 1, 40) else paste0("Q", first$printed_number)
       )
       others <- c(others, paste0(label, ": ", block$text %||% "(no heading)"))
       inner <- golden_blocks(block$children, label, questions, others)
@@ -125,7 +135,7 @@ if (sys.nframe() == 0) {
   use_saved <- "--saved" %in% args
   for (path in list.files("R", "\\.[Rr]$", full.names = TRUE)) source(path)
   if (file.exists(".env")) readRenviron(".env")
-  lookups <- lookup_service_get_all(list(url = Sys.getenv("SUPABASE_URL"), key = Sys.getenv("SUPABASE_SECRET_KEY")))
+  lookups <- lookup_service_get_all(list(url = Sys.getenv("TEST_SUPABASE_URL"), key = Sys.getenv("TEST_SUPABASE_SECRET_KEY")))
   dir.create(out_dir, recursive = TRUE, showWarnings = FALSE)
 
   for (name in if (length(names_wanted)) names_wanted else names(golden)) {

@@ -68,7 +68,7 @@ test_that("what stops a push is said in the order to do it", {
 
 test_that("a questionnaire recorded without any blocks matches none of the draft's, and is no error", {
   nothing <- list(
-    placements = no_rows(c("component_id", "parent_component_id", "display_order")),
+    placements = no_rows(c("placement_id", "component_id", "parent_placement_id", "display_order")),
     components = no_rows(c("component_id", "component_type_id", "text"))
   )
   ids <- list(component_types = data.frame(name = character(), component_type_id = integer()))
@@ -105,12 +105,12 @@ with_tables <- function(existing, tables) {
 # Questionnaire 7, recorded with nothing printed yet, and its waves 40 (asking one question) and 41 (none).
 empty_questionnaire <- function() {
   list(
-    placements = no_rows(c("component_id", "parent_component_id", "display_order")),
+    placements = no_rows(c("placement_id", "component_id", "parent_placement_id", "display_order")),
     components = no_rows(c("component_id", "component_type_id", "text")),
-    questions = no_rows("component_id"),
-    variables = no_rows(c("variable_key", "component_id", "matr_id", "display_order")),
+    questions = no_rows("placement_id"),
+    variables = no_rows(c("variable_key", "placement_id", "matr_id", "display_order")),
     waves = data.frame(wave_id = c(40, 41), name = c("Wave 1", "Wave 2")),
-    wave_questions = data.frame(wave_id = 40, component_id = 5)
+    wave_questions = data.frame(wave_id = 40, placement_id = 5)
   )
 }
 
@@ -220,10 +220,12 @@ test_that("how many of the wave's respondents gave an answer is added for the ex
 
 test_that("a recorded questionnaire's blocks are found where it prints them, and the rest are added", {
   existing <- with_tables(empty_questionnaire(), list(
-    placements = data.frame(component_id = c(100, 101, 102), parent_component_id = c(NA, 100, 100), display_order = c(1, 1, 2)),
+    placements = data.frame(
+      placement_id = c(500, 501, 502), component_id = c(100, 101, 102), parent_placement_id = c(NA, 500, 500), display_order = c(1, 1, 2)
+    ),
     components = data.frame(component_id = c(100, 101, 102), component_type_id = c(1, 4, 2), text = paste(test_marker, c("Part A", "Please answer.", "Do you smoke?"))),
-    questions = data.frame(component_id = 102),
-    variables = data.frame(variable_key = 900, component_id = 102, matr_id = paste0("zz1-", tolower(test_marker)), display_order = 1)
+    questions = data.frame(placement_id = 502),
+    variables = data.frame(variable_key = 900, placement_id = 502, matr_id = paste0("zz1-", tolower(test_marker)), display_order = 1)
   ))
   built <- build_for(small_draft(), existing = existing)
   expect_equal(built$summary$blocks_found, 3L) # the section, the instruction and the smoking question
@@ -232,12 +234,12 @@ test_that("a recorded questionnaire's blocks are found where it prints them, and
   expect_equal(built$summary$variables, 1L)
   expect_equal(built$summary$questions, 2L) # both are asked in the wave
   wave_questions <- built$items[built$items$entity_name == "wave_question", ]
-  expect_true('{"component_id":102,"questionnaire_id":7,"wave_id":41}' %in% wave_questions$record_identifier)
+  expect_true('{"placement_id":502,"wave_id":41}' %in% wave_questions$record_identifier)
   # the new block goes after what is in its section already
   order <- built$items$new_value[built$items$entity_name == "questionnaire_component" & built$items$attribute_name == "display_order"]
   expect_equal(order, "3")
-  parent <- built$items$new_value[built$items$entity_name == "questionnaire_component" & built$items$attribute_name == "parent_component_id"]
-  expect_equal(parent, "100")
+  parent <- built$items$new_value[built$items$entity_name == "questionnaire_component" & built$items$attribute_name == "parent_placement_id"]
+  expect_equal(parent, "500") # the section's placement
 })
 
 test_that("a linked question another questionnaire prints keeps the link: it gets the stem, unless it has another", {
@@ -279,27 +281,29 @@ test_that("a block another questionnaire prints with the same kind and words is 
   built <- build_for(small_draft(), options = options)
   expect_equal(built$summary[c("blocks", "blocks_shared")], list(blocks = 3L, blocks_shared = 1L))
   items <- built$items
-  about <- function(table, id) items[items$entity_name == table & grepl(sprintf('"component_id":%s[,}]', id), items$record_identifier), ]
-  # the oldest question with those words (but for spaces) is the one placed; it is neither added again nor copied
-  expect_equal(nrow(about("component", 150)), 0)
-  expect_equal(nrow(about("question", 150)), 0)
+  field <- function(table, attribute) items[items$entity_name == table & items$attribute_name == attribute, ]
+  # the question with those words (but for spaces) is the one placed; it is neither added again nor copied
+  expect_false(any(grepl('"component_id":150[,}]', items$record_identifier[items$entity_name %in% c("component", "question")])))
   expect_equal(sum(items$entity_name == "component" & items$attribute_name == "text"), 3)
-  expect_equal(nrow(about("questionnaire_component", 150)), 2) # its section and its place in it
-  expect_equal(nrow(about("questionnaire_question", 150)), 1)
-  expect_equal(nrow(about("wave_question", 150)), 2)
-  expect_equal(items$new_value[items$entity_name == "variable" & items$attribute_name == "component_id"][1], "150")
+  placed <- field("questionnaire_component", "component_id")
+  expect_equal(sum(placed$new_value == "150"), 1) # placed here once, with a placement of its own
+  place <- placed$record_identifier[placed$new_value == "150"]
+  expect_equal(field("questionnaire_question", "component_id")$new_value[field("questionnaire_question", "component_id")$record_identifier == place], "150")
+  expect_equal(sum(items$entity_name == "wave_question" & grepl(jsonlite::fromJSON(place)$placement_id, items$record_identifier, fixed = TRUE)), 3)
+  expect_equal(field("variable", "placement_id")$new_value[1], jsonlite::fromJSON(place)$placement_id)
   # an instruction with a question's words, or words with other capitals, isn't the same block: "How many?" is new
-  expect_false(any(grepl('"component_id":(160|170|300)[,}]', items$record_identifier)))
+  expect_false(any(items$attribute_name == "component_id" & items$new_value %in% c("160", "170", "300")))
 
-  # a questionnaire places a component once, so one it prints already elsewhere is copied instead
+  # a component the questionnaire prints already somewhere else is placed again, not copied
   existing <- with_tables(empty_questionnaire(), list(
-    placements = data.frame(component_id = 150, parent_component_id = NA_real_, display_order = 1),
+    placements = data.frame(placement_id = 600, component_id = 150, parent_placement_id = NA_real_, display_order = 1),
     components = data.frame(component_id = 150, component_type_id = 2, text = paste(test_marker, "Do  you smoke? ")),
-    questions = data.frame(component_id = 150)
+    questions = data.frame(placement_id = 600)
   ))
   again <- build_for(small_draft(), existing = existing, options = options)
   expect_equal(again$summary[c("blocks", "blocks_found", "blocks_shared")], list(blocks = 3L, blocks_found = 0L, blocks_shared = 1L))
-  expect_true(any(grepl('"component_id":300[,}]', again$items$record_identifier[again$items$entity_name == "questionnaire_component"])))
+  again_placed <- again$items[again$items$entity_name == "questionnaire_component" & again$items$attribute_name == "component_id", ]
+  expect_true("150" %in% again_placed$new_value)
 
   expect_match(extraction_service_push_summary(built$summary), "^Adds 3 new blocks, 1 block other questionnaires print, ")
   expect_equal(extraction_service_what_cards(built$summary)[[1]]$facts, c("3 new", "1 shared with other questionnaires"))
@@ -328,10 +332,10 @@ test_that("a block another questionnaire prints with the same kind and words is 
 
 test_that("a MATR ID that another question already has, or nothing to add, is a sentence", {
   existing <- with_tables(empty_questionnaire(), list(
-    placements = data.frame(component_id = 102, parent_component_id = NA_real_, display_order = 1),
+    placements = data.frame(placement_id = 602, component_id = 102, parent_placement_id = NA_real_, display_order = 1),
     components = data.frame(component_id = 102, component_type_id = 2, text = "Some other question"),
-    questions = data.frame(component_id = 102),
-    variables = data.frame(variable_key = 900, component_id = 102, matr_id = paste0("zz1-", tolower(test_marker)), display_order = 1)
+    questions = data.frame(placement_id = 602),
+    variables = data.frame(variable_key = 900, placement_id = 602, matr_id = paste0("zz1-", tolower(test_marker)), display_order = 1)
   ))
   expect_error(
     build_for(small_draft(), existing = existing),
@@ -503,6 +507,39 @@ test_that("who a variable is about: a blank is the respondent, a known subject i
   expect_match(extraction_service_push_summary(built$summary), "1 new subject")
 })
 
+test_that("a subject the database names with a curly apostrophe is the one a straight apostrophe names", {
+  draft <- small_draft(subject = NA)
+  draft <- draft_service_update(draft, "variables", draft$variables$id[1], "subject", "Respondent's Family")
+  ids <- no_ids
+  ids$subjects <- data.frame(subject_id = c(1, 9), name = c("Self", "Respondent’s Family"))
+  items <- extraction_service_build_items(
+    draft, extraction_service_info(list(info = list(questionnaire_id = "7", wave_id = "41"))),
+    ids = ids, existing = empty_questionnaire(), options = no_options
+  )$items
+  expect_equal(items$new_value[items$entity_name == "variable" & items$attribute_name == "subject_id"][1], "9")
+  expect_false("subject" %in% items$entity_name)
+})
+
+test_that("when a variable is about: none is no time frame, a known one is used, and a new one is added once", {
+  draft <- small_draft(subject = NA)
+  items <- build_for(draft)$items
+  expect_false("time_frame_id" %in% items$attribute_name)
+
+  boxes <- draft$variables$id
+  draft <- draft_service_update(draft, "variables", boxes[1], "time_frame", "during the last 12 months")
+  draft <- draft_service_update(draft, "variables", boxes[2], "time_frame", "in the past 30 days")
+  ids <- c(no_ids, list(time_frames = data.frame(time_frame_id = 3, name = "In the past 12 months")))
+  built <- extraction_service_build_items(
+    draft, extraction_service_info(list(info = list(questionnaire_id = "7", wave_id = "41"))),
+    ids = ids, existing = empty_questionnaire(), options = no_options
+  )
+  items <- built$items
+  frames <- items$new_value[items$entity_name == "variable" & items$attribute_name == "time_frame_id"]
+  expect_equal(frames, c("3", "new:time_frame:1")) # the one there, whatever its capitals; then a new one
+  expect_equal(items$new_value[items$entity_name == "time_frame"], "in the past 30 days")
+  expect_match(extraction_service_push_summary(built$summary), "1 new time frame")
+})
+
 test_that("a choice that skips points at the block it skips to, added before any variable", {
   draft <- small_draft()
   no <- draft$response_options$id[draft$response_options$answer_option == "no"]
@@ -510,11 +547,11 @@ test_that("a choice that skips points at the block it skips to, added before any
   draft <- draft_service_update(draft, "response_options", no, "skip_to_id", later)
   draft <- draft_service_update(draft, "response_options", no, "skip_instruction", "Go to Question 2")
   items <- build_for(draft)$items
-  skip <- items[items$entity_name == "response_option" & items$attribute_name == "skip_to_component_id", ]
+  skip <- items[items$entity_name == "response_option" & items$attribute_name == "skip_to_placement_id", ]
   expect_equal(nrow(skip), 1)
-  expect_equal(skip$new_value, "new:component:4") # the second question (the section, the instruction, the first question come first)
-  # every block is in before the first variable
-  expect_lt(max(which(items$entity_name == "component")), min(which(items$entity_name == "variable")))
+  expect_equal(skip$new_value, "new:questionnaire_component:4") # the second question's placement (after the section, the instruction, the first question)
+  # every block is placed before the first variable
+  expect_lt(max(which(items$entity_name == "questionnaire_component")), min(which(items$entity_name == "variable")))
   expect_true(all(items$action == "Insert"))
 })
 test_that("a write-in that skips, and a skip to the end, say so in their rows; without them nothing new is sent", {
@@ -529,8 +566,8 @@ test_that("a write-in that skips, and a skip to the end, say so in their rows; w
   items <- build_for(draft)$items
   value_of <- function(entity, attribute) items$new_value[items$entity_name == entity & items$attribute_name == attribute]
   expect_equal(value_of("response_option", "skip_to_end"), "true")
-  expect_length(value_of("response_option", "skip_to_component_id"), 0) # the end is no component
-  expect_equal(value_of("open_ended", "skip_condition"), "None")
+  expect_length(value_of("response_option", "skip_to_placement_id"), 0) # the end is no placement
+  expect_equal(value_of("open_ended", "skip_condition"), "none")
   expect_equal(value_of("open_ended", "skip_to_end"), "true")
 })
 
@@ -552,12 +589,88 @@ test_that("a group that skips says so where it is placed, pointing at a question
   built <- build_for(draft)
   expect_equal(built$rows$blocks$detail, rep("Question", 4)) # the group has no words, so the list leaves it out
   items <- built$items
-  placed <- items[items$entity_name == "questionnaire_component" & grepl('"new:component:1"', items$record_identifier), ]
+  placed <- items[items$entity_name == "questionnaire_component" & grepl('"new:questionnaire_component:1"', items$record_identifier), ]
   value_of <- function(attribute) placed$new_value[placed$attribute_name == attribute]
   expect_equal(value_of("skip_condition"), "No")
   expect_equal(value_of("skip_when"), "every") # what an empty one means
   expect_equal(value_of("skip_instruction"), "Go to Question 24")
-  expect_equal(value_of("skip_to_component_id"), "new:component:5") # 24: the group, 22a, 22b, 23, then it
-  # every new block's component is added before any is placed, so the group can point past itself
-  expect_lt(max(which(items$entity_name == "component")), min(which(items$entity_name == "questionnaire_component")))
+  expect_equal(value_of("skip_to_placement_id"), "new:questionnaire_component:5") # 24: the group, 22a, 22b, 23, then it
+  # the place it skips to is added before the group's own row names it
+  first_row <- function(token) min(which(items$entity_name == "questionnaire_component" & grepl(sprintf('"%s"', token), items$record_identifier)))
+  expect_lt(first_row("new:questionnaire_component:5"), first_row("new:questionnaire_component:1"))
+  # ... and still keeps its printed place: the group first, 23 and 24 after it
+  orders <- items[items$entity_name == "questionnaire_component" & items$attribute_name == "display_order", ]
+  expect_equal(orders$new_value[match(sprintf('{"placement_id":"new:questionnaire_component:%d"}', c(1, 4, 5)), orders$record_identifier)], c("1", "2", "3"))
+})
+
+test_that("a block printed twice in one questionnaire is one component placed twice", {
+  question <- function(number, words) {
+    list(
+      component_type = "Question", text = words, printed_number = number,
+      variables = list(list(variable_type = "closed_ended", matr_id = paste0("m", number), response_options = list(list(answer_option = "Yes"), list(answer_option = "No"))))
+    )
+  }
+  draft <- draft_service_from_json(list(components = list(
+    list(component_type = "Section", text = "About Twin A", children = list(
+      list(component_type = "Instruction", text = "Please answer yes or no."), question("1", "My child is a good listener.")
+    )),
+    list(component_type = "Section", text = "About Twin B", children = list(
+      list(component_type = "Instruction", text = "Please answer yes or no."), question("2", "My child is a good listener.")
+    ))
+  )))
+  built <- build_for(draft)
+  items <- built$items
+  expect_equal(built$summary[c("blocks", "blocks_repeated")], list(blocks = 4L, blocks_repeated = 2L))
+  expect_equal(sum(items$entity_name == "component" & items$attribute_name == "text"), 4) # two sections, one instruction, one question
+  placed <- items$new_value[items$entity_name == "questionnaire_component" & items$attribute_name == "component_id"]
+  expect_equal(length(placed), 6)
+  expect_equal(sort(as.vector(table(placed))), c(1, 1, 2, 2)) # each section once; the instruction and the question twice
+  # each placement of the question has its own number in the wave and its own variable
+  expect_equal(length(unique(items$record_identifier[items$entity_name == "wave_question"])), 2)
+  expect_equal(length(unique(items$new_value[items$entity_name == "variable" & items$attribute_name == "placement_id"])), 2)
+  expect_match(extraction_service_push_summary(built$summary), "2 blocks printed again")
+  expect_equal(built$rows$blocks$status[built$rows$blocks$text == "Please answer yes or no."], c("New", "Printed again"))
+})
+
+test_that("every group is the one Group component, placed where each is", {
+  draft <- draft_service_from_json(list(components = list(
+    list(component_type = "Group", children = list(list(component_type = "Instruction", text = "First."))),
+    list(component_type = "Group", children = list(list(component_type = "Instruction", text = "Second.")))
+  )))
+  ids <- no_ids
+  ids$component_types <- rbind(ids$component_types, data.frame(component_type_id = 8, name = "Group"))
+  built <- extraction_service_build_items(draft, extraction_service_info(list(info = list(questionnaire_id = "7", wave_id = "41"))),
+    ids = ids, existing = empty_questionnaire(), options = no_options)
+  groups <- built$items[built$items$entity_name == "component" & built$items$attribute_name == "component_type_id" & built$items$new_value == "8", ]
+  expect_equal(nrow(groups), 1)
+  # one the database has is used
+  there <- utils::modifyList(no_options, list(components = data.frame(component_id = 77, component_type_id = 8, text = NA_character_)))
+  reused <- extraction_service_build_items(draft, extraction_service_info(list(info = list(questionnaire_id = "7", wave_id = "41"))),
+    ids = ids, existing = empty_questionnaire(), options = there)
+  expect_false(any(reused$items$entity_name == "component" & reused$items$new_value %in% "8"))
+  expect_equal(sum(reused$items$attribute_name == "component_id" & reused$items$new_value == "77"), 2)
+})
+
+test_that("a grid is placed with its lead-in, and says where it skips as a group does", {
+  ids <- no_ids
+  ids$component_types <- rbind(ids$component_types, data.frame(component_type_id = 9, name = "Grid"))
+  question <- function(number) {
+    list(
+      component_type = "Question", text = paste("item", number), printed_number = number,
+      variables = list(list(variable_type = "closed_ended", matr_id = paste0("m", number), response_options = list(list(answer_option = "Yes"), list(answer_option = "No"))))
+    )
+  }
+  draft <- draft_service_from_json(list(components = list(
+    list(component_type = "Grid", text = "In the past year, did you", skip_condition = "No", skip_instruction = "Go to Question 24",
+         children = list(question("22a"), question("22b"))),
+    question("24")
+  )))
+  built <- extraction_service_build_items(draft, extraction_service_info(list(info = list(questionnaire_id = "7", wave_id = "41"))),
+    ids = ids, existing = empty_questionnaire(), options = no_options)
+  items <- built$items
+  expect_true('Insert component {"component_id":"new:component:1"} text: - -> In the past year, did you' %in% item_lines(items))
+  grid <- items[items$entity_name == "questionnaire_component" & grepl('"new:questionnaire_component:1"', items$record_identifier), ]
+  expect_equal(grid$new_value[grid$attribute_name == "skip_condition"], "No")
+  expect_equal(grid$new_value[grid$attribute_name == "skip_to_placement_id"], "new:questionnaire_component:4")
+  expect_equal(built$rows$blocks$detail[1], "Grid") # listed, as it has words
 })

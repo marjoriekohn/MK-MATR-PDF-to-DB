@@ -1,8 +1,8 @@
 cascade_of <- function(snap, ...) edit_service_cascade(snap, list(...))
 
 test_that("rows are identified by their key columns", {
-  snap <- test_snapshot("questionnaire_component")
-  expect_equal(edit_key(snap$questionnaire_component[1:2, ], c("questionnaire_id", "component_id")), c("1|1", "1|2"))
+  snap <- test_snapshot(c("questionnaire_component", "wave_question"))
+  expect_equal(edit_key(snap$wave_question[1:2, ], c("wave_id", "placement_id")), c("1|103", "1|104"))
   expect_equal(edit_key(snap$questionnaire_component[0, ], "component_id"), character())
   expect_equal(edit_key(data.frame(id = c(100000, 3)), "id"), c("100000", "3"))
 })
@@ -13,9 +13,9 @@ test_that("a question that nothing else leans on takes only what's attached to i
 
   expect_equal(cascade$removed$component, "3")
   expect_equal(cascade$removed$question, "3")
-  expect_equal(cascade$removed$questionnaire_component, "1|3")
-  expect_equal(cascade$removed$questionnaire_question, "1|3")
-  expect_equal(sort(cascade$removed$wave_question), c("1|1|3", "1|2|3"))
+  expect_equal(cascade$removed$questionnaire_component, "103")
+  expect_equal(cascade$removed$questionnaire_question, "103")
+  expect_equal(sort(cascade$removed$wave_question), c("1|103", "2|103"))
   expect_equal(cascade$removed$variable, "1")
   expect_equal(cascade$removed$open_ended, "1")
   expect_length(cascade$cleared, 0)
@@ -26,7 +26,7 @@ test_that("a shared question is removed from every questionnaire that prints it"
   snap <- test_snapshot()
   cascade <- cascade_of(snap, component = "9")
 
-  expect_equal(sort(cascade$removed$questionnaire_component), c("2|9", "3|9"))
+  expect_equal(sort(cascade$removed$questionnaire_component), c("209", "309"))
   expect_equal(sort(cascade$removed$variable), c("5", "6"))
   expect_equal(length(cascade$removed$response_option), 8)
   expect_equal(cascade$removed$question_scale, "1|9")
@@ -39,26 +39,26 @@ test_that("a question with a follow-up can't go until the follow-up does", {
 
   expect_length(cascade$blocked, 1)
   expect_match(cascade$blocked[[1]]$text, "1 question in a questionnaire is in the way")
-  expect_equal(cascade$blocked[[1]]$labels, "AHP · How many cigarettes do you smoke on a typical day?")
+  expect_equal(cascade$blocked[[1]]$labels, "AHP · how many cigarettes do you smoke on a typical day?")
   expect_match(cascade$blocked[[1]]$fix, "Delete the follow-ups first")
 })
 
 test_that("a follow-up that's going too isn't in the way", {
   snap <- test_snapshot()
-  section_a <- cascade_of(snap, questionnaire_component = "1|1")
+  section_a <- cascade_of(snap, questionnaire_component = "101")
 
   expect_length(section_a$blocked, 0)
-  expect_equal(sort(section_a$removed$questionnaire_component), sort(c("1|1", "1|2", "1|3", "1|4", "1|5")))
-  expect_equal(sort(section_a$removed$questionnaire_question), c("1|3", "1|4", "1|5"))
+  expect_equal(sort(section_a$removed$questionnaire_component), sort(c("101", "102", "103", "104", "105")))
+  expect_equal(sort(section_a$removed$questionnaire_question), c("103", "104", "105"))
 })
 
 test_that("a question's placement and its settings go as one", {
   snap <- test_snapshot()
-  cascade <- cascade_of(snap, questionnaire_component = "1|5", questionnaire_question = "1|5")
+  cascade <- cascade_of(snap, questionnaire_component = "105", questionnaire_question = "105")
 
-  expect_equal(cascade$removed$questionnaire_component, "1|5")
-  expect_equal(cascade$removed$questionnaire_question, "1|5")
-  expect_equal(sort(cascade$removed$wave_question), c("1|1|5", "1|2|5"))
+  expect_equal(cascade$removed$questionnaire_component, "105")
+  expect_equal(cascade$removed$questionnaire_question, "105")
+  expect_equal(sort(cascade$removed$wave_question), c("1|105", "2|105"))
   expect_equal(cascade$removed$variable, "3")
   expect_length(cascade$blocked, 0)
   # no other questionnaire prints it, so the component goes too, with its MeSH tag
@@ -72,7 +72,7 @@ test_that("deleting a questionnaire takes its waves, blocks and variables, and t
   cascade <- cascade_of(snap, questionnaire = "2")
 
   expect_equal(cascade$removed$wave, "3")
-  expect_equal(sort(cascade$removed$questionnaire_component), c("2|10", "2|8", "2|9"))
+  expect_equal(sort(cascade$removed$questionnaire_component), c("208", "209", "210"))
   expect_equal(cascade$removed$variable, "5")
   # KQP prints the section Mood (10) and question 9 too
   expect_equal(cascade$removed$component, "8")
@@ -97,26 +97,17 @@ test_that("a component no questionnaire prints any more stays while a scale list
     snap
   })
   expect_equal(sort(cascade_of(unscaled, questionnaire = "2")$removed$component), c("10", "8", "9"))
-
-  # ... unless a write-in elsewhere skips to it
-  skipped <- test_snapshot(change = function(snap) {
-    snap <- only_kq(snap)
-    snap$question_scale <- snap$question_scale[0, ]
-    snap$open_ended$skip_to_component_id[snap$open_ended$variable_key == 1] <- 9
-    snap
-  })
-  expect_equal(sort(cascade_of(skipped, questionnaire = "2")$removed$component), c("10", "8"))
 })
 
-test_that("a write-in that skips to a component that goes no longer skips there", {
+test_that("a write-in that skips to a place that goes no longer skips there", {
   snap <- test_snapshot(change = function(snap) {
-    snap$open_ended$skip_to_component_id[snap$open_ended$variable_key == 1] <- 9
+    snap$open_ended$skip_to_placement_id[snap$open_ended$variable_key == 1] <- 107
     snap
   })
-  cascade <- cascade_of(snap, component = "9")
+  cascade <- cascade_of(snap, questionnaire_component = "107", questionnaire_question = "107")
   cleared <- Filter(function(clear) clear$table == "open_ended", cascade$cleared)
   expect_equal(cleared[[1]]$keys, "1")
-  expect_equal(cleared[[1]]$columns, "skip_to_component_id")
+  expect_equal(cleared[[1]]$columns, "skip_to_placement_id")
 })
 
 test_that("a stem goes with the last question that has it", {
@@ -138,8 +129,8 @@ test_that("a wave takes the questions that were asked in nothing else", {
 
   # question 9 of KQ was asked only in Wave 1 of KQ, so it goes from KQ
   only_wave <- cascade_of(snap, wave = "3")
-  expect_equal(only_wave$removed$questionnaire_question, "2|9")
-  expect_equal(only_wave$removed$questionnaire_component, "2|9")
+  expect_equal(only_wave$removed$questionnaire_question, "209")
+  expect_equal(only_wave$removed$questionnaire_component, "209")
   expect_equal(only_wave$removed$variable, "5")
   expect_null(only_wave$removed$component) # KQP prints it too
 })
@@ -147,19 +138,19 @@ test_that("a wave takes the questions that were asked in nothing else", {
 test_that("a question no wave asks stays while a follow-up that stays names it", {
   # in AHP, question 5 follows question 4; here Wave 2 asks only the follow-up
   snap <- test_snapshot(change = function(snap) {
-    snap$wave_question <- snap$wave_question[!(snap$wave_question$wave_id == 2 & snap$wave_question$component_id == 4), ]
+    snap$wave_question <- snap$wave_question[!(snap$wave_question$wave_id == 2 & snap$wave_question$placement_id == 104), ]
     snap
   })
   cascade <- cascade_of(snap, wave = "1")
-  expect_false("1|4" %in% cascade$removed$questionnaire_question)
+  expect_false("104" %in% cascade$removed$questionnaire_question)
   expect_length(cascade$blocked, 0)
 
   # and goes once the follow-up goes too
   both <- test_snapshot(change = function(snap) {
-    snap$wave_question <- snap$wave_question[!(snap$wave_question$wave_id == 2 & snap$wave_question$component_id %in% c(4, 5)), ]
+    snap$wave_question <- snap$wave_question[!(snap$wave_question$wave_id == 2 & snap$wave_question$placement_id %in% c(104, 105)), ]
     snap
   })
-  expect_true(all(c("1|4", "1|5") %in% cascade_of(both, wave = "1")$removed$questionnaire_question))
+  expect_true(all(c("104", "105") %in% cascade_of(both, wave = "1")$removed$questionnaire_question))
 })
 
 test_that("an investigator who leads a study can't be deleted, one who is only a contact can", {
@@ -195,7 +186,7 @@ test_that("a study's last questionnaire and a questionnaire's last wave can be d
   last_wave <- cascade_of(snap, wave = "3") # questionnaire 2's only wave
   expect_length(last_wave$blocked, 0)
   expect_null(last_wave$removed$questionnaire) # the questionnaire stays, with no waves until one is added
-  expect_equal(last_wave$removed$questionnaire_question, "2|9") # questions asked in no other wave go (BR69)
+  expect_equal(last_wave$removed$questionnaire_question, "209") # questions asked in no other wave go (BR69)
 
   whole <- cascade_of(snap, study = "2")
   expect_length(whole$blocked, 0)
@@ -263,11 +254,11 @@ test_that("rows are named in staff's words", {
   snap <- test_snapshot()
   expect_equal(edit_label(snap, "wave", snap$wave[2, ]), "AHP Wave 2")
   expect_equal(edit_label(snap, "questionnaire", snap$questionnaire[1, ]), "Adult Health and Personality (AHP)")
-  expect_equal(edit_label(snap, "component", snap$component[snap$component$component_id == 1, ]), "A. About you")
+  expect_equal(edit_label(snap, "component", snap$component[snap$component$component_id == 1, ]), "a. about you")
   untitled <- snap$component[1, ]
   snap$component$text[1] <- NA
   expect_equal(edit_label(snap, "component", snap$component[1, ]), "(untitled section)")
-  expect_equal(edit_label(snap, "variable", snap$variable[1, ]), "AH01DB · Date of birth")
+  expect_equal(edit_label(snap, "variable", snap$variable[1, ]), "AH01DB · date of birth")
   expect_equal(edit_label(snap, "wave", snap$wave[0, ]), character())
 })
 

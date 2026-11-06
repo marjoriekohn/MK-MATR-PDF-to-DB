@@ -21,10 +21,7 @@
 edit_question_add_fields <- function(snap, scope) {
   q <- as.numeric(scope)
   placed <- edit_service_placements(snap, q)
-  candidates <- snap$component[
-    edit_is_question(snap, snap$component$component_id) & !snap$component$component_id %in% placed$component_id, ,
-    drop = FALSE
-  ]
+  candidates <- snap$component[edit_is_question(snap, snap$component$component_id), , drop = FALSE]
   candidate_choices <- stats::setNames(
     key_text(candidates$component_id),
     paste0(
@@ -50,11 +47,11 @@ edit_question_add_fields <- function(snap, scope) {
       edit_field("component_id", "The question", "select",
         required = TRUE, show_when = list(field = "source", value = "existing"),
         choices = c("Choose a question" = "", candidate_choices),
-        hint = "Questions this questionnaire already asks aren't listed."
+        hint = "A question this questionnaire asks already can be asked again here, as a second place that prints it."
       ),
-      edit_field("parent_component_id", "Inside which section or group?", "select",
-        choices = edit_service_parent_choices(snap, placed), short = "section or group it's in",
-        hint = "Only sections and groups can hold other blocks."
+      edit_field("parent_placement_id", "Inside which section, grid or group?", "select",
+        choices = edit_service_parent_choices(snap, placed), short = "section, grid or group it's in",
+        hint = "Only sections, grids and groups can hold other blocks."
       ),
       edit_field(
         "display_order", "Position", "number",
@@ -62,7 +59,7 @@ edit_question_add_fields <- function(snap, scope) {
         hint = "1 is first. The blocks next to it move over to make room. Leave empty to put it last.",
         warn = function(value, values) {
           position <- edit_whole_number(value)
-          parent <- if (has_text(values$parent_component_id)) as.numeric(values$parent_component_id) else NA_real_
+          parent <- if (has_text(values$parent_placement_id)) as.numeric(values$parent_placement_id) else NA_real_
           room <- edit_service_room(placed, parent) + 1
           if (!is.na(position) && position > room) sprintf("There are only %d places there, so it will go last (position %d).", room, room)
         }
@@ -73,13 +70,13 @@ edit_question_add_fields <- function(snap, scope) {
         default = "TRUE", short = "whether it stands on its own"
       ),
       edit_field(
-        "parent_question_id", "Which question does it follow up on?", "select",
+        "parent_question_placement_id", "Which question does it follow up on?", "select",
         required = TRUE, short = "the question it follows up on",
         show_when = list(field = "self_contained", value = "FALSE"),
         choices = c("Choose a question" = "", edit_service_parent_question_choices(snap, q)),
         hint = "Pick one printed before where this one goes."
       ),
-      edit_field("condition", "Printed condition",
+      edit_field("condition", "Printed condition", normalize = normal_text,
         placeholder = "e.g. If you answered Yes to the previous question",
         hint = "Leave empty if the question is asked of everyone."
       )
@@ -90,6 +87,7 @@ edit_question_add_fields <- function(snap, scope) {
       required = TRUE, default = edit_variables_default(snap),
       options = list(
         subjects = sort(snap$subject$name[!is.na(blank_respondent(snap$subject$name))]),
+        time_frames = sort(snap$time_frame$name),
         answer_data_types = c("NUMBER", "TEXT", "DATE", "TIME"),
         answer_options = sort(snap$answer_option$standardized_label)
       ),
@@ -249,18 +247,19 @@ edit_variables_draft <- function(variables) {
     text_or_null <- function(value) if (nzchar(edit_variable_text(value))) edit_variable_text(value)
     without_blanks(list(
       variable_type = if (closed) "closed_ended" else "open_ended",
-      label = text_or_null(box$label),
+      label = normal_text(text_or_null(box$label)),
       subject = text_or_null(box$subject),
+      time_frame = text_or_null(box$time_frame),
       matr_id = text_or_null(box$matr_id),
       answer_data_type = if (!closed) text_or_null(box$answer_data_type),
-      skip_condition = if (!closed) text_or_null(box$skip_condition),
-      skip_instruction = if (!closed) text_or_null(box$skip_instruction),
+      skip_condition = if (!closed) normal_text(text_or_null(box$skip_condition)),
+      skip_instruction = if (!closed) normal_text(text_or_null(box$skip_instruction)),
       response_options = if (closed) {
         lapply(box$response_options %||% list(), function(choice) {
           without_blanks(list(
             answer_option = text_or_null(choice$answer_option),
             code_value = text_or_null(choice$code_value),
-            skip_instruction = text_or_null(choice$skip_instruction)
+            skip_instruction = normal_text(text_or_null(choice$skip_instruction))
           ))
         })
       }
@@ -279,6 +278,8 @@ edit_variables_json <- function(draft) {
   variables <- map_rows(boxes, function(box) {
     about <- list(variable_type = if (identical(box$variable_type, "open_ended")) "open_ended" else "closed_ended",
                   matr_id = text(box$matr_id), subject = text(box$subject), label = text(box$label))
+    # a time frame only when it has one, so a form without them reads as it did
+    if (nzchar(text(box$time_frame))) about$time_frame <- text(box$time_frame)
     if (about$variable_type == "open_ended") {
       return(c(about, list(
         answer_data_type = text(box$answer_data_type),
@@ -327,26 +328,31 @@ edit_question_add_items_in <- function(snap, scope, fields, values) {
 
   # its place in the outline
   placed <- edit_service_placements(snap, q)
-  parent <- if (has_text(value_of("parent_component_id"))) as.numeric(value_of("parent_component_id")) else NA_real_
+  parent <- if (has_text(value_of("parent_placement_id"))) as.numeric(value_of("parent_placement_id")) else NA_real_
   room <- edit_service_room(placed, parent)
   position <- edit_whole_number(value_of("display_order"))
   position <- if (is.na(position)) room + 1 else max(1, min(position, room + 1))
-  later <- placed[same_parent(placed$parent_component_id, parent) & placed$display_order >= position, , drop = FALSE]
+  later <- placed[same_parent(placed$parent_placement_id, parent) & placed$display_order >= position, , drop = FALSE]
   for (i in seq_len(nrow(later))) {
     add(edit_item(
-      "questionnaire_component", edit_identifier(list(questionnaire_id = q, component_id = later$component_id[i])),
+      "questionnaire_component", edit_identifier(list(placement_id = later$placement_id[i])),
       "Update", "display_order", later$display_order[i], later$display_order[i] + 1
     ))
   }
-  here <- edit_identifier(list(questionnaire_id = q, component_id = component))
-  if (!is.na(parent)) add(edit_item("questionnaire_component", here, "Insert", "parent_component_id", NA, parent))
+  placement <- "new:questionnaire_component:1"
+  here <- edit_identifier(list(placement_id = placement))
+  add(edit_item("questionnaire_component", here, "Insert", "questionnaire_id", NA, q))
+  add(edit_item("questionnaire_component", here, "Insert", "component_id", NA, component))
+  if (!is.na(parent)) add(edit_item("questionnaire_component", here, "Insert", "parent_placement_id", NA, parent))
   add(edit_item("questionnaire_component", here, "Insert", "display_order", NA, position))
 
-  # what is true of it in this questionnaire
+  # what is true of it at that place
   self_contained <- edit_service_normalize(field("self_contained"), value_of("self_contained"))
+  add(edit_item("questionnaire_question", here, "Insert", "questionnaire_id", NA, q))
+  add(edit_item("questionnaire_question", here, "Insert", "component_id", NA, component))
   add(edit_item("questionnaire_question", here, "Insert", "self_contained", NA, self_contained))
   if (identical(self_contained, "false")) {
-    add(edit_item("questionnaire_question", here, "Insert", "parent_question_id", NA, as.numeric(value_of("parent_question_id"))))
+    add(edit_item("questionnaire_question", here, "Insert", "parent_question_placement_id", NA, as.numeric(value_of("parent_question_placement_id"))))
   }
   condition <- edit_service_normalize(field("condition"), value_of("condition"))
   if (!is.na(condition)) add(edit_item("questionnaire_question", here, "Insert", "condition", NA, condition))
@@ -354,18 +360,19 @@ edit_question_add_items_in <- function(snap, scope, fields, values) {
   # each wave that asks it: its place among the wave's questions, once the outline has it, and the number
   # printed beside it
   keys <- function(ids) ifelse(is.na(ids), NA_character_, key_text(ids))
-  outline <- placed[c("component_id", "parent_component_id", "display_order")]
-  outline$display_order[match(later$component_id, outline$component_id)] <- later$display_order + 1
-  outline$component_id <- keys(outline$component_id)
-  outline$parent_component_id <- keys(outline$parent_component_id)
-  outline <- rbind(outline, data.frame(component_id = key_text(component), parent_component_id = keys(parent), display_order = position))
+  outline <- placed[c("placement_id", "parent_placement_id", "display_order")]
+  outline$display_order[match(later$placement_id, outline$placement_id)] <- later$display_order + 1
+  outline$placement_id <- keys(outline$placement_id)
+  outline$parent_placement_id <- keys(outline$parent_placement_id)
+  outline <- rbind(outline, data.frame(placement_id = placement, parent_placement_id = keys(parent), display_order = position))
   for (name in grep("^asked_[0-9]+$", names(edit_part_values(fields, values, prefix)), value = TRUE)) {
     if (!identical(value_of(name), "yes")) next
     wave <- as.numeric(sub("^asked_", "", name))
-    numbers <- edit_wave_numbers(snap, q, wave, edit_wave_order(snap, q, wave, outline, also = component))
+    numbers <- edit_wave_numbers(snap, q, wave, edit_wave_order(snap, q, wave, outline, also = placement))
     add(numbers$items)
-    asked <- edit_identifier(list(questionnaire_id = q, wave_id = wave, component_id = component))
-    add(edit_item("wave_question", asked, "Insert", "question_number", NA, numbers$numbers[[key_text(component)]]))
+    asked <- edit_identifier(list(placement_id = placement, wave_id = wave))
+    add(edit_item("wave_question", asked, "Insert", "questionnaire_id", NA, q))
+    add(edit_item("wave_question", asked, "Insert", "question_number", NA, numbers$numbers[[placement]]))
     printed <- trimws(value_of(paste0("qn_", key_text(wave))))
     if (nzchar(printed)) add(edit_item("wave_question", asked, "Insert", "printed_number", NA, printed))
   }
@@ -373,14 +380,14 @@ edit_question_add_items_in <- function(snap, scope, fields, values) {
   # its variables, added the way an extraction adds them
   draft <- edit_variables_draft(edit_variables_parse(value_of("variables")))
   push <- push_start(
-    ids = list(component_types = snap$component_type, subjects = snap$subject),
+    ids = list(component_types = snap$component_type, subjects = snap$subject, time_frames = snap$time_frame),
     existing = NULL,
     options = list(
       answer_options = snap$answer_option, aliases = snap$answer_option_alias,
       option_sets = snap$option_set, members = snap$answer_option_set
     )
   )
-  push_variables(push, draft, draft$components[1, ], component, q)
+  push_variables(push, draft, draft$components[1, ], placement, q)
   add(do.call(rbind, push$items()))
   do.call(rbind, items)
 }

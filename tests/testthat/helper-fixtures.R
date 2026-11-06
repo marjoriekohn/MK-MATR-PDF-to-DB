@@ -77,6 +77,7 @@ test_lookups <- function() {
   list(
     component_types = fixture_table("component_type")$name,
     subjects = fixture_table("subject")$name,
+    time_frames = fixture_table("time_frame")$name,
     answer_options = fixture_table("answer_option")$standardized_label,
     answer_data_types = c("NUMBER", "TEXT", "DATE", "TIME"),
     problems = character()

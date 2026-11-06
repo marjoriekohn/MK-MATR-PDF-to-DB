@@ -67,6 +67,7 @@ make_edit_kinds <- list(
   investigator = c("Principal Investigators", "Principal Investigator"),
   respondent_type = c("Respondent Types", "Respondent Type"),
   subject = c("Subjects", "Subject"),
+  time_frame = c("Time Frames", "Time Frame"),
   answer_option = c("Answer Choices", "Answer Choice"),
   option_set = c("Option Sets", "Option Set"),
   measurement_scale = c("Measurement Scales", "Measurement Scale"),

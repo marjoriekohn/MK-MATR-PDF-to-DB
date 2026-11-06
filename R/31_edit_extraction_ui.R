@@ -272,12 +272,13 @@ normalize_ui <- function(ns, choices, groups, draft) {
     ),
     div(
       class = "request-section",
-      h3("Questions about different people"),
+      h3("Questions about different people or times"),
       p(
         class = "form-text",
-        "These questions differ only in who they ask about. Linking them keeps each one's words, number and variables, ",
-        "and gives them one stem, with [subject] for who they ask about. Each variable is then about who its question ",
-        "asks about, and a choice that names them says [subject] instead, so they share one set of choices."
+        "These questions differ only in who or when they ask about. Linking them keeps each one's words, number and ",
+        "variables, and gives them one stem, with [subject] for who they ask about and [time frame] for when. Each ",
+        "variable is then about who and when its question asks about, and a choice that names who says [subject] ",
+        "instead, so they share one set of choices."
       ),
       if (length(groups) == 0) {
         p(class = "text-muted", "None found.")
@@ -293,8 +294,17 @@ normalize_ui <- function(ns, choices, groups, draft) {
   )
 }
 
-# One group of questions that differ only in who they ask about: its stem, each question with whom it asks about,
-# and Link or Unlink.
+# Who and when one question of a group asks about: "(about Twin A, in the past year)", "(in your lifetime)".
+normalize_group_about <- function(group, i) {
+  parts <- c(
+    if (!is.na(group$subjects[i])) paste("about", group$subjects[i]),
+    if (!is.na((group$time_frames %||% NA_character_)[i])) group$time_frames[i]
+  )
+  if (length(parts) > 0) paste0("(", paste(parts, collapse = ", "), ")") else ""
+}
+
+# One group of questions that differ only in who or when they ask about: its stem, each question with whom and
+# when it asks about, and Link or Unlink.
 normalize_group_ui <- function(group, draft) {
   blocks <- draft$components[match(group$ids, draft$components$id), , drop = FALSE]
   ids <- paste(group$ids, collapse = ",")
@@ -317,7 +327,7 @@ normalize_group_ui <- function(group, draft) {
       tags$li(
         if (!is.na(number)) strong(number, outline_number_separator),
         blocks$text[i], " ",
-        span(class = "form-text", paste0("(about ", group$subjects[i], ")"))
+        span(class = "form-text", normalize_group_about(group, i))
       )
     }))
   )

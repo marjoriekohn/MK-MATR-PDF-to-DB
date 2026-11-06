@@ -48,12 +48,12 @@ test_that("a registry's card counts its studies", {
 test_that("a component's card says how many questionnaires print it, and warns when it's shared", {
   entity <- edit_entities$question
   cards <- edit_service_cards(entity, test_snapshot(edit_service_tables(entity)))
-  smoke <- cards[cards$title == "Do you now smoke cigarettes?", ]
+  smoke <- cards[cards$title == "do you now smoke cigarettes?", ]
   expect_equal(smoke$facts[[1]], c("seen in 2 questionnaires: AHP, MQ", "2 variables"))
   expect_equal(smoke$warn, "Shared: changes show in 2 questionnaires")
   expect_true(is.na(smoke$tag)) # every item under Questions is one, so none says so
 
-  once <- cards[cards$title == "What is your date of birth?", ]
+  once <- cards[cards$title == "what is your date of birth?", ]
   expect_equal(once$facts[[1]][1], "seen in 1 questionnaire: AHP")
   expect_true(is.na(once$warn))
 })
@@ -61,11 +61,11 @@ test_that("a component's card says how many questionnaires print it, and warns w
 test_that("a component nothing prints says so", {
   entity <- edit_entities$component
   cards <- edit_service_cards(entity, test_snapshot(edit_service_tables(entity)))
-  thanks <- cards[cards$title == "Thank you for taking part.", ]
+  thanks <- cards[cards$title == "thank you for taking part.", ]
   expect_equal(thanks$facts[[1]], "not printed in any questionnaire")
   expect_equal(thanks$tag, "Note")
   # questions are their own kind
-  expect_false("Do you now smoke cigarettes?" %in% cards$title)
+  expect_false("do you now smoke cigarettes?" %in% cards$title)
 })
 
 test_that("cards are found by any words on them", {
@@ -74,7 +74,7 @@ test_that("cards are found by any words on them", {
   expect_equal(nrow(edit_service_cards(entity, snap, query = "")), 7)
   expect_setequal(
     edit_service_cards(entity, snap, query = "SMOKE")$title,
-    c("Do you now smoke cigarettes?", "How many cigarettes do you smoke on a typical day?", "Did you smoke during your pregnancy?")
+    c("do you now smoke cigarettes?", "how many cigarettes do you smoke on a typical day?", "did you smoke during your pregnancy?")
   )
   expect_equal(nrow(edit_service_cards(entity, snap, query = "smoke cigarettes ahp")), 2)
   expect_equal(nrow(edit_service_cards(entity, snap, query = "zzz")), 0)
@@ -85,14 +85,14 @@ test_that("a questionnaire's blocks are listed in the order they print, with whe
   snap <- test_snapshot(edit_service_tables(entity))
   cards <- edit_service_cards(entity, snap, "1")
   expect_equal(cards$title, c(
-    "A. About you", "— Please answer every question. Skip any you prefer not to answer.", "— What is your date of birth?",
-    "— Do you now smoke cigarettes?", "— How many cigarettes do you smoke on a typical day?",
-    "B. Your health", "— How often do you see a doctor?"
+    "a. about you", "— please answer every question. skip any you prefer not to answer.", "— what is your date of birth?",
+    "— do you now smoke cigarettes?", "— how many cigarettes do you smoke on a typical day?",
+    "b. your health", "— how often do you see a doctor?"
   ))
-  expect_equal(cards$subtitle[1:2], c("top level · position 1", "in A. About you · position 1"))
+  expect_equal(cards$subtitle[1:2], c("top level · position 1", "in a. about you · position 1"))
   expect_equal(cards$facts[[1]], "4 items inside")
   expect_equal(cards$facts[[4]], "also printed in 1 other questionnaire")
-  expect_equal(cards$key[1:2], c("1|1", "1|2"))
+  expect_equal(cards$key[1:2], c("101", "102"))
 })
 
 test_that("a questionnaire's questions say what numbers they had and what they follow up on", {
@@ -101,8 +101,8 @@ test_that("a questionnaire's questions say what numbers they had and what they f
   cards <- edit_service_cards(entity, snap, "1")
   expect_equal(nrow(cards), 4)
   expect_equal(cards$subtitle[2], "asked as question 2 in Wave 1, question 2 in Wave 2")
-  follow_up <- cards[grepl("How many cigarettes", cards$title), ]
-  expect_true("follow-up to “Do you now smoke cigarettes?”" %in% follow_up$facts[[1]])
+  follow_up <- cards[grepl("how many cigarettes", cards$title), ]
+  expect_true("follow-up to “do you now smoke cigarettes?”" %in% follow_up$facts[[1]])
 })
 
 # ------ The form -----------------------------------------------------------------------------------
@@ -249,7 +249,7 @@ test_that("only a group has no words, and it has none", {
 })
 
 test_that("wording that exists already is a warning, not a problem", {
-  form <- form_for("question", "add", question__text = "Do you now smoke cigarettes?")
+  form <- form_for("question", "add", question__text = "do you now smoke cigarettes?")
   check <- edit_service_check(form$fields, form$values)
   expect_length(check$problems, 0)
   expect_match(check$warnings$question__text, "already has exactly these words \\(seen in 2 questionnaires: AHP, MQ\\)")
@@ -284,18 +284,18 @@ test_that("a registry's name, and a study's name in its registry, can't be added
 })
 
 test_that("a field that isn't shown isn't required or checked", {
-  form <- form_for("questionnaire_question", "update", "1|5", scope = "1")
+  form <- form_for("questionnaire_question", "update", "105", scope = "1")
   check <- edit_service_check(form$fields, form$values)
   expect_length(check$missing, 0)
-  form <- form_for("questionnaire_question", "update", "1|5", scope = "1", questionnaire_question__parent_question_id = "")
+  form <- form_for("questionnaire_question", "update", "105", scope = "1", questionnaire_question__parent_question_placement_id = "")
   expect_equal(edit_service_check(form$fields, form$values)$missing, "which question does it follow up on?")
   form <- form_for(
     "questionnaire_question",
     "update",
-    "1|5",
+    "105",
     scope = "1",
     questionnaire_question__self_contained = "TRUE",
-    questionnaire_question__parent_question_id = ""
+    questionnaire_question__parent_question_placement_id = ""
   )
   expect_length(edit_service_check(form$fields, form$values)$missing, 0)
 })
@@ -359,6 +359,12 @@ test_that("values are saved tidied", {
   expect_equal(edit_service_normalize(edit_field("d", "D", "date"), "04/15/2022"), "2022-04-15")
   expect_equal(edit_service_normalize(edit_field("t", "T"), "  hello  "), "hello")
   expect_equal(edit_service_normalize(edit_field("c", "C", "choice"), "FALSE"), "false")
+  # a questionnaire's words are kept in lower case
+  snap <- list(component_type = data.frame(component_type_id = c(1, 2), name = c("Question", "Group")))
+  expect_equal(edit_service_normalize(edit_text_field(snap, "add", NULL), "Are You a WORRIER?"), "are you a worrier?")
+  # a subject's name with straight quotes
+  subject_name <- edit_entities$subject$fields(list(subject = data.frame(subject_id = numeric(), name = character())), "add", NULL, NULL)[[1]]
+  expect_equal(edit_service_normalize(subject_name, " Respondent’s Twin "), "Respondent's Twin")
 })
 
 test_that("a study's add form names only the study's own required fields left blank", {
@@ -493,8 +499,10 @@ test_that("a questionnaire with nothing in it yet can be added to", {
   items <- edit_service_build(entity, "add", snap, NULL, "1", fields, values)$items
   expect_equal(item_lines(items), c(
     'Insert component {"component_id":"new:component:1"} component_type_id: - -> 4',
-    'Insert component {"component_id":"new:component:1"} text: - -> Welcome.',
-    'Insert questionnaire_component {"component_id":"new:component:1","questionnaire_id":1} display_order: - -> 1'
+    'Insert component {"component_id":"new:component:1"} text: - -> welcome.',
+    'Insert questionnaire_component {"placement_id":"new:questionnaire_component:1"} questionnaire_id: - -> 1',
+    'Insert questionnaire_component {"placement_id":"new:questionnaire_component:1"} component_id: - -> new:component:1',
+    'Insert questionnaire_component {"placement_id":"new:questionnaire_component:1"} display_order: - -> 1'
   ))
   question <- edit_entities$questionnaire_question
   expect_equal(

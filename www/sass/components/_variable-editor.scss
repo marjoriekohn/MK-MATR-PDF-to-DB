@@ -10,7 +10,7 @@ $code-width: 4.25rem; // a choice's code: a few digits
 
 // ------ Variables and choices -----------------------------------------------
 // A question's variables as a table: one line each, in printed order (not numbered). The About and Label
-// columns are there once a variable has one (has-subject, has-label). Below about 40rem a line's cells stack,
+// columns are there once a variable has one (has-subject, has-time_frame, has-label; optional-N says how many). Below about 40rem a line's cells stack,
 // each named by its data-label, since the column names are hidden then.
 .variable-cards {
   container-type: inline-size;
@@ -24,7 +24,7 @@ $code-width: 4.25rem; // a choice's code: a few digits
 
 .box-list { display: flex; flex-direction: column; margin-top: 0.25rem; }
 
-// handle, MATR ID, response, [about], [label], +, delete
+// handle, MATR ID, response, [about], [time frame], [label], +, delete
 .variable-line {
   display: grid;
   grid-template-columns: 1rem minmax(7rem, 10rem) minmax(10rem, 1fr) 1.9rem 1.9rem;
@@ -32,12 +32,14 @@ $code-width: 4.25rem; // a choice's code: a few digits
   gap: 0.4rem;
   padding: 0.35rem 0;
 }
-.variable-cards.has-subject .variable-line,
-.variable-cards.has-label .variable-line {
+.variable-cards.optional-1 .variable-line {
   grid-template-columns: 1rem minmax(7rem, 10rem) minmax(10rem, 1.4fr) minmax(8rem, 1fr) 1.9rem 1.9rem;
 }
-.variable-cards.has-subject.has-label .variable-line {
-  grid-template-columns: 1rem minmax(7rem, 10rem) minmax(10rem, 1.4fr) minmax(8rem, 1fr) minmax(8rem, 1fr) 1.9rem 1.9rem;
+.variable-cards.optional-2 .variable-line {
+  grid-template-columns: 1rem minmax(7rem, 10rem) minmax(10rem, 1.4fr) repeat(2, minmax(8rem, 1fr)) 1.9rem 1.9rem;
+}
+.variable-cards.optional-3 .variable-line {
+  grid-template-columns: 1rem minmax(7rem, 9rem) minmax(9rem, 1.4fr) repeat(3, minmax(7rem, 1fr)) 1.9rem 1.9rem;
 }
 .variable-head {
   padding-bottom: 0;
@@ -80,7 +82,7 @@ $code-width: 4.25rem; // a choice's code: a few digits
     > .is-id { order: 2; }
     > .variable-add { order: 3; }
     > .variable-delete { order: 4; }
-    > .is-response, > .is-subject, > .is-label { order: 5; grid-column: 2 / -1; }
+    > .is-response, > .is-subject, > .is-time_frame, > .is-label { order: 5; grid-column: 2 / -1; }
   }
   .variable-cards .choice-table { margin-left: 0; }
   // a choice's Printed as and Skip to each take a line under its code and words, named

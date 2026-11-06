@@ -186,7 +186,7 @@ tokens_used <- function(answers) {
   )
 }
 
-# The prompt, with the lookup lists filled in, so a type or subject staff add
+# The prompt, with the lookup lists filled in, so a type, subject or time frame staff add
 # reaches Gemini without editing the prompt.
 reading_service_instructions <- function(lookups, prompt_path = reading_prompt_path) {
   prompt <- reading_model_prompt(prompt_path)
@@ -194,6 +194,8 @@ reading_service_instructions <- function(lookups, prompt_path = reading_prompt_p
   lists <- list(
     component_types = quoted(lookups$component_types),
     subjects = quoted(lookups$subjects),
+    # a database without the list yet still shows the form they take
+    time_frames = quoted(if (length(lookups$time_frames)) lookups$time_frames else c("in your lifetime", "in the past 12 months", "in the past 30 days")),
     answer_data_types = quoted(lookups$answer_data_types),
     # not a choice with [subject] in it: Gemini writes who a choice names as printed, and staff link the questions
     answer_options = paste0("  - ", grep(subject_placeholder, lookups$answer_options, fixed = TRUE, value = TRUE, invert = TRUE), collapse = "\n")
@@ -213,7 +215,7 @@ reading_service_prompt_version <- function(instructions) {
 # ------ Into the Edit Extraction page's shape ----------------------------------------------------
 # Counts display_order 1, 2, 3... down each list, keeps only the fields each kind
 # of block has (in tests/testthat/fixtures/gna_gold.json's order, leaving out empty ones), and
-# tidies the text: one space between words, straight quotes. A block put inside
+# tidies the text: one space between words, straight quotes, and the form's words in lower case (normal_text()). A block put inside
 # one that isn't a section or group moves out to sit straight after it. A variable about the
 # respondent has no subject.
 reading_service_tidy <- function(reading) {
@@ -232,27 +234,27 @@ tidy_blocks <- function(blocks) {
     block <- blocks[[i]]
     type <- block$component_type
     if (is_container(type)) {
-      # a group can skip, on the answers to the questions in it (service_draft_skips.R)
-      skips <- type == "Group"
+      # a group or a grid can skip, on the answers to the questions in it (service_draft_skips.R)
+      skips <- type %in% skipping_types
       return(without_blanks(list(
-        component_type = type, display_order = i, text = clean_text(block$text), page = block$page,
-        skip_condition = if (skips) clean_text(block$skip_condition),
+        component_type = type, display_order = i, text = normal_text(clean_text(block$text)), page = block$page,
+        skip_condition = if (skips) normal_text(clean_text(block$skip_condition)),
         skip_when = if (skips && !is.null(block$skip_condition)) tidy_skip_when(block$skip_when),
-        skip_instruction = if (skips) clean_text(block$skip_instruction),
+        skip_instruction = if (skips) normal_text(clean_text(block$skip_instruction)),
         children = tidy_blocks(block$children)
       )))
     }
     if (type != "Question") {
-      return(without_blanks(list(component_type = type, display_order = i, text = clean_text(block$text), page = block$page)))
+      return(without_blanks(list(component_type = type, display_order = i, text = normal_text(clean_text(block$text)), page = block$page)))
     }
     without_blanks(list(
       component_type = type,
       display_order = i,
-      text = clean_text(block$text),
+      text = normal_text(clean_text(block$text)),
       page = block$page,
       printed_number = clean_number(block$printed_number),
       self_contained = block$self_contained %||% TRUE,
-      condition = clean_text(block$condition),
+      condition = normal_text(clean_text(block$condition)),
       parent_question = clean_number(block$parent_question),
       variables = tidy_boxes(block$variables)
     ))
@@ -278,14 +280,16 @@ tidy_boxes <- function(boxes) {
     box <- boxes[[i]]
     if (box$variable_type == "open_ended") {
       return(without_blanks(list(
-        variable_type = box$variable_type, display_order = i, label = clean_text(box$label),
-        subject = blank_respondent(clean_text(box$subject) %||% NA), answer_data_type = box$answer_data_type,
-        skip_condition = clean_text(box$skip_condition), skip_instruction = clean_text(box$skip_instruction)
+        variable_type = box$variable_type, display_order = i, label = normal_text(clean_text(box$label)),
+        subject = blank_respondent(clean_text(box$subject) %||% NA), time_frame = tidy_time_frame(box$time_frame),
+        answer_data_type = box$answer_data_type,
+        skip_condition = normal_text(clean_text(box$skip_condition)), skip_instruction = normal_text(clean_text(box$skip_instruction))
       )))
     }
     without_blanks(list(
-      variable_type = box$variable_type, display_order = i, label = clean_text(box$label),
-      subject = blank_respondent(clean_text(box$subject) %||% NA), response_options = tidy_choices(box$response_options)
+      variable_type = box$variable_type, display_order = i, label = normal_text(clean_text(box$label)),
+      subject = blank_respondent(clean_text(box$subject) %||% NA), time_frame = tidy_time_frame(box$time_frame),
+      response_options = tidy_choices(box$response_options)
     ))
   })
 }
@@ -299,9 +303,15 @@ tidy_choices <- function(choices) {
     without_blanks(list(
       display_order = i,
       answer_option = normal_answer(clean_text(choice$answer_option) %||% NA),
-      skip_instruction = clean_text(choice$skip_instruction)
+      skip_instruction = normal_text(clean_text(choice$skip_instruction))
     ))
   })
+}
+
+# The time a box's answer is about, written one way (normal_time_frame()); NULL for none.
+tidy_time_frame <- function(time_frame) {
+  time_frame <- normal_time_frame(clean_text(time_frame) %||% NA)
+  if (!is.na(time_frame)) time_frame
 }
 
 # NULL for nothing at all.
@@ -309,9 +319,7 @@ clean_text <- function(text) {
   if (is.null(text)) {
     return(NULL)
   }
-  text <- gsub("[‘’]", "'", text)
-  text <- gsub("[“”]", '"', text)
-  text <- gsub("…", "...", text)
+  text <- gsub("…", "...", straight_quotes(text))
   text <- trimws(gsub("[[:space:]]+", " ", text))
   if (nzchar(text)) text
 }

@@ -1,4 +1,4 @@
-variable_key,answer_option_id,display_order,code_value,skip_instruction,skip_to_component_id,skip_to_end
+variable_key,answer_option_id,display_order,code_value,skip_instruction,skip_to_placement_id,skip_to_end
 2,1,1,1,,,false
 2,2,2,0,Go to question 3,,false
 4,13,1,1,,,false

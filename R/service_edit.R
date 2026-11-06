@@ -51,7 +51,7 @@ edit_item <- function(entity_name, record_identifier, action, attribute_name, ol
 #' Name a row by its key columns.
 #'
 #' @param key A named list of the key columns to their values.
-#' @return JSON with the columns in alphabetical order, e.g. `{"component_id":88,"questionnaire_id":3}`.
+#' @return JSON with the columns in alphabetical order, e.g. `{"placement_id":88,"wave_id":3}`.
 edit_identifier <- function(key) {
   key <- key[order(names(key))]
   key <- lapply(key, function(value) {
@@ -744,7 +744,7 @@ edit_renumber_after_delete <- function(snap, cascade) {
     wave <- touched$wave_id[i]
     left <- asked[!is_gone & asked$questionnaire_id == q & asked$wave_id == wave, , drop = FALSE]
     left <- left[order(suppressWarnings(as.numeric(left$question_number))), , drop = FALSE]
-    edit_wave_numbers(snap, q, wave, key_text(left$component_id))$items
+    edit_wave_numbers(snap, q, wave, key_text(left$placement_id))$items
   })
   items <- Filter(Negate(is.null), items)
   if (length(items) > 0) do.call(rbind, items)
@@ -753,11 +753,11 @@ edit_renumber_after_delete <- function(snap, cascade) {
 # Rows that hold others (a section's contents, a question's follow-ups) are
 # deleted after what's inside them.
 edit_children_first <- function(rows, table) {
-  parent_column <- c(questionnaire_component = "parent_component_id", questionnaire_question = "parent_question_id")[table]
+  parent_column <- c(questionnaire_component = "parent_placement_id", questionnaire_question = "parent_question_placement_id")[table]
   if (is.na(parent_column) || nrow(rows) < 2) {
     return(rows)
   }
-  depth <- edit_chain_depth(rows$component_id, rows[[parent_column]], rows$questionnaire_id)
+  depth <- edit_chain_depth(rows$placement_id, rows[[parent_column]], rows$questionnaire_id)
   rows[order(-depth), , drop = FALSE]
 }
 
@@ -831,7 +831,8 @@ edit_summary_delete <- function(entity, snap, row, plan) {
 edit_service_usage <- function(entity, snap, row) {
   if (entity$table == "component") {
     uses <- edit_service_uses(snap, row$component_id)
-    return(list(uses = uses, shared = length(uses), pointing = list()))
+    shared <- length(unique(vapply(uses, function(use) as.numeric(use$questionnaire_id), numeric(1))))
+    return(list(uses = uses, shared = shared, pointing = list()))
   }
   key <- edit_key(row, edit_table_key(entity$table))
   pointing <- lapply(Filter(function(relation) relation$parent == entity$table, edit_relations), function(relation) {
@@ -899,7 +900,14 @@ edit_usage_groups <- function(snap, table, rows, labels) {
 #' @return One string per variable; `""` for one with neither.
 edit_variable_tags <- function(snap, variables) {
   about <- if (is.null(snap$subject)) rep(NA_character_, nrow(variables)) else edit_lookup(snap, "subject", "subject_id", variables$subject_id, "name")
-  vapply(seq_len(nrow(variables)), function(i) preview_variable_tags(list(label = variables$label[i], subject = about[i])), character(1))
+  when <- if (is.null(snap$time_frame) || is.null(variables$time_frame_id)) {
+    rep(NA_character_, nrow(variables))
+  } else {
+    edit_lookup(snap, "time_frame", "time_frame_id", variables$time_frame_id, "name")
+  }
+  vapply(seq_len(nrow(variables)), function(i) {
+    preview_variable_tags(list(label = variables$label[i], time_frame = when[i], subject = about[i]))
+  }, character(1))
 }
 
 # ------ What's left to do ------------------------------------------------------------------------------------------------------------

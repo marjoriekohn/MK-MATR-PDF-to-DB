@@ -24,15 +24,14 @@
 #     gets it (the one change an extraction makes to a row that is there), and one linked under another stem
 #     stops the push with a sentence.
 #   * The questionnaire's blocks are found where it prints them: a block with the same kind and
-#     words, in the same place, is that block (so the wave asks the same question, and finds its
-#     variables by MATR ID). The blocks that aren't there are added, after the ones that are in the
+#     words, in the same place, is that placement (so the wave asks the same question, and finds its
+#     variables by MATR ID). The blocks that aren't there are placed, after the ones that are in the
 #     same section.
-#   * A component is kept once for the whole registry, so a block the questionnaire doesn't print
-#     yet, but another questionnaire does with the same kind and words (exactly, but for runs of
-#     spaces), is that component: it is placed in this questionnaire too, not copied. The oldest, if
-#     several have those words. A questionnaire places a component once, so a block whose words this
-#     questionnaire prints already somewhere else, or prints twice, is a new component. Only the
-#     blocks no questionnaire prints are new components.
+#   * A component is a wording, kept once for the whole registry: one for each kind and words (exactly,
+#     but for runs of spaces), and one Group. Every block the questionnaire doesn't print yet gets a
+#     placement of its own, and its component is the one with its kind and words: one the database has
+#     (another questionnaire prints it, or this one elsewhere), one this push has come to already (the
+#     questionnaire prints it again, as an instruction repeated before each battery), or a new one.
 #   * The wave is used as it is; it has to ask no questions yet. A questionnaire or wave that isn't
 #     recorded yet is added first, from the Basic Info form's drop-downs.
 #   * Nothing already recorded is changed or deleted.
@@ -41,10 +40,10 @@
 #     choices and the sets of choices they point at are the ones reused.
 #   * Who a variable is about is a SUBJECT row: the respondent's ("Respondent") for a blank, the one with the
 #     same name (ignoring capitals and spaces at the ends) when there is one, or a new one staff typed.
-#   * A choice or a write-in that skips points at the block it sends respondents to (skip_to_component_id),
-#     so every block is added before any variable, or says it ends the questionnaire (skip_to_end). A group
+#   * A choice or a write-in that skips points at the placement it sends respondents to (skip_to_placement_id),
+#     so every block is placed before any variable, or says it ends the questionnaire (skip_to_end). A group
 #     that skips (on the answers to the questions in it) says so where the questionnaire places it, so every
-#     new block's component is added before any is placed.
+#     new block's component is added, and its placement named, before any is placed.
 #   * The wave records each question's place among the questions (question_number, 1, 2, 3...,
 #     sections and groups not counted) and the number printed beside it (printed_number),
 #     which can repeat or be missing.
@@ -150,14 +149,15 @@ extraction_service_push_build <- function(connection, record, draft = NULL, info
 #' Read once for a preview, which is worked out again as its fields change.
 #'
 #' @param connection The MATR database, `list(url, key)`; see `model_database.R`.
-#' @return A list: `ids` (`component_types` and `subjects`, as data frames with their ids) and
+#' @return A list: `ids` (`component_types`, `subjects` and `time_frames`, as data frames with their ids) and
 #'   `options` (from `push_model_options()`, with `components` from `push_model_components()`, and `placed` and
 #'   `questionnaires` from `push_model_placed()`).
 extraction_service_push_context <- function(connection) {
   list(
     ids = list(
       component_types = lookup_model_get_component_types(connection),
-      subjects = lookup_model_get_subjects(connection)
+      subjects = lookup_model_get_subjects(connection),
+      time_frames = lookup_model_get_time_frames(connection)
     ),
     options = c(push_model_options(connection), list(components = push_model_components(connection)), push_model_placed(connection))
   )
@@ -188,7 +188,8 @@ extraction_service_push_items <- function(connection, record) {
 #'
 #' @param draft The questionnaire as saved; see `draft_service_from_json()`.
 #' @param info Where it goes, from `extraction_service_info()`.
-#' @param ids `component_types` and `subjects` as data frames with their ids.
+#' @param ids `component_types`, `subjects` and `time_frames` as data frames with their ids (without
+#'   `time_frames`, every time frame is new).
 #' @param existing What the questionnaire has printed already, from `push_model_existing()`.
 #' @param options The answer choices and option sets there are, from `push_model_options()`, and the
 #'   components with words (`components`, from `push_model_components()`; without it, no block is shared).
@@ -200,57 +201,45 @@ extraction_service_build_items <- function(draft, info, ids, existing, options) 
   wave <- push_recorded_wave(info, existing)
   push$wave <- wave # the respondents' counts are this wave's
 
-  # ---- the blocks: first each one's component, so a group can skip to a block printed after it ...
+  # ---- the blocks: first each one's component (its words) and placement (its place), so a group or a choice can
+  # skip to a block printed after it ...
   blocks <- draft$components
   printed <- draft_service_printed_order(draft)
   found <- if (!is.null(existing)) push_match_blocks(draft, existing, ids) else numeric()
   component_of <- list() # block id -> its component: a number (there already) or a name (new:component:3)
+  placement_of <- list() # block id -> its placement: a number (there already) or a name (new:questionnaire_component:3)
   for (id in printed) {
     block <- blocks[blocks$id == id, ]
     if (id %in% names(found)) {
-      component_of[[id]] <- found[[id]]
+      placement_of[[id]] <- found[[id]]
+      component_of[[id]] <- existing$placements$component_id[match(found[[id]], existing$placements$placement_id)]
       push$summary$blocks_found <- push$summary$blocks_found + 1L
       push$note_block(block, "Already in the questionnaire")
-      push_link_reused(push, block, found[[id]])
+      push_link_reused(push, block, component_of[[id]])
       next
     }
-    placed_here <- c(existing$placements$component_id, unlist(Filter(is.numeric, component_of)))
-    shared <- push_shared_component(push, block, placed_here)
-    component <- shared %||% push$token("component")
-    component_of[[id]] <- component
-    if (!is.null(shared)) {
-      push$summary$blocks_shared <- push$summary$blocks_shared + 1L
-      push$note_block(block, push_shared_status(push$options, shared)) # placed here, not copied
-      push_link_reused(push, block, shared)
-      next
-    }
-    push$insert("component", list(component_id = component), list(
-      component_type_id = push$type_id(block$component_type), text = block$text
-    ))
-    if (block$component_type == "Question") {
-      push$insert("question", list(component_id = component), list(question_stem_id = push_question_stem(push, block$stem)))
-    }
-    push$summary$blocks <- push$summary$blocks + 1L
-    push$note_block(block, "New", is_new = TRUE)
+    component_of[[id]] <- push_component(push, block)
+    placement_of[[id]] <- push$token("questionnaire_component")
   }
-  # ---- ... then where the questionnaire places each new one, parents before what is inside them
-  push$component_of <- component_of
-  placed_in <- list() # section -> how many new blocks have been put in it
-  for (id in printed) {
+  # ---- ... then where the questionnaire places each new one, after what holds it and where it skips to
+  push$placement_of <- placement_of
+  order_in <- push_new_display_orders(blocks, printed, found, placement_of, existing)
+  for (id in push_placing_order(blocks, printed, found)) {
     block <- blocks[blocks$id == id, ]
-    component <- component_of[[id]]
+    placement <- placement_of[[id]]
     if (!id %in% names(found)) {
-      parent <- if (is.na(block$parent_id)) NA else component_of[[block$parent_id]]
-      section <- if (is.na(parent)) "(top)" else as.character(parent)
-      placed_in[[section]] <- (placed_in[[section]] %||% 0L) + 1L
-      push$insert("questionnaire_component", list(component_id = component, questionnaire_id = questionnaire), c(
-        list(parent_component_id = parent, display_order = push_taken(existing, parent) + placed_in[[section]]),
+      parent <- if (is.na(block$parent_id)) NA else placement_of[[block$parent_id]]
+      push$insert("questionnaire_component", list(placement_id = placement), c(
+        list(
+          questionnaire_id = questionnaire, component_id = component_of[[id]], parent_placement_id = parent,
+          display_order = order_in[[id]]
+        ),
         push_group_skip(push, block)
       ))
       if (block$component_type == "Question") {
-        follows <- if (is.na(block$parent_question_id)) NA else component_of[[block$parent_question_id]]
-        push$insert("questionnaire_question", list(component_id = component, questionnaire_id = questionnaire), list(
-          parent_question_id = follows,
+        follows <- if (is.na(block$parent_question_id)) NA else placement_of[[block$parent_question_id]]
+        push$insert("questionnaire_question", list(placement_id = placement), list(
+          questionnaire_id = questionnaire, component_id = component_of[[id]], parent_question_placement_id = follows,
           self_contained = if (is.na(block$self_contained)) NA else tolower(as.character(block$self_contained)),
           condition = block$condition
         ))
@@ -258,16 +247,86 @@ extraction_service_build_items <- function(draft, info, ids, existing, options) 
     }
     if (block$component_type != "Question") next
     push$summary$questions <- push$summary$questions + 1L
-    push$insert("wave_question", list(component_id = component_of[[id]], questionnaire_id = questionnaire, wave_id = wave), list(
-      question_number = block$question_number, printed_number = block$printed_number
+    push$insert("wave_question", list(placement_id = placement, wave_id = wave), list(
+      questionnaire_id = questionnaire, question_number = block$question_number, printed_number = block$printed_number
     ))
   }
   # ---- then the variables, once every block is there: a choice can skip to a block printed after it
   for (id in printed) {
     block <- blocks[blocks$id == id, ]
-    if (block$component_type == "Question") push_variables(push, draft, block, component_of[[id]], questionnaire)
+    if (block$component_type == "Question") push_variables(push, draft, block, placement_of[[id]], questionnaire)
   }
   list(items = edit_number_items(do.call(rbind, push$items())), summary = push$summary, rows = push$rows())
+}
+
+# Where each new block goes among what holds it (or the top): after the blocks there already, in printed order.
+# @return A named list: block id -> display order, for the blocks that aren't there yet.
+push_new_display_orders <- function(blocks, printed, found, placement_of, existing) {
+  counted <- list() # what holds them -> how many new blocks are in it so far
+  orders <- list()
+  for (id in setdiff(printed, names(found))) {
+    parent_id <- blocks$parent_id[blocks$id == id]
+    parent <- if (is.na(parent_id)) NA else placement_of[[parent_id]]
+    holder <- if (is.na(parent)) "(top)" else as.character(parent)
+    counted[[holder]] <- (counted[[holder]] %||% 0L) + 1L
+    orders[[id]] <- push_taken(existing, parent) + counted[[holder]]
+  }
+  orders
+}
+
+# The order to place the blocks in: printed order, but a group that skips to a block printed after it comes after
+# that block (and what holds it), since its row names the place it skips to. What holds a block, and the question a
+# question follows, always come first.
+push_placing_order <- function(blocks, printed, found) {
+  done <- character()
+  visiting <- character()
+  visit <- function(id) {
+    if (is.na(id) || id %in% done || id %in% visiting || !id %in% blocks$id) {
+      return(invisible())
+    }
+    visiting <<- c(visiting, id)
+    block <- blocks[blocks$id == id, ]
+    visit(block$parent_id)
+    visit(block$parent_question_id) # a question's settings name the question it follows
+    target <- block$skip_to_id
+    if (block$component_type %in% skipping_types && !is.na(target) && target != skip_to_end_id) visit(target)
+    done <<- c(done, id)
+    invisible()
+  }
+  for (id in printed) visit(id)
+  done
+}
+
+# The component a block of the draft prints, for a block the questionnaire doesn't print yet. There is one component
+# for each kind and words: the one this push has already come to with them (the questionnaire prints them again),
+# the one the database has (another questionnaire prints them, or this one elsewhere), or a new one.
+push_component <- function(push, block) {
+  key <- paste0("component:", push$type_id(block$component_type), ":", push_words(block$text))
+  again <- push$made[[key]]
+  if (!is.null(again)) {
+    push$summary$blocks_repeated <- push$summary$blocks_repeated + 1L
+    push$note_block(block, "Printed again")
+    return(again)
+  }
+  shared <- push_shared_component(push, block)
+  if (!is.null(shared)) {
+    push$summary$blocks_shared <- push$summary$blocks_shared + 1L
+    push$note_block(block, push_shared_status(push$options, shared)) # placed here, not copied
+    push_link_reused(push, block, shared)
+    push$made[[key]] <- shared
+    return(shared)
+  }
+  component <- push$token("component")
+  push$insert("component", list(component_id = component), list(
+    component_type_id = push$type_id(block$component_type), text = block$text
+  ))
+  if (block$component_type == "Question") {
+    push$insert("question", list(component_id = component), list(question_stem_id = push_question_stem(push, block$stem)))
+  }
+  push$summary$blocks <- push$summary$blocks + 1L
+  push$note_block(block, "New", is_new = TRUE)
+  push$made[[key]] <- component
+  component
 }
 
 # The tools a push uses while it works: names for rows that don't exist yet (`token`), a way to add a
@@ -281,9 +340,9 @@ push_start <- function(ids, existing, options) {
   made <- new.env() # answer choices and option sets this push has already added
   push <- new.env()
   push$summary <- list(
-    blocks = 0L, blocks_found = 0L, blocks_shared = 0L, questions = 0L, variables = 0L, variables_found = 0L,
+    blocks = 0L, blocks_found = 0L, blocks_shared = 0L, blocks_repeated = 0L, questions = 0L, variables = 0L, variables_found = 0L,
     choices = 0L, answer_options = 0L, answer_options_found = 0L, option_sets = 0L, option_sets_found = 0L, subjects = 0L,
-    stems = 0L, linked = 0L
+    time_frames = 0L, stems = 0L, linked = 0L
   )
   push$existing <- existing
   push$options <- options
@@ -349,12 +408,13 @@ push_start <- function(ids, existing, options) {
     })
   }
   push$type_id <- function(name) ids$component_types$component_type_id[match(name, ids$component_types$name)]
-  # Who a variable is about: a blank is the respondent; a name the database doesn't have yet is added once.
+  # Who a variable is about: a blank is the respondent; a name the database doesn't have yet is added once. Names
+  # are the same whatever their capitals, and whether their quotes are curly or straight.
   push$subject_id <- function(name) {
-    name <- trimws(if (is.na(name)) respondent_subject else name)
+    name <- trimws(straight_quotes(if (is.na(name)) respondent_subject else name))
     # the respondent's row, whichever name it has
     same <- if (is.na(blank_respondent(name))) tolower(respondent_names) else tolower(name)
-    there <- ids$subjects$subject_id[tolower(trimws(ids$subjects$name)) %in% same]
+    there <- ids$subjects$subject_id[tolower(trimws(straight_quotes(ids$subjects$name))) %in% same]
     if (length(there) > 0) {
       return(there[1])
     }
@@ -366,23 +426,41 @@ push_start <- function(ids, existing, options) {
     }
     made[[key]]
   }
+  # When a variable is about: none is no time frame; one the database doesn't have yet is added once.
+  push$time_frame_id <- function(name) {
+    name <- normal_time_frame(name)
+    if (is.na(name)) {
+      return(NA)
+    }
+    there <- ids$time_frames$time_frame_id[normal_time_frame(ids$time_frames$name) %in% name]
+    if (length(there) > 0) {
+      return(there[1])
+    }
+    key <- paste0("time_frame:", name)
+    if (is.null(made[[key]])) {
+      made[[key]] <- push$token("time_frame")
+      push$insert("time_frame", list(time_frame_id = made[[key]]), list(name = name))
+      push$summary$time_frames <- push$summary$time_frames + 1L
+    }
+    made[[key]]
+  }
   push
 }
 
-# The variables of one question. A variable of a recorded questionnaire that has the MATR ID is that
+# The variables of one placed question. A variable of a recorded questionnaire that has the MATR ID is that
 # variable; the rest are added.
-push_variables <- function(push, draft, block, component, questionnaire) {
+push_variables <- function(push, draft, block, placement, questionnaire) {
   boxes <- draft_service_children(draft, "variables", block$id)
   existing <- push$existing
-  here <- if (!is.null(existing) && is.numeric(component)) {
-    existing$variables[existing$variables$component_id == component, , drop = FALSE]
+  here <- if (!is.null(existing) && is.numeric(placement)) {
+    existing$variables[existing$variables$placement_id == placement, , drop = FALSE]
   }
   order_so_far <- if (!is.null(here) && nrow(here) > 0) max(here$display_order, na.rm = TRUE) else 0
   for (i in seq_len(nrow(boxes))) {
     box <- boxes[i, ]
     if (!is.null(existing) && box$matr_id %in% existing$variables$matr_id) {
       elsewhere <- existing$variables[existing$variables$matr_id == box$matr_id, , drop = FALSE]
-      if (!(is.numeric(component) && component %in% elsewhere$component_id)) {
+      if (!(is.numeric(placement) && placement %in% elsewhere$placement_id)) {
         stop(sprintf(
           "The MATR ID %s is already used by another question of this questionnaire. Give the variable a MATR ID of its own.",
           box$matr_id
@@ -395,8 +473,9 @@ push_variables <- function(push, draft, block, component, questionnaire) {
     order_so_far <- order_so_far + 1
     variable <- push$token("variable")
     push$insert("variable", list(variable_key = variable), list(
-      questionnaire_id = questionnaire, component_id = component, matr_id = trimws(box$matr_id),
-      display_order = order_so_far, label = box$label, subject_id = push$subject_id(box$subject)
+      questionnaire_id = questionnaire, placement_id = placement, matr_id = trimws(box$matr_id),
+      display_order = order_so_far, label = box$label, subject_id = push$subject_id(box$subject),
+      time_frame_id = push$time_frame_id(box$time_frame %||% NA)
     ))
     push$summary$variables <- push$summary$variables + 1L
     push$note("variables", box$id, box$matr_id, box$label, "New", TRUE)
@@ -434,7 +513,7 @@ push_variables <- function(push, draft, block, component, questionnaire) {
 # A group's skip, as where the questionnaire places it records it: nothing for a block that isn't a group, or a
 # group that doesn't skip, which leave those columns as their defaults. An empty `skip_when` is "every".
 push_group_skip <- function(push, block) {
-  if (!identical(block$component_type, "Group") || (is.na(block$skip_to_id) && is.na(block$skip_condition))) {
+  if (!block$component_type %in% skipping_types || (is.na(block$skip_to_id) && is.na(block$skip_condition))) {
     return(list())
   }
   c(
@@ -446,11 +525,12 @@ push_group_skip <- function(push, block) {
   )
 }
 
-# Where a choice or write-in skips to, as its row records it: the component (skip_to_component_id), or the end of
-# the questionnaire (skip_to_end). Empty fields aren't sent, which leaves the columns as their defaults.
+# Where a choice, write-in or group skips to, as its row records it: the place in the questionnaire
+# (skip_to_placement_id), or the end of the questionnaire (skip_to_end). Empty fields aren't sent, which leaves the
+# columns as their defaults.
 push_skip_to <- function(push, skip_to_id) {
   list(
-    skip_to_component_id = if (!is.na(skip_to_id) && skip_to_id != skip_to_end_id) push$component_of[[skip_to_id]] %||% NA else NA,
+    skip_to_placement_id = if (!is.na(skip_to_id) && skip_to_id != skip_to_end_id) push$placement_of[[skip_to_id]] %||% NA else NA,
     skip_to_end = if (identical(skip_to_id, skip_to_end_id)) TRUE else NA
   )
 }
@@ -622,15 +702,15 @@ push_link_reused <- function(push, block, component) {
 # one that is there if it has the same kind and words and sits in the same place (inside the same
 # block, or at the top). Each block that is there is found once.
 #
-# @return A named numeric vector: the draft's block id -> the component that is there.
+# @return A named numeric vector: the draft's block id -> the placement that is there.
 push_match_blocks <- function(draft, existing, ids) {
   blocks <- draft$components
   placements <- existing$placements
   components <- existing$components
   of_component <- match(placements$component_id, components$component_id)
   placed <- data.frame(
-    component_id = placements$component_id,
-    parent = placements$parent_component_id,
+    placement_id = placements$placement_id,
+    parent = placements$parent_placement_id,
     order = placements$display_order,
     type = ids$component_types$name[match(components$component_type_id[of_component], ids$component_types$component_type_id)],
     text = push_words(components$text[of_component]),
@@ -652,7 +732,7 @@ push_match_blocks <- function(draft, existing, ids) {
     if (length(here) == 0) next
     here <- here[which.min(placed$order[here])]
     placed$used[here] <- TRUE
-    found[id] <- placed$component_id[here]
+    found[id] <- placed$placement_id[here]
   }
   found
 }
@@ -660,18 +740,15 @@ push_match_blocks <- function(draft, existing, ids) {
 # A block's words as they are compared: runs of spaces are one space, and none at the ends.
 push_words <- function(text) trimws(gsub("[[:space:]]+", " ", ifelse(is.na(text), "", text)))
 
-# For a block this questionnaire doesn't print yet: the component another questionnaire prints with the same kind and
-# words, to place here instead of a copy (the oldest, if several have them), or NULL. Not one of `placed_here`, the
-# components this questionnaire places already, since it places each once. A group has no words, so it is
-# never shared.
-push_shared_component <- function(push, block, placed_here) {
+# The component the database has with a block's kind and words (but for runs of spaces), to place here instead of a
+# copy, or NULL. There is one at most, and one Group (which has no words) shared by every group.
+push_shared_component <- function(push, block) {
   components <- push$components
-  if (is.null(components) || !nzchar(push_words(block$text))) {
+  if (is.null(components)) {
     return(NULL)
   }
   same <- components$component_id[
-    components$component_type_id %in% push$type_id(block$component_type) &
-      components$words == push_words(block$text) & !components$component_id %in% placed_here
+    components$component_type_id %in% push$type_id(block$component_type) & components$words == push_words(block$text)
   ]
   if (length(same) == 0) NULL else min(same)
 }
@@ -715,7 +792,7 @@ push_taken <- function(existing, parent) {
     return(0L)
   }
   placements <- existing$placements
-  in_section <- if (is.na(parent)) is.na(placements$parent_component_id) else placements$parent_component_id %in% parent
+  in_section <- if (is.na(parent)) is.na(placements$parent_placement_id) else placements$parent_placement_id %in% parent
   if (!any(in_section)) 0L else as.integer(max(placements$display_order[in_section], na.rm = TRUE))
 }
 
@@ -732,6 +809,7 @@ extraction_service_push_summary <- function(summary) {
     if (summary$blocks > 0) plural(summary$blocks, "new block"),
     if (summary$blocks_found > 0) paste0(plural(summary$blocks_found, "block"), " already there"),
     if (summary$blocks_shared > 0) paste0(plural(summary$blocks_shared, "block"), " other questionnaires print"),
+    if (isTRUE(summary$blocks_repeated > 0)) paste0(plural(summary$blocks_repeated, "block"), " printed again"),
     if (summary$questions > 0) paste(plural(summary$questions, "question"), "asked in the wave"),
     if (summary$variables > 0) plural(summary$variables, "new variable"),
     if (summary$variables_found > 0) paste0(plural(summary$variables_found, "variable"), " already there"),
@@ -739,6 +817,7 @@ extraction_service_push_summary <- function(summary) {
     if (summary$answer_options > 0) plural(summary$answer_options, "new answer choice"),
     if (summary$option_sets > 0) plural(summary$option_sets, "new set of choices", plural_form = "new sets of choices"),
     if (summary$subjects > 0) plural(summary$subjects, "new subject"),
+    if (isTRUE(summary$time_frames > 0)) plural(summary$time_frames, "new time frame"),
     if (isTRUE(summary$stems > 0)) plural(summary$stems, "new question stem"),
     if (isTRUE(summary$linked > 0)) paste(plural(summary$linked, "question"), "already there linked")
   )
@@ -854,12 +933,17 @@ extraction_service_what_cards <- function(summary, rows = NULL) {
   }
   blocks <- card(
     "Blocks", summary$blocks, summary$blocks_found,
-    plural(summary$blocks + summary$blocks_found + summary$blocks_shared, "block", big_mark = ","), "already in the questionnaire",
+    plural(summary$blocks + summary$blocks_found + summary$blocks_shared + (summary$blocks_repeated %||% 0L), "block", big_mark = ","),
+    "already in the questionnaire",
     listed = rows$blocks, columns = c(text = "Words", detail = "Kind")
   )
   if (summary$blocks_shared > 0) {
     blocks$facts <- c(blocks$facts, paste(count(summary$blocks_shared), "shared with other questionnaires"))
     blocks$is_new <- TRUE # each is placed in the questionnaire
+  }
+  if (isTRUE(summary$blocks_repeated > 0)) {
+    blocks$facts <- c(blocks$facts, paste(count(summary$blocks_repeated), "printed again in this questionnaire"))
+    blocks$is_new <- TRUE
   }
   answers <- card(
     "Answer choices", summary$answer_options, summary$answer_options_found,

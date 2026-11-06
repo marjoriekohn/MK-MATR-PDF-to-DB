@@ -102,10 +102,11 @@ outline_filter <- function() {
 # database has that isn't here is "Any other printed text".
 block_kind_descriptions <- c(
   Section = "A part of the questionnaire under a printed heading, holding the blocks printed under it.",
-  `Group` = "Sets apart blocks that belong together and have no heading: questions under a lead-in only they share, or a question with its follow-up.",
+  Grid = "Questions that share a printed lead-in which is part of each one (“In the past 4 weeks, how often” + “have you felt calm?”). Its words are the lead-in; each question's are the rest.",
+  `Group` = "Sets apart blocks that belong together with no words of their own: questions with an instruction or definition only they share, or that skip together. Each question is whole on its own.",
   Question = "Asks for one or more answers, each recorded by a variable.",
   Introduction = "Opening words that say what the questionnaire or study is about.",
-  Instruction = "Tells respondents how to answer, or is the lead-in the items after it share.",
+  Instruction = "Tells respondents how to answer, or says what the questions after it are about.",
   Definition = "Says what a term means, e.g. “A drink is one beer, one glass of wine or one shot of liquor”.",
   `Interviewer Script` = "Words an interviewer reads aloud, or directions for the interviewer.",
   Note = "Any other printed text that belongs to the questionnaire."
@@ -378,8 +379,11 @@ outline_list <- function(draft, section, view, lookups, ns) {
 
 outline_node <- function(block, draft, view, lookups, ns) {
   div(
-    # a group is drawn as a gold box around the blocks it holds (_outline.scss)
-    class = c("outline-node", if (block$component_type == "Group") "is-group", if (block$id %in% view$collapsed) "is-collapsed"),
+    # a group, or a grid, is drawn as a gold box around the blocks it holds (_outline.scss)
+    class = c(
+      "outline-node", if (block$component_type == "Group") "is-group", if (block$component_type == "Grid") "is-grid",
+      if (block$id %in% view$collapsed) "is-collapsed"
+    ),
     `data-id` = block$id,
     `data-label` = block_label(block),
     `data-page` = if (isTRUE(block$page > 0)) block$page, # Open PDF opens at it (review.js)
@@ -411,7 +415,7 @@ outline_row <- function(block, draft, view, ns) {
     if (type == "Group") span(class = "outline-group-note") else outline_text_field(block, view$problems, ns) |> tagAppendAttributes(readonly = NA),
     outline_badges(block, draft, view$problems),
     if (type != "Question") row_actions(block, view$component_types),
-    if (!is_section || type == "Group") {
+    if (!is_section || type %in% skipping_types) {
       review_button(
         app_icon("open"), "select",
         `data-id` = block$id, class = "btn btn-sm btn-icon btn-open", title = "Open in the editor", `aria-label` = "Open in the editor"
@@ -476,8 +480,9 @@ variable_summary_text <- function(draft, ids) {
     choice_summary(choices[choices$variable_id == boxes$id[i], , drop = FALSE])
   }, character(1))
   about <- ifelse(is.na(boxes$subject), "", paste0(" · About: ", boxes$subject))
+  when <- ifelse(is.na(boxes$time_frame), "", paste0(" · ", boxes$time_frame))
   label <- ifelse(is.na(boxes$label), "", paste0(" · “", shorten(boxes$label, 30), "”"))
-  stats::setNames(paste0(answer, about, label), boxes$id)
+  stats::setNames(paste0(answer, about, when, label), boxes$id)
 }
 
 # The block's words, typed where they are. The words of the other blocks of the same kind, and of the
@@ -662,7 +667,7 @@ block_detail <- function(block, draft, view, lookups, ns) {
       } else if (is_container(type)) {
         tagList(
           detail_section(NULL, detail_field("Holds", span(class = "detail-value", plural(sum(draft$components$parent_id %in% block$id), "block")))),
-          if (type == "Group") detail_section("Skip", group_skip(block, draft, problems, ns))
+          if (type %in% skipping_types) detail_section("Skip", group_skip(block, draft, problems, ns))
         )
       }
     ),

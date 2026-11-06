@@ -69,10 +69,10 @@ database_tables <- list(
     columns = c(component_id = "id", component_type_id = "id", text = "text")
   ),
   questionnaire_component = list(
-    key = c("questionnaire_id", "component_id"), order_by = c("questionnaire_id", "component_id"),
+    key = "placement_id", order_by = c("questionnaire_id", "placement_id"),
     columns = c(
-      questionnaire_id = "id", component_id = "id", parent_component_id = "id",
-      display_order = "number", skip_to_component_id = "id"
+      placement_id = "id", questionnaire_id = "id", component_id = "id", parent_placement_id = "id",
+      display_order = "number", skip_to_placement_id = "id"
     )
   ),
   question = list(
@@ -84,17 +84,17 @@ database_tables <- list(
     columns = c(question_stem_id = "id", text = "text")
   ),
   questionnaire_question = list(
-    key = c("questionnaire_id", "component_id"), order_by = c("questionnaire_id", "component_id"),
+    key = "placement_id", order_by = c("questionnaire_id", "placement_id"),
     columns = c(
-      questionnaire_id = "id", component_id = "id", parent_question_id = "id",
+      placement_id = "id", questionnaire_id = "id", component_id = "id", parent_question_placement_id = "id",
       self_contained = "flag", condition = "text"
     )
   ),
   wave_question = list(
-    key = c("questionnaire_id", "wave_id", "component_id"),
-    order_by = c("questionnaire_id", "wave_id", "component_id"),
+    key = c("wave_id", "placement_id"),
+    order_by = c("questionnaire_id", "wave_id", "placement_id"),
     columns = c(
-      questionnaire_id = "id", wave_id = "id", component_id = "id",
+      questionnaire_id = "id", wave_id = "id", placement_id = "id",
       question_number = "text", printed_number = "text"
     )
   ),
@@ -117,6 +117,10 @@ database_tables <- list(
   subject = list(
     key = "subject_id", order_by = "name",
     columns = c(subject_id = "id", name = "text")
+  ),
+  time_frame = list(
+    key = "time_frame_id", order_by = "name",
+    columns = c(time_frame_id = "id", name = "text")
   ),
   option_set = list(
     key = "option_set_id", order_by = "name",
@@ -144,14 +148,14 @@ database_tables <- list(
   variable = list(
     key = "variable_key", order_by = "variable_key",
     columns = c(
-      variable_key = "id", questionnaire_id = "id", component_id = "id",
+      variable_key = "id", questionnaire_id = "id", placement_id = "id",
       matr_id = "text", display_order = "number", label = "text",
-      subject_id = "id"
+      subject_id = "id", time_frame_id = "id"
     )
   ),
   open_ended = list(
     key = "variable_key", order_by = "variable_key",
-    columns = c(variable_key = "id", answer_data_type = "text", skip_to_component_id = "id")
+    columns = c(variable_key = "id", answer_data_type = "text", skip_to_placement_id = "id")
   ),
   closed_ended = list(
     key = "variable_key", order_by = "variable_key",
@@ -162,7 +166,7 @@ database_tables <- list(
     columns = c(
       variable_key = "id", answer_option_id = "id", display_order = "number",
       code_value = "text",
-      skip_instruction = "text", skip_to_component_id = "id", skip_to_end = "flag"
+      skip_instruction = "text", skip_to_placement_id = "id", skip_to_end = "flag"
     )
   ),
   response_option_count = list(

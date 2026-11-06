@@ -113,7 +113,7 @@ test_that("changing something several questionnaires share says so, asks to conf
     aside <- text_of(output$impact)
     expect_match(aside, "Shared by 2 questionnaires")
     expect_match(aside, "Open in this questionnaire")
-    expect_match(paste(output$impact$html, collapse = ""), 'data-kind="questionnaire_question" data-verb="view" data-scope="1" data-key="1|4"', fixed = TRUE)
+    expect_match(paste(output$impact$html, collapse = ""), 'data-kind="questionnaire_question" data-verb="view" data-scope="1" data-key="104"', fixed = TRUE)
     expect_match(aside, "AHP|Adult Health and Personality")
     expect_match(aside, "MQ|Mother Questionnaire")
   })
@@ -161,17 +161,17 @@ test_that("a row in the details is its fields as text, with where it is used, an
   })
 })
 
-test_that("new words for a block in one questionnaire say the questionnaire gets its own component", {
-  page <- change_page("questionnaire_component", "update", "4|4", scope = "4")
+test_that("new words for a block in one questionnaire say they change that place only", {
+  page <- change_page("questionnaire_component", "update", "404", scope = "4")
   shiny::testServer(edit_change_server, args = change_args(page), {
     draw()
     expect_false(grepl("This changes MQ only|This only changes the one questionnaire", text_of(output$impact))) # the info block says so
-    expect_false(grepl("New words mean a new component", text_of(output$impact)))
+    expect_false(grepl("New words change this place only", text_of(output$impact)))
 
     session$setInputs(questionnaire_component__text = "Do you currently smoke cigarettes?")
     aside <- text_of(output$impact)
-    expect_match(aside, "New words mean a new component")
-    expect_match(aside, "The old one stays, for the 1 other questionnaire that still print it.")
+    expect_match(aside, "New words change this place only")
+    expect_match(aside, "The old one stays, for the 1 other place that still print it.")
     expect_true(ready() || length(blockers()) > 0)
   })
 })

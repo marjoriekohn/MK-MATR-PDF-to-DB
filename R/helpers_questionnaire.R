@@ -94,7 +94,7 @@ questionnaire_preview_rows <- function(draft) {
         if (block$component_type == "Group") groups <- groups + 1L
         inside <- c(path, preview_container_name(block, groups))
         walk(block$id, inside)
-        if (block$component_type == "Group" && (!is.na(block$skip_to_id) || !is.na(block$skip_condition))) {
+        if (block$component_type %in% skipping_types && (!is.na(block$skip_to_id) || !is.na(block$skip_condition))) {
           targets <<- targets %||% skip_targets(draft)
           add(paste(inside, collapse = " \u203a "), "Skip", text = group_skip_text(block, targets), tags = if (is.na(block$skip_instruction)) "" else paste0("(printed: ", block$skip_instruction, ")"))
         }
@@ -162,10 +162,10 @@ preview_question_words <- function(block) {
   if (nzchar(trimmed)) trimmed else block$text
 }
 
-# "[Lifetime] [Siblings]": the variable's label and who it is about, each when it has one (a variable about
-# the respondent has no subject), or "".
+# "[Drinks] [in the past 30 days] [Siblings]": the variable's label, when and who it is about, each when it has one
+# (a variable about the respondent has no subject), or "".
 preview_variable_tags <- function(box) {
-  tags <- c(box$label, box$subject)
+  tags <- c(box$label, box$time_frame, box$subject)
   tags <- trimws(tags[!is.na(tags)])
   tags <- tags[nzchar(tags)]
   if (length(tags) > 0) paste0("[", tags, "]", collapse = " ") else ""

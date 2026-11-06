@@ -21,6 +21,7 @@ edit_entities <- list(
   measurement_scale = measurement_scale_entity,
   question_scale = question_scale_entity,
   subject = subject_entity,
+  time_frame = time_frame_entity,
   pdf_file = pdf_file_entity
 )
 edit_entities <- Map(function(entity, key) c(list(key = key), entity), edit_entities, names(edit_entities))

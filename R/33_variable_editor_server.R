@@ -42,7 +42,7 @@ variable_editor <- function(draft, change, redraw, ns) {
     now$variables$component_id[now$variables$id %in% variable]
   }
 
-  # Which table an optional field is in: a variable's About, label and (a write-in's) skip, or a choice's
+  # Which table an optional field is in: a variable's About, time frame, label and (a write-in's) skip, or a choice's
   # count of respondents and skip.
   optional_table <- function(name) {
     if (name %in% names(optional_variable_fields)) "variables" else if (name %in% names(optional_choice_fields)) "response_options"
@@ -245,7 +245,8 @@ variable_editor_server <- function(id) {
         isolate({
           variables <- tryCatch(edit_variables_parse(json), error = function(problem) list())
           lookups <<- list(
-            subjects = options$subjects, answer_data_types = options$answer_data_types, answer_options = options$answer_options
+            subjects = options$subjects, time_frames = options$time_frames, answer_data_types = options$answer_data_types,
+            answer_options = options$answer_options
           )
           editor$reset()
           draft(edit_variables_draft(variables))

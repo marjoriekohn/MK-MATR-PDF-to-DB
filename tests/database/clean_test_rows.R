@@ -185,27 +185,30 @@ for (i in seq_along(specs)) {
 log_step(7, total_steps, "Cleaning up components and dependencies")
 
 components <- ids_of("component", "component_id", "text")
+# the places questionnaires print them
+placements <- push_model_by_ids(connection, "questionnaire_component", "placement_id", "component_id", components)$placement_id
 
-# What points at a component, before what it points at. Its question row goes with it (on delete cascade):
-# the database removes a Question's two rows together or not at all.
-component_tables <- c(
-  "wave_question",
-  "variable",
-  "question_category",
-  "question_scale",
-  "questionnaire_question",
-  "questionnaire_component"
+# What points at a component's placements, then at the component, before what they point at. Its question row goes
+# with it (on delete cascade): the database removes a Question's two rows together or not at all.
+component_tables <- list(
+  c("wave_question", "placement_id"),
+  c("variable", "placement_id"),
+  c("question_category", "component_id"),
+  c("question_scale", "component_id"),
+  c("questionnaire_question", "placement_id"),
+  c("questionnaire_component", "placement_id")
 )
 
 for (i in seq_along(component_tables)) {
-  table <- component_tables[[i]]
+  table <- component_tables[[i]][1]
+  column <- component_tables[[i]][2]
 
   log_info(sprintf(
     "  Cleaning dependency %d/%d: %s",
     i, length(component_tables), table
   ))
 
-  test_delete_in(table, "component_id", components)
+  test_delete_in(table, column, if (column == "placement_id") placements else components)
 }
 
 log_info("  Deleting component records...")

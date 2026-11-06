@@ -133,7 +133,7 @@ test_that("a scale's items are listed in it by their number, with the choices th
   snap <- test_snapshot(edit_service_tables(entity))
   cards <- edit_service_cards(entity, snap, "1")
   expect_equal(cards$key, "1|9")
-  expect_equal(cards$title, "How often in the past week did you feel sad?")
+  expect_equal(cards$title, "how often in the past week did you feel sad?")
   expect_equal(cards$subtitle, "Item 1")
   expect_equal(cards$facts[[1]], "expects “Often / Sometimes / Rarely / Never”")
   expect_equal(nrow(edit_service_cards(entity, snap, "")), 0)
@@ -144,7 +144,7 @@ test_that("an item's question and number are each in the scale once", {
   again <- form_for("question_scale", "add", scope = "1", question_scale__component_id = "9", question_scale__item_number = " 1 ")
   problems <- edit_service_check(again$fields, again$values)$problems
   expect_equal(problems$question_scale__component_id, "This question is already item 1 of this scale.")
-  expect_equal(problems$question_scale__item_number, "Item 1 of this scale is already “How often in the past week did you feel sad?”.")
+  expect_equal(problems$question_scale__item_number, "Item 1 of this scale is already “how often in the past week did you feel sad?”.")
 
   # a question can only be picked from the questions, not other blocks
   choices <- Filter(function(field) field$name == "component_id", again$fields)[[1]]$choices
@@ -161,7 +161,7 @@ test_that("adding an item to a scale is one row, named by its scale and question
     "Insert question_scale {\"component_id\":7,\"scale_id\":1} item_number: - -> 2a",
     "Insert question_scale {\"component_id\":7,\"scale_id\":1} expected_option_set_id: - -> 2"
   ))
-  expect_equal(built$summary, "Added “How often do you see a doctor?” to the measurement scale “Short Mood Scale” as item 2a")
+  expect_equal(built$summary, "Added “how often do you see a doctor?” to the measurement scale “Short Mood Scale” as item 2a")
 })
 
 test_that("an item keeps its question, and its number and expected choices can change", {
