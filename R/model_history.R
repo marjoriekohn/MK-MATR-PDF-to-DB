@@ -31,11 +31,9 @@ history_columns <- c(
   "edit:edit_draft(edit_kind,reach)"
 )
 
-#' Every applied change, newest first.
-#'
-#' @param connection The MATR database, `list(url, key)`; see `model_database.R`.
-#' @param most Only the newest this many (up to 1,000); all of them by default.
-#' @return A list of records, named by id; empty if nothing has been applied yet.
+# Every applied change, newest first.
+# most: Only the newest this many (up to 1,000); all of them by default.
+# Returns: A list of records, named by id; empty if nothing has been applied yet.
 history_model_get_all <- function(connection, most = Inf) {
   rows <- database_model_select(
     connection, history_table, history_columns,
@@ -46,12 +44,10 @@ history_model_get_all <- function(connection, most = Inf) {
   stats::setNames(records, vapply(records, function(record) record$id, character(1)))
 }
 
-#' The fields one applied change changed.
-#'
-#' @param connection The MATR database, `list(url, key)`; see `model_database.R`.
-#' @param id The applied draft's id: digits only.
-#' @return A data frame with `item_number`, `entity_name`, `record_identifier`, `action`,
-#'   `attribute_name`, `old_value` and `new_value`, in the order they were applied.
+# The fields one applied change changed.
+# id: The applied draft's id: digits only.
+# Returns: A data frame with `item_number`, `entity_name`, `record_identifier`, `action`,
+#   `attribute_name`, `old_value` and `new_value`, in the order they were applied.
 history_model_get_items <- function(connection, id) {
   if (!grepl("^[0-9]+$", id %||% "")) stop("There's no edit with that number.", call. = FALSE)
   database_model_get(
@@ -60,10 +56,7 @@ history_model_get_items <- function(connection, id) {
   )
 }
 
-#' The number of applied changes.
-#'
-#' @param connection The MATR database, `list(url, key)`; see `model_database.R`.
-#' @return A whole number.
+# The number of applied changes.
 history_model_count <- function(connection) {
   database_model_count(connection, history_table, filters = list(status = database_eq(history_applied_status)))
 }

@@ -15,7 +15,6 @@ test_that("whoever STAFF_EMAIL names is the person using the site, whatever its 
 test_that("the person's role comes with them", {
   admin <- local_staff("ADMIN")
   expect_equal(staff_service_current(test_connection, admin$email)$role, "ADMIN")
-  expect_true(all(staff_roles %in% c("STAFF", "ADMIN")))
 })
 
 test_that("STAFF_EMAIL is read from the environment by default", {

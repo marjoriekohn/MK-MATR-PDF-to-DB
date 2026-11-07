@@ -31,6 +31,28 @@ shared_catalog <- function(env = parent.frame()) {
   })
 }
 
+# The lookup tables (lookup_model_get_*: component types, subjects, time frames, answer options and their
+# aliases), read once for a test file and handed to every later read until the test ends. The tests don't add
+# to them, and test-service_lookup.R reads them from the database itself. A test that wants one read to fail
+# stubs it after this, so its stub is the one used.
+shared_lookups <- function(env = parent.frame()) {
+  if (!is_test_body(env)) {
+    return(invisible())
+  }
+  reads <- c(
+    "lookup_model_get_component_types", "lookup_model_get_subjects", "lookup_model_get_time_frames",
+    "lookup_model_get_answer_options", "lookup_model_get_answer_option_aliases"
+  )
+  tables <- file_shared(env, "lookups", function(file_env) {
+    stats::setNames(lapply(reads, function(read) get(read)(test_connection)), reads)
+  })
+  for (read in reads) local({
+    table <- tables[[read]]
+    local_stub(read, function(connection) table, env = env)
+  })
+  invisible()
+}
+
 # The same for a catalog that is given (the sample tables), for a page that never touches the database.
 fixed_catalog <- function(catalog = test_catalog()) {
   list(get = shiny::reactiveVal(catalog), refresh = function() invisible())

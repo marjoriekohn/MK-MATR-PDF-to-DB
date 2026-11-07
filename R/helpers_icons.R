@@ -65,22 +65,18 @@ app_icons <- c(
   block = "square"
 )
 
-#' An icon, by what it means.
-#'
-#' @param name A name in `app_icons`, e.g. `"delete"`.
-#' @param ... Passed to `shiny::icon()`, e.g. `class`.
-#' @return A UI element.
+# An icon, by what it means.
+# name: A name in `app_icons`, e.g. `"delete"`.
+# ...: Passed to `shiny::icon()`, e.g. `class`.
 app_icon <- function(name, ...) {
   if (!name %in% names(app_icons)) stop("No icon is named ", name, call. = FALSE)
   shiny::icon(app_icons[[name]], ...)
 }
 
-#' A button's icon and words. On a phone only the icon shows (`.btn-text`, _page.scss); the words stay for
-#' screen readers.
-#'
-#' @param icon_name A name in `app_icons`.
-#' @param text The words.
-#' @return A UI element.
+# A button's icon and words. On a phone only the icon shows (`.btn-text`, _page.scss); the words stay for
+# screen readers.
+# icon_name: A name in `app_icons`.
+# text: The words.
 icon_label <- function(icon_name, text) {
   tagList(app_icon(icon_name), span(class = "btn-text", text))
 }

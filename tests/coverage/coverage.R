@@ -47,6 +47,9 @@ read_code <- function(files) {
   env
 }
 
+# testthat's 3rd edition, as tests/testthat.R runs them (the site has no DESCRIPTION to say so).
+Sys.setenv(TESTTHAT_EDITION = "3")
+
 # covr runs each test file as a script, and the first test that failed would end the run. So it is
 # given one script instead, which has testthat run the folder (helpers first, as shiny::runTests()
 # does), carrying on past failures, in the environment covr has put the code in.

@@ -199,16 +199,13 @@ database_tables <- list(
 # What is read of a table: its columns, then what the database works out.
 table_read_columns <- function(spec) c(spec$columns, spec$derived)
 
-#' Read a whole table as the edit pages see it.
-#'
-#' Every row of `table`, with every column listed in `database_tables`, as the kinds
-#' described above (ids and numbers as numbers, flags as logical, the rest as text).
-#'
-#' @param connection The MATR database, `list(url, key)`; see `model_database.R`.
-#' @param table One of `names(database_tables)`.
-#' @param filters Only the rows that match, as for `database_model_get()`; the pages read whole tables.
-#' @return A data frame; an empty table comes back with its columns and no rows. An
-#'   error if the pages don't know the table.
+# Read a whole table as the edit pages see it.
+# Every row of `table`, with every column listed in `database_tables`, as the kinds
+# described above (ids and numbers as numbers, flags as logical, the rest as text).
+# table: One of `names(database_tables)`.
+# filters: Only the rows that match, as for `database_model_get()`; the pages read whole tables.
+# Returns: A data frame; an empty table comes back with its columns and no rows. An
+#   error if the pages don't know the table.
 table_model_get <- function(connection, table, filters = list()) {
   spec <- database_tables[[table]]
   if (is.null(spec)) stop("The edit pages don't know a table called ", table, ".", call. = FALSE)

@@ -11,11 +11,9 @@ test_env_names <- c(
   SUPABASE_PUBLISHABLE_KEY = "TEST_SUPABASE_PUBLISHABLE_KEY"
 )
 
-#' Points SUPABASE_URL, its keys and global.R's `database` at the test project.
-#'
-#' Called once as the tests start, and again after anything that reads .env (sourcing global.R does).
-#'
-#' @return Nothing; called for its effect.
+# Points SUPABASE_URL, its keys and global.R's `database` at the test project.
+# Called once as the tests start, and again after anything that reads .env (sourcing global.R does).
+# Returns: Nothing; called for its effect.
 use_test_database <- function() {
   values <- Sys.getenv(unname(test_env_names), unset = "")
   do.call(Sys.setenv, as.list(stats::setNames(values, names(test_env_names))))
@@ -45,10 +43,9 @@ options(
 )
 if (testthat::is_testing()) withr::defer(options(httr2_mock = NULL, matr.test_requests = NULL), envir = testthat::teardown_env())
 
-#' The requests made so far, their addresses decoded, e.g. `"GET https://….supabase.co/rest/v1/wave?select=wave_id,name"`.
-#'
-#' @param since Only those after the first `since` requests: `test_requests$count` before what to look at.
-#' @return A character vector, oldest first.
+# The requests made so far, their addresses decoded, e.g. `"GET https://….supabase.co/rest/v1/wave?select=wave_id,name"`.
+# since: Only those after the first `since` requests: `test_requests$count` before what to look at.
+# Returns: A character vector, oldest first.
 test_request_log <- function(since = 0L) {
   log <- utils::tail(test_requests$log, max(test_requests$count - since, 0L))
   vapply(log, utils::URLdecode, character(1), USE.NAMES = FALSE)
@@ -87,10 +84,8 @@ project_file <- function(...) {
 test_project_ref <- "rqygcjgftmtatzrzcwcf"
 real_project_ref <- "nvjyiaehomrysoprfuyl"
 
-#' Whether an address is one the tests may write to: the test project, or a database on this computer.
-#'
-#' @param url A Supabase address.
-#' @return `TRUE` or `FALSE`.
+# Whether an address is one the tests may write to: the test project, or a database on this computer.
+# url: A Supabase address.
 is_test_database <- function(url) {
   url <- tolower(trimws(url %||% ""))
   if (grepl(real_project_ref, url, fixed = TRUE)) {
@@ -138,8 +133,10 @@ makeActiveBinding("test_connection", function() {
 }, environment())
 
 # ------ Marked rows ------------------------------------------------------------------------------------------
-# One marker for the whole run, and a counter so two rows never share a name.
-test_marker <- paste0("ZZTEST", format(Sys.time(), "%d%H%M"), paste(sample(letters, 2), collapse = ""))
+# One marker for the whole run, and a counter so two rows never share a name. When the files run in several
+# processes at once (tests/testthat.R), each is given its own marker, all the same length so none starts another,
+# since a process removes what its marker names when it ends.
+test_marker <- Sys.getenv("TEST_RUN_MARKER", paste0("ZZTEST", format(Sys.time(), "%d%H%M"), paste(sample(letters, 2), collapse = "")))
 test_counter <- local({
   n <- 0L
   function() {
@@ -148,13 +145,12 @@ test_counter <- local({
   }
 })
 
-#' A name for a row a test makes: the marker, then what it is.
-#'
-#' @param what Words saying what it is, e.g. `"Study"`.
-#' @return A string like `"ZZTEST0712ab Study 7"`; different every time.
+# A name for a row a test makes: the marker, then what it is.
+# what: Words saying what it is, e.g. `"Study"`.
+# Returns: A string like `"ZZTEST0712ab Study 7"`; different every time.
 test_name <- function(what = "row") paste(test_marker, what, test_counter())
 
-#' An abbreviation no other row has: the marker and a number, e.g. `"ZZTEST0712ab-7"`.
+# An abbreviation no other row has: the marker and a number, e.g. `"ZZTEST0712ab-7"`.
 test_abbreviation <- function() paste0(test_marker, "-", test_counter())
 
 # ------ Removing rows ----------------------------------------------------------------------------------------
@@ -211,37 +207,17 @@ test_delete_in <- function(table, column, ids) {
   }
 }
 
-# The rows with these keys (each a named list of column to value), a hundred to a request.
-test_delete_keys <- function(table, keys) {
-  for (chunk in split(keys, ceiling(seq_along(keys) / 100))) {
-    clauses <- vapply(chunk, function(key) {
-      paste0("and(", paste0(names(key), ".eq.", unlist(key), collapse = ","), ")")
-    }, character(1))
-    test_delete(table, list(or = paste0("(", paste(clauses, collapse = ","), ")")))
-  }
-}
-
-# The ids a read of `table` found, for a filter written as `list(column = "eq.value")`.
-test_ids <- function(table, column, filters) {
-  rows <- database_model_get(test_connection, table, column, order_by = column, filters = filters)
-  rows[[column]]
-}
-
-#' Remove staff members a test made, and every draft that involves them, applied ones and their history too.
-#'
-#' One request, to the test project's own function (tests/database/test_functions.sql): the database
-#' otherwise keeps both staff and applied drafts for good.
-#'
-#' @param staff_ids The staff members' ids.
-#' @return Called for its effect.
+# Remove staff members a test made, and every draft that involves them, applied ones and their history too.
+# One request, to the test project's own function (tests/database/test_functions.sql): the database
+# otherwise keeps both staff and applied drafts for good.
+# staff_ids: The staff members' ids.
 test_remove_staff <- function(staff_ids) test_forget_staff(staff_ids, remove_staff = TRUE)
 
-#' Ask the test project's own function to remove the drafts that involve staff the tests made.
-#'
-#' @param staff_ids The staff members' ids; only those named with a ZZTEST marker are touched.
-#' @param marker Or the start of their names, e.g. the run's marker.
-#' @param remove_staff Whether the staff members go too.
-#' @return What was removed: counts of `staff`, `drafts` and `applied_items`.
+# Ask the test project's own function to remove the drafts that involve staff the tests made.
+# staff_ids: The staff members' ids; only those named with a ZZTEST marker are touched.
+# marker: Or the start of their names, e.g. the run's marker.
+# remove_staff: Whether the staff members go too.
+# Returns: What was removed: counts of `staff`, `drafts` and `applied_items`.
 test_forget_staff <- function(staff_ids = NULL, marker = NULL, remove_staff = FALSE) {
   arguments <- list(p_remove_staff = remove_staff)
   if (length(staff_ids) > 0) arguments$p_staff_ids <- as.list(as.numeric(staff_ids))
@@ -263,47 +239,25 @@ test_functions_missing <- paste(
   "once in its SQL Editor (https://supabase.com/dashboard/project/rqygcjgftmtatzrzcwcf/sql)."
 )
 
-#' Remove the rows an applied change added to the live tables.
-#'
-#' The applied draft lists every row it added, with the numbers the database gave them, so what a test
-#' added by applying an edit or pushing an extraction is removed from the list: the rows added last first,
-#' since they point at the ones before. The applied draft itself and its items stay (see the top of this file).
-#' Several applied drafts are removed together: one read of their items, and one request for each table.
-#'
-#' @param history_ids The applied drafts' ids.
-#' @return Called for its effect.
+# Remove the rows an applied change added to the live tables.
+# The applied draft lists every row it added, with the numbers the database gave them, so what a test
+# added by applying an edit or pushing an extraction is removed from the list, in one request to the test
+# project's own function (tests/database/test_functions.sql), which removes the rows that point at others
+# first. The applied draft itself and its items stay (see the top of this file).
+# history_ids: The applied drafts' ids.
 test_remove_applied <- function(history_ids) {
   history_ids <- unique(as.character(history_ids))
   if (length(history_ids) == 0) {
     return(invisible())
   }
-  items <- database_model_get(
-    test_connection, history_item_table, c("item_number", "entity_name", "record_identifier", "action"),
-    order_by = c("draft_id", "item_number"), filters = list(draft_id = database_in(history_ids))
+  tryCatch(
+    database_model_call(test_connection, "test_remove_applied", list(p_draft_ids = as.list(as.numeric(history_ids)))),
+    error = function(problem) {
+      if (!grepl("test_remove_applied", conditionMessage(problem), fixed = TRUE)) stop(problem)
+      stop(test_functions_missing, call. = FALSE)
+    }
   )
-  added <- unique(items[items$action %in% "Insert", c("entity_name", "record_identifier")])
-  for (table in test_removal_order(unique(added$entity_name))) {
-    # an edit's item names one row; an extraction's line for a table lists every row it added there
-    keys <- unlist(lapply(added$record_identifier[added$entity_name == table], function(identifier) {
-      key <- jsonlite::fromJSON(identifier, simplifyVector = FALSE)
-      if (is.null(names(key))) key else list(key)
-    }), recursive = FALSE)
-    test_delete_keys(table, keys)
-  }
-}
-
-# The tables an edit can add to, children before the rows they point at. A variable's subtype row and its choices
-# (and their counts of respondents) are not listed: they go with the variable (on delete cascade), and the database
-# wants a variable and its subtype removed in one statement. A question row goes with its component the same way.
-test_table_order <- c(
-  "variable", "answer_option_set", "option_set", "answer_option",
-  "wave_question", "questionnaire_question", "question_category", "question_scale",
-  "questionnaire_component", "component",
-  "wave", "questionnaire", "study", "registry", "principal_investigator", "respondent_type", "subject",
-  "category", "measurement_scale"
-)
-test_removal_order <- function(tables) {
-  c(intersect(test_table_order, tables), setdiff(tables, c(test_table_order, "open_ended", "closed_ended", "response_option", "response_option_count", "question")))
+  invisible()
 }
 
 # A test that crashed before its own cleanup ran may have left staff and their drafts: when the run ends, one
@@ -364,11 +318,10 @@ file_shared <- function(test_env, name, make) {
 # review, or submitted or sent back (their reviews and history go with the drafts). One request for them all.
 test_clear_drafts <- function(staff_ids) test_forget_staff(staff_ids)
 
-#' The file's staff members, handed out in turn to each test that asks (see the top of this section).
-#'
-#' @param role `"STAFF"` or `"ADMIN"`.
-#' @param test_env The test's environment.
-#' @return As `local_staff()`.
+# The file's staff members, handed out in turn to each test that asks (see the top of this section).
+# role: `"STAFF"` or `"ADMIN"`.
+# test_env: The test's environment.
+# Returns: As `local_staff()`.
 pooled_staff <- function(role, test_env) {
   pool <- file_shared(test_env, "staff", function(file_env) {
     pool <- new.env()
@@ -394,10 +347,8 @@ pooled_staff <- function(role, test_env) {
   person
 }
 
-#' The file's tree, shared by its tests that only read it (see the top of this section).
-#'
-#' @param env The test's environment.
-#' @return As `local_tree()`.
+# The file's tree, shared by its tests that only read it (see the top of this section).
+# Returns: As `local_tree()`.
 shared_tree <- function(env = parent.frame()) {
   if (!is_test_body(env)) {
     return(local_tree(env = env))
@@ -405,16 +356,14 @@ shared_tree <- function(env = parent.frame()) {
   file_shared(env, "tree", function(file_env) local_tree(env = file_env))
 }
 
-#' A staff member for the test.
-#'
-#' Inside a test, one of the file's shared staff members unless a name is given or they are inactive; see
-#' the top of this section.
-#'
-#' @param role `"STAFF"` or `"ADMIN"`.
-#' @param active Whether they are active.
-#' @param name Their name; marked and numbered if not given.
-#' @param env The test's environment, where they are removed again.
-#' @return What the site calls `me`: `list(staff_id, name, role)`, and their `email`.
+# A staff member for the test.
+# Inside a test, one of the file's shared staff members unless a name is given or they are inactive; see
+# the top of this section.
+# role: `"STAFF"` or `"ADMIN"`.
+# active: Whether they are active.
+# name: Their name; marked and numbered if not given.
+# env: The test's environment, where they are removed again.
+# Returns: What the site calls `me`: `list(staff_id, name, role)`, and their `email`.
 local_staff <- function(role = "STAFF", active = TRUE, name = NULL, env = parent.frame()) {
   if (isTRUE(active) && is.null(name) && is_test_body(env)) {
     return(pooled_staff(role, env))
@@ -465,12 +414,10 @@ local_wave <- function(questionnaire, name = test_name("Wave"), env = parent.fra
   local_row("wave", list(questionnaire_id = questionnaire$questionnaire_id, name = name), "wave_id", env)
 }
 
-#' A registry with a study, a questionnaire and a wave: what an extraction is added to.
-#'
-#' Made in one request and removed in one, by the test project's own functions (tests/database/test_functions.sql).
-#'
-#' @param env The test's environment, where it is removed again.
-#' @return A list of the rows: `registry`, `investigator`, `study`, `respondent_type`, `questionnaire`, `wave`.
+# A registry with a study, a questionnaire and a wave: what an extraction is added to.
+# Made in one request and removed in one, by the test project's own functions (tests/database/test_functions.sql).
+# env: The test's environment, where it is removed again.
+# Returns: A list of the rows: `registry`, `investigator`, `study`, `respondent_type`, `questionnaire`, `wave`.
 local_tree <- function(env = parent.frame()) {
   tree <- tryCatch(
     database_model_call(test_connection, "test_make_tree", list(p_marker = test_marker)),
@@ -481,6 +428,12 @@ local_tree <- function(env = parent.frame()) {
   )
   withr::defer(database_model_call(test_connection, "test_forget_tree", list(p_tree = tree)), envir = env)
   tree
+}
+
+# One draft's shared row as the database keeps it (the site reads it only with its details, as a record), or NULL.
+draft_row_model_get <- function(connection, id) {
+  rows <- database_model_select(connection, draft_table, draft_columns, filters = draft_row_filter(id))
+  if (length(rows) > 0) rows[[1]]
 }
 
 # Removes what an applied edit added when the test ends. Call it as soon as the edit is applied.

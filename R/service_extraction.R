@@ -24,44 +24,33 @@ extraction_pending_statuses <- c(extraction_open_statuses, "Awaiting Review")
 # Where an extraction goes: the IDs of a recorded registry, study, questionnaire and wave.
 extraction_info_fields <- c("registry_id", "study_id", "questionnaire_id", "wave_id")
 
-#' Every extraction draft, newest saved first.
-#'
-#' @param connection The MATR database, `list(url, key)`; see `model_database.R`.
-#' @return A list of records named by id; see `extraction_model_get_all()`.
+# Every extraction draft, newest saved first.
+# Returns: A list of records named by id; see `extraction_model_get_all()`.
 extraction_service_get_all <- function(connection) {
   extraction_model_get_all(connection)
 }
 
-#' Whether a draft this staff member started is being read.
-#'
-#' While one is, the site reads the drafts again every few seconds, so they see how far the reading job
-#' has got; otherwise it only reads them when asked (a page opened, Refresh).
-#'
-#' @param records The extraction records, from `extraction_service_get_all()`.
-#' @param me Who is using the site: `list(staff_id, name, role)`.
-#' @return `TRUE` or `FALSE`.
+# Whether a draft this staff member started is being read.
+# While one is, the site reads the drafts again every few seconds, so they see how far the reading job
+# has got; otherwise it only reads them when asked (a page opened, Refresh).
+# records: The extraction records, from `extraction_service_get_all()`.
 extraction_service_is_reading <- function(records, me) {
   mine <- extraction_service_open_drafts(records, prepared_by_id = me$staff_id)
   any(vapply(mine, function(record) isTRUE(record$extraction_status %in% reading_statuses), logical(1)))
 }
 
-#' The drafts still being prepared: not yet submitted, or sent back.
-#'
-#' @param records A list of extraction records.
-#' @param prepared_by_id Only those prepared by this staff member, if given.
-#' @return The matching records.
+# The drafts still being prepared: not yet submitted, or sent back.
+# records: A list of extraction records.
 extraction_service_open_drafts <- function(records, prepared_by_id = NULL) {
   draft_row_service_open(records, extraction_open_statuses, prepared_by_id)
 }
 
-#' A record's info with every field present.
-#'
-#' Only the four picks are read: what drafts saved before the form was cut down to them also hold (a
-#' new questionnaire's or new wave's name, and the like) is left out, so such a draft asks for the
-#' questionnaire or wave to be picked again.
-#'
-#' @param record An extraction record, as `extraction_model_get_all()` returns it. `NULL` for an empty form.
-#' @return A named list of strings, one per field in `extraction_info_fields`, blanks as `""`.
+# A record's info with every field present.
+# Only the four picks are read: what drafts saved before the form was cut down to them also hold (a
+# new questionnaire's or new wave's name, and the like) is left out, so such a draft asks for the
+# questionnaire or wave to be picked again.
+# record: An extraction record, as `extraction_model_get_all()` returns it. `NULL` for an empty form.
+# Returns: A named list of strings, one per field in `extraction_info_fields`, blanks as `""`.
 extraction_service_info <- function(record = NULL) {
   info <- lapply(extraction_info_fields, function(field) {
     value <- record$info[[field]]
@@ -70,13 +59,11 @@ extraction_service_info <- function(record = NULL) {
   stats::setNames(info, extraction_info_fields)
 }
 
-#' An extraction's Basic Info, as the Change Requests form holds it.
-#'
-#' The form picks a recorded registry, study, questionnaire and wave (one that asks no questions yet);
-#' anything new is added from its drop-down first, so its "+ Add new …" choice isn't a pick.
-#'
-#' @param info Where it goes, as `extraction_service_info()` returns it, or the form's picks.
-#' @return `info`, in the same shape, with "+ Add new …" as blank.
+# An extraction's Basic Info, as the Change Requests form holds it.
+# The form picks a recorded registry, study, questionnaire and wave (one that asks no questions yet);
+# anything new is added from its drop-down first, so its "+ Add new …" choice isn't a pick.
+# info: Where it goes, as `extraction_service_info()` returns it, or the form's picks.
+# Returns: `info`, in the same shape, with "+ Add new …" as blank.
 extraction_service_basic_info <- function(info) {
   basic <- lapply(extraction_info_fields, function(field) {
     value <- as.character(info[[field]] %||% "")
@@ -85,15 +72,11 @@ extraction_service_basic_info <- function(info) {
   stats::setNames(basic, extraction_info_fields)
 }
 
-#' Fill in the study and registry a recorded questionnaire belongs to.
-#'
-#' A recorded questionnaire says which study and registry it belongs to, so they are
-#' filled in from it when blank (as in drafts saved before the form asked for them), and
-#' the questionnaire stays among the drop-down's choices.
-#'
-#' @param info Where it goes in the database, as `extraction_service_info()` returns it.
-#' @param catalog The live tables the pages pick from, from `questionnaire_service_get_catalog()`.
-#' @return `info`, with `study_id` and `registry_id` filled in where they were blank.
+# Fill in the study and registry a recorded questionnaire belongs to.
+# A recorded questionnaire says which study and registry it belongs to, so they are
+# filled in from it when blank (as in drafts saved before the form asked for them), and
+# the questionnaire stays among the drop-down's choices.
+# Returns: `info`, with `study_id` and `registry_id` filled in where they were blank.
 extraction_service_place <- function(info, catalog) {
   questionnaire <- questionnaire_service_get(catalog, info$questionnaire_id)
   if (!is.null(questionnaire) && !nzchar(info$study_id)) {
@@ -104,27 +87,19 @@ extraction_service_place <- function(info, catalog) {
   info
 }
 
-#' Whether the questionnaire is there to review.
-#'
-#' @param record An extraction record, as `extraction_model_get_all()` returns it.
-#' @return `TRUE` when the reading job has finished the draft, and for an extraction typed by
-#'   hand, which has nothing to wait for.
+# Whether the questionnaire is there to review.
+# Returns: `TRUE` when the reading job has finished the draft, and for an extraction typed by
+#   hand, which has nothing to wait for.
 extraction_service_is_read <- function(record) {
   identical(record$method, extraction_manual) || identical(record$extraction_status, "ready")
 }
 
 # ------ Changing a draft -----------------------------------------------------------
-#' Start an AI-Powered draft for an uploaded PDF.
-#'
-#' Reading starts at once; what staff typed before uploading comes with it. A file that
-#' isn't a PDF is turned away with a sentence.
-#'
-#' @param connection The MATR database, `list(url, key)`; see `model_database.R`.
-#' @param upload One row of a `fileInput`'s value: `name`, `size`, `datapath`.
-#' @param staff Who is preparing it: `list(staff_id, name, role)`.
-#' @param info Where it goes in the database, as `extraction_service_info()` returns it.
-#' @param now The time to record.
-#' @return The record as saved, with its id.
+# Start an AI-Powered draft for an uploaded PDF.
+# Reading starts at once; what staff typed before uploading comes with it. A file that
+# isn't a PDF is turned away with a sentence.
+# upload: One row of a `fileInput`'s value: `name`, `size`, `datapath`.
+# staff: Who is preparing it: `list(staff_id, name, role)`.
 extraction_service_create <- function(connection, upload, staff,
                                       info = extraction_service_info(), now = Sys.time(), supplement = NULL) {
   record <- list(
@@ -147,17 +122,11 @@ extraction_service_create <- function(connection, upload, staff,
   extraction_model_create(connection, record)
 }
 
-#' Start a Manual draft: the questionnaire is typed by hand.
-#'
-#' There is no reading. The PDF is optional: if staff give one, it is kept with the draft so the
-#' Edit Extraction page can show it beside what they type. The questionnaire starts empty.
-#'
-#' @param connection The MATR database, `list(url, key)`; see `model_database.R`.
-#' @param staff Who is preparing it: `list(staff_id, name, role)`.
-#' @param info Where it goes in the database, as `extraction_service_info()` returns it.
-#' @param upload One row of a `fileInput`'s value: `name`, `size`, `datapath`; or `NULL` for none.
-#' @param now The time to record.
-#' @return The record as saved, with its id.
+# Start a Manual draft: the questionnaire is typed by hand.
+# There is no reading. The PDF is optional: if staff give one, it is kept with the draft so the
+# Edit Extraction page can show it beside what they type. The questionnaire starts empty.
+# staff: Who is preparing it: `list(staff_id, name, role)`.
+# upload: One row of a `fileInput`'s value: `name`, `size`, `datapath`; or `NULL` for none.
 extraction_service_create_manual <- function(connection, staff, info = extraction_service_info(),
                                              upload = NULL, now = Sys.time()) {
   record <- list(
@@ -175,26 +144,18 @@ extraction_service_create_manual <- function(connection, staff, info = extractio
   extraction_model_create(connection, record)
 }
 
-#' Read a draft again.
-#'
-#' @param connection The MATR database, `list(url, key)`; see `model_database.R`.
-#' @param id The draft's id.
-#' @param me Who asks: `list(staff_id, name, role)`.
-#' @return The record as saved.
+# Read a draft again.
+# me: Who asks: `list(staff_id, name, role)`.
+# Returns: The record as saved.
 extraction_service_retry <- function(connection, id, me) {
   change_record(connection, id, me, restart_reading, new_revision = FALSE)
 }
 
-#' The reading job saying how far it has got.
-#'
-#' If reading has started again since the job began ("Try reading again"),
-#' its news is stale and nothing is saved.
-#'
-#' @param connection The MATR database, `list(url, key)`; see `model_database.R`.
-#' @param id The draft's id.
-#' @param reading_started The reading's start time the job was started for.
-#' @param changes A named list of record fields to their new values.
-#' @return Whether it was saved.
+# The reading job saying how far it has got.
+# If reading has started again since the job began ("Try reading again"),
+# its news is stale and nothing is saved.
+# changes: A named list of record fields to their new values.
+# Returns: Whether it was saved.
 extraction_service_reading_update <- function(connection, id, reading_started, changes) {
   record <- extraction_model_get(connection, id)
   if (!identical(record$reading_started, reading_started)) {
@@ -203,14 +164,10 @@ extraction_service_reading_update <- function(connection, id, reading_started, c
   extraction_model_save_reading(connection, id, changes, reading_started)
 }
 
-#' Discard a draft: it is deleted from the database, with its PDF when no other draft uses the file.
-#'
-#' Nobody has to approve it, but only the person who prepared it can, and not once it is applied.
-#'
-#' @param connection The MATR database, `list(url, key)`; see `model_database.R`.
-#' @param id The draft's id.
-#' @param me Who discards it: `list(staff_id, name, role)`.
-#' @return Called for its effect. An error with a sentence if the database refused.
+# Discard a draft: it is deleted from the database, with its PDF when no other draft uses the file.
+# Nobody has to approve it, but only the person who prepared it can, and not once it is applied.
+# me: Who discards it: `list(staff_id, name, role)`.
+# Returns: Called for its effect. An error with a sentence if the database refused.
 extraction_service_discard <- function(connection, id, me) {
   record <- extraction_model_get(connection, id)
   extraction_model_discard(connection, id, me$staff_id)
@@ -218,15 +175,11 @@ extraction_service_discard <- function(connection, id, me) {
   invisible()
 }
 
-#' Remove a discarded draft's PDF from Storage when no other draft, and no wave, uses the file. An applied
-#' extraction keeps its files: its wave names them (wave_file).
-#'
-#' The draft is already gone, so a file that can't be removed only stays behind in Storage: that is a
-#' warning in the log, not an error.
-#'
-#' @param connection The MATR database, `list(url, key)`; see `model_database.R`.
-#' @param record The draft's record, as it was.
-#' @return Called for its effect.
+# Remove a discarded draft's PDF from Storage when no other draft, and no wave, uses the file. An applied
+# extraction keeps its files: its wave names them (wave_file).
+# The draft is already gone, so a file that can't be removed only stays behind in Storage: that is a
+# warning in the log, not an error.
+# record: The draft's record, as it was.
 extraction_service_forget_pdf <- function(connection, record) {
   for (sha256 in c(record$pdf$sha256, record$supplement$sha256)) {
     tryCatch(
@@ -246,12 +199,9 @@ extraction_service_forget_pdf <- function(connection, record) {
 # What the file can be, by its name's ending: a PDF, or text.
 supplement_text_types <- c("csv", "tsv", "txt")
 
-#' A draft's file of MATR IDs and codes, ready to send to Gemini.
-#'
-#' @param connection The MATR database, `list(url, key)`; see `model_database.R`.
-#' @param id The draft's id.
-#' @return `list(name, path)` for a PDF (on this server, fetched from Storage if need be), `list(name, text)`
-#'   for text, or `NULL` for none. An error with a sentence if the PDF can't be found.
+# A draft's file of MATR IDs and codes, ready to send to Gemini.
+# Returns: `list(name, path)` for a PDF (on this server, fetched from Storage if need be), `list(name, text)`
+#   for text, or `NULL` for none. An error with a sentence if the PDF can't be found.
 extraction_service_supplement_file <- function(connection, id) {
   supplement <- extraction_model_supplement(connection, id)
   if (is.null(supplement)) {
@@ -266,25 +216,17 @@ extraction_service_supplement_file <- function(connection, id) {
 }
 
 # ------ The questionnaire it read ----------------------------------------------------
-#' A draft's questionnaire.
-#'
-#' The reviewed copy if staff have saved one, else what the reading job returned.
-#'
-#' @param connection The MATR database, `list(url, key)`; see `model_database.R`.
-#' @param record An extraction record, as `extraction_model_get_all()` returns it.
-#' @return A draft; see `draft_service_load()`.
+# A draft's questionnaire.
+# The reviewed copy if staff have saved one, else what the reading job returned.
+# Returns: A draft; see `draft_service_load()`.
 extraction_service_load_draft <- function(connection, record) {
   draft_service_load(connection, record$id)
 }
 
-#' A draft's questionnaire, for the Edit Extraction page, with what the AI returned to compare it with.
-#'
-#' Both are read at once. What the AI returned is read only when the draft opens, since it never changes.
-#'
-#' @param connection The MATR database, `list(url, key)`; see `model_database.R`.
-#' @param record An extraction record, as `extraction_model_get_all()` returns it.
-#' @return A list: `draft` (see `extraction_service_load_draft()`) and `original`, what the AI returned
-#'   as a draft (`NULL` for a Manual extraction). An error if reading hasn't finished.
+# A draft's questionnaire, for the Edit Extraction page, with what the AI returned to compare it with.
+# Both are read at once. What the AI returned is read only when the draft opens, since it never changes.
+# Returns: A list: `draft` (see `extraction_service_load_draft()`) and `original`, what the AI returned
+#   as a draft (`NULL` for a Manual extraction). An error if reading hasn't finished.
 extraction_service_open_draft <- function(connection, record) {
   json <- draft_model_get_both(connection, record$id)
   if (is.null(json$questionnaire %||% json$original)) stop("This draft hasn't been read yet.", call. = FALSE)
@@ -294,20 +236,17 @@ extraction_service_open_draft <- function(connection, record) {
   )
 }
 
-#' Save staff's reviewed copy of the questionnaire.
-#'
-#' For an AI-Powered extraction it also keeps how the copy differs from what the AI returned (see
-#' `draft_service_review_edits()`), in place of what was kept before; the AI's answer is never touched.
-#'
-#' @param connection The MATR database, `list(url, key)`; see `model_database.R`.
-#' @param record The extraction draft's record.
-#' @param draft A draft, as the Edit Extraction page edits it.
-#' @param original What the AI returned, from `extraction_service_open_draft()`; `NULL` for a Manual
-#'   extraction, which keeps no differences.
-#' @param me Who is saving: `list(staff_id, name, role)`.
-#' @param expected_revision The revision the page opened (or last saved): the save is refused if
-#'   someone else saved the draft since, so nobody's work is overwritten. `NULL` skips the check.
-#' @return The draft's revision after the save, invisibly. An error with a sentence if it was refused.
+# Save staff's reviewed copy of the questionnaire.
+# For an AI-Powered extraction it also keeps how the copy differs from what the AI returned (see
+# `draft_service_review_edits()`), in place of what was kept before; the AI's answer is never touched.
+# record: The extraction draft's record.
+# draft: A draft, as the Edit Extraction page edits it.
+# original: What the AI returned, from `extraction_service_open_draft()`; `NULL` for a Manual
+#   extraction, which keeps no differences.
+# me: Who is saving: `list(staff_id, name, role)`.
+# expected_revision: The revision the page opened (or last saved): the save is refused if
+#   someone else saved the draft since, so nobody's work is overwritten. `NULL` skips the check.
+# Returns: The draft's revision after the save, invisibly. An error with a sentence if it was refused.
 extraction_service_save_draft <- function(connection, record, draft, original, me, expected_revision = NULL) {
   edits <- if (!is.null(original)) draft_service_review_edits(original, draft)
   draft_service_save(connection, record$id, draft, me$staff_id, edits, expected_revision)
@@ -327,11 +266,9 @@ reading_steps <- data.frame(
   )
 )
 
-#' How far reading the PDF has got, as the Extraction page lists it.
-#'
-#' @param record An extraction record, as `extraction_model_get_all()` returns it.
-#' @return A data frame with `label`, `detail` and `state` (`done`, `in_progress`,
-#'   `not_started` or `attention`), one row per step.
+# How far reading the PDF has got, as the Extraction page lists it.
+# Returns: A data frame with `label`, `detail` and `state` (`done`, `in_progress`,
+#   `not_started` or `attention`), one row per step.
 extraction_service_reading_steps <- function(record) {
   status <- record$extraction_status
   steps <- reading_steps
@@ -365,14 +302,11 @@ extraction_service_reading_steps <- function(record) {
   steps
 }
 
-#' The steps on each Extraction Drafts card.
-#'
-#' How it was read (or that it was typed by hand), and how much of it has been checked on the Edit
-#' Extraction page, as the page's own "N% human-reviewed" counts it.
-#'
-#' @param record An extraction record, as `extraction_model_get_all()` returns it.
-#' @param draft The questionnaire it read, or `NULL` until reading has finished.
-#' @return A data frame with `label` and `state`, one row per step.
+# The steps on each Extraction Drafts card.
+# How it was read (or that it was typed by hand), and how much of it has been checked on the Edit
+# Extraction page, as the page's own "N% human-reviewed" counts it.
+# draft: The questionnaire it read, or `NULL` until reading has finished.
+# Returns: A data frame with `label` and `state`, one row per step.
 extraction_service_progress <- function(record, draft = NULL) {
   rbind(
     reading_progress(record),
@@ -412,23 +346,18 @@ count_state <- function(n_done, n_total) {
 }
 
 # ------ Naming ---------------------------------------------------------------------
-#' A card's title: where it goes, once that is picked on Change Requests; until then the PDF's file name.
-#'
-#' The name the AI read off the PDF isn't used: it is often a heading inside the questionnaire.
-#'
-#' @param record An extraction record, as `extraction_model_get_all()` returns it.
-#' @param catalog The live tables the pages pick from, from `questionnaire_service_get_catalog()`.
-#' @param read Not used; kept so callers can pass the draft's questionnaire.
-#' @return A string such as `"Adult Health and Personality (AHP) · Wave 3"`.
-extraction_service_title <- function(record, catalog, read = NULL) {
+# A card's title: where it goes, once that is picked on Change Requests; until then the PDF's file name.
+# The name the AI read off the PDF isn't used: it is often a heading inside the questionnaire.
+# Returns: A string such as `"Adult Health and Personality (AHP) · Wave 3"`.
+extraction_service_title <- function(record, catalog) {
   info <- extraction_service_info(record)
-  questionnaire <- extraction_service_questionnaire(info, catalog)
+  questionnaire <- questionnaire_service_get(catalog, info$questionnaire_id) # NULL if none is picked yet
   wave <- extraction_service_wave_name(info, catalog)
   if (is.null(questionnaire) && !nzchar(wave)) {
     return(record$pdf$name %||% "Untitled questionnaire")
   }
   paste(c(
-    if (!is.null(questionnaire)) questionnaire_name(questionnaire$name, questionnaire$abbreviation) else "Unnamed questionnaire",
+    if (!is.null(questionnaire)) name_with_abbreviation(questionnaire$name, questionnaire$abbreviation) else "Unnamed questionnaire",
     if (nzchar(wave)) wave
   ), collapse = " · ")
 }
@@ -439,18 +368,13 @@ extraction_service_wave_name <- function(info, catalog) {
   if (nrow(wave) == 1) trimws(wave$name) else ""
 }
 
-#' The Edit Extraction page's heading.
-#'
-#' Until staff say where it goes on Change Requests, it goes by the PDF's file name (the name the AI read off
-#' the PDF is often a heading inside it), or "Unnamed questionnaire" for one typed by hand without a PDF.
-#'
-#' @param record An extraction record, as `extraction_model_get_all()` returns it.
-#' @param catalog The live tables the pages pick from, from `questionnaire_service_get_catalog()`.
-#' @param read Not used; kept so callers can pass the draft's questionnaire.
-#' @return A list: `title` (e.g. `"AHP · Wave 3"`) and `subtitle` (the full name, or `""`).
-extraction_service_heading <- function(record, catalog, read = NULL) {
+# The Edit Extraction page's heading.
+# Until staff say where it goes on Change Requests, it goes by the PDF's file name (the name the AI read off
+# the PDF is often a heading inside it), or "Unnamed questionnaire" for one typed by hand without a PDF.
+# Returns: A list: `title` (e.g. `"AHP · Wave 3"`) and `subtitle` (the full name, or `""`).
+extraction_service_heading <- function(record, catalog) {
   info <- extraction_service_info(record)
-  questionnaire <- extraction_service_questionnaire(info, catalog)
+  questionnaire <- questionnaire_service_get(catalog, info$questionnaire_id) # NULL if none is picked yet
   name <- trimws(questionnaire$name %||% "")
   abbreviation <- trimws(questionnaire$abbreviation %||% "")
   short_name <- if (nzchar(abbreviation)) abbreviation else if (nzchar(name)) name else record$pdf$name %||% "Unnamed questionnaire"
@@ -461,36 +385,17 @@ extraction_service_heading <- function(record, catalog, read = NULL) {
   )
 }
 
-# The recorded questionnaire picked, or NULL if none is picked yet.
-extraction_service_questionnaire <- function(info, catalog) {
-  questionnaire_service_get(catalog, info$questionnaire_id)
-}
-
-questionnaire_name <- function(name, abbreviation) {
-  if (!nzchar(name)) {
-    return(abbreviation)
-  }
-  if (!nzchar(abbreviation)) {
-    return(name)
-  }
-  paste0(name, " (", abbreviation, ")")
-}
 
 # ------ Checks on what staff picked ---------------------------------------------------
-#' The Basic Info fields still blank.
-#'
-#' The form goes registry, study, questionnaire, then one of the questionnaire's waves.
-#'
-#' @param info Where it goes, as `extraction_service_info()` returns it.
-#' @return The names of the fields, as sentences call them; empty if none.
+# The Basic Info fields still blank.
+# The form goes registry, study, questionnaire, then one of the questionnaire's waves.
+# Returns: The names of the fields, as sentences call them; empty if none.
 extraction_service_missing <- function(info) {
   unname(extraction_required_fields[extraction_service_missing_fields(info)])
 }
 
-#' The Basic Info fields still blank, by their names in `extraction_info_fields`.
-#'
-#' @param info Where it goes, as `extraction_service_info()` returns it.
-#' @return A character vector of field names, e.g. `c("registry_id", "wave_id")`.
+# The Basic Info fields still blank, by their names in `extraction_info_fields`.
+# Returns: A character vector of field names, e.g. `c("registry_id", "wave_id")`.
 extraction_service_missing_fields <- function(info) {
   blank <- !vapply(names(extraction_required_fields), function(field) has_text(info[[field]]), logical(1))
   names(extraction_required_fields)[blank]
@@ -501,20 +406,16 @@ extraction_required_fields <- c(
   registry_id = "registry", study_id = "study", questionnaire_id = "questionnaire", wave_id = "wave"
 )
 
-#' A problem with the recorded wave an extraction goes into, or `NULL`.
-#'
-#' It has to be one of the questionnaire's waves, with no questions yet (an extraction adds every
-#' question the wave asks), and no other draft being prepared or waiting for approval may be going into
-#' it too.
-#'
-#' @param info Where it goes, as `extraction_service_info()` returns it.
-#' @param catalog The live tables the pages pick from, from `questionnaire_service_get_catalog()`.
-#' @param question_counts How many questions each of the questionnaire's waves asks: a named integer
-#'   vector by wave id (`questionnaire_service_wave_question_counts()`).
-#' @param records All the extraction records, to find other drafts going into the same wave.
-#' @param id This draft's id, so it doesn't clash with itself.
-#' @param me Who is using the site, `list(staff_id, name)`, so a clash with their own draft says "You".
-#' @return A sentence saying what to do, or `NULL`.
+# A problem with the recorded wave an extraction goes into, or `NULL`.
+# It has to be one of the questionnaire's waves, with no questions yet (an extraction adds every
+# question the wave asks), and no other draft being prepared or waiting for approval may be going into
+# it too.
+# question_counts: How many questions each of the questionnaire's waves asks: a named integer
+#   vector by wave id (`questionnaire_service_wave_question_counts()`).
+# records: All the extraction records, to find other drafts going into the same wave.
+# id: This draft's id, so it doesn't clash with itself.
+# me: Who is using the site, `list(staff_id, name)`, so a clash with their own draft says "You".
+# Returns: A sentence saying what to do, or `NULL`.
 extraction_service_recorded_wave_problem <- function(info, catalog, question_counts = integer(), records = list(),
                                                      id = NULL, me = NULL) {
   if (!has_text(info$wave_id)) {
@@ -542,24 +443,17 @@ extraction_service_recorded_wave_problem <- function(info, catalog, question_cou
   NULL
 }
 
-# Headings like matr_id, MATR ID, variable_id, variable, Variable name or id.
-matr_id_headings <- "^((matr|variable)[ _.]?(ids?|names?)?|ids?)$"
-
 # ------ What a recorded questionnaire prints already ----------------------------------------
-#' The blocks a recorded questionnaire prints, and its questions' MATR IDs.
-#'
-#' For the questionnaire an extraction goes into, the Edit Extraction page offers the blocks it already
-#' prints as suggestions while a block's words are typed, and a question with the same words as one the
-#' questionnaire already asks keeps its variables' MATR IDs (BR93: a MATR ID names the variable within its
-#' questionnaire), so they are filled in instead of asked for. Until a questionnaire is picked there is
-#' nothing.
-#'
-#' @param connection The MATR database, `list(url, key)`; see `model_database.R`.
-#' @param record An extraction record, as `extraction_model_get_all()` returns it.
-#' @param component_types The kinds of block with their ids; read from the database unless given.
-#' @return A list of two data frames: `texts` (`component_type`, `text`: one row per block the questionnaire
-#'   prints) and `matr_ids` (`text`, `matr_id`, `display_order`: one row per variable, with its question's
-#'   words and its place in the question). Both have no rows until a questionnaire is picked.
+# The blocks a recorded questionnaire prints, and its questions' MATR IDs.
+# For the questionnaire an extraction goes into, the Edit Extraction page offers the blocks it already
+# prints as suggestions while a block's words are typed, and a question with the same words as one the
+# questionnaire already asks keeps its variables' MATR IDs (BR93: a MATR ID names the variable within its
+# questionnaire), so they are filled in instead of asked for. Until a questionnaire is picked there is
+# nothing.
+# component_types: The kinds of block with their ids; read from the database unless given.
+# Returns: A list of two data frames: `texts` (`component_type`, `text`: one row per block the questionnaire
+#   prints) and `matr_ids` (`text`, `matr_id`, `display_order`: one row per variable, with its question's
+#   words and its place in the question). Both have no rows until a questionnaire is picked.
 extraction_service_recorded <- function(connection, record, component_types = NULL) {
   info <- extraction_service_info(record)
   if (!has_text(info$questionnaire_id)) {
@@ -570,11 +464,10 @@ extraction_service_recorded <- function(connection, record, component_types = NU
   extraction_service_printed(existing, component_types)
 }
 
-#' What a recorded questionnaire prints: its blocks' words, and its variables' MATR IDs by question.
-#'
-#' @param existing From `push_model_existing()`, or `NULL` for none.
-#' @param component_types The kinds of block with their ids; only needed for `texts`.
-#' @return A list of two data frames, `texts` and `matr_ids`; see `extraction_service_recorded()`.
+# What a recorded questionnaire prints: its blocks' words, and its variables' MATR IDs by question.
+# existing: From `push_model_existing()`, or `NULL` for none.
+# component_types: The kinds of block with their ids; only needed for `texts`.
+# Returns: A list of two data frames, `texts` and `matr_ids`; see `extraction_service_recorded()`.
 extraction_service_printed <- function(existing, component_types = NULL) {
   none <- list(
     texts = data.frame(component_type = character(), text = character()),
@@ -602,15 +495,11 @@ extraction_service_printed <- function(existing, component_types = NULL) {
   list(texts = texts, matr_ids = matr_ids[!is.na(matr_ids$text), , drop = FALSE])
 }
 
-#' A draft's PDF, on this server, to show or read.
-#'
-#' Fetched from Storage first if this server hasn't got it (a hosted site loses its disk when it
-#' restarts, and its servers don't share one).
-#'
-#' @param connection The MATR database, `list(url, key)`; see `model_database.R`.
-#' @param record An extraction record.
-#' @return The record's `pdf` with `path` where the file is on this server, or `NULL` if the draft has
-#'   no PDF or it can't be had (Storage can't be reached, or never had it). Never an error.
+# A draft's PDF, on this server, to show or read.
+# Fetched from Storage first if this server hasn't got it (a hosted site loses its disk when it
+# restarts, and its servers don't share one).
+# Returns: The record's `pdf` with `path` where the file is on this server, or `NULL` if the draft has
+#   no PDF or it can't be had (Storage can't be reached, or never had it). Never an error.
 extraction_service_pdf <- function(connection, record) {
   path <- tryCatch(extraction_model_local_pdf(connection, record$pdf$sha256), error = function(problem) NULL)
   if (!is.null(path)) utils::modifyList(record$pdf, list(path = path))

@@ -3,16 +3,17 @@
 # worked out by pure functions, tested here with data given to them, and added by the database, tested with a
 # real push that is removed again.
 
-test_marker <- "ZZTEST"
+# The marker in this file's sample words (not the run's test_marker: nothing here goes in the database).
+sample_marker <- "ZZTEST"
 
 # ------ A small questionnaire ------------------------------------------------------------------------------------
 # A section holding an instruction, a closed question and an open one. Every block's words carry the run's marker,
 # so what a push adds can be told from real data (and a push that wasn't cleaned up is noticed).
-small_draft <- function(question = paste(test_marker, "Do you smoke?"), labels = c("Yes", "No"), subject = "Self", matr = c("zz1", "zz2")) {
+small_draft <- function(question = paste(sample_marker, "Do you smoke?"), labels = c("Yes", "No"), subject = "Self", matr = c("zz1", "zz2")) {
   draft <- draft_service_from_json(list(
     questionnaire = list(name = "Small", abbreviation = "SM"),
-    components = list(list(component_type = "Section", display_order = 1, text = paste(test_marker, "Part A"), children = list(
-      list(component_type = "Instruction", display_order = 1, text = paste(test_marker, "Please answer.")),
+    components = list(list(component_type = "Section", display_order = 1, text = paste(sample_marker, "Part A"), children = list(
+      list(component_type = "Instruction", display_order = 1, text = paste(sample_marker, "Please answer.")),
       list(
         component_type = "Question", display_order = 2, text = question, printed_number = "1", self_contained = TRUE,
         variables = list(list(
@@ -21,12 +22,12 @@ small_draft <- function(question = paste(test_marker, "Do you smoke?"), labels =
         ))
       ),
       list(
-        component_type = "Question", display_order = 3, text = paste(test_marker, "How many?"), printed_number = "2", self_contained = TRUE,
+        component_type = "Question", display_order = 3, text = paste(sample_marker, "How many?"), printed_number = "2", self_contained = TRUE,
         variables = list(list(variable_type = "open_ended", display_order = 1, subject = subject, answer_data_type = "NUMBER"))
       )
     )))
   ))
-  draft$variables$matr_id <- paste0(matr, "-", tolower(test_marker))
+  draft$variables$matr_id <- paste0(matr, "-", tolower(sample_marker))
   draft
 }
 
@@ -41,8 +42,9 @@ test_that("what stops a push is said in the order to do it", {
   lookups <- test_lookups()
   draft <- gold_draft()
   draft$variables$matr_id <- paste0("q", seq_len(nrow(draft$variables)))
+  # what stops a push: its Basic Info, then its questionnaire
   blockers <- function(record = complete_info(), draft = draft, ...) {
-    extraction_service_push_blockers(record, draft, lookups, catalog, ...)
+    c(extraction_service_info_blockers(record, catalog = catalog, ...), extraction_service_draft_blockers(draft, lookups))
   }
   expect_equal(blockers(draft = draft), character())
 
@@ -190,15 +192,15 @@ test_that("a new choice that looks like one in the database says so in the previ
 test_that("a linked question's stem is added once, or the one there with its words is used", {
   draft <- small_draft()
   question <- draft$components$id[draft$components$component_type == "Question"][1]
-  draft$components$stem[draft$components$id == question] <- paste(test_marker, "Do [subject] smoke?")
+  draft$components$stem[draft$components$id == question] <- paste(sample_marker, "Do [subject] smoke?")
   built <- build_for(draft)
   lines <- item_lines(built$items)
-  expect_true(paste0("Insert question_stem {\"question_stem_id\":\"new:question_stem:1\"} text: - -> ", test_marker, " Do [subject] smoke?") %in% lines)
+  expect_true(paste0("Insert question_stem {\"question_stem_id\":\"new:question_stem:1\"} text: - -> ", sample_marker, " Do [subject] smoke?") %in% lines)
   expect_equal(sum(built$items$entity_name == "question" & built$items$attribute_name == "question_stem_id"), 1)
   expect_equal(built$summary$stems, 1L)
   expect_match(extraction_service_push_summary(built$summary), "1 new question stem")
 
-  there <- c(no_options, list(stems = data.frame(question_stem_id = 77, text = paste(test_marker, " Do [subject]  smoke? "))))
+  there <- c(no_options, list(stems = data.frame(question_stem_id = 77, text = paste(sample_marker, " Do [subject]  smoke? "))))
   reused <- build_for(draft, options = there)
   expect_false("question_stem" %in% reused$items$entity_name)
   expect_equal(reused$items$new_value[reused$items$entity_name == "question" & reused$items$attribute_name == "question_stem_id"], "77")
@@ -222,10 +224,10 @@ test_that("a write-in's unit goes with it", {
 })
 
 test_that("a question whose own words have [subject] or [time frame] in them shares the stem of those words", {
-  draft <- small_draft(question = paste(test_marker, "did [subject] smoke [time frame]?"))
+  draft <- small_draft(question = paste(sample_marker, "did [subject] smoke [time frame]?"))
   built <- build_for(draft)
   lines <- item_lines(built$items)
-  expect_true(paste0("Insert question_stem {\"question_stem_id\":\"new:question_stem:1\"} text: - -> ", test_marker, " did [subject] smoke [time frame]?") %in% lines)
+  expect_true(paste0("Insert question_stem {\"question_stem_id\":\"new:question_stem:1\"} text: - -> ", sample_marker, " did [subject] smoke [time frame]?") %in% lines)
   expect_equal(built$summary$stems, 1L) # and only that one: the other question's words have neither
 })
 
@@ -248,9 +250,9 @@ test_that("a recorded questionnaire's blocks are found where it prints them, and
     placements = data.frame(
       placement_id = c(500, 501, 502), component_id = c(100, 101, 102), parent_placement_id = c(NA, 500, 500), display_order = c(1, 1, 2)
     ),
-    components = data.frame(component_id = c(100, 101, 102), component_type_id = c(1, 4, 2), text = paste(test_marker, c("Part A", "Please answer.", "Do you smoke?"))),
+    components = data.frame(component_id = c(100, 101, 102), component_type_id = c(1, 4, 2), text = paste(sample_marker, c("Part A", "Please answer.", "Do you smoke?"))),
     questions = data.frame(placement_id = 502),
-    variables = data.frame(variable_key = 900, placement_id = 502, matr_id = paste0("zz1-", tolower(test_marker)), display_order = 1)
+    variables = data.frame(variable_key = 900, placement_id = 502, matr_id = paste0("zz1-", tolower(sample_marker)), display_order = 1)
   ))
   built <- build_for(small_draft(), existing = existing)
   expect_equal(built$summary$blocks_found, 3L) # the section, the instruction and the smoking question
@@ -270,8 +272,8 @@ test_that("a recorded questionnaire's blocks are found where it prints them, and
 test_that("a linked question another questionnaire prints keeps the link: it gets the stem, unless it has another", {
   draft <- small_draft()
   question <- draft$components$id[draft$components$component_type == "Question"][1]
-  draft$components$stem[draft$components$id == question] <- paste(test_marker, "Do [subject] smoke?")
-  printed <- c(no_options, list(components = data.frame(component_id = 150, component_type_id = 2, text = paste(test_marker, "Do you smoke?"))))
+  draft$components$stem[draft$components$id == question] <- paste(sample_marker, "Do [subject] smoke?")
+  printed <- c(no_options, list(components = data.frame(component_id = 150, component_type_id = 2, text = paste(sample_marker, "Do you smoke?"))))
 
   # it has no stem yet: the extraction gives it one, the one change it makes to a row that is there
   built <- build_for(draft, options = printed)
@@ -283,7 +285,7 @@ test_that("a linked question another questionnaire prints keeps the link: it get
   expect_equal(sum(built$items$action == "Update"), 1)
 
   # it has that stem already: nothing to change
-  stems <- data.frame(question_stem_id = 77, text = paste(test_marker, "Do [subject] smoke?"))
+  stems <- data.frame(question_stem_id = 77, text = paste(sample_marker, "Do [subject] smoke?"))
   same <- build_for(draft, options = c(printed, list(stems = stems, linked = data.frame(component_id = 150, question_stem_id = 77))))
   expect_false(any(same$items$action == "Update"))
   expect_false("question_stem" %in% same$items$entity_name)
@@ -301,7 +303,7 @@ test_that("a block another questionnaire prints with the same kind and words is 
   options <- utils::modifyList(no_options, list(components = data.frame(
     component_id = c(300, 150, 160, 170),
     component_type_id = c(2, 2, 4, 2), # questions, but the third is an instruction
-    text = paste(test_marker, c("Do you smoke?", "Do  you smoke? ", "How many?", "do you smoke?"))
+    text = paste(sample_marker, c("Do you smoke?", "Do  you smoke? ", "How many?", "do you smoke?"))
   )))
   built <- build_for(small_draft(), options = options)
   expect_equal(built$summary[c("blocks", "blocks_shared")], list(blocks = 3L, blocks_shared = 1L))
@@ -322,7 +324,7 @@ test_that("a block another questionnaire prints with the same kind and words is 
   # a component the questionnaire prints already somewhere else is placed again, not copied
   existing <- with_tables(empty_questionnaire(), list(
     placements = data.frame(placement_id = 600, component_id = 150, parent_placement_id = NA_real_, display_order = 1),
-    components = data.frame(component_id = 150, component_type_id = 2, text = paste(test_marker, "Do  you smoke? ")),
+    components = data.frame(component_id = 150, component_type_id = 2, text = paste(sample_marker, "Do  you smoke? ")),
     questions = data.frame(placement_id = 600)
   ))
   again <- build_for(small_draft(), existing = existing, options = options)
@@ -337,7 +339,7 @@ test_that("a block another questionnaire prints with the same kind and words is 
   expect_equal(nrow(blocks), 4)
   expect_equal(sum(blocks$is_new), 3)
   expect_equal(blocks$status[!blocks$is_new], "Printed by another questionnaire") # where isn't known here
-  expect_equal(blocks$text[!blocks$is_new], paste(test_marker, "Do you smoke?"))
+  expect_equal(blocks$text[!blocks$is_new], paste(sample_marker, "Do you smoke?"))
   where <- list(
     placed = data.frame(component_id = c(150, 150, 300), questionnaire_id = c(2, 3, 2)),
     questionnaires = data.frame(questionnaire_id = c(2, 3), name = c("Kid Questionnaire", "Mother Questionnaire"), abbreviation = c("KQ", NA))
@@ -360,7 +362,7 @@ test_that("a MATR ID that another question already has, or nothing to add, is a 
     placements = data.frame(placement_id = 602, component_id = 102, parent_placement_id = NA_real_, display_order = 1),
     components = data.frame(component_id = 102, component_type_id = 2, text = "Some other question"),
     questions = data.frame(placement_id = 602),
-    variables = data.frame(variable_key = 900, placement_id = 602, matr_id = paste0("zz1-", tolower(test_marker)), display_order = 1)
+    variables = data.frame(variable_key = 900, placement_id = 602, matr_id = paste0("zz1-", tolower(sample_marker)), display_order = 1)
   ))
   expect_error(
     build_for(small_draft(), existing = existing),

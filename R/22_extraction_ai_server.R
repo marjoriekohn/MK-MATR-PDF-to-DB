@@ -1,22 +1,14 @@
-#' The AI-Powered mode of the Extraction page: the server.
-#'
-#' Choose a questionnaire PDF (and the optional file of Variable Names and Coding), click Begin Extraction, and
-#' watch it being read, in the background. The draft starts then, with both files, which can't be changed
-#' after: to read other files, cancel the extraction and begin again. Once reading has finished
-#' the draft opens on the Edit Extraction page. Where it goes in the database (its Basic Info) is filled in
-#' later, on Change Requests, once its change request is submitted. Drafts are kept in the database but nothing here adds to the MATR
-#' metadata database itself.
-#'
-#' @param id The module's id.
-#' @param extractions The extraction drafts as `server.R` shares them: `all()` is a reactive list
-#'   of records, and `changed()` tells it this session changed one.
-#' @param connection The MATR database, `list(url, key)`; see `model_database.R`.
-#' @param me Who is using the site: `list(staff_id, name, role)`.
-#' @param open_edit_extraction A function taking a record and opening it on the Edit Extraction page.
-#' @param switch_mode A function taking a mode of the Extraction page (`"manual"` or `"ai"`), or `"drafts"`
-#'   for the Extraction Drafts page, and showing it.
-#' @return A list with `open`, a function that shows a draft opened from Extraction Drafts, or an
-#'   empty drop zone for `NULL`.
+# The AI-Powered mode of the Extraction page: the server.
+# Choose a questionnaire PDF (and the optional file of Variable Names and Coding), click Begin Extraction, and
+# watch it being read, in the background. The draft starts then, with both files, which can't be changed
+# after: to read other files, cancel the extraction and begin again. Once reading has finished
+# the draft opens on the Edit Extraction page. Where it goes in the database (its Basic Info) is filled in
+# later, on Change Requests, once its change request is submitted. Drafts are kept in the database but nothing here adds to the MATR
+# metadata database itself.
+# switch_mode: A function taking a mode of the Extraction page (`"manual"` or `"ai"`), or `"drafts"`
+#   for the Extraction Drafts page, and showing it.
+# Returns: A list with `open`, a function that shows a draft opened from Extraction Drafts, or an
+#   empty drop zone for `NULL`.
 extraction_ai_server <- function(
   id,
   extractions,

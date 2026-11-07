@@ -30,14 +30,12 @@ database_test_names <- c(
   SUPABASE_PUBLISHABLE_KEY = "TEST_SUPABASE_PUBLISHABLE_KEY"
 )
 
-#' Point the site at the live or the test database.
-#'
-#' For `"test"`, `SUPABASE_URL` and its keys get the `TEST_SUPABASE_*` values, so everything that reads
-#' them (the connection made in global.R, signing in, the reading jobs) uses the test project.
-#'
-#' @param which `"live"` or `"test"`, from `MATR_DATABASE`; a blank is `"live"`.
-#' @return `"live"` or `"test"`. An error with a sentence for anything else, or for `"test"` without
-#'   the test project's address and secret key in .env.
+# Point the site at the live or the test database.
+# For `"test"`, `SUPABASE_URL` and its keys get the `TEST_SUPABASE_*` values, so everything that reads
+# them (the connection made in global.R, signing in, the reading jobs) uses the test project.
+# which: `"live"` or `"test"`, from `MATR_DATABASE`; a blank is `"live"`.
+# Returns: `"live"` or `"test"`. An error with a sentence for anything else, or for `"test"` without
+#   the test project's address and secret key in .env.
 database_model_choose <- function(which = Sys.getenv("MATR_DATABASE")) {
   which <- tolower(trimws(which %||% ""))
   if (!nzchar(which)) which <- "live"
@@ -60,17 +58,13 @@ database_timeout_seconds <- 20
 database_max_tries <- 3
 
 # ------ Reading ------------------------------------------------------------------
-#' Read a table of the MATR database.
-#'
-#' Every row of `table`, with only `columns`, sorted by `order_by`.
-#'
-#' @param connection The MATR database, `list(url, key)`; see `model_database.R`.
-#' @param table The table's name.
-#' @param columns The columns to read, as a character vector.
-#' @param order_by The columns to sort by; each can end in `.desc`. Defaults to the first column.
-#' @param filters Narrow the rows: a named list of PostgREST filters, e.g. `list(kind = database_eq("Edit"))`.
-#' @param page_size Rows asked for at a time; Supabase sends at most 1,000.
-#' @return A data frame with `columns`; with no rows, one whose columns are logical.
+# Read a table of the MATR database.
+# Every row of `table`, with only `columns`, sorted by `order_by`.
+# columns: The columns to read, as a character vector.
+# order_by: The columns to sort by; each can end in `.desc`. Defaults to the first column.
+# filters: Narrow the rows: a named list of PostgREST filters, e.g. `list(kind = database_eq("Edit"))`.
+# page_size: Rows asked for at a time; Supabase sends at most 1,000.
+# Returns: A data frame with `columns`; with no rows, one whose columns are logical.
 database_model_get <- function(connection, table, columns, order_by = columns[1],
                                filters = list(), page_size = database_page_size) {
   pages <- database_fetch(
@@ -84,16 +78,13 @@ database_model_get <- function(connection, table, columns, order_by = columns[1]
   rows[columns]
 }
 
-#' Read a table whose rows hold jsonb.
-#'
-#' Like `database_model_get()`, but each row comes back as a list, and a jsonb value
-#' as the lists it was saved as, not turned into data frames.
-#'
-#' @inheritParams database_model_get
-#' @param select PostgREST's `select`: columns, which can embed another table, e.g. `"preparer:staff!prepared_by(name)"`.
-#' @param order_by The columns to sort by, or `NULL` for the database's order.
-#' @param most The most rows to read (the first, in `order_by`'s order), up to a page; all of them by default.
-#' @return A list with one list per row; empty if there are none.
+# Read a table whose rows hold jsonb.
+# Like `database_model_get()`, but each row comes back as a list, and a jsonb value
+# as the lists it was saved as, not turned into data frames.
+# select: PostgREST's `select`: columns, which can embed another table, e.g. `"preparer:staff!prepared_by(name)"`.
+# order_by: The columns to sort by, or `NULL` for the database's order.
+# most: The most rows to read (the first, in `order_by`'s order), up to a page; all of them by default.
+# Returns: A list with one list per row; empty if there are none.
 database_model_select <- function(connection, table, select, order_by = NULL,
                                   filters = list(), page_size = database_page_size, most = Inf) {
   pages <- database_fetch(
@@ -145,14 +136,9 @@ database_last_page <- function(resp, page_size = database_page_size) {
   as.numeric(found[2]) + 1 >= as.numeric(found[3])
 }
 
-#' How many rows a table has.
-#'
-#' Asks for none of them: only the count the reply carries.
-#'
-#' @param connection The MATR database, `list(url, key)`; see `model_database.R`.
-#' @param table The table's name.
-#' @param filters Narrow the rows, as for `database_model_get()`.
-#' @return A whole number.
+# How many rows a table has.
+# Asks for none of them: only the count the reply carries.
+# filters: Narrow the rows, as for `database_model_get()`.
 database_model_count <- function(connection, table, filters = list()) {
   response <- database_request(connection, table) |>
     database_filter(filters) |>
@@ -162,28 +148,22 @@ database_model_count <- function(connection, table, filters = list()) {
   as.integer(rows_in_table(response))
 }
 
-#' The database's own description of its tables and functions.
-#'
-#' The REST API publishes it as an OpenAPI document at its root: every table with its
-#' columns, their types and defaults, which are required to add a row, and the keys that
-#' point at one column. It doesn't say anything about check or unique constraints,
-#' foreign keys over several columns, indexes, triggers or policies.
-#'
-#' @param connection The MATR database, `list(url, key)`; see `model_database.R`.
-#' @return The document as a list: `definitions` (one entry for each table) and `paths`
-#'   (the tables, and `/rpc/...` for each function).
+# The database's own description of its tables and functions.
+# The REST API publishes it as an OpenAPI document at its root: every table with its
+# columns, their types and defaults, which are required to add a row, and the keys that
+# point at one column. It doesn't say anything about check or unique constraints,
+# foreign keys over several columns, indexes, triggers or policies.
+# Returns: The document as a list: `definitions` (one entry for each table) and `paths`
+#   (the tables, and `/rpc/...` for each function).
 database_model_describe <- function(connection) {
   database_rows(database_perform(database_request(connection, "")))
 }
 
 # ------ Writing ------------------------------------------------------------------
-#' Add one row to a table.
-#'
-#' @param connection The MATR database, `list(url, key)`; see `model_database.R`.
-#' @param table The table's name.
-#' @param row A named list of columns to values; a jsonb value is a list.
-#' @param select The columns to send back. Limit it for a row holding big jsonb.
-#' @return The row as the database stored it, as a list, with the columns it filled in.
+# Add one row to a table.
+# row: A named list of columns to values; a jsonb value is a list.
+# select: The columns to send back. Limit it for a row holding big jsonb.
+# Returns: The row as the database stored it, as a list, with the columns it filled in.
 database_model_insert <- function(connection, table, row, select = "*") {
   response <- database_request(connection, table) |>
     httr2::req_method("POST") |>
@@ -194,17 +174,13 @@ database_model_insert <- function(connection, table, row, select = "*") {
   database_rows(response)[[1]]
 }
 
-#' Change the rows of a table that match filters.
-#'
-#' There must be a filter: this never changes a whole table.
-#'
-#' @param connection The MATR database, `list(url, key)`; see `model_database.R`.
-#' @param table The table's name.
-#' @param changes A named list of columns to their new values (`NULL` sets null).
-#' @param filters Which rows, as for `database_model_get()`.
-#' @param select The columns to send back.
-#' @return The rows as they are now, as a list of lists. Empty if nothing matched, so
-#'   a caller can tell its change didn't apply.
+# Change the rows of a table that match filters.
+# There must be a filter: this never changes a whole table.
+# changes: A named list of columns to their new values (`NULL` sets null).
+# filters: Which rows, as for `database_model_get()`.
+# select: The columns to send back.
+# Returns: The rows as they are now, as a list of lists. Empty if nothing matched, so
+#   a caller can tell its change didn't apply.
 database_model_update <- function(connection, table, changes, filters, select = "*") {
   if (length(filters) == 0) stop("Changing a table needs to say which rows.", call. = FALSE)
   response <- database_request(connection, table) |>
@@ -217,16 +193,13 @@ database_model_update <- function(connection, table, changes, filters, select = 
   database_rows(response)
 }
 
-#' Call a function of the database.
-#'
-#' For what has to change several tables at once: separate requests can't share a transaction,
-#' a function does. It is called through `/rpc/<name>` with named arguments.
-#'
-#' @param connection The MATR database, `list(url, key)`; see `model_database.R`.
-#' @param name The function's name, e.g. `"apply_pending_edit"`.
-#' @param arguments A named list of its arguments.
-#' @return What the function returns, as R values (NULL when it returns nothing). An error with the function's own sentence if
-#'   it refused, e.g. an edit that isn't approved.
+# Call a function of the database.
+# For what has to change several tables at once: separate requests can't share a transaction,
+# a function does. It is called through `/rpc/<name>` with named arguments.
+# name: The function's name, e.g. `"apply_pending_edit"`.
+# arguments: A named list of its arguments.
+# Returns: What the function returns, as R values (NULL when it returns nothing). An error with the function's own sentence if
+#   it refused, e.g. an edit that isn't approved.
 database_model_call <- function(connection, name, arguments = list()) {
   response <- database_request(connection, paste0("rpc/", name)) |>
     httr2::req_method("POST") |>
@@ -240,19 +213,16 @@ database_model_call <- function(connection, name, arguments = list()) {
 }
 
 # ------ Filters ------------------------------------------------------------------
-#' A PostgREST filter for "equals".
-#'
-#' A filter is a column's name and what to do with it. The value is encoded into the
-#' URL by httr2, so what staff type is never pasted in.
-#'
-#' @param value What the column must equal.
-#' @return A string for use in a `filters` list, e.g. `list(kind = database_eq("Edit"))`.
+# A PostgREST filter for "equals".
+# A filter is a column's name and what to do with it. The value is encoded into the
+# URL by httr2, so what staff type is never pasted in.
+# value: What the column must equal.
+# Returns: A string for use in a `filters` list, e.g. `list(kind = database_eq("Edit"))`.
 database_eq <- function(value) paste0("eq.", value)
 
-#' A PostgREST filter for "is one of".
-#'
-#' @param values What the column may equal; none matches no row.
-#' @return A string for use in a `filters` list, e.g. `list(draft_id = database_in(c(1, 2)))`.
+# A PostgREST filter for "is one of".
+# values: What the column may equal; none matches no row.
+# Returns: A string for use in a `filters` list, e.g. `list(draft_id = database_in(c(1, 2)))`.
 database_in <- function(values) {
   # The list is part of the filter's own syntax, so only plain values (numbers, ids) may go in it.
   if (!all(grepl("^[A-Za-z0-9_.-]+$", as.character(values)))) stop("A filter can only list plain values.", call. = FALSE)

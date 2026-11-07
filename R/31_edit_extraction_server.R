@@ -5,42 +5,30 @@ undo_depth <- 50
 # between every two changes: the server does nothing else while it saves, so the page can't be used then.
 autosave_delay <- 30
 
-#' The Edit Extraction page's server, for one extraction draft.
-#'
-#' The whole questionnaire as it was extracted, every block edited where it is
-#' (`extraction_outline_server()`). Other pages open a draft here with the `open` function this
-#' returns. Changes are saved to the draft's reviewed copy in the database by themselves, half a minute
-#' after the last one (`autosave_delay`), or at once with Save. While its change request is waiting for
-#' approval they are only saved with Save, since each save is a new version for the reviewer; and after a
-#' save is refused, only Save tries again.
-#'
-#' Preview shows the questionnaire the way Change Requests shows it to a reviewer;
-#' previewing writes nothing. Submit Change Request saves anything unsaved and sends it to Change
-#' Requests, where its Basic Info (registry, study, questionnaire, wave) is filled in; then one other
-#' staff member approves it, or an ADMIN adds their own (`service_extraction_push.R`). Each question
-#' shows its place among the questions (worked out from the outline, and kept up to date as blocks move)
-#' and the number printed beside it (read off the PDF, and corrected by staff); the wave records both. A
-#' draft going into a recorded questionnaire gets the MATR IDs its questions already have.
-#'
-#' One person at a time works on a draft (see `service_draft_row.R`). Opening one here claims it; while
-#' someone else has it, opening it asks whether to take it over instead. The page renews the claim while
-#' staff are active on the site, and lets it go when they leave the page with nothing unsaved, close it,
-#' or do nothing for a while; then it only shows the draft until it has it again, which it tries as soon
-#' as they come back. Save is refused if someone else saved the draft after this page opened it, so
-#' nobody's work is overwritten.
-#'
-#' @param id The module's id.
-#' @param extractions The extraction drafts as `server.R` shares them: `all()` is a reactive list
-#'   of records, and `changed()` tells it this session changed one.
-#' @param catalog The live tables the pages pick from, as `server.R` shares them: `get()` reads them
-#'   (`questionnaire_service_get_catalog()`) and `refresh()` reads them again.
-#' @param connection The MATR database, `list(url, key)`; see `model_database.R`.
-#' @param me Who is using the site: `list(staff_id, name, role)`.
-#' @param show_page A function taking a page's name and showing it.
-#' @param active A reactive: whether this page is the one showing.
-#' @return A list with `open`, a function taking a record (and `take_over`, whether to take it from
-#'   whoever is working on it) that opens it, unless the draft on screen has unsaved changes and staff
-#'   choose to stay, or someone else is working on it; it returns whether it opened.
+# The Edit Extraction page's server, for one extraction draft.
+# The whole questionnaire as it was extracted, every block edited where it is
+# (`extraction_outline_server()`). Other pages open a draft here with the `open` function this
+# returns. Changes are saved to the draft's reviewed copy in the database by themselves, half a minute
+# after the last one (`autosave_delay`), or at once with Save. While its change request is waiting for
+# approval they are only saved with Save, since each save is a new version for the reviewer; and after a
+# save is refused, only Save tries again.
+# Preview shows the questionnaire the way Change Requests shows it to a reviewer;
+# previewing writes nothing. Submit Change Request saves anything unsaved and sends it to Change
+# Requests, where its Basic Info (registry, study, questionnaire, wave) is filled in; then one other
+# staff member approves it, or an ADMIN adds their own (`service_extraction_push.R`). Each question
+# shows its place among the questions (worked out from the outline, and kept up to date as blocks move)
+# and the number printed beside it (read off the PDF, and corrected by staff); the wave records both. A
+# draft going into a recorded questionnaire gets the MATR IDs its questions already have.
+# One person at a time works on a draft (see `service_draft_row.R`). Opening one here claims it; while
+# someone else has it, opening it asks whether to take it over instead. The page renews the claim while
+# staff are active on the site, and lets it go when they leave the page with nothing unsaved, close it,
+# or do nothing for a while; then it only shows the draft until it has it again, which it tries as soon
+# as they come back. Save is refused if someone else saved the draft after this page opened it, so
+# nobody's work is overwritten.
+# active: A reactive: whether this page is the one showing.
+# Returns: A list with `open`, a function taking a record (and `take_over`, whether to take it from
+#   whoever is working on it) that opens it, unless the draft on screen has unsaved changes and staff
+#   choose to stay, or someone else is working on it; it returns whether it opened.
 edit_extraction_server <- function(
   id,
   extractions,
@@ -81,7 +69,7 @@ edit_extraction_server <- function(
     saved_at <- reactiveVal(NULL) # when this page last saved the draft
     autosave_off <- reactiveVal(FALSE) # a save was refused: only Save tries again
     has_draft <- reactive(!is.null(record_id()) && is.null(claim())) # to work on: no one else can change it
-    heading <- reactive(extraction_service_heading(record(), catalog$get(), req(draft())$questionnaire))
+    heading <- reactive(extraction_service_heading(record(), catalog$get())) # not the draft: typing doesn't change it
     suggestions <- reactive(draft_service_text_suggestions(req(draft()), recorded()$texts))
 
     # Every change to the draft comes through here so it can be undone. Service
@@ -246,10 +234,7 @@ edit_extraction_server <- function(
     # Loads `opened`'s questionnaire as it was saved at `revision`, and what the AI returned for it, and
     # shows it. Returns whether it could.
     put_on_page <- function(opened, revision) {
-      loaded <- tryCatch(extraction_service_open_draft(connection, opened), error = function(problem) {
-        show_problem(problem, "Couldn't open this draft")
-        NULL
-      })
+      loaded <- try_showing(extraction_service_open_draft(connection, opened), "Couldn't open this draft")
       if (is.null(loaded)) {
         return(FALSE)
       }
@@ -278,12 +263,9 @@ edit_extraction_server <- function(
     # questions' MATR IDs (filled in where the question is worded the same). Read when a draft opens,
     # from the Basic Info saved with it; a read that fails leaves nothing to offer, with a warning.
     read_recorded <- function(opened, info = extraction_service_info(opened)) {
-      recorded(tryCatch(
+      recorded(try_showing(
         extraction_service_recorded(connection, list(info = info)),
-        error = function(problem) {
-          show_problem(problem, "Couldn't read what this questionnaire has already", type = "warning")
-          NULL
-        }
+        "Couldn't read what this questionnaire has already", type = "warning"
       ))
     }
 
@@ -314,10 +296,7 @@ edit_extraction_server <- function(
     # The claim is renewed every minute while staff are active anywhere on the site (www/js/review.js
     # sends `active`), so a page left open overnight doesn't keep the draft from anyone.
     claim_draft <- function(id, take_over = FALSE) {
-      tryCatch(draft_row_service_claim(connection, id, me, take_over), error = function(problem) {
-        show_problem(problem, "Couldn't open this draft")
-        NULL
-      })
+      try_showing(draft_row_service_claim(connection, id, me, take_over), "Couldn't open this draft")
     }
 
     release_draft <- function(id) {
@@ -610,12 +589,9 @@ edit_extraction_server <- function(
       }
       # As this page has it: refused if someone else saved it since.
       sent <- utils::modifyList(record(), list(revision = loaded_revision()))
-      outcome <- tryCatch(
+      outcome <- try_showing(
         extraction_service_push(connection, sent, me, catalog$get(), reviewer = input$request_reviewer),
-        error = function(problem) {
-          show_problem(problem, "Couldn't send it")
-          NULL
-        }
+        "Couldn't send it"
       )
       if (is.null(outcome)) {
         return()
@@ -696,24 +672,19 @@ edit_extraction_server <- function(
 }
 
 # ------ The PDF, served to this session ------------------------------------------------------------
-#' The address the browser gets a PDF from, for this session only.
-#'
-#' The file is only kept on the server that received it (`uploads/pdfs/`), so it is handed to the
-#' browser at an address that works for this session only.
-#'
-#' @param session The Shiny session.
-#' @param name What to call it, in the module's namespace.
-#' @param data `path`, `name` and `sha256` of the file; `pdf_response()` is given it.
-#' @return The address.
+# The address the browser gets a PDF from, for this session only.
+# The file is only kept on the server that received it (`uploads/pdfs/`), so it is handed to the
+# browser at an address that works for this session only.
+# name: What to call it, in the module's namespace.
+# data: `path`, `name` and `sha256` of the file; `pdf_response()` is given it.
+# Returns: The address.
 pdf_address <- function(session, name, data) {
   session$registerDataObj(name = name, data = data, filterFunc = pdf_response)
 }
 
-#' How long ago the draft was saved, as the page's header says it.
-#'
-#' @param at When it was saved.
-#' @param now The time now.
-#' @return "Saved just now", "Saved 30 s ago", "Saved 4 min ago", or "Saved at 2:14 PM" after an hour.
+# How long ago the draft was saved, as the page's header says it.
+# at: When it was saved.
+# Returns: "Saved just now", "Saved 30 s ago", "Saved 4 min ago", or "Saved at 2:14 PM" after an hour.
 saved_ago <- function(at, now = Sys.time()) {
   seconds <- as.numeric(difftime(now, at, units = "secs"))
   if (seconds < 15) {
@@ -728,11 +699,10 @@ saved_ago <- function(at, now = Sys.time()) {
   paste("Saved at", trimws(format(at, "%l:%M %p")))
 }
 
-#' The browser's request for the PDF.
-#'
-#' @param data From `pdf_address()`: `path` and `name` of the file.
-#' @param req The request.
-#' @return A `shiny::httpResponse()`: the file, shown in the browser rather than downloaded.
+# The browser's request for the PDF.
+# data: From `pdf_address()`: `path` and `name` of the file.
+# req: The request.
+# Returns: A `shiny::httpResponse()`: the file, shown in the browser rather than downloaded.
 pdf_response <- function(data, req) {
   shiny::httpResponse(
     200L, "application/pdf",

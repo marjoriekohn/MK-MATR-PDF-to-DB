@@ -177,6 +177,14 @@ local_pdf_cache <- function(env = parent.frame()) {
   dir
 }
 
+# A draft's variable ids in the order a respondent meets them: question by question in printed order, and each
+# question's variables in their own order.
+draft_service_boxes_in_order <- function(draft) {
+  boxes <- draft$variables
+  question_position <- match(boxes$component_id, draft_service_printed_order(draft))
+  boxes$id[order(question_position, boxes$display_order)]
+}
+
 # One block of a draft, as a one-row data frame.
 component <- function(draft, id) draft$components[draft$components$id == id, ]
 

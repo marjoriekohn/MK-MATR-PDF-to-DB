@@ -1,20 +1,15 @@
-#' The outline of the Edit Extraction page: the questionnaire's blocks as a list, and the picked block's
-#' details beside it.
-#'
-#' The list is for finding and ordering blocks: each row is its kind, its words, how many variables a question
-#' has (pointing at the number lists their MATR IDs), what there is to fix, and an arrow that opens it.
-#' Clicking a section or group opens it, or closes it when it is open. A section's or text block's
-#' words are typed in the list once its edit button is pressed, and pointing at its row offers that, to change
-#' its kind, and to delete it. A block verified is green, and a section or group once everything in it is. The
-#' block picked is edited in the panel beside it (`block_detail()`). On a phone the list and the details take
-#' turns, with Back. A group's row has no words: it only holds blocks.
-#'
-#' The toolbar, in order: + Block (a dialog of the kinds of block), Filter (which blocks the list shows),
-#' Search, Expand All, Collapse All, and how many blocks have something to fix. Its buttons are only their
-#' icons on a phone.
-#'
-#' @param id The module's id.
-#' @return The page's UI.
+# The outline of the Edit Extraction page: the questionnaire's blocks as a list, and the picked block's
+# details beside it.
+# The list is for finding and ordering blocks: each row is its kind, its words, how many variables a question
+# has (pointing at the number lists their MATR IDs), what there is to fix, and an arrow that opens it.
+# Clicking a section or group opens it, or closes it when it is open. A section's or text block's
+# words are typed in the list once its edit button is pressed, and pointing at its row offers that, to change
+# its kind, and to delete it. A block verified is green, and a section or group once everything in it is. The
+# block picked is edited in the panel beside it (`block_detail()`). On a phone the list and the details take
+# turns, with Back. A group's row has no words: it only holds blocks.
+# The toolbar, in order: + Block (a dialog of the kinds of block), Filter (which blocks the list shows),
+# Search, Expand All, Collapse All, and how many blocks have something to fix. Its buttons are only their
+# icons on a phone.
 extraction_outline_ui <- function(id) {
   ns <- NS(id)
   div(
@@ -45,10 +40,8 @@ extraction_outline_ui <- function(id) {
   )
 }
 
-#' The divider between the list and the picked row's details: dragging it (or the arrow keys, while it has focus)
-#' makes the list wider or narrower, and a double click puts it back (www/js/split.js). Make an edit has one too.
-#'
-#' @return A UI element.
+# The divider between the list and the picked row's details: dragging it (or the arrow keys, while it has focus)
+# makes the list wider or narrower, and a double click puts it back (www/js/split.js). Make an edit has one too.
 outline_divider <- function() {
   div(
     class = "outline-divider", role = "separator", tabindex = "0", `aria-orientation` = "vertical",
@@ -56,12 +49,10 @@ outline_divider <- function() {
   )
 }
 
-#' The toolbar's search: the list shows only the blocks whose words or variables have what is typed (with the
-#' sections and groups they are in). The page script does it; it isn't a Shiny input. Make an edit's list has one
-#' too.
-#'
-#' @param label What it searches, for screen readers.
-#' @return A UI element.
+# The toolbar's search: the list shows only the blocks whose words or variables have what is typed (with the
+# sections and groups they are in). The page script does it; it isn't a Shiny input. Make an edit's list has one
+# too.
+# label: What it searches, for screen readers.
 outline_search <- function(label = "Search the blocks' words and MATR IDs") {
   span(
     class = "toolbar-field",
@@ -73,11 +64,9 @@ outline_search <- function(label = "Search the blocks' words and MATR IDs") {
   )
 }
 
-#' Filter: which blocks the list shows: all of them, those not checked yet, those with something to fix,
-#' or those staff changed from what the AI read. The page script hides the others, keeping the sections and
-#' groups they are in (www/js/review.js); it isn't a Shiny input.
-#'
-#' @return A UI element.
+# Filter: which blocks the list shows: all of them, those not checked yet, those with something to fix,
+# or those staff changed from what the AI read. The page script hides the others, keeping the sections and
+# groups they are in (www/js/review.js); it isn't a Shiny input.
 outline_filter <- function() {
   span(
     class = "toolbar-field",
@@ -112,14 +101,11 @@ block_kind_descriptions <- c(
   Note = "Any other printed text that belongs to the questionnaire."
 )
 
-#' A dialog with a box for each choice, each saying what it is for.
-#'
-#' @param title The dialog's title.
-#' @param ns The module's namespace function.
-#' @param boxes A list of `list(icon, title, text, action, data)`: `data` is a named list of the box's
-#'   `data-*` values (e.g. `list(type = "Section")`).
-#' @param wide Whether the boxes are squares in a grid (Add Block), rather than one under another.
-#' @return A `modalDialog()`.
+# A dialog with a box for each choice, each saying what it is for.
+# title: The dialog's title.
+# boxes: A list of `list(icon, title, text, action, data)`: `data` is a named list of the box's
+#   `data-*` values (e.g. `list(type = "Section")`).
+# wide: Whether the boxes are squares in a grid (Add Block), rather than one under another.
 pick_dialog <- function(title, ns, boxes, wide = FALSE) {
   modalDialog(
     title = title, easyClose = TRUE, footer = modalButton("Cancel"), size = if (wide) "l" else "m",
@@ -139,12 +125,9 @@ pick_dialog <- function(title, ns, boxes, wide = FALSE) {
   )
 }
 
-#' + Block: a box for each kind of block, in the order `block_kind_descriptions` has them (kinds it doesn't know
-#' last).
-#'
-#' @param ns The module's namespace function.
-#' @param component_types The kinds of block.
-#' @return A `modalDialog()`.
+# + Block: a box for each kind of block, in the order `block_kind_descriptions` has them (kinds it doesn't know
+# last).
+# component_types: The kinds of block.
 add_block_dialog <- function(ns, component_types) {
   kinds <- c(intersect(names(block_kind_descriptions), component_types), setdiff(component_types, names(block_kind_descriptions)))
   pick_dialog("Add a block", ns, lapply(kinds, function(kind) {
@@ -161,8 +144,8 @@ add_block_dialog <- function(ns, component_types) {
 # Each block is a row. A section's (or group's) row sits above its own list, and dropping a
 # block into that list puts the block inside it. Only sections and groups have a list, so
 # only they can hold blocks (BR53). `view` holds what's selected, which sections and groups are
-# collapsed, the problems the checks found, the words to suggest, the uploaded MATR IDs no variable has
-# yet, the optional fields staff have added to variables, and the kinds of block there are.
+# collapsed, the problems the checks found, the words to suggest, the optional fields staff have added to
+# variables, and the kinds of block there are.
 
 # SortableJS settings for every list in the outline: one shared group, so blocks
 # move between sections, dragged by their dots. SortableJS draws the dragged
@@ -184,10 +167,6 @@ outline_sortable_options <- sortable::sortable_options(
 # The id of the list of words offered for a kind of block, e.g. "edit_extraction-outline-suggest-Section".
 suggest_list_id <- function(ns, component_type) ns(paste0("suggest-", gsub("[^A-Za-z0-9]", "_", component_type)))
 
-# The id of the list of uploaded MATR IDs no variable has yet, which every MATR ID field offers. The page
-# script keeps it up to date as IDs are given (review.js).
-matr_id_list_id <- function(ns) ns("matr-ids")
-
 # The id of the list of questions every parent-question field offers ("7 · Have you smoked…"). The page
 # script keeps it up to date as blocks move (review.js).
 parent_list_id <- function(ns) ns("parent-questions")
@@ -196,17 +175,11 @@ parent_list_id <- function(ns) ns("parent-questions")
 # every Skip to field offers. The page script keeps it up to date as blocks move (review.js).
 skip_list_id <- function(ns) ns("skip-targets")
 
-#' The outline as a tree.
-#'
-#' @param draft A draft.
-#' @param view `list(selected, collapsed, opened, problems, suggestions, matr_ids, shown)`: what is
-#'   selected, which sections and groups are closed, which questions have their panel open, the problems
-#'   to mark, the words to offer for each kind of block (`draft_service_text_suggestions()`), the uploaded
-#'   MATR IDs to offer (`draft_service_available_matr_ids()`) and the optional fields added to variables
-#'   that have nothing in them yet (`"v12:label"`; see `variable_card()`).
-#' @param lookups The pick lists, from `lookup_service_get_all()`.
-#' @param ns The module's namespace function.
-#' @return A UI element.
+# The outline as a tree.
+# view: `list(selected, collapsed, opened, problems, suggestions, shown)`: what is selected, which
+#   sections and groups are closed, which questions have their panel open, the problems to mark, the words to
+#   offer for each kind of block (`draft_service_text_suggestions()`) and the optional fields added to
+#   variables that have nothing in them yet (`"v12:label"`; see `variable_card()`).
 outline_tree <- function(draft, view, lookups, ns) {
   # every question's row offers the questions before it; they are worked out once for the whole tree
   attr(draft, "outline_questions") <- outline_questions(draft)
@@ -214,35 +187,29 @@ outline_tree <- function(draft, view, lookups, ns) {
     class = "outline-tree",
     outline_list(draft, section = NULL, view, lookups, ns),
     # The words offered as staff type, one list per kind of block, plus the variables' (answer choices, who
-    # they're about, labels and MATR IDs), conditions, and the questions and places to skip to
+    # they're about and labels), conditions, and the questions and places to skip to
     lapply(names(view$suggestions %||% list()), function(component_type) {
       suggestions(suggest_list_id(ns, component_type), view$suggestions[[component_type]])
     }),
-    variable_editor_lists(ns, lookups, draft, view$matr_ids %||% character()),
+    variable_editor_lists(ns, lookups, draft),
     suggestions(ns("conditions"), unique(c("If yes", "If no", stats::na.omit(draft$components$condition)))),
     suggestions(parent_list_id(ns), attr(draft, "outline_questions")$questions$label),
     suggestions(skip_list_id(ns), skip_targets(draft)$label)
   )
 }
 
-#' What the page script marks on the outline, so it isn't drawn again for it.
-#'
-#' Drawing the outline takes a second or more (every block's fields and drop-downs), and the browser
-#' takes as long again to rebuild it. So what a click changes without changing the layout is marked on
-#' the outline already there instead: which row is selected, which sections and groups are closed, which
-#' blocks are checked (a section or group is once everything inside it is), each block's problems and the
-#' fields at fault, each question's MATR IDs (listed when its count of variables is pointed at), and the
-#' uploaded MATR IDs no variable has yet.
-#'
-#' @param draft A draft.
-#' @param problems From `draft_service_check()`.
-#' @param selected The selected block's id, or `NULL`.
-#' @param collapsed The ids of the closed sections and groups.
-#' @param matr_ids The uploaded MATR IDs no variable has yet.
-#' @param ns The module's namespace function.
-#' @return A list, sent as the "edit-extraction-marks" message (www/js/review.js).
-#' @param changed The blocks changed from what the AI read (`draft_service_changed_blocks()`), or `NULL`.
-outline_marks <- function(draft, problems, selected, collapsed, matr_ids, ns, changed = NULL) {
+# What the page script marks on the outline, so it isn't drawn again for it.
+# Drawing the outline takes a second or more (every block's fields and drop-downs), and the browser
+# takes as long again to rebuild it. So what a click changes without changing the layout is marked on
+# the outline already there instead: which row is selected, which sections and groups are closed, which
+# blocks are checked (a section or group is once everything inside it is), each block's problems and the
+# fields at fault, and each question's MATR IDs (listed when its count of variables is pointed at).
+# problems: From `draft_service_check()`.
+# selected: The selected block's id, or `NULL`.
+# collapsed: The ids of the closed sections and groups.
+# changed: The blocks changed from what the AI read (`draft_service_changed_blocks()`), or `NULL`.
+# Returns: A list, sent as the "edit-extraction-marks" message (www/js/review.js).
+outline_marks <- function(draft, problems, selected, collapsed, ns, changed = NULL) {
   counts <- as.list(table(problems$id))
   messages <- lapply(split(problems$message, problems$id), paste, collapse = "\n")
   at_fault <- problems[!is.na(problems$table), , drop = FALSE]
@@ -258,8 +225,6 @@ outline_marks <- function(draft, problems, selected, collapsed, matr_ids, ns, ch
     fields = map_rows(at_fault, function(problem) {
       list(table = problem$table, id = problem$row, field = if (is.na(problem$field)) "" else problem$field, title = problem$message)
     }),
-    matr_ids = as.list(matr_ids),
-    matr_list = matr_id_list_id(ns),
     labels = as.list(label_suggestions(draft)),
     label_list = ns("labels"),
     collapsed = as.list(collapsed),
@@ -282,26 +247,21 @@ question_matr_ids <- function(draft) {
   as.list(vapply(split(ids, boxes$component_id), paste, character(1), collapse = "\n"))
 }
 
-#' What to change on the outline already drawn, instead of drawing it again.
-#'
-#' The outline was drawn from `drawn`, and changed since only as the page script changes it (words
-#' typed, blocks dragged, marks). This compares it with `draft` and says what is different: the blocks
-#' to take out and to add (only the outermost: a section comes with what is in it), the rows whose
-#' words or counts changed, every list's blocks in order (so a block that moved is moved, and a drag the draft refused is put back),
-#' each block's display order and label, each question's number, and the questions in printed order
-#' (which every parent-question field offers). When much has changed (another draft, say), drawing the
-#' outline again is quicker, and this says so.
-#'
-#' @param drawn The draft as the outline on the page shows it, or `NULL` if it isn't drawn yet.
-#' @param draft The draft as it is now.
-#' @param view What the outline shows; see `outline_tree()`.
-#' @param lookups The pick lists, from `lookup_service_get_all()`.
-#' @param ns The module's namespace function.
-#' @param most How many blocks and rows may be drawn before drawing it all is quicker.
-#' @param rows Rows (by block id) to draw again even if their draft hasn't changed: a field there shows what
-#'   the draft refused.
-#' @return A list, sent as the "edit-extraction-patch" message (www/js/review.js), or `NULL` to draw
-#'   the outline again.
+# What to change on the outline already drawn, instead of drawing it again.
+# The outline was drawn from `drawn`, and changed since only as the page script changes it (words
+# typed, blocks dragged, marks). This compares it with `draft` and says what is different: the blocks
+# to take out and to add (only the outermost: a section comes with what is in it), the rows whose
+# words or counts changed, every list's blocks in order (so a block that moved is moved, and a drag the draft refused is put back),
+# each block's display order and label, each question's number, and the questions in printed order
+# (which every parent-question field offers). When much has changed (another draft, say), drawing the
+# outline again is quicker, and this says so.
+# drawn: The draft as the outline on the page shows it, or `NULL` if it isn't drawn yet.
+# draft: The draft as it is now.
+# most: How many blocks and rows may be drawn before drawing it all is quicker.
+# rows: Rows (by block id) to draw again even if their draft hasn't changed: a field there shows what
+#   the draft refused.
+# Returns: A list, sent as the "edit-extraction-patch" message (www/js/review.js), or `NULL` to draw
+#   the outline again.
 outline_patch <- function(drawn, draft, view, lookups, ns, most = 30, rows = NULL) {
   if (is.null(drawn)) {
     return(NULL)
@@ -345,8 +305,8 @@ outline_patch <- function(drawn, draft, view, lookups, ns, most = 30, rows = NUL
 }
 
 # What a block's row is drawn from, as one string per block (named by id): its kind, words, printed
-# number, parent question (as its list names it) and condition, how many blocks it holds, and its
-# variables' summary line.
+# number, parent question (as its list names it) and condition, how many blocks it holds, and how many
+# variables it has (its count badge).
 # What the page script keeps up to date on its own (selected, checked, problems, numbers, display order)
 # is left out.
 outline_row_signature <- function(draft) {
@@ -354,12 +314,9 @@ outline_row_signature <- function(draft) {
   n_inside <- tabulate(match(blocks$parent_id, blocks$id), nbins = nrow(blocks))
   questions <- (attr(draft, "outline_questions") %||% outline_questions(draft))$questions
   parent <- questions$label[match(blocks$parent_question_id, questions$id)]
-  # the question's variables, as its summary line shows them
-  boxes <- draft$variables[order(draft$variables$component_id, draft$variables$display_order), , drop = FALSE]
-  box_text <- paste(boxes$matr_id, variable_summary_text(draft, boxes$id))
-  summary <- vapply(split(box_text, factor(boxes$component_id, levels = blocks$id)), paste, character(1), collapse = "\n")
+  n_boxes <- tabulate(match(draft$variables$component_id, blocks$id), nbins = nrow(blocks))
   stats::setNames(
-    paste(blocks$component_type, blocks$text, blocks$printed_number, parent, blocks$condition, n_inside, summary, sep = "\r"),
+    paste(blocks$component_type, blocks$text, blocks$printed_number, parent, blocks$condition, n_inside, n_boxes, sep = "\r"),
     blocks$id
   )
 }
@@ -396,8 +353,7 @@ outline_node <- function(block, draft, view, lookups, ns) {
 # opens it in the details (a question's or text block's, and a group's, whose details hold its skip). Clicking a
 # section's or group's row opens or closes it. A section's and a
 # text block's words are typed in the row once its edit button is pressed (a question's in its details), and
-# pointing at the row puts its buttons at its end: edit, change its kind, ungroup, delete. A question's
-# variables in short are under its row only while MATR IDs are given out by hand (review.js). The numbers the
+# pointing at the row puts its buttons at its end: edit, change its kind, ungroup, delete. The numbers the
 # site works out (display order, place among the questions) order the blocks but aren't shown.
 outline_row <- function(block, draft, view, ns) {
   type <- block$component_type
@@ -420,69 +376,8 @@ outline_row <- function(block, draft, view, ns) {
         app_icon("open"), "select",
         `data-id` = block$id, class = "btn btn-sm btn-icon btn-open", title = "Open in the editor", `aria-label` = "Open in the editor"
       )
-    },
-    if (type == "Question") variable_summary(block, draft, view, ns)
-  )
-}
-
-#' A question's variables in one line under its row, while its panel is closed.
-#'
-#' Most questions have one variable: its MATR ID can be typed here, beside its choices in short ("1 Yes · 2
-#' No") or its kind of answer, and who it's about and its label when it has them. A question with several
-#' variables lists the first few. Clicking the line opens the panel, where everything else is edited.
-#'
-#' @param block One row of a draft's `components`: a question.
-#' @param draft A draft.
-#' @param view What the outline shows; see `outline_tree()`.
-#' @param ns The module's namespace function.
-#' @return A UI element.
-variable_summary <- function(block, draft, view, ns) {
-  boxes <- draft_service_children(draft, "variables", block$id)
-  open <- function(...) {
-    review_button(..., "details", `data-id` = block$id, class = "btn btn-sm summary-open", title = "Show the question's variables")
-  }
-  div(
-    class = "outline-row-summary",
-    if (nrow(boxes) == 0) {
-      open(tags$em("No variables yet"))
-    } else if (nrow(boxes) == 1) {
-      tagList(
-        field_text(
-          "variables", boxes, "matr_id",
-          placeholder = "MATR ID", list = matr_id_list_id(ns), label = "MATR ID", problems = view$problems
-        ) |> tagAppendAttributes(class = "summary-matr-id"),
-        open(variable_summary_text(draft, boxes$id))
-      )
-    } else {
-      shown <- head(boxes, 3)
-      open(
-        strong(plural(nrow(boxes), "variable")), ": ",
-        paste(
-          paste0(ifelse(is.na(shown$matr_id), "no MATR ID", shown$matr_id), " (", variable_summary_text(draft, shown$id), ")"),
-          collapse = " · " # (a variable's choices are joined by "; ")
-        ),
-        if (nrow(boxes) > 3) paste0(" · +", nrow(boxes) - 3, " more")
-      )
     }
   )
-}
-
-# Each variable in a few words: its choices in short or its kind of answer, then who it's about and its label
-# when it has them. Named by the variables' ids.
-variable_summary_text <- function(draft, ids) {
-  boxes <- draft$variables[match(ids, draft$variables$id), , drop = FALSE]
-  choices <- draft$response_options[draft$response_options$variable_id %in% ids, , drop = FALSE]
-  choices <- choices[order(choices$variable_id, choices$display_order), , drop = FALSE]
-  answer <- vapply(seq_len(nrow(boxes)), function(i) {
-    if (boxes$variable_type[i] != "closed_ended") {
-      return(paste("Write-in:", if (is.na(boxes$answer_data_type[i])) "answer type not picked" else boxes$answer_data_type[i]))
-    }
-    choice_summary(choices[choices$variable_id == boxes$id[i], , drop = FALSE])
-  }, character(1))
-  about <- ifelse(is.na(boxes$subject), "", paste0(" · Subject: ", boxes$subject))
-  when <- ifelse(is.na(boxes$time_frame), "", paste0(" · ", boxes$time_frame))
-  label <- ifelse(is.na(boxes$label), "", paste0(" · “", shorten(boxes$label, 30), "”"))
-  stats::setNames(paste0(answer, about, when, label), boxes$id)
 }
 
 # The block's words, typed where they are. The words of the other blocks of the same kind, and of the
@@ -522,12 +417,10 @@ outline_badges <- function(block, draft, problems) {
 }
 
 
-#' The badge of a row that says how much there is to fix: a warning sign and the number. Pointing at it lists
-#' the problems (review.js). It is drawn even when there is nothing to fix (then hidden), so the page script
-#' can show it without redrawing the row.
-#'
-#' @param messages The block's problems, as sentences.
-#' @return A UI element.
+# The badge of a row that says how much there is to fix: a warning sign and the number. Pointing at it lists
+# the problems (review.js). It is drawn even when there is nothing to fix (then hidden), so the page script
+# can show it without redrawing the row.
+# messages: The block's problems, as sentences.
 problem_badge <- function(messages) {
   n <- length(messages)
   row_badge(
@@ -614,21 +507,14 @@ question_panel <- function(block, draft, view, lookups, ns) {
 
 # ------ The picked block's details, beside the list ------------------------------------------------
 
-#' The details of the block picked in the list, edited beside it.
-#'
-#' The header is one row: the block's kind, its words (typed there; a group has none) and what there
-#' is to fix. Then, for a question, the number printed beside it, its skip logic (`skip_logic()`), its variables
-#' and their choices (`question_panel()`), and its categories and measurement scales (coming); for a section or group, how many
-#' blocks it holds, and for a group its skip (`group_skip()`). Its buttons are along the bottom (`detail_actions()`). Fields have a small label above
-#' them. They are the list's own (the same `data-field`s), so the page script keeps the row and the details in
-#' step as words are typed.
-#'
-#' @param block One row of a draft's `components`, or `NULL` when nothing is picked.
-#' @param draft A draft.
-#' @param view What the outline shows; see `outline_tree()`.
-#' @param lookups The pick lists, from `lookup_service_get_all()`.
-#' @param ns The module's namespace function.
-#' @return A UI element.
+# The details of the block picked in the list, edited beside it.
+# The header is one row: the block's kind, its words (typed there; a group has none) and what there
+# is to fix. Then, for a question, the number printed beside it, its skip logic (`skip_logic()`), its variables
+# and their choices (`question_panel()`), and its categories and measurement scales (coming); for a section or group, how many
+# blocks it holds, and for a group its skip (`group_skip()`). Its buttons are along the bottom (`detail_actions()`). Fields have a small label above
+# them. They are the list's own (the same `data-field`s), so the page script keeps the row and the details in
+# step as words are typed.
+# block: One row of a draft's `components`, or `NULL` when nothing is picked.
 block_detail <- function(block, draft, view, lookups, ns) {
   if (is.null(block) || nrow(block) != 1) {
     return(div(class = "detail-empty", "Pick a block in the list to see and edit it here."))
@@ -639,9 +525,7 @@ block_detail <- function(block, draft, view, lookups, ns) {
   block_problems <- problems$message[problems$id == block$id]
   div(
     class = "block-detail", `data-id` = block$id,
-    div(
-      class = "detail-head",
-      tags$button(type = "button", class = "btn btn-sm btn-link detail-back", `data-detail-back` = NA, app_icon("back"), " List"),
+    detail_head(
       type_chip(type),
       if (type == "Group") {
         h2(class = "detail-group-title", "Group")
@@ -682,26 +566,21 @@ block_detail <- function(block, draft, view, lookups, ns) {
   )
 }
 
-#' A question's skip conditions and logic: who sees it, in sentences.
-#'
-#' - Shown only for some answers to an earlier question (its parent): "This question is only shown to
-#'   respondents if they answered **“Yes”** to **“Do you smoke?”**", a link to that question. Picked with Add
-#'   Skip Logic, the answers are the ones picked (its condition); otherwise they are worked out from the
-#'   parent's Skip tos (on a choice, or a write-in): the ones that don't skip past it. With neither, it reads
-#'   "depending on how they answered".
-#' - Shown only to some respondents: "This question is only shown to respondents who are:
-#'   **Twins**" (its condition, when it has no parent picked).
-#' - Skipped by a group's skip: "Respondents who answer **“No”** to every question in **the group with
-#'   questions 22a–22d** skip this question", a link to the group (`draft_service_group_skipped()`).
-#'
-#' The question is named by its words, in full, and they and the answers are in quotes. A sentence staff added
-#' has a delete button that takes it away; one worked out from a Skip to goes when the Skip to does. More is
-#' added with + Skip Logic, at the bottom of the details.
-#'
-#' @param block One row of a draft's `components`: a question.
-#' @param draft A draft, with its `outline_questions` attribute.
-#' @param ns The module's namespace function.
-#' @return A UI element.
+# A question's skip conditions and logic: who sees it, in sentences.
+# - Shown only for some answers to an earlier question (its parent): "This question is only shown to
+#  respondents if they answered **“Yes”** to **“Do you smoke?”**", a link to that question. Picked with Add
+#  Skip Logic, the answers are the ones picked (its condition); otherwise they are worked out from the
+#  parent's Skip tos (on a choice, or a write-in): the ones that don't skip past it. With neither, it reads
+#  "depending on how they answered".
+# - Shown only to some respondents: "This question is only shown to respondents who are:
+#  **Twins**" (its condition, when it has no parent picked).
+# - Skipped by a group's skip: "Respondents who answer **“No”** to every question in **the group with
+#  questions 22a–22d** skip this question", a link to the group (`draft_service_group_skipped()`).
+# The question is named by its words, in full, and they and the answers are in quotes. A sentence staff added
+# has a delete button that takes it away; one worked out from a Skip to goes when the Skip to does. More is
+# added with + Skip Logic, at the bottom of the details.
+# block: One row of a draft's `components`: a question.
+# draft: A draft, with its `outline_questions` attribute.
 skip_logic <- function(block, draft, ns) {
   blocks <- draft$components
   derived <- isTRUE(block$parent_from_skip)
@@ -766,16 +645,13 @@ skip_logic <- function(block, draft, ns) {
 
 skip_sentence <- function(...) div(class = "skip-sentence", ...)
 
-#' A group's skip, on the answers to the questions in it, in its details: "If they answer [No] to [every
-#' question] in this group, skip to [28 · …]", then the routing as printed. Left empty, the group doesn't skip.
-#' Where it skips to is picked like a choice's (`skip_fields()`); "every question" is what an empty
-#' `skip_when` means.
-#'
-#' @param block One row of a draft's `components`: a group.
-#' @param draft A draft, with its `outline_questions` attribute.
-#' @param problems The checks' problems, to outline a field at fault.
-#' @param ns The module's namespace function.
-#' @return A UI element.
+# A group's skip, on the answers to the questions in it, in its details: "If they answer [No] to [every
+# question] in this group, skip to [28 · …]", then the routing as printed. Left empty, the group doesn't skip.
+# Where it skips to is picked like a choice's (`skip_fields()`); "every question" is what an empty
+# `skip_when` means.
+# block: One row of a draft's `components`: a group.
+# draft: A draft, with its `outline_questions` attribute.
+# problems: The checks' problems, to outline a field at fault.
 group_skip <- function(block, draft, problems, ns) {
   tagList(
     detail_field(
@@ -860,14 +736,12 @@ condition_answer_list <- function(condition) {
   if (is.na(condition)) character() else strsplit(sub("(?i)^if\\s+", "", trimws(condition), perl = TRUE), " or ", fixed = TRUE)[[1]]
 }
 
-#' The answers to `parent` that show `id`, worked out from the skips on `parent`: of each variable whose choices
-#' skip past `id`, the choices that don't; of each write-in that does, anything but the answer that skips.
-#'
-#' @param draft A draft.
-#' @param id The question shown only for some answers.
-#' @param parent The question with the skips.
-#' @return Text such as "“Yes”" or "“Yes” or “Sometimes”" or "anything but “None”", or
-#'   `NULL` when none can be said.
+# The answers to `parent` that show `id`, worked out from the skips on `parent`: of each variable whose choices
+# skip past `id`, the choices that don't; of each write-in that does, anything but the answer that skips.
+# id: The question shown only for some answers.
+# parent: The question with the skips.
+# Returns: Text such as "“Yes”" or "“Yes” or “Sometimes”" or "anything but “None”", or
+#   `NULL` when none can be said.
 skip_answers <- function(draft, id, parent) {
   printed <- draft_service_printed_order(draft)
   place <- match(id, printed)
@@ -885,15 +759,13 @@ skip_answers <- function(draft, id, parent) {
   if (length(answers) == 0) NULL else paste(answers, collapse = " or ")
 }
 
-#' The details' buttons, along the bottom, the same size and evenly spaced: for a question Verify, + Skip
-#' Logic, + Variable and Delete; for another block Verify and Delete; for a section or group Ungroup and
-#' Delete. Verify marks it as checked and goes to the next block (the page script keeps it up to date as the
-#' checks run); it waits until nothing is left to fix (it says so when pointed at). A section or group has no
-#' Verify: it is checked once everything in it is. On a phone they are only their icons.
-#'
-#' @param block One row of a draft's `components`.
-#' @param block_problems Its problems, as sentences.
-#' @return A UI element.
+# The details' buttons, along the bottom, the same size and evenly spaced: for a question Verify, + Skip
+# Logic, + Variable and Delete; for another block Verify and Delete; for a section or group Ungroup and
+# Delete. Verify marks it as checked and goes to the next block (the page script keeps it up to date as the
+# checks run); it waits until nothing is left to fix (it says so when pointed at). A section or group has no
+# Verify: it is checked once everything in it is. On a phone they are only their icons.
+# block: One row of a draft's `components`.
+# block_problems: Its problems, as sentences.
 detail_actions <- function(block, block_problems) {
   type <- tolower(block$component_type)
   blocked <- !block$checked && length(block_problems) > 0
@@ -963,14 +835,14 @@ skip_logic_answer_modal <- function(ns, draft, id) {
   earlier <- questions[questions$position < place, , drop = FALSE]
   block <- draft$components[draft$components$id == id, , drop = FALSE]
   current <- if (!is.na(block$parent_question_id) && !isTRUE(block$parent_from_skip)) block$parent_question_id else ""
-  modalDialog(
-    title = "Shown only for some answers", easyClose = TRUE,
+  confirm_dialog(
+    "Shown only for some answers",
     selectizeInput(
       ns("logic_parent"), "The earlier question",
       choices = c("Pick a question" = "", stats::setNames(earlier$id, earlier$label)), selected = current, width = "100%"
     ),
     uiOutput(ns("logic_answers")),
-    footer = tagList(modalButton("Cancel"), actionButton(ns("logic_answer_save"), "Save", class = "btn-primary"))
+    confirm_id = ns("logic_answer_save"), confirm_label = "Save", keep_label = "Cancel", easy_close = TRUE
   )
 }
 
@@ -1003,14 +875,14 @@ skip_logic_parent_answers <- function(draft, parent) {
 
 # Shown only to some respondents: who they are, in a word or two ("Twins", "Female", "Parents").
 skip_logic_condition_modal <- function(ns, current = NA) {
-  modalDialog(
-    title = "Shown only to some respondents", easyClose = TRUE,
+  confirm_dialog(
+    "Shown only to some respondents",
     textInput(
       ns("logic_condition_text"), "This question is only shown to respondents who are:",
       value = blank_if_na(current), placeholder = "e.g. Twins, Female, Parents", width = "100%"
     ),
     p(class = "detail-note", "A question picked as the one this question follows is taken away: a question has one condition."),
-    footer = tagList(modalButton("Cancel"), actionButton(ns("logic_condition_save"), "Save", class = "btn-primary"))
+    confirm_id = ns("logic_condition_save"), confirm_label = "Save", keep_label = "Cancel", easy_close = TRUE
   )
 }
 
@@ -1033,10 +905,9 @@ outline_questions <- function(draft) {
   )
 }
 
-#' What the checks found, as a count for the toolbar.
-#'
-#' @param problems The result of `draft_service_check()`.
-#' @return A UI element, or `NULL` when there is nothing to fix.
+# What the checks found, as a count for the toolbar.
+# problems: The result of `draft_service_check()`.
+# Returns: A UI element, or `NULL` when there is nothing to fix.
 to_fix_note <- function(problems) {
   n <- length(unique(problems$id))
   if (n == 0) {

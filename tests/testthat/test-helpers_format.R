@@ -60,3 +60,18 @@ test_that("text counts only if it has something besides spaces, and nothing is n
   expect_false(has_text(NULL))
   expect_equal(has_text(c(NA, "a", NA_character_)), c(FALSE, TRUE, FALSE)) # nzchar(NA) alone would say TRUE
 })
+
+test_that("an age range is in words, and is any age when neither age is known", {
+  expect_equal(age_range_text(c(5, 18, NA, NA), c(17, NA, 17, NA)), c("5-17", "18+", "up to 17", "any age"))
+})
+
+test_that("runs of spaces become one, with none at the ends, and a missing text stays missing", {
+  expect_equal(squish(c("  a \t b\n c  ", "", NA)), c("a b c", "", NA))
+})
+
+test_that("a name comes with its abbreviation, or alone, or the abbreviation alone, when the other is blank", {
+  expect_equal(
+    name_with_abbreviation(c("Adult Health Study", "Adult Health Study", "", NA, "Twins"), c("AHS", "", "AHS", "AHS", NA)),
+    c("Adult Health Study (AHS)", "Adult Health Study", "AHS", "AHS", "Twins")
+  )
+})

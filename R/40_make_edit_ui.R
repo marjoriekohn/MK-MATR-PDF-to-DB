@@ -1,14 +1,10 @@
-#' The Make an edit page.
-#'
-#' Everything staff can add, change or delete in the MATR metadata database, laid out as Edit Extraction lays out
-#' a questionnaire: an outline on the left and the item picked on the right. Each kind of thing is a section of the
-#' outline, closed until it is clicked; open, it lists that kind's items, by name, and + Add. Questions are listed
-#' together, whichever questionnaire prints them; a scale's items have a section for each measurement scale. The
-#' details show the item picked, with Edit and Delete; Edit and + Add show its form, with Save. Saved edits that
-#' aren't finished are listed above.
-#'
-#' @param id The module's id.
-#' @return The page's UI.
+# The Make an edit page.
+# Everything staff can add, change or delete in the MATR metadata database, laid out as Edit Extraction lays out
+# a questionnaire: an outline on the left and the item picked on the right. Each kind of thing is a section of the
+# outline, closed until it is clicked; open, it lists that kind's items, by name, and + Add. Questions are listed
+# together, whichever questionnaire prints them; a scale's items have a section for each measurement scale. The
+# details show the item picked, with Edit and Delete; Edit and + Add show its form, with Save. Saved edits that
+# aren't finished are listed above.
 make_edit_ui <- function(id) {
   ns <- NS(id)
   as_fill_carrier(div(
@@ -82,12 +78,10 @@ make_edit_kinds <- list(
 # The kinds the list has a section for.
 make_edit_listed <- setdiff(names(make_edit_kinds), c("questionnaire_component", "component", "questionnaire_question"))
 
-#' A kind's items as the list shows them: in alphabetical order.
-#'
-#' @param key The kind, a name of `edit_entities`.
-#' @param snap The tables the kind needs, as `edit_service_load()` reads them.
-#' @param scope The questionnaire's (or scale's) key, for a kind that has a section for each; otherwise "".
-#' @return Cards, from `edit_service_cards()`, with `scope` too.
+# A kind's items as the list shows them: in alphabetical order.
+# key: The kind, a name of `edit_entities`.
+# scope: The questionnaire's (or scale's) key, for a kind that has a section for each; otherwise "".
+# Returns: Cards, from `edit_service_cards()`, with `scope` too.
 make_edit_cards <- function(key, snap, scope = "") {
   entity <- edit_entities[[key]]
   with_scope <- function(cards, q) {
@@ -98,14 +92,12 @@ make_edit_cards <- function(key, snap, scope = "") {
   cards[order(tolower(cards$title), cards$subtitle, method = "radix"), , drop = FALSE]
 }
 
-#' A section of the list: its row, which opens and closes it (the page script does it at once), and what is
-#' inside it, drawn only once it is opened (Shiny doesn't draw what is hidden).
-#'
-#' @param id The section's id: a kind, or a kind and a questionnaire or scale ("questionnaire_question:12").
-#' @param label What the row says.
-#' @param inside What is in it.
-#' @param open Whether it is drawn open: a section inside another is drawn again with it, as staff left it.
-#' @return A UI element.
+# A section of the list: its row, which opens and closes it (the page script does it at once), and what is
+# inside it, drawn only once it is opened (Shiny doesn't draw what is hidden).
+# id: The section's id: a kind, or a kind and a questionnaire or scale ("questionnaire_question:12").
+# label: What the row says.
+# inside: What is in it.
+# open: Whether it is drawn open: a section inside another is drawn again with it, as staff left it.
 make_edit_section <- function(id, label, inside, open = FALSE) {
   div(
     class = c("outline-node", if (!open) "is-collapsed"), `data-id` = id,
@@ -118,14 +110,12 @@ make_edit_section <- function(id, label, inside, open = FALSE) {
   )
 }
 
-#' One item of a kind, in its section: its kind of block (for a block), its name, and the arrow that opens it in
-#' the details. Clicking it opens it there too.
-#'
-#' @param kind The kind, a name of `edit_entities`.
-#' @param card One of the kind's cards, from `edit_service_cards()`.
-#' @param scope The questionnaire's (or scale's) key, for a kind that belongs to one; otherwise "".
-#' @param selected Whether it is the one in the details.
-#' @return A UI element.
+# One item of a kind, in its section: its kind of block (for a block), its name, and the arrow that opens it in
+# the details. Clicking it opens it there too.
+# kind: The kind, a name of `edit_entities`.
+# card: One of the kind's cards, from `edit_service_cards()`.
+# scope: The questionnaire's (or scale's) key, for a kind that belongs to one; otherwise "".
+# selected: Whether it is the one in the details.
 make_edit_item <- function(kind, card, scope = "", selected = FALSE) {
   id <- paste(kind, scope, card$key, sep = "|")
   picks <- list(`data-id` = id, `data-kind` = kind, `data-key` = card$key, `data-scope` = scope)
@@ -143,11 +133,9 @@ make_edit_item <- function(kind, card, scope = "", selected = FALSE) {
   )
 }
 
-#' + Add, at the end of a kind's section (or of a questionnaire's, for a kind that belongs to one).
-#'
-#' @param kind The kind, a name of `edit_entities`.
-#' @param scope The questionnaire's key, or "".
-#' @return A UI element.
+# + Add, at the end of a kind's section (or of a questionnaire's, for a kind that belongs to one).
+# kind: The kind, a name of `edit_entities`.
+# scope: The questionnaire's key, or "".
 make_edit_add_button <- function(kind, scope = "") {
   review_button(
     icon_label("add", paste("Add", make_edit_kinds[[kind]][2])), "add",

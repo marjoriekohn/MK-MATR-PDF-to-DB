@@ -49,31 +49,10 @@
 #     which can repeat or be missing.
 
 # ------ Before pushing -----------------------------------------------------------------
-#' What stops an extraction being added: its Basic Info, then its questionnaire.
-#'
-#' @param record The extraction's record.
-#' @param draft The questionnaire, as on the Edit Extraction page.
-#' @param lookups The pick lists, from `lookup_service_get_all()`.
-#' @param catalog The live tables the pages pick from, from `questionnaire_service_get_catalog()`.
-#' @param records All the extraction records, to find other drafts of the same questionnaire and wave.
-#' @param info Where it goes, as `extraction_service_info()` returns it; the record's by default.
-#' @param question_counts How many questions each of the questionnaire's waves asks, for a recorded
-#'   wave (`questionnaire_service_wave_question_counts()`).
-#' @return A character vector of sentences, in the order to do them; empty when it can go.
-extraction_service_push_blockers <- function(record, draft, lookups, catalog, records = list(),
-                                             info = extraction_service_info(record), question_counts = integer()) {
-  c(
-    extraction_service_info_blockers(record, info, catalog, records, question_counts),
-    extraction_service_draft_blockers(draft, lookups)
-  )
-}
-
-#' What stops an extraction's change request being submitted from the Edit Extraction page: only its
-#' questionnaire. The Basic Info is filled in afterwards, on Change Requests.
-#'
-#' @param draft The questionnaire, as on the Edit Extraction page.
-#' @param lookups The pick lists, from `lookup_service_get_all()`.
-#' @return A character vector of sentences, in the order to do them; empty when it can be submitted.
+# What stops an extraction's change request being submitted from the Edit Extraction page: only its
+# questionnaire. The Basic Info is filled in afterwards, on Change Requests.
+# draft: The questionnaire, as on the Edit Extraction page.
+# Returns: A character vector of sentences, in the order to do them; empty when it can be submitted.
 extraction_service_draft_blockers <- function(draft, lookups) {
   n_blocks_to_fix <- length(unique(draft_service_check(draft, lookups)$id)) # a blank MATR ID is among them
   as.character(c(
@@ -83,10 +62,12 @@ extraction_service_draft_blockers <- function(draft, lookups) {
   ))
 }
 
-#' What stops an extraction's change request being approved because of its Basic Info.
-#'
-#' @inheritParams extraction_service_push_blockers
-#' @return A character vector of sentences; empty when the Basic Info is complete and fits.
+# What stops an extraction's change request being approved because of its Basic Info.
+# info: Where it goes, as `extraction_service_info()` returns it; the record's by default.
+# records: All the extraction records, to find other drafts of the same questionnaire and wave.
+# question_counts: How many questions each of the questionnaire's waves asks, for a recorded
+#   wave (`questionnaire_service_wave_question_counts()`).
+# Returns: A character vector of sentences; empty when the Basic Info is complete and fits.
 extraction_service_info_blockers <- function(record, info = extraction_service_info(record), catalog,
                                              records = list(), question_counts = integer()) {
   missing <- extraction_service_missing(info)
@@ -97,11 +78,10 @@ extraction_service_info_blockers <- function(record, info = extraction_service_i
   ))
 }
 
-#' What an extraction's questionnaire holds, in a sentence, for submitting it before its Basic Info is
-#' known.
-#'
-#' @param draft The questionnaire.
-#' @return A string, e.g. `"12 blocks, with 30 questions and 45 variables."`.
+# What an extraction's questionnaire holds, in a sentence, for submitting it before its Basic Info is
+# known.
+# draft: The questionnaire.
+# Returns: A string, e.g. `"12 blocks, with 30 questions and 45 variables."`.
 extraction_service_draft_summary <- function(draft) {
   questions <- sum(draft$components$component_type %in% "Question")
   paste0(
@@ -111,30 +91,23 @@ extraction_service_draft_summary <- function(draft) {
   )
 }
 
-#' How many blocks still haven't been marked as checked.
-#'
-#' Not a reason to stop: it is said before the request is submitted.
-#'
-#' @param draft The questionnaire as saved.
-#' @return A whole number.
+# How many blocks still haven't been marked as checked.
+# Not a reason to stop: it is said before the request is submitted.
+# draft: The questionnaire as saved.
 extraction_service_unchecked <- function(draft) {
   sum(!draft$components$checked %in% TRUE)
 }
 
 # ------ The rows ----------------------------------------------------------------------------
-#' The rows an extraction adds.
-#'
-#' Reads the questionnaire as it is saved (or takes the one given) and the database it has to fit,
-#' and works out the items (see the top of this file). Nothing is written.
-#'
-#' @param connection The MATR database, `list(url, key)`; see `model_database.R`.
-#' @param record The extraction's record.
-#' @param draft The questionnaire, if not the saved one (the Edit Extraction page's, before it is saved).
-#' @param info Where it goes, as `extraction_service_info()` returns it; the record's by default.
-#' @return A list: `items` (a data frame in the shape of `edit_item()`, numbered, in the order to
-#'   add them), `summary` (what they come to; see `extraction_service_push_summary()`) and `rows` (each
-#'   block, variable, answer choice and set of choices, new or already there; see `push_start()`). An
-#'   error with a sentence if it can't be added as it is.
+# The rows an extraction adds.
+# Reads the questionnaire as it is saved (or takes the one given) and the database it has to fit,
+# and works out the items (see the top of this file). Nothing is written.
+# draft: The questionnaire, if not the saved one (the Edit Extraction page's, before it is saved).
+# info: Where it goes, as `extraction_service_info()` returns it; the record's by default.
+# Returns: A list: `items` (a data frame in the shape of `edit_item()`, numbered, in the order to
+#   add them), `summary` (what they come to; see `extraction_service_push_summary()`) and `rows` (each
+#   block, variable, answer choice and set of choices, new or already there; see `push_start()`). An
+#   error with a sentence if it can't be added as it is.
 extraction_service_push_build <- function(connection, record, draft = NULL, info = extraction_service_info(record)) {
   # the questions are numbered by their place in the questionnaire, as the Edit Extraction page shows them
   draft <- draft_service_renumber_questions(draft %||% draft_service_load(connection, record$id))
@@ -143,15 +116,12 @@ extraction_service_push_build <- function(connection, record, draft = NULL, info
   extraction_service_build_items(draft, info, context$ids, existing, context$options)
 }
 
-#' What any extraction's rows are worked out against: the kinds of block, the subjects, the
-#' answer choices and option sets there are, and the components with words.
-#'
-#' Read once for a preview, which is worked out again as its fields change.
-#'
-#' @param connection The MATR database, `list(url, key)`; see `model_database.R`.
-#' @return A list: `ids` (`component_types`, `subjects` and `time_frames`, as data frames with their ids) and
-#'   `options` (from `push_model_options()`, with `components` from `push_model_components()`, and `placed` and
-#'   `questionnaires` from `push_model_placed()`).
+# What any extraction's rows are worked out against: the kinds of block, the subjects, the
+# answer choices and option sets there are, and the components with words.
+# Read once for a preview, which is worked out again as its fields change.
+# Returns: A list: `ids` (`component_types`, `subjects` and `time_frames`, as data frames with their ids) and
+#   `options` (from `push_model_options()`, with `components` from `push_model_components()`, and `placed` and
+#   `questionnaires` from `push_model_placed()`).
 extraction_service_push_context <- function(connection) {
   list(
     ids = list(
@@ -163,37 +133,30 @@ extraction_service_push_context <- function(connection) {
   )
 }
 
-#' What a recorded questionnaire has printed already, for an extraction that goes into it.
-#'
-#' @param connection The MATR database, `list(url, key)`; see `model_database.R`.
-#' @param info Where it goes, as `extraction_service_info()` returns it.
-#' @return From `push_model_existing()`, or `NULL` while none is picked.
+# What a recorded questionnaire has printed already, for an extraction that goes into it.
+# Returns: From `push_model_existing()`, or `NULL` while none is picked.
 extraction_service_push_existing <- function(connection, info) {
   if (grepl("^[0-9]+$", info$questionnaire_id)) {
     push_model_existing(connection, info$questionnaire_id)
   }
 }
 
-#' The items of pushing an extraction.
-#'
-#' @inheritParams extraction_service_push_build
-#' @return The items, as a data frame; this is what the database function is given.
+# The items of pushing an extraction.
+# Returns: The items, as a data frame; this is what the database function is given.
 extraction_service_push_items <- function(connection, record) {
   extraction_service_push_build(connection, record)$items
 }
 
-#' The rows to add for a questionnaire as reviewed.
-#'
-#' Pure: everything it needs is given. See the top of this file for what is reused.
-#'
-#' @param draft The questionnaire as saved; see `draft_service_from_json()`.
-#' @param info Where it goes, from `extraction_service_info()`.
-#' @param ids `component_types`, `subjects` and `time_frames` as data frames with their ids (without
-#'   `time_frames`, every time frame is new).
-#' @param existing What the questionnaire has printed already, from `push_model_existing()`.
-#' @param options The answer choices and option sets there are, from `push_model_options()`, and the
-#'   components with words (`components`, from `push_model_components()`; without it, no block is shared).
-#' @return A list: `items`, `summary` and `rows`; see `extraction_service_push_build()`.
+# The rows to add for a questionnaire as reviewed.
+# Pure: everything it needs is given. See the top of this file for what is reused.
+# draft: The questionnaire as saved; see `draft_service_from_json()`.
+# info: Where it goes, from `extraction_service_info()`.
+# ids: `component_types`, `subjects` and `time_frames` as data frames with their ids (without
+#   `time_frames`, every time frame is new).
+# existing: What the questionnaire has printed already, from `push_model_existing()`.
+# options: The answer choices and option sets there are, from `push_model_options()`, and the
+#   components with words (`components`, from `push_model_components()`; without it, no block is shared).
+# Returns: A list: `items`, `summary` and `rows`; see `extraction_service_push_build()`.
 extraction_service_build_items <- function(draft, info, ids, existing, options) {
   if (nrow(draft$components) == 0) stop("There is nothing in this questionnaire to add yet.", call. = FALSE)
   push <- push_start(ids, existing, options)
@@ -262,7 +225,7 @@ extraction_service_build_items <- function(draft, info, ids, existing, options) 
 }
 
 # Where each new block goes among what holds it (or the top): after the blocks there already, in printed order.
-# @return A named list: block id -> display order, for the blocks that aren't there yet.
+# Returns: A named list: block id -> display order, for the blocks that aren't there yet.
 push_new_display_orders <- function(blocks, printed, found, placement_of, existing) {
   counted <- list() # what holds them -> how many new blocks are in it so far
   orders <- list()
@@ -717,7 +680,7 @@ push_link_reused <- function(push, block, component) {
 # one that is there if it has the same kind and words and sits in the same place (inside the same
 # block, or at the top). Each block that is there is found once.
 #
-# @return A named numeric vector: the draft's block id -> the placement that is there.
+# Returns: A named numeric vector: the draft's block id -> the placement that is there.
 push_match_blocks <- function(draft, existing, ids) {
   blocks <- draft$components
   placements <- existing$placements
@@ -753,7 +716,7 @@ push_match_blocks <- function(draft, existing, ids) {
 }
 
 # A block's words as they are compared: runs of spaces are one space, and none at the ends.
-push_words <- function(text) trimws(gsub("[[:space:]]+", " ", ifelse(is.na(text), "", text)))
+push_words <- function(text) squish(ifelse(is.na(text), "", text))
 
 # The component the database has with a block's kind and words (but for runs of spaces), to place here instead of a
 # copy, or NULL. There is one at most, and one Group (which has no words) shared by every group.
@@ -812,13 +775,10 @@ push_taken <- function(existing, parent) {
 }
 
 # ------ Said in words ---------------------------------------------------------------------------
-#' What an extraction's rows come to, in words.
-#'
-#' For example "Adds 14 new blocks, 9 questions asked in the wave, 11 new variables and 20 response
-#' options."
-#'
-#' @param summary From `extraction_service_push_build()`.
-#' @return A string.
+# What an extraction's rows come to, in words.
+# For example "Adds 14 new blocks, 9 questions asked in the wave, 11 new variables and 20 response
+# options."
+# summary: From `extraction_service_push_build()`.
 extraction_service_push_summary <- function(summary) {
   parts <- c(
     if (summary$blocks > 0) plural(summary$blocks, "new block"),
@@ -840,18 +800,14 @@ extraction_service_push_summary <- function(summary) {
 }
 
 # ------ The preview -------------------------------------------------------------------------------
-#' What an extraction's change request comes to, to show before it is submitted and while it waits.
-#'
-#' Pure: the rows are worked out from what is given (`context` and `existing` are read by the caller),
-#' and nothing is written.
-#'
-#' @param draft The questionnaire.
-#' @param info Where it goes, as `extraction_service_info()` returns it.
-#' @param catalog The live tables the pages pick from, from `questionnaire_service_get_catalog()`.
-#' @param context From `extraction_service_push_context()`.
-#' @param existing From `extraction_service_push_existing()`.
-#' @return A list for `extraction_request_ui()`: `where` and `what` (lists of cards), `summary` (a
-#'   sentence), `problem` (why the rows can't be worked out, or `NULL`) and `unchecked`.
+# What an extraction's change request comes to, to show before it is submitted and while it waits.
+# Pure: the rows are worked out from what is given (`context` and `existing` are read by the caller),
+# and nothing is written.
+# draft: The questionnaire.
+# context: From `extraction_service_push_context()`.
+# existing: From `extraction_service_push_existing()`.
+# Returns: A list for `extraction_request_ui()`: `where` and `what` (lists of cards), `summary` (a
+#   sentence), `problem` (why the rows can't be worked out, or `NULL`) and `unchecked`.
 extraction_service_request_preview <- function(draft, info, catalog, context, existing = NULL) {
   preview <- list(
     where = extraction_service_where_cards(info, catalog),
@@ -874,11 +830,8 @@ extraction_service_request_preview <- function(draft, info, catalog, context, ex
   preview
 }
 
-#' The cards for where an extraction goes: its registry, study, questionnaire and wave, all recorded.
-#'
-#' @param info Where it goes, as `extraction_service_info()` returns it.
-#' @param catalog The live tables the pages pick from, from `questionnaire_service_get_catalog()`.
-#' @return A list of four cards (see `request_card_ui()`); one not picked yet says so.
+# The cards for where an extraction goes: its registry, study, questionnaire and wave, all recorded.
+# Returns: A list of four cards (see `request_card_ui()`); one not picked yet says so.
 extraction_service_where_cards <- function(info, catalog) {
   not_picked <- function(kind) list(kind = kind, title = "Not picked yet", subtitle = "", facts = character(), is_missing = TRUE)
   registry <- catalog$registries[as.character(catalog$registries$registry_id) %in% info$registry_id, , drop = FALSE]
@@ -888,7 +841,7 @@ extraction_service_where_cards <- function(info, catalog) {
   list(
     if (nrow(registry) == 1) {
       list(
-        kind = "Registry", title = questionnaire_name(registry$name, registry$abbreviation %||% ""),
+        kind = "Registry", title = name_with_abbreviation(registry$name, registry$abbreviation %||% ""),
         subtitle = "Already in the database", facts = character(), is_new = FALSE
       )
     } else {
@@ -905,7 +858,7 @@ extraction_service_where_cards <- function(info, catalog) {
     },
     if (!is.null(questionnaire)) {
       list(
-        kind = "Questionnaire", title = questionnaire_name(questionnaire$name, questionnaire$abbreviation),
+        kind = "Questionnaire", title = name_with_abbreviation(questionnaire$name, questionnaire$abbreviation),
         subtitle = paste0("For ", questionnaire$respondent_type, " · already in the database"),
         facts = plural(questionnaire$n_waves, "wave"), is_new = FALSE
       )
@@ -927,16 +880,15 @@ extraction_service_where_cards <- function(info, catalog) {
   )
 }
 
-#' The cards for what an extraction adds: for each kind of row that can be kept once and used again, how many
-#' are new and how many are already in the database. How often each is used is in its list (`request_rows_ui()`). A wave's
-#' questions and a variable's response options aren't among them: there is a new one for each question and
-#' each choice, so they only say how long the questionnaire is (the sentence above the cards counts them).
-#'
-#' @param summary From `extraction_service_push_build()`.
-#' @param rows Each row the cards count, from `extraction_service_push_build()`, to list under them; `NULL` for none.
-#' @return A list of cards (see `request_card_ui()`); a card is NEW when its rows are added. Each has `rows` (a
-#'   data frame of `text`, `detail`, `status`, `is_new` and `uses`, or `NULL`) and `columns`, what its rows'
-#'   `text`, `detail` and `uses` are called.
+# The cards for what an extraction adds: for each kind of row that can be kept once and used again, how many
+# are new and how many are already in the database. How often each is used is in its list (`request_rows_ui()`). A wave's
+# questions and a variable's response options aren't among them: there is a new one for each question and
+# each choice, so they only say how long the questionnaire is (the sentence above the cards counts them).
+# summary: From `extraction_service_push_build()`.
+# rows: Each row the cards count, from `extraction_service_push_build()`, to list under them; `NULL` for none.
+# Returns: A list of cards (see `request_card_ui()`); a card is NEW when its rows are added. Each has `rows` (a
+#   data frame of `text`, `detail`, `status`, `is_new` and `uses`, or `NULL`) and `columns`, what its rows'
+#   `text`, `detail` and `uses` are called.
 extraction_service_what_cards <- function(summary, rows = NULL) {
   count <- function(n) format(n, big.mark = ",")
   card <- function(kind, n_new, n_found, title, found_note, subtitle = "", listed = NULL, columns = character()) {
@@ -985,29 +937,22 @@ extraction_service_what_cards <- function(summary, rows = NULL) {
 }
 
 # ------ Sending it ----------------------------------------------------------------------------------
-#' The one-line description of an extraction's change request, for its title.
-#'
-#' @param record The extraction's record.
-#' @param catalog The live tables the pages pick from.
-#' @return A string, e.g. `"Add Adult Health and Personality (AHP) · Wave 3"`.
+# The one-line description of an extraction's change request, for its title.
+# catalog: The live tables the pages pick from.
+# Returns: A string, e.g. `"Add Adult Health and Personality (AHP) · Wave 3"`.
 extraction_service_push_title <- function(record, catalog) {
   paste("Add", extraction_service_title(record, catalog))
 }
 
-#' Submit an extraction's change request.
-#'
-#' It is sent to Change Requests, whoever submits it: its Basic Info (`info`) is filled in there. Then
-#' one other staff member approves it, which applies it; an ADMIN can add their own without approval.
-#' The questionnaire has to be saved first (the page saves it); what is sent is the saved copy.
-#'
-#' @param connection The MATR database, `list(url, key)`; see `model_database.R`.
-#' @param record The extraction's record.
-#' @param me Who is submitting it: `list(staff_id, name, role)`.
-#' @param catalog The live tables the pages pick from, from `questionnaire_service_get_catalog()`.
-#' @param reviewer The staff id of the person asked to review it, or `NULL`.
-#' @return A list: `applied` (always `FALSE`: it waits on Change Requests), `history_id` (`NULL`) and
-#'   `record` (as saved, with when it was `submitted`, which the database records). An error with a
-#'   sentence if the database refused.
+# Submit an extraction's change request.
+# It is sent to Change Requests, whoever submits it: its Basic Info (`info`) is filled in there. Then
+# one other staff member approves it, which applies it; an ADMIN can add their own without approval.
+# The questionnaire has to be saved first (the page saves it); what is sent is the saved copy.
+# me: Who is submitting it: `list(staff_id, name, role)`.
+# reviewer: The staff id of the person asked to review it, or `NULL`.
+# Returns: A list: `applied` (always `FALSE`: it waits on Change Requests), `history_id` (`NULL`) and
+#   `record` (as saved, with when it was `submitted`, which the database records). An error with a
+#   sentence if the database refused.
 extraction_service_push <- function(connection, record, me, catalog, reviewer = NULL) {
   asked <- if (!is.null(reviewer) && nzchar(as.character(reviewer))) list(id = as.numeric(reviewer))
   sent <- utils::modifyList(
@@ -1025,18 +970,13 @@ extraction_service_push <- function(connection, record, me, catalog, reviewer = 
   list(applied = FALSE, history_id = NULL, record = saved)
 }
 
-#' Save an extraction's Basic Info: where it goes in the database.
-#'
-#' Filled in on Change Requests. It is a change to the request like any other: it makes a new
-#' revision, and whoever saves it can't be the one who approves it.
-#'
-#' @param connection The MATR database, `list(url, key)`; see `model_database.R`.
-#' @param record The request as the person read it.
-#' @param info Where it goes, as `extraction_service_info()` returns it.
-#' @param me Who is saving it: `list(staff_id, name, role)`.
-#' @param catalog The live tables the pages pick from, from `questionnaire_service_get_catalog()`.
-#' @return The record as saved. An error with a sentence if the database refused, e.g. because the
-#'   request was changed after the person opened it.
+# Save an extraction's Basic Info: where it goes in the database.
+# Filled in on Change Requests. It is a change to the request like any other: it makes a new
+# revision, and whoever saves it can't be the one who approves it.
+# record: The request as the person read it.
+# me: Who is saving it: `list(staff_id, name, role)`.
+# Returns: The record as saved. An error with a sentence if the database refused, e.g. because the
+#   request was changed after the person opened it.
 extraction_service_save_info <- function(connection, record, info, me, catalog) {
   placed <- utils::modifyList(record, list(info = info), keep.null = TRUE)
   described <- utils::modifyList(placed, list(summary = extraction_service_push_title(placed, catalog)), keep.null = TRUE)

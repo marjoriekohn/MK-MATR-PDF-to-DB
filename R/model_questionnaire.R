@@ -2,21 +2,15 @@
 # and the studies in them, who leads each study, each questionnaire's respondent type,
 # and its waves. `connection` is the MATR database (model_database.R).
 
-#' Every registry.
-#'
-#' The outermost container; every study rolls up to a registry.
-#'
-#' @param connection The MATR database, `list(url, key)`; see `model_database.R`.
-#' @return A data frame with `registry_id`, `name` and `abbreviation`, by name.
+# Every registry.
+# The outermost container; every study rolls up to a registry.
+# Returns: A data frame with `registry_id`, `name` and `abbreviation`, by name.
 registry_model_get_all <- function(connection) {
   database_model_get(connection, "registry", c("registry_id", "name", "abbreviation"), order_by = "name")
 }
 
-#' The questions one questionnaire's waves ask.
-#'
-#' @param connection The MATR database, `list(url, key)`; see `model_database.R`.
-#' @param questionnaire_id The questionnaire's id.
-#' @return A data frame with `wave_id` and `component_id`, one row per question a wave asks.
+# The questions one questionnaire's waves ask.
+# Returns: A data frame with `wave_id` and `component_id`, one row per question a wave asks.
 wave_question_model_get <- function(connection, questionnaire_id) {
   database_model_get(
     connection, "wave_question", c("wave_id", "placement_id"),
@@ -24,16 +18,13 @@ wave_question_model_get <- function(connection, questionnaire_id) {
   )
 }
 
-#' Every study, with its lead investigator's name, its questionnaires and their waves, in one request.
-#'
-#' Every questionnaire is in a study and every wave in a questionnaire, so this is all of each, without a
-#' request for each table.
-#'
-#' @param connection The MATR database, `list(url, key)`; see `model_database.R`.
-#' @return A list of data frames: `studies` (`study_id`, `registry_id`, `principal_investigator_id` and `name`,
-#'   by name), `investigators` (`principal_investigator_id` and `name`, only those who lead a study),
-#'   `questionnaires` (`questionnaire_id`, `study_id`, `respondent_type_id`, `name` and `abbreviation`) and
-#'   `waves` (`wave_id`, `questionnaire_id`, `name`, `administered_date` and `respondent_count`), each by id.
+# Every study, with its lead investigator's name, its questionnaires and their waves, in one request.
+# Every questionnaire is in a study and every wave in a questionnaire, so this is all of each, without a
+# request for each table.
+# Returns: A list of data frames: `studies` (`study_id`, `registry_id`, `principal_investigator_id` and `name`,
+#   by name), `investigators` (`principal_investigator_id` and `name`, only those who lead a study),
+#   `questionnaires` (`questionnaire_id`, `study_id`, `respondent_type_id`, `name` and `abbreviation`) and
+#   `waves` (`wave_id`, `questionnaire_id`, `name`, `administered_date` and `respondent_count`), each by id.
 study_model_get_tree <- function(connection) {
   columns <- list(
     studies = c("study_id", "registry_id", "principal_investigator_id", "name"),
@@ -79,10 +70,8 @@ data_frame_of <- function(rows, columns) {
   as.data.frame(values, stringsAsFactors = FALSE)
 }
 
-#' Every respondent type.
-#'
-#' @param connection The MATR database, `list(url, key)`; see `model_database.R`.
-#' @return A data frame with `respondent_type_id`, `name`, `minimum_age` and `maximum_age`, by name.
+# Every respondent type.
+# Returns: A data frame with `respondent_type_id`, `name`, `minimum_age` and `maximum_age`, by name.
 respondent_type_model_get_all <- function(connection) {
   database_model_get(
     connection, "respondent_type",

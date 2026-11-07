@@ -1,12 +1,8 @@
-#' The pop-up that adds a row from inside a Basic Info drop-down.
-#'
-#' It holds the Make an edit form for one kind (`edit_change_ui()`), a note that says when what was typed
-#' looks like something already there, and the buttons.
-#'
-#' @param entity The kind, from `edit_service_quick_entity()`.
-#' @param ns The module's namespace function.
-#' @param back Whether Cancel goes back to another pop-up (the study's, from the investigator's).
-#' @return A `modalDialog()`, for `showModal()`.
+# The pop-up that adds a row from inside a Basic Info drop-down.
+# It holds the Make an edit form for one kind (`edit_change_ui()`), a note that says when what was typed
+# looks like something already there, and the buttons.
+# entity: The kind, from `edit_service_quick_entity()`.
+# back: Whether Cancel goes back to another pop-up (the study's, from the investigator's).
 quick_add_dialog <- function(entity, ns, back = FALSE) {
   modalDialog(
     title = paste("Add", entity$article, entity$noun),

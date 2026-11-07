@@ -21,17 +21,14 @@ gemini_first_pause_seconds <- 5
 gemini_longest_pause_seconds <- 30
 gemini_busy_statuses <- c(429, 500, 502, 503, 504)
 
-#' Have Gemini read a PDF.
-#'
-#' One request for each prompt, all about the same PDF, sent at once. A busy Gemini is
-#' asked again (see `gemini_model_perform()`). Errors are sentences staff can act on.
-#'
-#' @param pdf_path The PDF, or `NULL` to send the prompts alone (what Gemini reads is in them).
-#' @param prompts A character vector, one prompt for each request.
-#' @param model The Gemini model to use.
-#' @param api_key The Gemini API key; defaults to `GEMINI_KEY`.
-#' @return A list with one answer for each prompt: `text`, `model`, `input_tokens`,
-#'   `output_tokens` and `thinking_tokens`.
+# Have Gemini read a PDF.
+# One request for each prompt, all about the same PDF, sent at once. A busy Gemini is
+# asked again (see `gemini_model_perform()`). Errors are sentences staff can act on.
+# pdf_path: The PDF, or `NULL` to send the prompts alone (what Gemini reads is in them).
+# prompts: A character vector, one prompt for each request.
+# api_key: The Gemini API key; defaults to `GEMINI_KEY`.
+# Returns: A list with one answer for each prompt: `text`, `model`, `input_tokens`,
+#   `output_tokens` and `thinking_tokens`.
 gemini_model_generate <- function(pdf_path, prompts, model = "gemini-3.8-flash",
                                   api_key = Sys.getenv("GEMINI_KEY")) {
   if (!nzchar(api_key)) {

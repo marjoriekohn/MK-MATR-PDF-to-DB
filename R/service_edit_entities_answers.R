@@ -113,18 +113,14 @@ edit_merge_clash <- function(snap, from, to) {
   intersect(offered$variable_key[offered$answer_option_id %in% from], offered$variable_key[offered$answer_option_id %in% to])
 }
 
-#' The items of merging one answer choice into another.
-#'
-#' Each variable's response option of `from` becomes one of `to`, with the same order, code, skip and counts of
-#' answers (a row's key can't change, so it goes and comes back). Each option set with `from` has `to` instead, and
-#' a set that then has the same choices as another is merged into it: the variables and scale items that used it
-#' use the other (the one more variables offer). `from`'s words, and the wordings merged into it before, become
-#' `to`'s, so an extraction that reads them uses `to` (answer_option_alias). Then `from` goes.
-#'
-#' @param snap The tables the kind needs, as `edit_service_load()` reads them: a list of data frames named after the tables.
-#' @param from The answer choice merged.
-#' @param to The answer choice it is merged into.
-#' @return A data frame of items; see `edit_item()`.
+# The items of merging one answer choice into another.
+# Each variable's response option of `from` becomes one of `to`, with the same order, code, skip and counts of
+# answers (a row's key can't change, so it goes and comes back). Each option set with `from` has `to` instead, and
+# a set that then has the same choices as another is merged into it: the variables and scale items that used it
+# use the other (the one more variables offer). `from`'s words, and the wordings merged into it before, become
+# `to`'s, so an extraction that reads them uses `to` (answer_option_alias). Then `from` goes.
+# from: The answer choice merged.
+# to: The answer choice it is merged into.
 edit_merge_items <- function(snap, from, to) {
   items <- list()
   add <- function(...) items[[length(items) + 1]] <<- edit_item(...)

@@ -35,28 +35,26 @@ test_that("an edit someone approved says who, and that it needed approval", {
   expect_match(record$approved, "^[0-9]{4}-")
 })
 
-test_that("a draft that isn't applied yet isn't in the history, and the count is of applied ones", {
+test_that("a draft that isn't applied yet isn't in the history, the count is of applied ones, and an added row is listed", {
   me <- local_staff()
   waiting <- local_edit(me, status = "Awaiting Review")
   before <- history_model_count(test_connection)
   expect_false(waiting$id %in% names(history_model_get_all(test_connection)))
   admin <- local_staff("ADMIN")
-  id <- local_applied_edit(admin, "respondent_type", "add", respondent_type__name = test_name("Counted"))
+  name <- test_name("Counted")
+  id <- local_applied_edit(admin, "respondent_type", "add", respondent_type__name = name)
   expect_equal(history_model_count(test_connection), before + 1L)
+  # an added row is listed with the number the database gave it
+  items <- history_model_get_items(test_connection, as.character(id))
+  expect_equal(unique(items$action), "Insert")
+  expect_true(all(is.na(items$old_value)))
+  expect_equal(items$new_value[items$attribute_name == "name"], name)
+  expect_match(items$record_identifier[1], '^\\{"respondent_type_id":[0-9]+\\}$')
   # the newest are read alone, newest first
   newest <- history_model_get_all(test_connection, most = 2)
   expect_length(newest, min(2, before + 1L))
   expect_equal(names(newest), utils::head(names(history_model_get_all(test_connection)), 2))
   expect_true(as.character(id) %in% names(history_model_get_all(test_connection)))
-})
-
-test_that("the edits come newest first", {
-  admin <- local_staff("ADMIN")
-  first <- local_applied_edit(admin, "respondent_type", "add", respondent_type__name = test_name("First"))
-  second <- local_applied_edit(admin, "respondent_type", "add", respondent_type__name = test_name("Second"))
-  records <- history_model_get_all(test_connection)
-  ours <- names(records)[names(records) %in% as.character(c(first, second))]
-  expect_equal(ours, as.character(c(second, first)))
 })
 
 test_that("an edit from before it had a sentence has empty words where it has none", {
@@ -95,17 +93,6 @@ test_that("the fields an edit changed come back in the order they were applied",
   expect_equal(items$new_value[items$attribute_name == "maximum_age"], "64")
   expect_equal(unique(items$record_identifier), sprintf('{"respondent_type_id":%d}', type$respondent_type_id))
   expect_equal(unique(items$action), "Update")
-})
-
-test_that("an added row is listed with the number the database gave it", {
-  admin <- local_staff("ADMIN")
-  name <- test_name("Added")
-  id <- local_applied_edit(admin, "respondent_type", "add", respondent_type__name = name)
-  items <- history_model_get_items(test_connection, as.character(id))
-  expect_equal(unique(items$action), "Insert")
-  expect_true(all(is.na(items$old_value)))
-  expect_equal(items$new_value[items$attribute_name == "name"], name)
-  expect_match(items$record_identifier[1], '^\\{"respondent_type_id":[0-9]+\\}$')
 })
 
 test_that("an edit with no items is an empty table, and only digits ask for an edit", {

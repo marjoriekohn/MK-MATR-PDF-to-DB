@@ -2,14 +2,11 @@
 # kinds themselves are in service_edit_entities_*.R, one file for each group, and listed in service_edit_kinds.R.
 
 # ------ Building blocks ---------------------------------------------------------------------
-#' A count of rows with its noun, thousands separated.
-#'
-#' For example "1 study", "3 studies", "1,200 waves".
-#'
-#' @param n The count.
-#' @param singular The noun for one.
-#' @param plural_form The noun for any other count; defaults to adding an "s".
-#' @return A string; see `plural()`.
+# A count of rows with its noun, thousands separated.
+# For example "1 study", "3 studies", "1,200 waves".
+# singular: The noun for one.
+# plural_form: The noun for any other count; defaults to adding an "s".
+# Returns: A string; see `plural()`.
 edit_count <- function(n, singular, plural_form = paste0(singular, "s")) {
   plural(n, singular, plural_form = plural_form, big_mark = ",")
 }
@@ -44,16 +41,11 @@ edit_cards <- function(key, title, subtitle = "", facts = NULL, tag = NA_charact
   cards
 }
 
-# "18+", "5-17", "up to 17" or "any age" (see age_range_text()).
-edit_age_range <- function(minimum, maximum) age_range_text(minimum, maximum)
-
-#' The choices of a drop-down of rows: shown by name, saved as the row's ID.
-#'
-#' @param snap The tables the kind needs, as `edit_service_load()` reads them: a list of data frames named after the tables.
-#' @param table The table the rows are from.
-#' @param rows The rows to offer; all of the table's by default.
-#' @param blank The text of a leading choice with the value `""`, or `NULL` for none.
-#' @return A named character vector: the names are shown, and the values, the ids, are saved.
+# The choices of a drop-down of rows: shown by name, saved as the row's ID.
+# table: The table the rows are from.
+# rows: The rows to offer; all of the table's by default.
+# blank: The text of a leading choice with the value `""`, or `NULL` for none.
+# Returns: A named character vector: the names are shown, and the values, the ids, are saved.
 edit_choices <- function(snap, table, rows = snap[[table]], blank = NULL) {
   # (with no rows, text pasted around nothing would still make one label)
   labels <- if (nrow(rows) == 0) {
@@ -70,16 +62,13 @@ edit_choices <- function(snap, table, rows = snap[[table]], blank = NULL) {
 }
 
 edit_choice_labels <- list(
-  registry = function(snap, rows) paste0(rows$name, " (", rows$abbreviation, ")"),
-  respondent_type = function(snap, rows) paste0(rows$name, " (", edit_age_range(rows$minimum_age, rows$maximum_age), ")"),
+  registry = function(snap, rows) name_with_abbreviation(rows$name, rows$abbreviation),
+  respondent_type = function(snap, rows) paste0(rows$name, " (", age_range_text(rows$minimum_age, rows$maximum_age), ")"),
   study = function(snap, rows) {
     paste0(rows$name, " · ", edit_lookup(snap, "registry", "registry_id", rows$registry_id, "abbreviation"))
   },
   questionnaire = function(snap, rows) {
-    paste0(
-      ifelse(is.na(rows$abbreviation) | !nzchar(rows$abbreviation), rows$name, paste0(rows$name, " (", rows$abbreviation, ")")),
-      " · ", edit_lookup(snap, "study", "study_id", rows$study_id, "name")
-    )
+    paste0(name_with_abbreviation(rows$name, rows$abbreviation), " · ", edit_lookup(snap, "study", "study_id", rows$study_id, "name"))
   }
 )
 
@@ -94,30 +83,24 @@ edit_field_types <- c("text", "textarea", "number", "date", "select", "several",
 # that value. `problem` and `warn` are functions of (value, values), where
 # `values` is everything typed in the same part of the form by field name,
 # giving a sentence, or NULL: a problem stops the edit, a warning only says.
-# `default` is what an added row starts with. `tooltip` is shown when the label is hovered or focused.
+# `default` is what an added row starts with. `tooltip` is added to the hint, after it.
 edit_field <- function(name, label, type = "text", required = FALSE, choices = NULL, hint = NULL,
                        placeholder = NULL, locked = NULL, min = NULL, rows = NULL, show_when = NULL,
-                       problem = NULL, warn = NULL, suggest = NULL, default = NULL, short = NULL,
+                       problem = NULL, warn = NULL, default = NULL, short = NULL,
                        tooltip = NULL, options = NULL, normalize = NULL) {
   # the form would draw any other as a text box, and check nothing about it
   if (!type %in% edit_field_types) stop("A form field can't be of type ", type, ".", call. = FALSE)
   list(
     name = name, label = label, type = type, required = required, choices = choices, hint = hint,
     placeholder = placeholder, locked = locked, min = min, rows = rows, show_when = show_when,
-    problem = problem, warn = warn, suggest = suggest, default = default, tooltip = tooltip, options = options,
+    problem = problem, warn = warn, default = default, tooltip = tooltip, options = options,
     normalize = normalize, # a function: what is typed, as it is saved
     short = short %||% tolower_first(label) # what a sentence calls it: "changed the ..."
   )
 }
 
-# The words already used in a column, for a text field to offer as it's typed.
-edit_suggestions <- function(values) {
-  values <- unique(values[!is.na(values) & nzchar(values)])
-  sort(values)
-}
-
 # Words as they are compared: capitals and extra spaces (at either end, or doubled inside) don't count.
-edit_same_words <- function(text) tolower(gsub("[[:space:]]+", " ", trimws(text)))
+edit_same_words <- function(text) tolower(squish(text))
 
 # Another row of `table` already has `value` in `column` (ignoring case and
 # extra spaces), apart from the row being changed.
@@ -130,10 +113,9 @@ edit_taken <- function(snap, table, column, value, row = NULL, within = NULL) {
 }
 
 # ------ Small helpers the forms use ---------------------------------------------------------------------
-#' A whole number typed as text.
-#'
-#' @param text For example `"1,200"`.
-#' @return The number, or `NA` if `text` isn't a whole number.
+# A whole number typed as text.
+# text: For example `"1,200"`.
+# Returns: The number, or `NA` if `text` isn't a whole number.
 edit_whole_number <- function(text) {
   text <- gsub(",", "", trimws(text %||% ""), fixed = TRUE)
   if (!grepl("^[0-9]+$", text)) {

@@ -3,25 +3,15 @@
 # it. Shiny runs a session's code one piece at a time, so nothing changes it while something else is reading it; it
 # isn't made to be shared between threads or sessions, and shouldn't be.
 
-#' The Extraction Drafts page's server.
-#'
-#' Every extraction draft still being prepared, newest first. Continue opens a draft that
-#' has been read (or typed by hand) on the Edit Extraction page, and one still being read on New Extraction, in
-#' AI-Powered mode.
-#' While someone else is working on a draft its card says so, and offers Take over instead (asking first).
-#'
-#' @param id The module's id.
-#' @param extractions The extraction drafts as `server.R` shares them: `all()` is a reactive list
-#'   of records, and `changed()` tells it this session changed one.
-#' @param catalog The live tables the pages pick from, as `server.R` shares them: `get()` reads them
-#'   (`questionnaire_service_get_catalog()`) and `refresh()` reads them again.
-#' @param connection The MATR database, `list(url, key)`; see `model_database.R`.
-#' @param me Who is using the site: `list(staff_id, name, role)`.
-#' @param open_edit_extraction A function taking a record (and `take_over`, whether to take it from
-#'   whoever is working on it) and opening it on the Edit Extraction page.
-#' @param open_details A function taking a record and opening it on New Extraction, in AI-Powered mode.
-#' @param switch_mode A function taking a mode of New Extraction (`"manual"` or `"ai"`) and showing it.
-#' @return Called for its effect.
+# The Extraction Drafts page's server.
+# Every extraction draft still being prepared, newest first. Continue opens a draft that
+# has been read (or typed by hand) on the Edit Extraction page, and one still being read on New Extraction, in
+# AI-Powered mode.
+# While someone else is working on a draft its card says so, and offers Take over instead (asking first).
+# open_edit_extraction: A function taking a record (and `take_over`, whether to take it from
+#   whoever is working on it) and opening it on the Edit Extraction page.
+# open_details: A function taking a record and opening it on New Extraction, in AI-Powered mode.
+# switch_mode: A function taking a mode of New Extraction (`"manual"` or `"ai"`) and showing it.
 extraction_drafts_server <- function(
   id,
   extractions,
@@ -102,13 +92,10 @@ extraction_drafts_server <- function(
 
     observeEvent(input$confirm_discard, {
       removeModal()
-      tryCatch(
-        {
-          extraction_service_discard(connection, discarding(), me)
-          showNotification("Draft discarded.", type = "message")
-        },
-        error = function(problem) show_problem(problem, "Couldn't discard it")
-      )
+      try_showing({
+        extraction_service_discard(connection, discarding(), me)
+        showNotification("Draft discarded.", type = "message")
+      }, "Couldn't discard it")
       extractions$changed()
     })
 

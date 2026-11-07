@@ -28,14 +28,10 @@ storage_request <- function(connection, bucket, name) {
 # A PDF can be tens of megabytes, so it has longer than a database request.
 storage_timeout_seconds <- 120
 
-#' Keep a file in a bucket, replacing one of the same name.
-#'
-#' @param connection The MATR database, `list(url, key)`; see `model_database.R`.
-#' @param bucket The bucket.
-#' @param name The file's name in the bucket.
-#' @param path The file on this server.
-#' @param type Its media type.
-#' @return Called for its effect. An error with a sentence if Storage refused.
+# Keep a file in a bucket, replacing one of the same name.
+# path: The file on this server.
+# type: Its media type.
+# Returns: Called for its effect. An error with a sentence if Storage refused.
 storage_model_upload <- function(connection, bucket, name, path, type = "application/pdf") {
   response <- storage_request(connection, bucket, name) |>
     httr2::req_method("POST") |>
@@ -46,13 +42,9 @@ storage_model_upload <- function(connection, bucket, name, path, type = "applica
   invisible()
 }
 
-#' Remove a file from a bucket.
-#'
-#' @param connection The MATR database, `list(url, key)`; see `model_database.R`.
-#' @param bucket The bucket.
-#' @param name The file's name in the bucket.
-#' @return Called for its effect; a file that isn't there is no problem. An error with a sentence if
-#'   Storage refused.
+# Remove a file from a bucket.
+# Returns: Called for its effect; a file that isn't there is no problem. An error with a sentence if
+#   Storage refused.
 storage_model_delete <- function(connection, bucket, name) {
   response <- storage_request(connection, bucket, name) |>
     httr2::req_method("DELETE") |>
@@ -61,14 +53,10 @@ storage_model_delete <- function(connection, bucket, name) {
   invisible()
 }
 
-#' Fetch a file from a bucket.
-#'
-#' @param connection The MATR database, `list(url, key)`; see `model_database.R`.
-#' @param bucket The bucket.
-#' @param name The file's name in the bucket.
-#' @param path Where to put it on this server.
-#' @return `TRUE` if it was there and is now at `path`, `FALSE` if the bucket has no such file. An
-#'   error with a sentence if Storage couldn't be asked.
+# Fetch a file from a bucket.
+# path: Where to put it on this server.
+# Returns: `TRUE` if it was there and is now at `path`, `FALSE` if the bucket has no such file. An
+#   error with a sentence if Storage couldn't be asked.
 storage_model_download <- function(connection, bucket, name, path) {
   fetching <- tempfile(tmpdir = dirname(path))
   on.exit(unlink(fetching))

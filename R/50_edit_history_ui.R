@@ -1,7 +1,4 @@
-#' The Edit History page: every edit that has been applied to the MATR metadata database.
-#'
-#' @param id The module's id.
-#' @return The page's UI.
+# The Edit History page: every edit that has been applied to the MATR metadata database.
 edit_history_ui <- function(id) {
   ns <- NS(id)
   div(
@@ -25,10 +22,7 @@ edit_history_ui <- function(id) {
 }
 
 # ------ One card for each edit -----------------------------------------------------------
-#' One edit in the history.
-#'
-#' @param record An edit, from `history_service_get_all()`.
-#' @return A UI element.
+# One edit in the history.
 history_entry_ui <- function(record) {
   div(
     class = "list-card",
@@ -48,10 +42,8 @@ history_entry_ui <- function(record) {
   )
 }
 
-#' What is shown when there is nothing to list.
-#'
-#' @param filtered Whether a filter or search hid every edit, rather than there being none.
-#' @return A UI element.
+# What is shown when there is nothing to list.
+# filtered: Whether a filter or search hid every edit, rather than there being none.
 no_history <- function(filtered) {
   div(
     class = "list-card is-empty",

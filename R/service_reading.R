@@ -32,21 +32,17 @@ reading_assign_prompt_path <- "prompts/assign_codes.md"
 reading_assign_batch <- 80
 reading_pages_at_once <- 2
 
-#' Read a questionnaire PDF into the JSON the Edit Extraction page loads.
-#'
-#' Gemini reads a few pages at a time, the requests sent at once, and the answers are
-#' joined and tidied. The draft checks look the result over; if they find problems, Gemini
-#' reads it once more, told what they were, and the reading with fewer problems is kept.
-#'
-#' @param pdf_path The PDF.
-#' @param lookups The pick lists, from `lookup_service_get_all()`.
-#' @param progress A function told `"sent"` when the PDF goes to Gemini and `"received"`
-#'   when its answers are back.
-#' @param generate `gemini_model_generate()` or a stand-in.
-#' @param model The Gemini model to use.
-#' @param pages The PDF's page count; counted from the PDF if not given.
-#' @return A list: `json` (the questionnaire), `problems` the checks still find, `model`,
-#'   `prompt_version` and `tokens` used.
+# Read a questionnaire PDF into the JSON the Edit Extraction page loads.
+# Gemini reads a few pages at a time, the requests sent at once, and the answers are
+# joined and tidied. The draft checks look the result over; if they find problems, Gemini
+# reads it once more, told what they were, and the reading with fewer problems is kept.
+# pdf_path: The PDF.
+# progress: A function told `"sent"` when the PDF goes to Gemini and `"received"`
+#   when its answers are back.
+# generate: `gemini_model_generate()` or a stand-in.
+# pages: The PDF's page count; counted from the PDF if not given.
+# Returns: A list: `json` (the questionnaire), `problems` the checks still find, `model`,
+#   `prompt_version` and `tokens` used.
 reading_service_read <- function(pdf_path, lookups, progress = function(status) NULL,
                                  generate = gemini_model_generate, model = reading_gemini_model,
                                  pages = NULL) {
@@ -327,7 +323,7 @@ clean_text <- function(text) {
     return(NULL)
   }
   text <- gsub("…", "...", straight_quotes(text))
-  text <- trimws(gsub("[[:space:]]+", " ", text))
+  text <- squish(text)
   if (nzchar(text)) text
 }
 
@@ -383,21 +379,18 @@ block_name <- function(blocks) {
 }
 
 # ------ MATR IDs and codes from a second file -------------------------------------------
-#' Give a reading's variables their MATR IDs, and its choices their codes, from a file that lists them.
-#'
-#' Gemini reads the file (a codebook or a list: a PDF, or text) with the reading's variables, each named by an
-#' id (v1, v2... and o1, o2... for the choices, in printed order), and answers with what the file gives for
-#' each. The variables go `reading_assign_batch` at a time, each batch with the whole file, the requests sent at
-#' once. Only what it gives is filled in. A MATR ID it gives two variables, or codes that repeat within a
-#' variable, are left out, for staff to give on the Edit Extraction page.
-#'
-#' @param json A reading, as `reading_service_tidy()` returns it.
-#' @param supplement The file: `list(name, path)` for a PDF, `list(name, text)` for text
-#'   (`extraction_service_supplement_file()`).
-#' @param generate `gemini_model_generate()` or a stand-in.
-#' @param model The Gemini model to use.
-#' @param prompt_path The prompt's file.
-#' @return The reading, with `matr_id` on the variables and `code_value` on the choices the file gave.
+# Give a reading's variables their MATR IDs, and its choices their codes, from a file that lists them.
+# Gemini reads the file (a codebook or a list: a PDF, or text) with the reading's variables, each named by an
+# id (v1, v2... and o1, o2... for the choices, in printed order), and answers with what the file gives for
+# each. The variables go `reading_assign_batch` at a time, each batch with the whole file, the requests sent at
+# once. Only what it gives is filled in. A MATR ID it gives two variables, or codes that repeat within a
+# variable, are left out, for staff to give on the Edit Extraction page.
+# json: A reading, as `reading_service_tidy()` returns it.
+# supplement: The file: `list(name, path)` for a PDF, `list(name, text)` for text
+#   (`extraction_service_supplement_file()`).
+# generate: `gemini_model_generate()` or a stand-in.
+# prompt_path: The prompt's file.
+# Returns: The reading, with `matr_id` on the variables and `code_value` on the choices the file gave.
 reading_service_assign <- function(json, supplement, generate = gemini_model_generate, model = reading_gemini_model,
                                    prompt_path = reading_assign_prompt_path) {
   variables <- assign_variables(json)
@@ -510,15 +503,12 @@ reading_claim_grace_seconds <- 120
 
 reading_log_dir <- "logs"
 
-#' Start, stop and check on the reading jobs.
-#'
-#' Starts a job for each draft waiting to be read, stops jobs whose reading was restarted
-#' or discarded, and marks failed any reading whose job has died.
-#'
-#' @param records The extraction records, from `extraction_service_get_all()`.
-#' @param connection The MATR database, `list(url, key)`; see `model_database.R`.
-#' @return `TRUE` while any draft is being read, so the caller looks again soon (a job
-#'   that dies changes nothing in the database).
+# Start, stop and check on the reading jobs.
+# Starts a job for each draft waiting to be read, stops jobs whose reading was restarted
+# or discarded, and marks failed any reading whose job has died.
+# records: The extraction records, from `extraction_service_get_all()`.
+# Returns: `TRUE` while any draft is being read, so the caller looks again soon (a job
+#   that dies changes nothing in the database).
 reading_service_watch <- function(records, connection) {
   open <- extraction_service_open_drafts(records)
   for (id in setdiff(ls(reading_jobs), names(open))) stop_job(id)
@@ -551,18 +541,13 @@ reading_service_watch <- function(records, connection) {
   reading
 }
 
-#' What a reading job does, in its own R process.
-#'
-#' Reads the draft's PDF, saves the questionnaire it got, and moves the draft's
-#' `extraction_status` along as it goes; a failure is saved as the reason. Nothing is
-#' saved if the reading was restarted meanwhile.
-#'
-#' @param connection The MATR database, `list(url, key)`; see `model_database.R`.
-#' @param id The draft's id.
-#' @param reading_started The reading's start time the job was started for.
-#' @param read `reading_service_read()` or a stand-in.
-#' @param assign `reading_service_assign()` or a stand-in.
-#' @return `TRUE` invisibly, or `FALSE` if the reading had already restarted.
+# What a reading job does, in its own R process.
+# Reads the draft's PDF, saves the questionnaire it got, and moves the draft's
+# `extraction_status` along as it goes; a failure is saved as the reason. Nothing is
+# saved if the reading was restarted meanwhile.
+# read: `reading_service_read()` or a stand-in.
+# assign: `reading_service_assign()` or a stand-in.
+# Returns: `TRUE` invisibly, or `FALSE` if the reading had already restarted.
 reading_service_run <- function(connection, id, reading_started, read = reading_service_read,
                                 assign = reading_service_assign) {
   update <- function(...) extraction_service_reading_update(connection, id, reading_started, list(...))

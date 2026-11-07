@@ -3,13 +3,11 @@
 # changed and what a change reaches (the list is 40_make_edit_ui.R's). Buttons use the
 # page script's data-action (see helpers_review.R).
 
-#' A box with something staff should know.
-#'
-#' @param kind `"info"`, `"warning"` or `"danger"`.
-#' @param ... What it says.
-#' @param title A bold line above it.
-#' @param icon_name An icon, by its name in `app_icons`; by default one that suits `kind`.
-#' @return A UI element.
+# A box with something staff should know.
+# kind: `"info"`, `"warning"` or `"danger"`.
+# ...: What it says.
+# title: A bold line above it.
+# icon_name: An icon, by its name in `app_icons`; by default one that suits `kind`.
 edit_callout <- function(kind, ..., title = NULL, icon_name = NULL) {
   icon_name <- icon_name %||% switch(kind,
     danger = "problem",
@@ -24,15 +22,12 @@ edit_callout <- function(kind, ..., title = NULL, icon_name = NULL) {
 }
 
 # ------ The info block ----------------------------------------------------------------------------
-#' Everything staff should know about the edit they are making, in one place under the sentence: what
-#' the verb involves for the kind of thing, and what happens when it is sent. Nothing else on the page
-#' says these again. `NULL` when there is nothing to say (a plain add or update, applied at once).
-#'
-#' @param entity The kind of thing; see `edit_entities`.
-#' @param verb `"add"`, `"update"`, `"delete"`, or `""` while it isn't picked yet.
-#' @param approval Whether it waits on Change Requests for another staff member's approval.
-#' @param editing_request Whether a request already waiting for approval is being changed.
-#' @return A UI element.
+# Everything staff should know about the edit they are making, in one place under the sentence: what
+# the verb involves for the kind of thing, and what happens when it is sent. Nothing else on the page
+# says these again. `NULL` when there is nothing to say (a plain add or update, applied at once).
+# verb: `"add"`, `"update"`, `"delete"`, or `""` while it isn't picked yet.
+# approval: Whether it waits on Change Requests for another staff member's approval.
+# editing_request: Whether a request already waiting for approval is being changed.
 edit_info_block <- function(entity, verb, approval = FALSE, editing_request = FALSE) {
   doing <- c(add = "Adding", update = "Changing", delete = "Deleting")
   how <- switch(verb,
@@ -58,19 +53,15 @@ edit_info_block <- function(entity, verb, approval = FALSE, editing_request = FA
 }
 
 # ------ Fields -----------------------------------------------------------------------------------
-#' One field of a form.
-#'
-#' Like every form on the site it has no label above it: what it holds is said inside it (a text box's
-#' placeholder, a drop-down's empty choice) and, for screen readers and when pointed at, in its
-#' `aria-label` and `title`. A required field that is blank is outlined in red (the note under it marks
-#' it; see `edit_change_server()`). A field that is locked shows its value, greyed, with the reason.
-#' Fields that only matter while another has a value are wrapped so the page hides them.
-#'
-#' @param ns The module's namespace function.
-#' @param field One of the form's fields, from `edit_service_fields()`.
-#' @param value What it starts with.
-#' @param slot The output that says what is wrong with it.
-#' @return A UI element.
+# One field of a form.
+# Like every form on the site it has no label above it: what it holds is said inside it (a text box's
+# placeholder, a drop-down's empty choice) and, for screen readers and when pointed at, in its
+# `aria-label` and `title`. A required field that is blank is outlined in red (the note under it marks
+# it; see `edit_change_server()`). A field that is locked shows its value, greyed, with the reason.
+# Fields that only matter while another has a value are wrapped so the page hides them.
+# field: One of the form's fields, from `edit_service_fields()`.
+# value: What it starts with.
+# slot: The output that says what is wrong with it.
 edit_field_ui <- function(ns, field, value, slot) {
   id <- ns(field$id)
   inside <- edit_field_placeholder(field)
@@ -111,10 +102,6 @@ edit_field_ui <- function(ns, field, value, slot) {
       variables = variable_editor_ui(ns("variables"), field$label), # its server is edit_change_server()'s
       {
         box <- named(textInput(id, NULL, value, placeholder = inside, width = "100%"), "input")
-        if (!is.null(field$suggest)) {
-          list_id <- paste0(id, "-list")
-          box <- tagList(tag_input_attributes(box, "input", list = list_id), suggestions(list_id, field$suggest))
-        }
         if (field$type == "number") box <- tag_input_attributes(box, "input", inputmode = "numeric")
         box
       }
@@ -136,11 +123,10 @@ edit_field_ui <- function(ns, field, value, slot) {
   )
 }
 
-#' A drop-down's choices, its empty choice naming the field ("Select lead investigator"), so two
-#' drop-downs of the same rows can be told apart without labels.
-#'
-#' @param field One of the form's fields, from `edit_service_fields()`, of type `"select"`.
-#' @return The choices, as `selectInput()` takes them.
+# A drop-down's choices, its empty choice naming the field ("Select lead investigator"), so two
+# drop-downs of the same rows can be told apart without labels.
+# field: One of the form's fields, from `edit_service_fields()`, of type `"select"`.
+# Returns: The choices, as `selectInput()` takes them.
 edit_select_choices <- function(field) {
   choices <- field$choices
   blank <- which(unname(choices) == "")
@@ -151,11 +137,10 @@ edit_select_choices <- function(field) {
   choices
 }
 
-#' What a text box says while it is empty: its name, an example or format if it has one, and whether
-#' it can be left empty.
-#'
-#' @param field One of the form's fields, from `edit_service_fields()`.
-#' @return A string, e.g. `"Name (e.g. Adult Health Study)"` or `"Description (optional)"`.
+# What a text box says while it is empty: its name, an example or format if it has one, and whether
+# it can be left empty.
+# field: One of the form's fields, from `edit_service_fields()`.
+# Returns: A string, e.g. `"Name (e.g. Adult Health Study)"` or `"Description (optional)"`.
 edit_field_placeholder <- function(field) {
   notes <- c(
     if (!isTRUE(field$required)) "optional",
@@ -167,23 +152,18 @@ edit_field_placeholder <- function(field) {
   paste0(field$label, " (", paste(notes, collapse = ", "), ")")
 }
 
-#' A heading above the fields of one part of a form that is several rows.
-#'
-#' @param title The heading.
-#' @param why A sentence under it, or `NULL`.
-#' @return A UI element.
+# A heading above the fields of one part of a form that is several rows.
+# title: The heading.
+# why: A sentence under it, or `NULL`.
 edit_part_heading <- function(title, why = NULL) {
   div(class = "edit-part-heading", h3(title), if (!is.null(why)) p(class = "form-text", why))
 }
 
 # ------ What changed -------------------------------------------------------------------------------------
-#' The fields that differ, old and new.
-#'
-#' Words are marked where they differ, the way a tracked change reads: taken-out words
-#' struck through, put-in words highlighted.
-#'
-#' @param changes The result of `edit_service_changes()`.
-#' @return A UI element.
+# The fields that differ, old and new.
+# Words are marked where they differ, the way a tracked change reads: taken-out words
+# struck through, put-in words highlighted.
+# changes: The result of `edit_service_changes()`.
 edit_changes_ui <- function(changes) {
   if (nrow(changes) == 0) {
     return(div(
@@ -219,17 +199,13 @@ edit_changes_ui <- function(changes) {
 }
 
 # ------ Where this appears ---------------------------------------------------------------------------------
-#' What changing a row reaches.
-#'
-#' For a component or question: how many questionnaires print it, and a card for each (see `edit_use_card()`). For
-#' anything else: the rows that point at it,
-#' each kind of row a box saying how many there are, where they are, and every one of them. A few are listed as they
-#' are; more are folded away, one fold for each questionnaire they are in (the most first), or one for them all.
-#' The row's own name is the details' title, so it isn't said again here.
-#'
-#' @param entity The kind of thing; see `edit_entities`.
-#' @param usage The result of `edit_service_usage()`.
-#' @return A UI element.
+# What changing a row reaches.
+# For a component or question: how many questionnaires print it, and a card for each (see `edit_use_card()`). For
+# anything else: the rows that point at it,
+# each kind of row a box saying how many there are, where they are, and every one of them. A few are listed as they
+# are; more are folded away, one fold for each questionnaire they are in (the most first), or one for them all.
+# The row's own name is the details' title, so it isn't said again here.
+# usage: The result of `edit_service_usage()`.
 edit_usage_ui <- function(entity, usage) {
   local <- !is.null(entity$scope)
   div(
@@ -298,15 +274,12 @@ edit_use_fold <- function(title, n, ...) {
   )
 }
 
-#' A questionnaire that prints a component or asks a question, as its card in the details shows it.
-#'
-#' Its name, with a button that opens the component or question as it is in that questionnaire alone; where it sits;
-#' each wave that asked it, with the number it had; and each variable, with what it records, who it is about, and its
-#' choices.
-#'
-#' @param use One of `edit_service_uses()`.
-#' @param entity The kind of thing: a component or a question.
-#' @return A UI element.
+# A questionnaire that prints a component or asks a question, as its card in the details shows it.
+# Its name, with a button that opens the component or question as it is in that questionnaire alone; where it sits;
+# each wave that asked it, with the number it had; and each variable, with what it records, who it is about, and its
+# choices.
+# use: One of `edit_service_uses()`.
+# entity: The kind of thing: a component or a question.
 edit_use_card <- function(use, entity) {
   div(
     class = "edit-use",
@@ -350,14 +323,10 @@ edit_use_where <- function(use) {
 }
 
 # ------ Deleting ------------------------------------------------------------------------------------------------
-#' Everything staff should read before something is deleted.
-#'
-#' What it is, what else goes with it, and what stops it.
-#'
-#' @param entity The kind of thing; see `edit_entities`.
-#' @param title The row's name.
-#' @param plan The result of `edit_service_delete_plan()`.
-#' @return A UI element.
+# Everything staff should read before something is deleted.
+# What it is, what else goes with it, and what stops it.
+# title: The row's name.
+# plan: The result of `edit_service_delete_plan()`.
 edit_delete_ui <- function(entity, title, plan) {
   reach <- plan$reach
   blocked <- length(plan$blocked) > 0
@@ -451,13 +420,9 @@ edit_reach_ui <- function(entity, reach, plan) {
   )
 }
 
-#' The confirmations before a delete can be sent.
-#'
-#' Far-reaching deletes also need the word typed.
-#'
-#' @param ns The module's namespace function.
-#' @param plan The result of `edit_service_delete_plan()`.
-#' @return A UI element.
+# The confirmations before a delete can be sent.
+# Far-reaching deletes also need the word typed.
+# plan: The result of `edit_service_delete_plan()`.
 edit_delete_confirm_ui <- function(ns, plan) {
   div(
     class = "delete-confirm",
@@ -477,46 +442,24 @@ edit_delete_confirm_ui <- function(ns, plan) {
   )
 }
 
-#' A small info mark that explains a field when it is hovered or focused.
-#'
-#' @param text What it says.
-#' @param label The field's label, for screen readers.
-#' @return A UI element.
-field_tooltip <- function(text, label) {
-  bslib::tooltip(
-    span(
-      class = "field-tooltip", tabindex = "0", role = "img", `aria-label` = paste("About", tolower(label)),
-      app_icon("info")
-    ),
-    text
-  )
-}
-
 # ------ Something like it is there already -----------------------------------------------------------------
-#' The dialog that says an add looks like something already in the database.
-#'
-#' It shows what is there and lets staff go back or add it anyway: a warning, not a block.
-#'
-#' @param found From `edit_service_duplicates()`.
-#' @param confirm_id The input id of the "Add it anyway" button.
-#' @return A `modalDialog()`, for `showModal()`.
+# The dialog that says an add looks like something already in the database.
+# It shows what is there and lets staff go back or add it anyway: a warning, not a block.
+# found: From `edit_service_duplicates()`.
+# confirm_id: The input id of the "Add it anyway" button.
 edit_duplicates_dialog <- function(found, confirm_id) {
-  modalDialog(
-    title = "This looks like something that's already there",
+  confirm_dialog(
+    "This looks like something that's already there",
     p("If it is the same thing, adding it again would make a copy. Look before you go on."),
     edit_duplicates_list(found),
-    footer = tagList(modalButton("Go back"), actionButton(confirm_id, "Add it anyway", class = "btn-primary")),
-    easyClose = TRUE
+    confirm_id = confirm_id, confirm_label = "Add it anyway", keep_label = "Go back", easy_close = TRUE
   )
 }
 
-#' The same warning as a note on the form, for a form that is itself in a dialog.
-#'
-#' A dialog can't open over another, so the pop-ups that add from a drop-down show what is there
-#' under the form as it is typed, and their button says "Add it anyway".
-#'
-#' @param found From `edit_service_duplicates()`.
-#' @return A UI element.
+# The same warning as a note on the form, for a form that is itself in a dialog.
+# A dialog can't open over another, so the pop-ups that add from a drop-down show what is there
+# under the form as it is typed, and their button says "Add it anyway".
+# found: From `edit_service_duplicates()`.
 edit_duplicates_inline <- function(found) {
   edit_callout(
     "warning",

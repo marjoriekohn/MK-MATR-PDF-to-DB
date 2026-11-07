@@ -1,13 +1,10 @@
-#' The lists staff pick from on the Edit Extraction page, and the reading job tells Gemini to use.
-#'
-#' A list that can't be read comes back empty, and `problems` says why (e.g. a lookup
-#' table the database doesn't have yet), so the page can say so instead of failing.
-#'
-#' @param connection The MATR database, `list(url, key)`; see `model_database.R`.
-#' @return A list: `component_types`, `subjects` (who a variable can be about besides the respondent,
-#'   who is a blank), `time_frames` (when a variable can be about), `answer_options` and `answer_data_types` (character vectors), `answer_option_aliases`
-#'   (a data frame of `alias` and `label`: the wordings merged into a choice, and its words), and `problems`
-#'   (sentences).
+# The lists staff pick from on the Edit Extraction page, and the reading job tells Gemini to use.
+# A list that can't be read comes back empty, and `problems` says why (e.g. a lookup
+# table the database doesn't have yet), so the page can say so instead of failing.
+# Returns: A list: `component_types`, `subjects` (who a variable can be about besides the respondent,
+#   who is a blank), `time_frames` (when a variable can be about), `answer_options` and `answer_data_types` (character vectors), `answer_option_aliases`
+#   (a data frame of `alias` and `label`: the wordings merged into a choice, and its words), and `problems`
+#   (sentences).
 lookup_service_get_all <- function(connection) {
   problems <- character()
   rows_of <- function(read, label) {

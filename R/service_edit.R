@@ -30,15 +30,14 @@ item_text <- function(value) {
   as.character(value)
 }
 
-#' One item of a proposal: one change to one field of one row.
-#'
-#' @param entity_name The table.
-#' @param record_identifier The row, from `edit_identifier()`.
-#' @param action `"Insert"`, `"Update"` or `"Delete"`.
-#' @param attribute_name The column, or `NULL` for a whole row.
-#' @param old_value What it was (an Update or Delete).
-#' @param new_value What it becomes (an Insert or Update).
-#' @return A one-row data frame.
+# One item of a proposal: one change to one field of one row.
+# entity_name: The table.
+# record_identifier: The row, from `edit_identifier()`.
+# action: `"Insert"`, `"Update"` or `"Delete"`.
+# attribute_name: The column, or `NULL` for a whole row.
+# old_value: What it was (an Update or Delete).
+# new_value: What it becomes (an Insert or Update).
+# Returns: A one-row data frame.
 edit_item <- function(entity_name, record_identifier, action, attribute_name, old_value, new_value) {
   data.frame(
     entity_name = entity_name, record_identifier = record_identifier, action = action,
@@ -48,10 +47,9 @@ edit_item <- function(entity_name, record_identifier, action, attribute_name, ol
   )
 }
 
-#' Name a row by its key columns.
-#'
-#' @param key A named list of the key columns to their values.
-#' @return JSON with the columns in alphabetical order, e.g. `{"placement_id":88,"wave_id":3}`.
+# Name a row by its key columns.
+# key: A named list of the key columns to their values.
+# Returns: JSON with the columns in alphabetical order, e.g. `{"placement_id":88,"wave_id":3}`.
 edit_identifier <- function(key) {
   key <- key[order(names(key))]
   key <- lapply(key, function(value) {
@@ -96,65 +94,48 @@ edit_service_tables <- function(entity) {
 # A drop-down names a study with its registry, and a questionnaire with its study.
 edit_choice_needs <- list(study = "registry", questionnaire = "study")
 
-#' Read the tables a kind needs, afresh.
-#'
-#' @param connection The MATR database, `list(url, key)`; see `model_database.R`.
-#' @param entity A kind of thing staff can edit: one entry of `edit_entities` (see `service_edit_kinds.R`).
-#' @return A list of data frames named after the tables.
+# Read the tables a kind needs, afresh.
+# Returns: A list of data frames named after the tables.
 edit_service_load <- function(connection, entity) {
   tables <- edit_service_tables(entity)
   stats::setNames(lapply(tables, function(table) table_model_get(connection, table)), tables)
 }
 
-#' Lower-case the first letter.
-#'
-#' @param text A string.
-#' @return `text` with its first letter in lower case.
+# Lower-case the first letter.
+# text: A string.
+# Returns: `text` with its first letter in lower case.
 tolower_first <- function(text) paste0(tolower(substr(text, 1, 1)), substring(text, 2))
 
-#' Lower-case a label for the middle of a sentence.
-#'
-#' A word that starts with a capital and goes on in lower case (Respondent Type) is lower-cased; an
-#' acronym (MATR ID) is left as it is.
-#'
-#' @param text A string, e.g. a field's label.
-#' @return `text`, e.g. `"respondent type"`.
+# Lower-case a label for the middle of a sentence.
+# A word that starts with a capital and goes on in lower case (Respondent Type) is lower-cased; an
+# acronym (MATR ID) is left as it is.
+# text: A string, e.g. a field's label.
+# Returns: `text`, e.g. `"respondent type"`.
 tolower_words <- function(text) {
   words <- strsplit(text, " ", fixed = TRUE)[[1]]
   paste(ifelse(grepl("^[A-Z][a-z]", words), tolower_first(words), words), collapse = " ")
 }
 
-#' Why a kind can't be added, updated or deleted here.
-#'
-#' @param entity A kind of thing staff can edit: one entry of `edit_entities` (see `service_edit_kinds.R`).
-#' @param snap The tables the kind needs, as `edit_service_load()` reads them: a list of data frames named after the tables.
-#' @param mode `"add"`, `"update"` or `"delete"`.
-#' @return A sentence, or `NULL` if it can.
+# Why a kind can't be added, updated or deleted here.
+# Returns: A sentence, or `NULL` if it can.
 edit_service_can <- function(entity, snap, mode) {
   if (!is.null(entity$can)) entity$can(snap, mode)
 }
 
 # ------ Finding the row -----------------------------------------------------------------------------------
-#' The cards staff pick from.
-#'
-#' Narrowed to those that have every word in `query`.
-#'
-#' @param entity A kind of thing staff can edit: one entry of `edit_entities` (see `service_edit_kinds.R`).
-#' @param snap The tables the kind needs, as `edit_service_load()` reads them: a list of data frames named after the tables.
-#' @param scope The questionnaire's key, for a kind that belongs to one.
-#' @param query Words typed to find a card.
-#' @return A data frame of cards; see `edit_cards()`.
+# The cards staff pick from.
+# Narrowed to those that have every word in `query`.
+# query: Words typed to find a card.
+# Returns: A data frame of cards; see `edit_cards()`.
 edit_service_cards <- function(entity, snap, scope = NULL, query = "") {
   edit_service_filter(entity$cards(snap, scope), query)
 }
 
-#' The cards with every one of the words typed.
-#'
-#' Building the cards counts things, so the page builds them once and filters as staff type.
-#'
-#' @param cards A data frame of cards.
-#' @param query Words typed to find a card.
-#' @return The matching cards.
+# The cards with every one of the words typed.
+# Building the cards counts things, so the page builds them once and filters as staff type.
+# cards: A data frame of cards.
+# query: Words typed to find a card.
+# Returns: The matching cards.
 edit_service_filter <- function(cards, query = "") {
   words <- strsplit(tolower(trimws(query %||% "")), "[[:space:]]+")[[1]]
   words <- words[nzchar(words)]
@@ -162,12 +143,9 @@ edit_service_filter <- function(cards, query = "") {
   cards
 }
 
-#' A kind's row by its key.
-#'
-#' @param entity A kind of thing staff can edit: one entry of `edit_entities` (see `service_edit_kinds.R`).
-#' @param snap The tables the kind needs, as `edit_service_load()` reads them: a list of data frames named after the tables.
-#' @param key The row's key, as text (`edit_key()`).
-#' @return A one-row data frame, or `NULL`.
+# A kind's row by its key.
+# key: The row's key, as text (`edit_key()`).
+# Returns: A one-row data frame, or `NULL`.
 edit_service_row <- function(entity, snap, key) {
   rows <- snap[[entity$table]]
   found <- rows[edit_key(rows, edit_table_key(entity$table)) %in% key, , drop = FALSE]
@@ -175,18 +153,11 @@ edit_service_row <- function(entity, snap, key) {
 }
 
 # ------ The form ---------------------------------------------------------------------------------------------
-#' The fields of an add or update form.
-#'
-#' Each has an `id` (kind__field) that is also its input's name. An add that needs more
-#' rows (a study, with its first questionnaire and wave) has the fields of all of them,
-#' `part` saying which.
-#'
-#' @param entity A kind of thing staff can edit: one entry of `edit_entities` (see `service_edit_kinds.R`).
-#' @param snap The tables the kind needs, as `edit_service_load()` reads them: a list of data frames named after the tables.
-#' @param mode `"add"` or `"update"`.
-#' @param row The row being updated.
-#' @param scope The questionnaire's key, for a kind that belongs to one.
-#' @return A list of fields, each a list with `id`, `name`, `label`, `type` and more.
+# The fields of an add or update form.
+# Each has an `id` (kind__field) that is also its input's name. An add that needs more
+# rows (a study, with its first questionnaire and wave) has the fields of all of them,
+# `part` saying which.
+# Returns: A list of fields, each a list with `id`, `name`, `label`, `type` and more.
 edit_service_fields <- function(entity, snap, mode, row = NULL, scope = NULL) {
   parts <- if (mode == "add" && !is.null(entity$parts)) entity$parts else list(list(entity = entity$key))
   fields <- list()
@@ -207,18 +178,10 @@ edit_service_fields <- function(entity, snap, mode, row = NULL, scope = NULL) {
   fields
 }
 
-#' What each field starts with.
-#'
-#' A row's values for an update; for an add the field's default or nothing. Dates are
-#' shown as MM/DD/YYYY.
-#'
-#' @param entity A kind of thing staff can edit: one entry of `edit_entities` (see `service_edit_kinds.R`).
-#' @param fields The form's fields, from `edit_service_fields()`.
-#' @param snap The tables the kind needs, as `edit_service_load()` reads them: a list of data frames named after the tables.
-#' @param mode `"add"` or `"update"`.
-#' @param row The row being updated.
-#' @param scope The questionnaire's key, for a kind that belongs to one.
-#' @return A named list of strings by field id.
+# What each field starts with.
+# A row's values for an update; for an add the field's default or nothing. Dates are
+# shown as MM/DD/YYYY.
+# Returns: A named list of strings by field id.
 edit_service_initial <- function(entity, fields, snap, mode, row = NULL, scope = NULL) {
   special <- if (mode == "update" && !is.null(entity$initial)) entity$initial(snap, row, scope) else list()
   values <- lapply(fields, function(field) {
@@ -243,14 +206,12 @@ edit_show_value <- function(value, field) {
   )
 }
 
-#' What a field's value is saved as.
-#'
-#' Spaces trimmed, nothing as `NA`, numbers without commas, dates as YYYY-MM-DD,
-#' "TRUE"/"FALSE" as true/false.
-#'
-#' @param field One of the form's fields.
-#' @param value What was typed.
-#' @return A string, or `NA_character_` for nothing.
+# What a field's value is saved as.
+# Spaces trimmed, nothing as `NA`, numbers without commas, dates as YYYY-MM-DD,
+# "TRUE"/"FALSE" as true/false.
+# field: One of the form's fields.
+# value: What was typed.
+# Returns: A string, or `NA_character_` for nothing.
 edit_service_normalize <- function(field, value) {
   value <- trimws(value %||% "")
   if (!is.null(field$normalize)) value <- sub("^NA$", "", paste(field$normalize(value))) # an answer choice, as kept
@@ -272,10 +233,9 @@ edit_service_normalize <- function(field, value) {
   )
 }
 
-#' The values picked in a field of type several.
-#'
-#' @param value What the field holds: the values joined by commas, or (from the page) a vector of them.
-#' @return The values, once each, as text, in order (as numbers if they all are).
+# The values picked in a field of type several.
+# value: What the field holds: the values joined by commas, or (from the page) a vector of them.
+# Returns: The values, once each, as text, in order (as numbers if they all are).
 edit_several_ids <- function(value) {
   ids <- trimws(unlist(strsplit(as.character(value %||% character()), ",", fixed = TRUE)))
   ids <- unique(ids[!is.na(ids) & nzchar(ids)])
@@ -284,10 +244,9 @@ edit_several_ids <- function(value) {
   ids
 }
 
-#' Values of a field of type several, as it holds them: joined by commas, in order.
-#'
-#' @param ids The values.
-#' @return A string; `""` for none.
+# Values of a field of type several, as it holds them: joined by commas, in order.
+# ids: The values.
+# Returns: A string; `""` for none.
 edit_several_text <- function(ids) paste(edit_several_ids(paste(key_text(ids), collapse = ",")), collapse = ",")
 
 # Whether a field matters, given the others: `show_when` hides it otherwise.
@@ -310,20 +269,16 @@ edit_service_active <- function(fields, values) {
 }
 
 # ------ The details ------------------------------------------------------------------------------------------------
-#' What a row's details list: its fields as text, each on a line of its own.
-#'
-#' A field that only matters while another has a value is left out when it doesn't, and so is the one field of a kind
-#' that has only one, which is the details' title already (a subject's name). A kind with `details` lists what it
-#' belongs to as well (a questionnaire's study), and picks and orders its own fields: `details(snap, row, own)` takes
-#' these lines and gives the ones to show.
-#'
-#' @param entity A kind of thing staff can edit: one entry of `edit_entities` (see `service_edit_kinds.R`).
-#' @param snap The tables the kind needs, as `edit_service_load()` reads them: a list of data frames named after the tables.
-#' @param row The row.
-#' @param fields The form's fields, from `edit_service_fields()` (as an update).
-#' @param values What each starts with, from `edit_service_initial()`.
-#' @return A data frame of `name` (the field's, `NA` for a line about what the row belongs to), `label`, `value` (as
-#'   staff read it; `"(empty)"` for nothing) and `wide`.
+# What a row's details list: its fields as text, each on a line of its own.
+# A field that only matters while another has a value is left out when it doesn't, and so is the one field of a kind
+# that has only one, which is the details' title already (a subject's name). A kind with `details` lists what it
+# belongs to as well (a questionnaire's study), and picks and orders its own fields: `details(snap, row, own)` takes
+# these lines and gives the ones to show.
+# row: The row.
+# fields: The form's fields, from `edit_service_fields()` (as an update).
+# values: What each starts with, from `edit_service_initial()`.
+# Returns: A data frame of `name` (the field's, `NA` for a line about what the row belongs to), `label`, `value` (as
+#   staff read it; `"(empty)"` for nothing) and `wide`.
 edit_service_details <- function(entity, snap, row, fields, values) {
   shown <- Filter(function(field) field$type != "variables" && edit_service_visible(field, values), fields)
   own <- edit_details_lines(
@@ -341,13 +296,12 @@ edit_service_details <- function(entity, snap, row, fields, values) {
   if (nrow(own) == 1) own[0, ] else own
 }
 
-#' Lines of a row's details.
-#'
-#' @param name The fields' names; `NA` for a line about what the row belongs to.
-#' @param label What each is.
-#' @param value Each as staff read it; `NA` is shown as `"(empty)"`.
-#' @param wide Whether each is long text.
-#' @return A data frame, as `edit_service_details()` gives it.
+# Lines of a row's details.
+# name: The fields' names; `NA` for a line about what the row belongs to.
+# label: What each is.
+# value: Each as staff read it; `NA` is shown as `"(empty)"`.
+# wide: Whether each is long text.
+# Returns: A data frame, as `edit_service_details()` gives it.
 edit_details_lines <- function(name, label, value, wide = FALSE) {
   value <- as.character(value)
   data.frame(
@@ -362,15 +316,11 @@ edit_details_pick <- function(lines, names) {
 }
 
 # ------ Checking what's typed -----------------------------------------------------------------------------------
-#' Check what staff typed.
-#'
-#' A problem stops the edit being sent; a warning only says.
-#'
-#' @param fields The form's fields, from `edit_service_fields()`.
-#' @param values What is in the form: a named list of strings by field id.
-#' @return A list: `missing` (required fields left empty, as their labels), `problems` and
-#'   `warnings` (a sentence for each field, by id, that has one), and `missing_ids` (the ids of the
-#'   required fields left empty, so the form can outline them in red).
+# Check what staff typed.
+# A problem stops the edit being sent; a warning only says.
+# Returns: A list: `missing` (required fields left empty, as their labels), `problems` and
+#   `warnings` (a sentence for each field, by id, that has one), and `missing_ids` (the ids of the
+#   required fields left empty, so the form can outline them in red).
 edit_service_check <- function(fields, values) {
   missing <- list()
   problems <- list()
@@ -423,10 +373,9 @@ edit_type_problem <- function(field, value) {
   )
 }
 
-#' A problem with a typed date, or `NULL`.
-#'
-#' @param text What was typed; blank is fine.
-#' @return A sentence saying what to do, or `NULL`.
+# A problem with a typed date, or `NULL`.
+# text: What was typed; blank is fine.
+# Returns: A sentence saying what to do, or `NULL`.
 edit_date_problem <- function(text) {
   text <- trimws(text)
   if (!nzchar(text)) {
@@ -437,15 +386,11 @@ edit_date_problem <- function(text) {
 }
 
 # ------ What changed ------------------------------------------------------------------------------------------------
-#' The fields that differ from how the row started.
-#'
-#' Only for an update. A field that is no longer shown counts as emptied.
-#'
-#' @param fields The form's fields, from `edit_service_fields()`.
-#' @param initial What the fields started with (`edit_service_initial()`).
-#' @param values What is in the form: a named list of strings by field id.
-#' @return A data frame with `id`, `name`, `label`, `short`, `type`, `old` and `new` (as
-#'   shown) and `old_value` and `new_value` (as saved); no rows if nothing changed.
+# The fields that differ from how the row started.
+# Only for an update. A field that is no longer shown counts as emptied.
+# initial: What the fields started with (`edit_service_initial()`).
+# Returns: A data frame with `id`, `name`, `label`, `short`, `type`, `old` and `new` (as
+#   shown) and `old_value` and `new_value` (as saved); no rows if nothing changed.
 edit_service_changes <- function(fields, initial, values) {
   # A field that's no longer shown (a follow-up's parent, once the question
   # stands on its own) counts as emptied.
@@ -472,13 +417,11 @@ edit_service_changes <- function(fields, initial, values) {
   do.call(rbind, rows)
 }
 
-#' A saved value as staff read it.
-#'
-#' The choice's name, or a date as MM/DD/YYYY.
-#'
-#' @param field One of the form's fields.
-#' @param value The saved value.
-#' @return A string; `"(empty)"` for `NA`.
+# A saved value as staff read it.
+# The choice's name, or a date as MM/DD/YYYY.
+# field: One of the form's fields.
+# value: The saved value.
+# Returns: A string; `"(empty)"` for `NA`.
 edit_display_value <- function(field, value) {
   if (is.na(value)) {
     return("(empty)")
@@ -501,13 +444,11 @@ edit_us_date <- function(value) {
   if (is.na(parsed)) as.character(value) else format(parsed, "%m/%d/%Y")
 }
 
-#' Two texts as runs of words kept, taken out and put in.
-#'
-#' It reads as the new text with the changes marked.
-#'
-#' @param old The old text.
-#' @param new The new text.
-#' @return A data frame of `kind` (`"same"`, `"del"` or `"ins"`) and `text`.
+# Two texts as runs of words kept, taken out and put in.
+# It reads as the new text with the changes marked.
+# old: The old text.
+# new: The new text.
+# Returns: A data frame of `kind` (`"same"`, `"del"` or `"ins"`) and `text`.
 edit_service_word_diff <- function(old, new) {
   tokens <- function(text) {
     text <- text %||% ""
@@ -562,20 +503,15 @@ edit_service_word_diff <- function(old, new) {
 }
 
 # ------ Writing a change as items ----------------------------------------------------------------------------------------
-#' What an add, update or delete comes to.
-#'
-#' @param entity A kind of thing staff can edit: one entry of `edit_entities` (see `service_edit_kinds.R`).
-#' @param mode `"add"`, `"update"` or `"delete"`.
-#' @param snap The tables the kind needs, as `edit_service_load()` reads them: a list of data frames named after the tables.
-#' @param row The row being updated or deleted.
-#' @param scope The questionnaire's key, for a kind that belongs to one.
-#' @param fields The form's fields, from `edit_service_fields()`. Not for a delete.
-#' @param values What is in the form: a named list of strings by field id. Not for a delete.
-#' @param plan For a delete, the plan if it is already worked out.
-#' @return A list: `items` (numbered, in the order to apply them) and `summary` (one
-#'   sentence for the proposal); a delete also has its `plan`. An error with a sentence if an add or an
-#'   update would change something while its form still has a field to fill in or fix: the page only builds
-#'   a checked form, but a caller that builds one itself (`edit_service_quick_add()`) is checked here too.
+# What an add, update or delete comes to.
+# row: The row being updated or deleted.
+# fields: The form's fields, from `edit_service_fields()`. Not for a delete.
+# values: What is in the form: a named list of strings by field id. Not for a delete.
+# plan: For a delete, the plan if it is already worked out.
+# Returns: A list: `items` (numbered, in the order to apply them) and `summary` (one
+#   sentence for the proposal); a delete also has its `plan`. An error with a sentence if an add or an
+#   update would change something while its form still has a field to fill in or fix: the page only builds
+#   a checked form, but a caller that builds one itself (`edit_service_quick_add()`) is checked here too.
 edit_service_build <- function(entity, mode, snap, row = NULL, scope = NULL, fields = NULL, values = NULL, plan = NULL) {
   if (mode == "delete") {
     plan <- plan %||% edit_service_delete_plan(entity, snap, row)
@@ -640,14 +576,7 @@ edit_add_items <- function(entity, snap, fields, values) {
 }
 
 # ------ * Update ----------------------------------------------------------------------------------------------------------
-#' One Update item per field that differs.
-#'
-#' @param entity A kind of thing staff can edit: one entry of `edit_entities` (see `service_edit_kinds.R`).
-#' @param snap The tables the kind needs, as `edit_service_load()` reads them: a list of data frames named after the tables.
-#' @param row The row being updated.
-#' @param fields The form's fields, from `edit_service_fields()`.
-#' @param values What is in the form: a named list of strings by field id.
-#' @return A data frame of items; see `edit_item()`.
+# One Update item per field that differs.
 edit_update_items <- function(entity, snap, row, fields, values) {
   initial <- edit_service_initial(entity, fields, snap, "update", row)
   changes <- edit_service_changes(fields, initial, values)
@@ -659,18 +588,14 @@ edit_update_items <- function(entity, snap, row, fields, values) {
 }
 
 # ------ * Delete ------------------------------------------------------------------------------------------------------------
-#' What a delete comes to.
-#'
-#' What it reaches, what stops it, and the items. The kind says where it starts (a
-#' question's placement and its settings are one thing).
-#'
-#' @param entity A kind of thing staff can edit: one entry of `edit_entities` (see `service_edit_kinds.R`).
-#' @param snap The tables the kind needs, as `edit_service_load()` reads them: a list of data frames named after the tables.
-#' @param row The row being deleted.
-#' @return A list: `cascade`, `reach`, `blocked` (empty when it can go ahead), `items`,
-#'   `far_reaching` (whether anything beyond the row itself is affected) and `deleted` (the row picked:
-#'   `table`, `row`, its key as JSON, and `name`, see `edit_deleted_name()`), which is all the Edit History keeps
-#'   of a delete once it is applied.
+# What a delete comes to.
+# What it reaches, what stops it, and the items. The kind says where it starts (a
+# question's placement and its settings are one thing).
+# row: The row being deleted.
+# Returns: A list: `cascade`, `reach`, `blocked` (empty when it can go ahead), `items`,
+#   `far_reaching` (whether anything beyond the row itself is affected) and `deleted` (the row picked:
+#   `table`, `row`, its key as JSON, and `name`, see `edit_deleted_name()`), which is all the Edit History keeps
+#   of a delete once it is applied.
 edit_service_delete_plan <- function(entity, snap, row) {
   start <- if (!is.null(entity$delete_start)) {
     entity$delete_start(snap, row)
@@ -813,21 +738,16 @@ edit_summary_delete <- function(entity, snap, row, plan) {
 }
 
 # ------ Where a row is used ------------------------------------------------------------------------------------------------------
-#' What changing a row reaches.
-#'
-#' For a component or question, every questionnaire that prints it; for anything else, the
-#' rows that point at it.
-#'
-#' @param entity A kind of thing staff can edit: one entry of `edit_entities` (see `service_edit_kinds.R`).
-#' @param snap The tables the kind needs, as `edit_service_load()` reads them: a list of data frames named after the tables.
-#' @param row The row being changed.
-#' A kind with `usage_rows(snap, row, table, rows)` says how it lists the rows of `table` that point at it: a list of
-#' `rows` (the ones to list, in order), `labels` and, if it likes, `text`; or `NULL` for the usual way, by name.
-#'
-#' @return A list: `uses`, `shared` (how many questionnaires print a component) and `pointing`, one list for each
-#'   kind of row that points at it: `table`, `n`, `text` ("3 variables"), `labels` (every row's name, in order) and
-#'   `groups`, the rows by the questionnaire they are in (see `edit_usage_groups()`), or `NULL` when they are all in
-#'   the row's own questionnaire.
+# What changing a row reaches.
+# For a component or question, every questionnaire that prints it; for anything else, the
+# rows that point at it.
+# row: The row being changed.
+# A kind with `usage_rows(snap, row, table, rows)` says how it lists the rows of `table` that point at it: a list of
+# `rows` (the ones to list, in order), `labels` and, if it likes, `text`; or `NULL` for the usual way, by name.
+# Returns: A list: `uses`, `shared` (how many questionnaires print a component) and `pointing`, one list for each
+#   kind of row that points at it: `table`, `n`, `text` ("3 variables"), `labels` (every row's name, in order) and
+#   `groups`, the rows by the questionnaire they are in (see `edit_usage_groups()`), or `NULL` when they are all in
+#   the row's own questionnaire.
 edit_service_usage <- function(entity, snap, row) {
   if (entity$table == "component") {
     uses <- edit_service_uses(snap, row$component_id)
@@ -861,17 +781,14 @@ edit_service_usage <- function(entity, snap, row) {
   list(uses = list(), shared = 0, pointing = Filter(Negate(is.null), pointing))
 }
 
-#' Rows that point at something, by the questionnaire each is in.
-#'
-#' A row is in a questionnaire if it holds one (a variable, a wave) or its variable does (a variable's choice).
-#'
-#' @param snap The tables the kind needs, as `edit_service_load()` reads them: a list of data frames named after the tables.
-#' @param table The rows' table.
-#' @param rows The rows.
-#' @param labels Their names, from `edit_label()`.
-#' @return A list with one list per questionnaire, the most rows first: `id`, `questionnaire` (its name, or "Not in
-#'   a questionnaire") and `labels`, in the order given. `NULL` for rows that can't be in a questionnaire, or are
-#'   questionnaires.
+# Rows that point at something, by the questionnaire each is in.
+# A row is in a questionnaire if it holds one (a variable, a wave) or its variable does (a variable's choice).
+# table: The rows' table.
+# rows: The rows.
+# labels: Their names, from `edit_label()`.
+# Returns: A list with one list per questionnaire, the most rows first: `id`, `questionnaire` (its name, or "Not in
+#   a questionnaire") and `labels`, in the order given. `NULL` for rows that can't be in a questionnaire, or are
+#   questionnaires.
 edit_usage_groups <- function(snap, table, rows, labels) {
   ids <- if (table == "questionnaire") {
     NULL
@@ -892,12 +809,10 @@ edit_usage_groups <- function(snap, table, rows, labels) {
   }, names(by_name), by_name))
 }
 
-#' What each variable records, its unit, when and who it is about, as the questionnaire's preview shows them:
-#' "[Smokes now] [hours] [in the past 30 days] [Respondent]", each part when it has one.
-#'
-#' @param snap The tables the kind needs, as `edit_service_load()` reads them: a list of data frames named after the tables.
-#' @param variables Rows of `variable`.
-#' @return One string per variable; `""` for one with neither.
+# What each variable records, its unit, when and who it is about, as the questionnaire's preview shows them:
+# "[Smokes now] [hours] [in the past 30 days] [Respondent]", each part when it has one.
+# variables: Rows of `variable`.
+# Returns: One string per variable; `""` for one with neither.
 edit_variable_tags <- function(snap, variables) {
   about <- if (is.null(snap$subject)) rep(NA_character_, nrow(variables)) else edit_lookup(snap, "subject", "subject_id", variables$subject_id, "name")
   when <- if (is.null(snap$time_frame) || is.null(variables$time_frame_id)) {
@@ -917,17 +832,14 @@ edit_variable_tags <- function(snap, variables) {
 }
 
 # ------ What's left to do ------------------------------------------------------------------------------------------------------------
-#' What's left to do before a change can be sent.
-#'
-#' In the order to do it; nothing when it can go.
-#'
-#' @param mode `"add"`, `"update"` or `"delete"`.
-#' @param found `edit_service_check()`'s `missing` and `problems`.
-#' @param n_changes How many fields an update changes.
-#' @param shared How many questionnaires use what an update changes.
-#' @param plan The delete plan from `edit_service_delete_plan()`.
-#' @param confirmed What staff ticked and typed: `list(read, word, shared)`.
-#' @return A character vector of sentences; empty when it is ready.
+# What's left to do before a change can be sent.
+# In the order to do it; nothing when it can go.
+# found: `edit_service_check()`'s `missing` and `problems`.
+# n_changes: How many fields an update changes.
+# shared: How many questionnaires use what an update changes.
+# plan: The delete plan from `edit_service_delete_plan()`.
+# confirmed: What staff ticked and typed: `list(read, word, shared)`.
+# Returns: A character vector of sentences; empty when it is ready.
 edit_service_blockers <- function(mode, found = NULL, n_changes = 0, shared = 0, plan = NULL, confirmed = list()) {
   out <- character()
   if (mode == "delete") {
@@ -949,13 +861,10 @@ edit_service_blockers <- function(mode, found = NULL, n_changes = 0, shared = 0,
   out
 }
 
-#' What a form that still has things to fix is saved as.
-#'
-#' A draft as typed, with no items.
-#'
-#' @param verb `"add"`, `"update"` or `"delete"`.
-#' @param entity A kind of thing staff can edit: one entry of `edit_entities` (see `service_edit_kinds.R`).
-#' @return A list with `summary` and `items` (`NULL`), like `edit_service_build()`.
+# What a form that still has things to fix is saved as.
+# A draft as typed, with no items.
+# verb: `"add"`, `"update"` or `"delete"`.
+# Returns: A list with `summary` and `items` (`NULL`), like `edit_service_build()`.
 edit_service_unfinished <- function(verb, entity) {
   list(summary = paste0("Unfinished: ", verb, " ", entity$article, " ", entity$noun), items = NULL)
 }
@@ -967,17 +876,15 @@ edit_service_unfinished <- function(verb, entity) {
 # approval (service_change_request.R).
 edit_open_statuses <- c("Draft", "Sent Back", "Awaiting Review")
 
-#' A proposal as it is saved.
-#'
-#' @param me Who is preparing it: `list(staff_id, name, role)`.
-#' @param form How to open it again on the form: `action`, `entity`, `scope`, `target`, `values`.
-#' @param built The result of `edit_service_build()`, or `edit_service_unfinished()`.
-#' @param status `"Draft"`, or `"Awaiting Review"` to send it for approval. A proposal that was
-#'   sent back, or is waiting for review, keeps that status when it is only saved again.
-#' @param previous The record being saved again, if any; it keeps its id, preparer and start time.
-#' @param reviewer The staff id of the person asked to review it, or `NULL` for no one in particular.
-#' @param now The time to record.
-#' @return A record; see `edit_model_get_all()`. `id` is `NULL` until it is first saved.
+# A proposal as it is saved.
+# me: Who is preparing it: `list(staff_id, name, role)`.
+# form: How to open it again on the form: `action`, `entity`, `scope`, `target`, `values`.
+# built: The result of `edit_service_build()`, or `edit_service_unfinished()`.
+# status: `"Draft"`, or `"Awaiting Review"` to send it for approval. A proposal that was
+#   sent back, or is waiting for review, keeps that status when it is only saved again.
+# previous: The record being saved again, if any; it keeps its id, preparer and start time.
+# reviewer: The staff id of the person asked to review it, or `NULL` for no one in particular.
+# Returns: A record; see `edit_model_get_all()`. `id` is `NULL` until it is first saved.
 edit_service_record <- function(me, form, built, status, previous = NULL, reviewer = NULL, now = Sys.time()) {
   # A saved change keeps the status it has, unless it is being sent for review.
   if (status == "Draft" && !is.null(previous$status) && previous$status %in% c("Sent Back", "Awaiting Review")) {
@@ -1014,14 +921,12 @@ edit_service_record <- function(me, form, built, status, previous = NULL, review
   )
 }
 
-#' Other open proposals that change a row this one does.
-#'
-#' Staff should talk before both are applied.
-#'
-#' @param records The saved proposals.
-#' @param items This proposal's items.
-#' @param except The id of this proposal, so it doesn't clash with itself.
-#' @return The records that overlap.
+# Other open proposals that change a row this one does.
+# Staff should talk before both are applied.
+# records: The saved proposals.
+# items: This proposal's items.
+# except: The id of this proposal, so it doesn't clash with itself.
+# Returns: The records that overlap.
 edit_service_conflicts <- function(records, items, except = NULL) {
   if (is.null(items) || nrow(items) == 0) {
     return(list())
@@ -1041,67 +946,37 @@ edit_service_conflicts <- function(records, items, except = NULL) {
   }, records)
 }
 
-#' The saved proposals still open.
-#'
-#' @param records The saved proposals.
-#' @param prepared_by_id Only those prepared by this staff member, if given.
-#' @param status The statuses that count as open.
-#' @return The matching records.
+# The saved proposals still open.
+# records: The saved proposals.
+# status: The statuses that count as open.
 edit_service_open <- function(records, prepared_by_id = NULL, status = edit_open_statuses) {
   draft_row_service_open(records, status, prepared_by_id)
 }
 
-#' The saved proposals, newest first.
-#'
-#' @param connection The MATR database, `list(url, key)`; see `model_database.R`.
-#' @return A list of records named by id; see `edit_model_get_all()`.
+# The saved proposals, newest first.
+# Returns: A list of records named by id; see `edit_model_get_all()`.
 edit_service_get_all <- function(connection) {
   edit_model_get_all(connection)
 }
 
-#' One saved proposal.
-#'
-#' @param connection The MATR database, `list(url, key)`; see `model_database.R`.
-#' @param id The proposal's id.
-#' @return The record, as in `edit_model_get_all()`. An error if there is none.
-edit_service_get <- function(connection, id) {
-  edit_model_get(connection, id)
-}
-
-#' Save a proposal, new or changed.
-#'
-#' @param connection The MATR database, `list(url, key)`; see `model_database.R`.
-#' @param record A proposal record from `edit_service_record()`.
-#' @param me Who saves it: `list(staff_id, name, role)`.
-#' @return The record as saved; a new one now has its id. An error with a sentence if the
-#'   database refused, e.g. because someone saved a newer version since this one was opened.
+# Save a proposal, new or changed. One saved with the status `"Awaiting Review"` is sent for approval: it
+# waits in Change Requests until one other staff member approves it, which applies it.
+# record: A proposal record from `edit_service_record()`.
+# me: Who saves it: `list(staff_id, name, role)`.
+# Returns: The record as saved; a new one now has its id. An error with a sentence if the
+#   database refused, e.g. because someone saved a newer version since this one was opened.
 edit_service_save <- function(connection, record, me) {
   edit_model_save(connection, record, me$staff_id)
 }
 
-#' Send a proposal for approval.
-#'
-#' It waits in Change Requests until one other staff member approves it, which applies it.
-#'
-#' @param connection The MATR database, `list(url, key)`; see `model_database.R`.
-#' @param record A proposal record from `edit_service_record()`, with status `"Awaiting Review"`.
-#' @param me Who sends it: `list(staff_id, name, role)`.
-#' @return The record as saved.
-edit_service_send <- function(connection, record, me) {
-  edit_model_save(connection, record, me$staff_id)
-}
-
-#' Apply a saved proposal now.
-#'
-#' For a change that needs no approval (an add or an update, or anything an ADMIN does). Save it first
-#' (`edit_service_save()`), so if the database refuses it (a row changed since the form was opened,
-#' a rule of the database) the person's work is still there as a saved edit.
-#'
-#' @param connection The MATR database, `list(url, key)`; see `model_database.R`.
-#' @param record A saved proposal record (it has an `id`).
-#' @param me Who applies it: `list(staff_id, name, role)`; it has to be the person who prepared it.
-#' @return The id of its row in the Edit History. An error with the database's own sentence if it
-#'   refused.
+# Apply a saved proposal now.
+# For a change that needs no approval (an add or an update, or anything an ADMIN does). Save it first
+# (`edit_service_save()`), so if the database refuses it (a row changed since the form was opened,
+# a rule of the database) the person's work is still there as a saved edit.
+# record: A saved proposal record (it has an `id`).
+# me: Who applies it: `list(staff_id, name, role)`; it has to be the person who prepared it.
+# Returns: The id of its row in the Edit History. An error with the database's own sentence if it
+#   refused.
 edit_service_apply <- function(connection, record, me) {
   if (change_request_service_needs_approval(me, edit_draft_kind, record$edit_kind)) {
     stop("This needs approval from another staff member before it is applied.", call. = FALSE)
@@ -1109,39 +984,28 @@ edit_service_apply <- function(connection, record, me) {
   change_request_model_apply(connection, record$id, me$staff_id)
 }
 
-#' What staff chose to do, as the history writes it.
-#'
-#' @param verb `"add"`, `"update"` or `"delete"`.
-#' @return `"Add"`, `"Update"` or `"Delete"`.
+# What staff chose to do, as the history writes it.
+# verb: `"add"`, `"update"` or `"delete"`.
+# Returns: `"Add"`, `"Update"` or `"Delete"`.
 edit_service_kind_of <- function(verb) edit_model_kind(list(action = verb))
 
-#' Discard a proposal.
-#'
-#' The record is kept, as Withdrawn, so it stays in the history.
-#'
-#' @param connection The MATR database, `list(url, key)`; see `model_database.R`.
-#' @param id The proposal's id.
-#' @param me Who discards it: `list(staff_id, name, role)`.
-#' @return Called for its effect.
+# Discard a proposal.
+# The record is kept, as Withdrawn, so it stays in the history.
+# id: The proposal's id.
+# me: Who discards it: `list(staff_id, name, role)`.
 edit_service_withdraw <- function(connection, id, me) {
   change_request_model_withdraw(connection, id, me$staff_id)
 }
 
 # ------ Something like it is there already ---------------------------------------------------------------
-#' The rows an add looks like.
-#'
-#' When someone adds something that is already there, the form says so before it saves, and shows what
-#' is there; it is a warning, not a block. Each kind says what counts as the same (`duplicates` in its
-#' `service_edit_entities_*.R` file): its name for most, a respondent type's age range, and so on. Capitals and
-#' extra spaces don't count.
-#'
-#' @param entity A kind of thing staff can edit: one entry of `edit_entities` (see `service_edit_kinds.R`).
-#' @param snap The tables the kind needs, as `edit_service_load()` reads them: a list of data frames named after the tables.
-#' @param fields The form's fields, from `edit_service_fields()`.
-#' @param values What is in the form: a named list of strings by field id.
-#' @return A list with one entry for each way it looks like something there: `entity` (the kind of what
-#'   is there), `why` (a sentence) and `cards` (a data frame of the rows, as the cards show them; see
-#'   `edit_cards()`). Empty if it looks like nothing.
+# The rows an add looks like.
+# When someone adds something that is already there, the form says so before it saves, and shows what
+# is there; it is a warning, not a block. Each kind says what counts as the same (`duplicates` in its
+# `service_edit_entities_*.R` file): its name for most, a respondent type's age range, and so on. Capitals and
+# extra spaces don't count.
+# Returns: A list with one entry for each way it looks like something there: `entity` (the kind of what
+#   is there), `why` (a sentence) and `cards` (a data frame of the rows, as the cards show them; see
+#   `edit_cards()`). Empty if it looks like nothing.
 edit_service_duplicates <- function(entity, snap, fields, values) {
   parts <- entity$parts %||% list(list(entity = entity$key))
   found <- list()

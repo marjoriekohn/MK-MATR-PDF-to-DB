@@ -27,9 +27,9 @@ test_that("a file that isn't a PDF is turned away", {
   local_pdf_cache()
   me <- local_staff()
   not_pdf <- fake_upload("notes.pdf", text = "just some words")
-  before <- names(extraction_service_get_all(test_connection))
   expect_error(extraction_service_create(test_connection, not_pdf, me), "notes.pdf isn't a PDF")
-  expect_equal(names(extraction_service_get_all(test_connection)), before)
+  # no draft was added for them (only theirs are looked at: other runs of the tests add drafts meanwhile)
+  expect_length(extraction_service_open_drafts(extraction_service_get_all(test_connection), prepared_by_id = me$staff_id), 0)
 })
 
 test_that("a draft typed by hand starts empty, with no reading, and can have a PDF or not", {
@@ -62,8 +62,11 @@ test_that("discarding deletes the draft, and its PDF once no other draft uses it
   local_pdf_cache()
   me <- local_staff()
   colleague <- local_staff()
-  record <- extraction_service_create(test_connection, fake_upload(), me)
-  same_pdf <- extraction_service_create(test_connection, fake_upload(), me)
+  # a PDF of its own: the other tests' drafts share fake_upload()'s, and while one of them (in another process) has a
+  # draft open with it, it is rightly kept
+  upload <- fake_upload(text = paste0("%PDF-1.4\n% ", test_name("PDF"), "\n<< /Type /Page >>\n"))
+  record <- extraction_service_create(test_connection, upload, me)
+  same_pdf <- extraction_service_create(test_connection, upload, me)
   sha256 <- record$pdf$sha256
   pdf_rows <- function() database_model_count(test_connection, "pdf_file", list(pdf_sha256 = database_eq(sha256)))
 
@@ -234,8 +237,6 @@ test_that("cards are named from where it goes, else what the AI read, else the P
   record <- list(pdf = list(name = "scan.pdf"), info = picked_info())
   expect_equal(extraction_service_title(record, catalog), "Adult Health and Personality (AHP) · Wave 2")
   expect_equal(extraction_service_title(list(pdf = list(name = "scan.pdf"), info = list()), catalog), "scan.pdf")
-  # the name the AI read is often a heading inside the questionnaire, so the PDF's name stands until one is picked
-  expect_equal(extraction_service_title(list(pdf = list(name = "scan.pdf"), info = list()), catalog, list(name = "Sleep Diary")), "scan.pdf")
   expect_equal(extraction_service_title(list(pdf = list(), info = list()), catalog), "Untitled questionnaire") # typed by hand, no PDF
   expect_equal(extraction_service_title(list(info = picked_info(wave_id = "")), catalog), "Adult Health and Personality (AHP)")
 })
@@ -263,21 +264,18 @@ test_that("a recorded wave has to be the questionnaire's, ask no questions yet, 
 
 test_that("the Edit Extraction page is headed by where it goes, else the PDF's name, never what Gemini read", {
   catalog <- test_catalog()
-  read <- list(name = "Printed Title", abbreviation = "PT")
   expect_equal(
-    extraction_service_heading(list(info = picked_info()), catalog, read),
+    extraction_service_heading(list(info = picked_info()), catalog),
     list(title = "AHP · Wave 2", subtitle = "Adult Health and Personality")
   )
-  expect_equal(extraction_service_heading(list(pdf = list(name = "AHP_Redacted.pdf"), info = list()), catalog, read), list(title = "AHP_Redacted.pdf", subtitle = ""))
-  expect_equal(extraction_service_heading(list(info = list()), catalog, read)$title, "Unnamed questionnaire")
+  expect_equal(extraction_service_heading(list(pdf = list(name = "AHP_Redacted.pdf"), info = list()), catalog), list(title = "AHP_Redacted.pdf", subtitle = ""))
+  expect_equal(extraction_service_heading(list(info = list()), catalog)$title, "Unnamed questionnaire")
 })
 
 # ------ What a recorded questionnaire has already ----------------------------------------------------------
 test_that("a new wave of a recorded questionnaire knows the blocks it prints and its questions' MATR IDs", {
-  admin <- local_staff("ADMIN")
-  tree <- local_tree()
-  pushed <- local_pushed_questionnaire(admin, tree)
-  record <- list(info = picked_basic_info(tree, pushed$questionnaire_id))
+  pushed <- shared_pushed_questionnaire()
+  record <- list(info = picked_basic_info(pushed$tree, pushed$questionnaire_id))
   recorded <- extraction_service_recorded(test_connection, record)
   expect_named(recorded, c("texts", "matr_ids"))
   expect_setequal(recorded$texts$text, pushed$draft$components$text)
@@ -290,9 +288,7 @@ test_that("a new wave of a recorded questionnaire knows the blocks it prints and
 })
 
 test_that("an applied extraction keeps its draft, and its history has a line for each table it added to", {
-  admin <- local_staff("ADMIN")
-  tree <- local_tree()
-  pushed <- local_pushed_questionnaire(admin, tree)
+  pushed <- shared_pushed_questionnaire()
   kept <- extraction_model_get(test_connection, pushed$id) # what was read and reviewed stays, for analysis
   expect_equal(kept$status, history_applied_status)
   items <- history_model_get_items(test_connection, pushed$history_id)

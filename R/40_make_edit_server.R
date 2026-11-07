@@ -4,23 +4,17 @@
 # code one piece at a time, so nothing changes them while something else is reading them; they aren't made to be
 # shared between threads or sessions, and shouldn't be.
 
-#' The Make an edit page's server.
-#'
-#' The list on the left has a section for each kind of thing (40_make_edit_ui.R); a section's items are read from
-#' the database the first time it is opened. Picking an item shows it in the details (`edit_change_server()`,
-#' "view"), with Edit and Delete; Edit, Delete and + Add show the form or what a delete reaches there, with Save.
-#' This page keeps drafts and makes the change: Save as draft, then either apply it at once (an add or an update,
-#' or anything an ADMIN does) or send it to Change Requests for one other staff member to approve (a STAFF
-#' member's delete); see `service_change_request.R`. A draft is saved in the database (`model_edit.R`). A request
-#' that was sent back, or is waiting for approval, can be opened here again: saving it makes a new revision.
-#'
-#' @param id The module's id.
-#' @param connection The MATR database, `list(url, key)`; see `model_database.R`.
-#' @param me Who is using the site: `list(staff_id, name, role)`.
-#' @param show_page A function taking a page's name and showing it.
-#' @param active A reactive that says whether this page is the one on screen, or `NULL`. Opening the page reads
-#'   the saved drafts again, since a reviewer can send one back, and the lists, since other staff change them.
-#' @return A list with `open`, a function taking a saved edit's record that opens it on the form.
+# The Make an edit page's server.
+# The list on the left has a section for each kind of thing (40_make_edit_ui.R); a section's items are read from
+# the database the first time it is opened. Picking an item shows it in the details (`edit_change_server()`,
+# "view"), with Edit and Delete; Edit, Delete and + Add show the form or what a delete reaches there, with Save.
+# This page keeps drafts and makes the change: Save as draft, then either apply it at once (an add or an update,
+# or anything an ADMIN does) or send it to Change Requests for one other staff member to approve (a STAFF
+# member's delete); see `service_change_request.R`. A draft is saved in the database (`model_edit.R`). A request
+# that was sent back, or is waiting for approval, can be opened here again: saving it makes a new revision.
+# active: A reactive that says whether this page is the one on screen, or `NULL`. Opening the page reads
+#   the saved drafts again, since a reviewer can send one back, and the lists, since other staff change them.
+# Returns: A list with `open`, a function taking a saved edit's record that opens it on the form.
 make_edit_server <- function(id, connection, me, show_page, active = NULL) {
   moduleServer(id, function(input, output, session) {
     ns <- session$ns
@@ -111,19 +105,10 @@ make_edit_server <- function(id, connection, me, show_page, active = NULL) {
       )
     }
     # the proposals last read, for when they can't be read again: this session's own (it is made inside the module)
-    last_proposals <- list()
+    read_proposals <- last_good_read(function() edit_service_get_all(connection))
     proposals <- reactive({
       saved_count()
-      tryCatch(
-        {
-          last_proposals <<- edit_service_get_all(connection)
-          last_proposals
-        },
-        error = function(problem) {
-          showNotification(conditionMessage(problem), type = "error", id = "database_problem")
-          last_proposals
-        }
-      )
+      read_proposals()
     })
 
     # What stops a verb for the kind, if anything ("You can't delete a registry yet: …").
@@ -211,6 +196,14 @@ make_edit_server <- function(id, connection, me, show_page, active = NULL) {
       )
     }
 
+    # Asks before what was typed is thrown away: leaving the edit for another item, or cancelling it.
+    unsaved_dialog <- function(title, confirm_id, confirm_label) {
+      confirm_dialog(
+        title, "What you've typed isn't saved. Save it as a draft first if you want to come back to it.",
+        confirm_id = ns(confirm_id), confirm_label = confirm_label, keep_label = "Keep editing", easy_close = TRUE
+      )
+    }
+
     # ------ Picking ------------------------------------------------------------------
     observeEvent(input$action, {
       event <- input$action
@@ -267,12 +260,7 @@ make_edit_server <- function(id, connection, me, show_page, active = NULL) {
     go_to <- function(where) {
       if (verb() %in% c("add", "update")) {
         leaving_to(where)
-        showModal(modalDialog(
-          title = "Leave this edit?",
-          "What you've typed isn't saved. Save it as a draft first if you want to come back to it.",
-          footer = tagList(modalButton("Keep editing"), actionButton(ns("confirm_leave"), "Leave it", class = "btn-primary")),
-          easyClose = TRUE
-        ))
+        showModal(unsaved_dialog("Leave this edit?", "confirm_leave", "Leave it"))
         return()
       }
       show_item(where)
@@ -353,12 +341,7 @@ make_edit_server <- function(id, connection, me, show_page, active = NULL) {
       }
       div(
         class = "block-detail edit-detail",
-        div(
-          class = "detail-head",
-          tags$button(type = "button", class = "btn btn-sm btn-link detail-back", `data-detail-back` = NA, app_icon("back"), " List"),
-          span(class = "row-badge", make_edit_kinds[[key]][2]),
-          h2(class = "detail-title", detail_title(mode))
-        ),
+        detail_head(span(class = "row-badge", make_edit_kinds[[key]][2]), h2(class = "detail-title", detail_title(mode))),
         div(
           class = "detail-content",
           if (mode == "view") {
@@ -394,12 +377,7 @@ make_edit_server <- function(id, connection, me, show_page, active = NULL) {
       table <- entity()$scope$table
       div(
         class = "block-detail edit-detail",
-        div(
-          class = "detail-head",
-          tags$button(type = "button", class = "btn btn-sm btn-link detail-back", `data-detail-back` = NA, app_icon("back"), " List"),
-          span(class = "row-badge", make_edit_kinds[[key]][2]),
-          h2(class = "detail-title", detail_title("add"))
-        ),
+        detail_head(span(class = "row-badge", make_edit_kinds[[key]][2]), h2(class = "detail-title", detail_title("add"))),
         div(
           class = "detail-content",
           selectInput(
@@ -548,13 +526,10 @@ make_edit_server <- function(id, connection, me, show_page, active = NULL) {
 
     observeEvent(input$confirm_discard, {
       removeModal()
-      tryCatch(
-        {
-          edit_service_withdraw(connection, discarding(), me)
-          showNotification("Saved edit discarded.", type = "message")
-        },
-        error = function(problem) show_problem(problem, "Couldn't discard it")
-      )
+      try_showing({
+        edit_service_withdraw(connection, discarding(), me)
+        showNotification("Saved edit discarded.", type = "message")
+      }, "Couldn't discard it")
       saved_count(saved_count() + 1L)
     })
 
@@ -603,12 +578,7 @@ make_edit_server <- function(id, connection, me, show_page, active = NULL) {
     # Cancel: a form with something typed in it asks first; it goes back to the item (or to nothing, for an add).
     observeEvent(input$cancel, {
       if (verb() %in% c("add", "update") && !change$stuck()) {
-        showModal(modalDialog(
-          title = "Cancel this edit?",
-          "What you've typed isn't saved. Save it as a draft first if you want to come back to it.",
-          footer = tagList(modalButton("Keep editing"), actionButton(ns("confirm_cancel"), "Cancel the edit", class = "btn-primary")),
-          easyClose = TRUE
-        ))
+        showModal(unsaved_dialog("Cancel this edit?", "confirm_cancel", "Cancel the edit"))
         return()
       }
       back_to_item()
@@ -634,17 +604,11 @@ make_edit_server <- function(id, connection, me, show_page, active = NULL) {
     }
 
     observeEvent(input$save_draft, {
-      saved <- tryCatch(
-        {
-          saved <- edit_service_save(connection, build_record("Draft"), me)
-          saved_count(saved_count() + 1L)
-          saved
-        },
-        error = function(problem) {
-          show_problem(problem, "Couldn't save")
-          NULL
-        }
-      )
+      saved <- try_showing({
+        saved <- edit_service_save(connection, build_record("Draft"), me)
+        saved_count(saved_count() + 1L)
+        saved
+      }, "Couldn't save")
       if (is.null(saved)) {
         return()
       }
@@ -678,25 +642,18 @@ make_edit_server <- function(id, connection, me, show_page, active = NULL) {
     # Saves, then does what the rule says: applies it, sends it for approval, or saves a new version. The lists are
     # read again, and the details say what happened.
     proceed <- function() {
-      outcome <- tryCatch(
-        {
-          if (editing_request()) {
-            saved <- edit_service_save(connection, build_record("Awaiting Review"), me)
-            list(applied = FALSE, record = saved, resaved = TRUE)
-          } else if (needs_approval()) {
-            saved <- edit_service_send(connection, build_record("Awaiting Review"), me)
-            list(applied = FALSE, record = saved)
-          } else {
-            saved <- edit_service_save(connection, build_record("Draft"), me)
-            draft(saved) # if the database refuses it, what was typed is still a saved edit
-            saved_count(saved_count() + 1L)
-            list(applied = TRUE, record = saved, history_id = edit_service_apply(connection, saved, me))
-          }
+      outcome <- try_showing(
+        if (editing_request() || needs_approval()) {
+          # a request being changed is saved as a new version; any other waits for approval
+          saved <- edit_service_save(connection, build_record("Awaiting Review"), me)
+          list(applied = FALSE, record = saved, resaved = editing_request())
+        } else {
+          saved <- edit_service_save(connection, build_record("Draft"), me)
+          draft(saved) # if the database refuses it, what was typed is still a saved edit
+          saved_count(saved_count() + 1L)
+          list(applied = TRUE, record = saved, history_id = edit_service_apply(connection, saved, me))
         },
-        error = function(problem) {
-          show_problem(problem, if (needs_approval()) "Couldn't send it" else "Couldn't apply it")
-          NULL
-        }
+        if (needs_approval()) "Couldn't send it" else "Couldn't apply it"
       )
       if (is.null(outcome)) {
         return()

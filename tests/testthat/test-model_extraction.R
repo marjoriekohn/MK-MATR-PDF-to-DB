@@ -36,12 +36,17 @@ test_that("a draft typed by hand has no reading and keeps what staff said about 
   expect_equal(saved$info$wave_id, "2")
 })
 
-test_that("records are read newest saved first, named by id, and only extractions", {
+test_that("records are read newest saved first, named by id, and only extractions, each read with its details at once", {
   me <- local_staff()
   first <- local_extraction(me)
   second <- local_extraction(me)
   edit <- local_edit(me)
+  before <- test_requests$count
   records <- extraction_model_get_all(test_connection)
+  expect_equal(test_requests$count - before, 1L) # the drafts and their details in one request
+  before <- test_requests$count
+  expect_equal(extraction_model_get(test_connection, first$id), records[[first$id]])
+  expect_equal(test_requests$count - before, 1L)
   ours <- names(records)[names(records) %in% c(first$id, second$id)]
   expect_equal(ours, c(second$id, first$id))
   expect_false(edit$id %in% names(records))

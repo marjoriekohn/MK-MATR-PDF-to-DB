@@ -7,13 +7,10 @@
 # A row an edit adds has no number yet and is named new:<table>:<n>.
 change_new_row_pattern <- "^new:([a-z_]+):([0-9]+)$"
 
-#' How a row is named in an item, in words.
-#'
-#' `{"component_id":88,"questionnaire_id":3}` is "component_id 88, questionnaire_id 3"; a row
-#' the edit adds, `new:component:1`, is "a new row (1)".
-#'
-#' @param record_identifier The row's key as JSON, from `edit_identifier()`.
-#' @return A string.
+# How a row is named in an item, in words.
+# `{"component_id":88,"questionnaire_id":3}` is "component_id 88, questionnaire_id 3"; a row
+# the edit adds, `new:component:1`, is "a new row (1)".
+# record_identifier: The row's key as JSON, from `edit_identifier()`.
 change_service_row_name <- function(record_identifier) {
   key <- tryCatch(jsonlite::fromJSON(record_identifier, simplifyVector = FALSE), error = function(problem) NULL)
   if (!is.list(key) || length(key) == 0) {
@@ -26,18 +23,16 @@ change_service_row_name <- function(record_identifier) {
   paste(parts, collapse = ", ")
 }
 
-#' The rows an edit touches, each with the fields it changes.
-#'
-#' Items for the same row and action go together, in the order the rows first appear. An applied extraction
-#' is recorded a table at a time (private.apply_draft_items()): an item whose `record_identifier` is a JSON
-#' array of keys stands for every row it added to that table, with no fields.
-#'
-#' @param items The items: a data frame with `entity_name`, `record_identifier`, `action`,
-#'   `attribute_name`, `old_value` and `new_value`.
-#' @return A list with one entry for each row (or each table of an extraction): `table`, `row` (how it is
-#'   named, or "287 rows"), `rows` (how many rows it stands for: 1, or a table's count), `action`
-#'   (`"Insert"`, `"Update"` or `"Delete"`) and `fields`, a data frame of `column`, `old`
-#'   and `new` (`NA` for nothing). Empty if there are no items.
+# The rows an edit touches, each with the fields it changes.
+# Items for the same row and action go together, in the order the rows first appear. An applied extraction
+# is recorded a table at a time (private.apply_draft_items()): an item whose `record_identifier` is a JSON
+# array of keys stands for every row it added to that table, with no fields.
+# items: The items: a data frame with `entity_name`, `record_identifier`, `action`,
+#   `attribute_name`, `old_value` and `new_value`.
+# Returns: A list with one entry for each row (or each table of an extraction): `table`, `row` (how it is
+#   named, or "287 rows"), `rows` (how many rows it stands for: 1, or a table's count), `action`
+#   (`"Insert"`, `"Update"` or `"Delete"`) and `fields`, a data frame of `column`, `old`
+#   and `new` (`NA` for nothing). Empty if there are no items.
 change_service_groups <- function(items) {
   if (is.null(items) || NROW(items) == 0) {
     return(list())
@@ -72,11 +67,10 @@ change_service_rows_listed <- function(record_identifier) {
   if (is.list(keys)) length(keys) else NA_integer_
 }
 
-#' How many rows an edit adds, changes and removes.
-#'
-#' @param groups The rows an edit touches, from `change_service_groups()`.
-#' @return A list: `added`, `changed` and `removed` (counts of rows) and `tables` (how many
-#'   tables they are in).
+# How many rows an edit adds, changes and removes.
+# groups: The rows an edit touches, from `change_service_groups()`.
+# Returns: A list: `added`, `changed` and `removed` (counts of rows) and `tables` (how many
+#   tables they are in).
 change_service_counts <- function(groups) {
   count <- function(action) {
     sum(vapply(groups, function(group) if (identical(group$action, action)) group$rows %||% 1L else 0L, integer(1)))
@@ -87,12 +81,10 @@ change_service_counts <- function(groups) {
   )
 }
 
-#' The counts as a sentence.
-#'
-#' For example "Adds 3 rows, changes 2 and removes 18, in 7 tables."
-#'
-#' @param counts The result of `change_service_counts()`.
-#' @return A string; empty if the edit touches nothing.
+# The counts as a sentence.
+# For example "Adds 3 rows, changes 2 and removes 18, in 7 tables."
+# counts: The result of `change_service_counts()`.
+# Returns: A string; empty if the edit touches nothing.
 change_service_counts_text <- function(counts) {
   parts <- c(
     if (counts$added > 0) paste("adds", plural(counts$added, "row", big_mark = ",")),

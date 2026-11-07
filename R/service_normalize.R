@@ -21,11 +21,10 @@
 # Who a question can ask about is a subject the database has, or one a variable of the draft names, found in its
 # words as whole words, whatever their capitals ("Twin A"). The respondent isn't: they are a blank.
 
-#' Answer choices that look like these words: worded the same but for punctuation, capitals, "&" and plurals.
-#'
-#' @param label An answer choice's words.
-#' @param labels The answer choices to look in.
-#' @return The ones that look like it, not `label` itself.
+# Answer choices that look like these words: worded the same but for punctuation, capitals, "&" and plurals.
+# label: An answer choice's words.
+# labels: The answer choices to look in.
+# Returns: The ones that look like it, not `label` itself.
 normalize_look_alikes <- function(label, labels) {
   labels <- unique(labels[!is.na(labels)])
   if (length(label) != 1 || is.na(label) || length(labels) == 0) {
@@ -40,20 +39,17 @@ normalize_loose_words <- function(text) {
   text <- gsub("&", " and ", normal_answer(text), fixed = TRUE)
   text <- gsub("\\[(?!subject\\])|(?<!\\[subject)\\]", " ", text, perl = TRUE)
   text <- gsub("[^a-z0-9 \\[\\]]", " ", text, perl = TRUE)
-  text <- trimws(gsub("[[:space:]]+", " ", text))
+  text <- squish(text)
   gsub("\\b([a-z]{3,})s\\b", "\\1", text, perl = TRUE)
 }
 
-#' The choices of a draft that could be worded as others are.
-#'
-#' A choice the database doesn't have whose words were merged into one of its choices, or that look like one of
-#' them or like another choice of the draft that more variables offer.
-#'
-#' @param draft A draft: `list(questionnaire, components, variables, response_options)`; see the top of `service_draft.R`.
-#' @param answer_options The answer choices' words in the database.
-#' @param aliases The wordings merged into them: a data frame of `alias` and `label` (the choice's words).
-#' @return A data frame: `from` (the draft's words), `uses` (how many of its choices have them), `to` (the words to
-#'   use instead), `why` ("merged" or "alike") and `in_database` (whether `to` is a choice the database has).
+# The choices of a draft that could be worded as others are.
+# A choice the database doesn't have whose words were merged into one of its choices, or that look like one of
+# them or like another choice of the draft that more variables offer.
+# answer_options: The answer choices' words in the database.
+# aliases: The wordings merged into them: a data frame of `alias` and `label` (the choice's words).
+# Returns: A data frame: `from` (the draft's words), `uses` (how many of its choices have them), `to` (the words to
+#   use instead), `why` ("merged" or "alike") and `in_database` (whether `to` is a choice the database has).
 normalize_service_choice_suggestions <- function(draft, answer_options, aliases = NULL) {
   words <- draft$response_options$answer_option
   words <- words[!is.na(words)]
@@ -85,12 +81,10 @@ normalize_service_choice_suggestions <- function(draft, answer_options, aliases 
   if (is.null(rows)) none else rows[order(rows$from), , drop = FALSE]
 }
 
-#' Use other words for a choice, everywhere the draft has it.
-#'
-#' @param draft A draft: `list(questionnaire, components, variables, response_options)`; see the top of `service_draft.R`.
-#' @param from The words the draft has.
-#' @param to The words to use instead.
-#' @return The draft. An error with a sentence if a variable would then offer the same choice twice.
+# Use other words for a choice, everywhere the draft has it.
+# from: The words the draft has.
+# to: The words to use instead.
+# Returns: The draft. An error with a sentence if a variable would then offer the same choice twice.
 normalize_service_use_choice <- function(draft, from, to) {
   choices <- draft$response_options
   is_from <- choices$answer_option %in% from
@@ -166,19 +160,6 @@ normalize_with_placeholder <- function(text, subject, patterns) {
   gsub(patterns[[subject]], subject_placeholder, text, perl = TRUE)
 }
 
-#' Words with [subject] and [time frame] filled in.
-#'
-#' @param text A question stem or an answer choice.
-#' @param subject Who it is about: a subject's name; blank for the respondent.
-#' @param time_frame When it is about: a time frame; with none, [time frame] stays.
-#' @return `text` with [subject] as `subject` (or "the respondent"), and [time frame] as `time_frame`.
-normalize_service_fill <- function(text, subject, time_frame = NA) {
-  subject <- if (is.na(subject) || !nzchar(trimws(subject))) "the respondent" else trimws(subject)
-  text <- gsub(subject_placeholder, subject, text, fixed = TRUE)
-  if (!is.na(time_frame) && nzchar(trimws(time_frame))) text <- gsub(time_frame_placeholder, trimws(time_frame), text, fixed = TRUE)
-  text
-}
-
 # ------ Questions about different times --------------------------------------------------------------------------
 # The time frames some words ask about, as the database writes them: one character vector for each text.
 normalize_time_frames_in <- function(texts) {
@@ -199,20 +180,17 @@ normalize_with_time_placeholder <- function(text) {
   gsub(normalize_time_frame_words, time_frame_placeholder, text, perl = TRUE)
 }
 
-#' The questions of a draft that differ only in who or when they ask about.
-#'
-#' Questions whose words are the same once each names who it asks about as [subject] and when as [time frame], each
-#' asking about someone else, another time, or both ("in your lifetime", "during the last 12 months"); or worded the
-#' same, where each is in a part about someone else (its section's heading, or failing that the nearest block before
-#' it, names one subject, and they all differ).
-#'
-#' @param draft A draft: `list(questionnaire, components, variables, response_options)`; see the top of `service_draft.R`.
-#' @param subjects Who a variable can be about besides the respondent (the database's subjects); those the draft's
-#'   variables name are added.
-#' @return A list of groups, in printed order, each a list: `stem` (the words they share), `ids` (the questions' ids,
-#'   in printed order), `subjects` (who each asks about; `NA` when they all ask about the respondent),
-#'   `time_frames` (when each asks about; `NA` when the stem has no [time frame]) and `linked` (whether they share
-#'   that stem already).
+# The questions of a draft that differ only in who or when they ask about.
+# Questions whose words are the same once each names who it asks about as [subject] and when as [time frame], each
+# asking about someone else, another time, or both ("in your lifetime", "during the last 12 months"); or worded the
+# same, where each is in a part about someone else (its section's heading, or failing that the nearest block before
+# it, names one subject, and they all differ).
+# subjects: Who a variable can be about besides the respondent (the database's subjects); those the draft's
+#   variables name are added.
+# Returns: A list of groups, in printed order, each a list: `stem` (the words they share), `ids` (the questions' ids,
+#   in printed order), `subjects` (who each asks about; `NA` when they all ask about the respondent),
+#   `time_frames` (when each asks about; `NA` when the stem has no [time frame]) and `linked` (whether they share
+#   that stem already).
 normalize_service_question_groups <- function(draft, subjects) {
   patterns <- normalize_subject_patterns(c(subjects, blank_respondent(draft$variables$subject)))
   printed <- draft_service_printed_order(draft)
@@ -387,16 +365,13 @@ normalize_groups_by_hand <- function(draft, blocks, found) {
   })
 }
 
-#' Link questions by hand: those reworded for another person ("What is your date of birth?", "What is the date of
-#' birth of the other biological parent?"), or that differ in any other way Normalize doesn't find.
-#'
-#' Each keeps its own words, number and variables, and gets the stem typed, in lower case (normal_text()).
-#'
-#' @param draft A draft: `list(questionnaire, components, variables, response_options)`; see the top of `service_draft.R`.
-#' @param numbers The questions' numbers, as the outline shows them ("B.1", "12").
-#' @param stem The words they share, with [subject] for who and [time frame] for when they ask about.
-#' @return The draft. An error with a sentence if a number is no question's, there are fewer than two, or the stem
-#'   is blank.
+# Link questions by hand: those reworded for another person ("What is your date of birth?", "What is the date of
+# birth of the other biological parent?"), or that differ in any other way Normalize doesn't find.
+# Each keeps its own words, number and variables, and gets the stem typed, in lower case (normal_text()).
+# numbers: The questions' numbers, as the outline shows them ("B.1", "12").
+# stem: The words they share, with [subject] for who and [time frame] for when they ask about.
+# Returns: The draft. An error with a sentence if a number is no question's, there are fewer than two, or the stem
+#   is blank.
 normalize_service_link_by_hand <- function(draft, numbers, stem) {
   numbers <- unique(trimws(numbers[nzchar(trimws(numbers))]))
   if (length(numbers) < 2) stop("Name two or more questions to link, by their numbers.", call. = FALSE)
@@ -425,17 +400,14 @@ normalize_context_subject <- function(draft, blocks, named, i) {
   if (is.na(hit)) NA_character_ else named[[hit]]
 }
 
-#' Link questions that differ only in who or when they ask about.
-#'
-#' Each gets the stem, and each of its variables is about when it asks about. When they ask about different people,
-#' each variable is about who its question asks about, and a choice that names its variable's subject has [subject]
-#' there instead, unless the variable's choices name someone else too ("twin a much more" beside "twin b much more"
-#' compares them).
-#'
-#' @param draft A draft: `list(questionnaire, components, variables, response_options)`; see the top of `service_draft.R`.
-#' @param group One of `normalize_service_question_groups()`.
-#' @param subjects As for `normalize_service_question_groups()`.
-#' @return The draft.
+# Link questions that differ only in who or when they ask about.
+# Each gets the stem, and each of its variables is about when it asks about. When they ask about different people,
+# each variable is about who its question asks about, and a choice that names its variable's subject has [subject]
+# there instead, unless the variable's choices name someone else too ("twin a much more" beside "twin b much more"
+# compares them).
+# group: One of `normalize_service_question_groups()`.
+# subjects: As for `normalize_service_question_groups()`.
+# Returns: The draft.
 normalize_service_link <- function(draft, group, subjects) {
   patterns <- normalize_subject_patterns(c(subjects, group$subjects, blank_respondent(draft$variables$subject)))
   about_people <- !all(is.na(group$subjects))
@@ -462,11 +434,9 @@ normalize_service_link <- function(draft, group, subjects) {
   draft
 }
 
-#' Unlink questions: they no longer share a stem. Their subjects and choices stay as they are.
-#'
-#' @param draft A draft: `list(questionnaire, components, variables, response_options)`; see the top of `service_draft.R`.
-#' @param ids The questions' ids.
-#' @return The draft.
+# Unlink questions: they no longer share a stem. Their subjects and choices stay as they are.
+# ids: The questions' ids.
+# Returns: The draft.
 normalize_service_unlink <- function(draft, ids) {
   draft$components$stem[draft$components$id %in% ids] <- NA_character_
   draft

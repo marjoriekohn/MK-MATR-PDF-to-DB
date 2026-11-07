@@ -1,7 +1,4 @@
-#' The Change Requests page: items waiting for one other staff member to approve them.
-#'
-#' @param id The module's id.
-#' @return The page's UI.
+# The Change Requests page: items waiting for one other staff member to approve them.
 change_requests_ui <- function(id) {
   ns <- NS(id)
   div(
@@ -17,12 +14,10 @@ change_requests_ui <- function(id) {
   )
 }
 
-#' "Waiting for me (1)", "My requests (2)" and "All waiting (3)": which requests are listed.
-#'
-#' @param input_id The input's id; its value is `"me"`, `"mine"` or `"everyone"`.
-#' @param whose The one picked now.
-#' @param n_me,n_mine,n_everyone The counts shown on the buttons.
-#' @return A UI element.
+# "Waiting for me (1)", "My requests (2)" and "All waiting (3)": which requests are listed.
+# input_id: The input's id; its value is `"me"`, `"mine"` or `"everyone"`.
+# whose: The one picked now.
+# n_me,n_mine,n_everyone: The counts shown on the buttons.
 change_request_whose_buttons <- function(input_id, whose, n_me, n_mine, n_everyone) {
   choices <- c("me", "mine", "everyone")
   names(choices) <- c(
@@ -32,11 +27,8 @@ change_request_whose_buttons <- function(input_id, whose, n_me, n_mine, n_everyo
 }
 
 # ------ One card for each request ------------------------------------------------------------
-#' One request waiting for approval.
-#'
-#' @param record A request, from `change_request_service_waiting()`.
-#' @param me Who is using the site: `list(staff_id, name, role)`.
-#' @return A UI element.
+# One request waiting for approval.
+# record: A request, from `change_request_service_waiting()`.
 change_request_card_ui <- function(record, me) {
   state <- change_request_service_state(record, me)
   kind <- change_request_service_kind(record)
@@ -100,22 +92,17 @@ change_request_review_label <- function(state) {
   "See the request"
 }
 
-#' What a person reads before approving, sending back or withdrawing a request.
-#'
-#' For an extraction (`extraction_request_ui()`): its Basic Info, the form where the registry, study,
-#' questionnaire and wave it goes into are filled in and saved, and what it adds, as cards of the rows that
-#' are there and the NEW ones. The questionnaire itself, with Edit and Withdraw, is the request's Preview
-#' (`change_request_preview_dialog()`). It can't be approved (or added, by an ADMIN who prepared it) until its
-#' Basic Info is saved; the page's server keeps those buttons disabled until then.
-#'
-#' @param record A request.
-#' @param me Who is using the site: `list(staff_id, name, role)`.
-#' @param ns The module's namespace function.
-#' @param detail What the request comes to: for an edit `change_request_service_changes()`; for an
-#'   extraction `list(preview = <from extraction_service_request_preview()>)`.
-#' @return A `modalDialog()`, for `showModal()`. Saving an extraction's Basic Info changes the request, so what
-#'   depends on it is in parts of their own (`request_title`, `request_detail`, `request_footer`), which the page
-#'   draws again in place (`change_request_parts()`) while the form stays as it is.
+# What a person reads before approving, sending back or withdrawing a request.
+# For an extraction (`extraction_request_ui()`): its Basic Info, the form where the registry, study,
+# questionnaire and wave it goes into are filled in and saved, and what it adds, as cards of the rows that
+# are there and the NEW ones. The questionnaire itself, with Edit and Withdraw, is the request's Preview
+# (`change_request_preview_dialog()`). It can't be approved (or added, by an ADMIN who prepared it) until its
+# Basic Info is saved; the page's server keeps those buttons disabled until then.
+# detail: What the request comes to: for an edit `change_request_service_changes()`; for an
+#   extraction `list(preview = <from extraction_service_request_preview()>)`.
+# Returns: A `modalDialog()`, for `showModal()`. Saving an extraction's Basic Info changes the request, so what
+#   depends on it is in parts of their own (`request_title`, `request_detail`, `request_footer`), which the page
+#   draws again in place (`change_request_parts()`) while the form stays as it is.
 change_request_dialog <- function(record, me, ns, detail) {
   state <- change_request_service_state(record, me)
   extraction <- identical(record$kind, extraction_kind)
@@ -138,13 +125,11 @@ change_request_dialog <- function(record, me, ns, detail) {
   )
 }
 
-#' The parts of a request's dialog that depend on the request as saved: its title, what it comes to (with the
-#' note that approving adds it now) and the buttons. Each is one element, so the page can put it in place of the
-#' one that is there.
-#'
-#' @inheritParams change_request_dialog
-#' @param ready Whether Approve (or an ADMIN's Add) can be pressed: its Basic Info is saved and fits.
-#' @return A list of UI elements: `title`, `detail` and `footer`.
+# The parts of a request's dialog that depend on the request as saved: its title, what it comes to (with the
+# note that approving adds it now) and the buttons. Each is one element, so the page can put it in place of the
+# one that is there.
+# ready: Whether Approve (or an ADMIN's Add) can be pressed: its Basic Info is saved and fits.
+# Returns: A list of UI elements: `title`, `detail` and `footer`.
 change_request_parts <- function(record, me, ns, detail, ready) {
   state <- change_request_service_state(record, me)
   extraction <- identical(record$kind, extraction_kind)
@@ -180,18 +165,13 @@ change_request_parts <- function(record, me, ns, detail, ready) {
   )
 }
 
-#' An extraction request's questionnaire, as the Edit Extraction page's Preview shows it: how many blocks
-#' haven't been marked as checked, its PDF and the questionnaire laid out as a table. Edit opens it on the Edit
-#' Extraction page, Withdraw sets it aside (its preparer only), and the last button goes on to the request's
-#' Basic Info dialog (`change_request_dialog()`).
-#'
-#' @param record A request.
-#' @param me Who is using the site: `list(staff_id, name, role)`.
-#' @param ns The module's namespace function.
-#' @param draft Its questionnaire, or `NULL` if it couldn't be read.
-#' @param pdf_url The address of its PDF, or `NULL`.
-#' @param table Where the page draws the questionnaire's table once the dialog is open, or `NULL` to draw it here.
-#' @return A `modalDialog()`, for `showModal()`.
+# An extraction request's questionnaire, as the Edit Extraction page's Preview shows it: how many blocks
+# haven't been marked as checked, its PDF and the questionnaire laid out as a table. Edit opens it on the Edit
+# Extraction page, Withdraw sets it aside (its preparer only), and the last button goes on to the request's
+# Basic Info dialog (`change_request_dialog()`).
+# draft: Its questionnaire, or `NULL` if it couldn't be read.
+# pdf_url: The address of its PDF, or `NULL`.
+# table: Where the page draws the questionnaire's table once the dialog is open, or `NULL` to draw it here.
 change_request_preview_dialog <- function(record, me, ns, draft, pdf_url = NULL, table = NULL) {
   state <- change_request_service_state(record, me)
   modalDialog(
@@ -208,11 +188,8 @@ change_request_preview_dialog <- function(record, me, ns, draft, pdf_url = NULL,
   )
 }
 
-#' An extraction request's Basic Info: the form, and the button that saves it.
-#'
-#' @param ns The module's namespace function.
-#' @param state From `change_request_service_state()`.
-#' @return A UI element.
+# An extraction request's Basic Info: the form, and the button that saves it.
+# state: From `change_request_service_state()`.
 basic_info_ui <- function(ns, state) {
   tagList(
     p(
@@ -229,29 +206,23 @@ basic_info_ui <- function(ns, state) {
   )
 }
 
-#' The dialog that asks what to say when sending a request back.
-#'
-#' @param record The request.
-#' @param ns The module's namespace function.
-#' @return A `modalDialog()`, for `showModal()`.
+# The dialog that asks what to say when sending a request back.
+# record: The request.
 change_request_send_back_dialog <- function(record, ns) {
-  modalDialog(
-    title = "Send it back",
+  confirm_dialog(
+    "Send it back",
     p("It goes back to ", strong(record$prepared_by), ", with what you say here. They change it and send it again."),
     textAreaInput(
       ns("send_back_note"), NULL,
       rows = 3, width = "100%", placeholder = "What needs changing? e.g. This is the wrong wave: it should be Wave 2."
     ) |>
       tag_input_attributes("textarea", `aria-label` = "What needs changing?"),
-    footer = tagList(modalButton("Cancel"), actionButton(ns("confirm_send_back"), "Send it back", class = "btn-primary")),
-    easyClose = TRUE
+    confirm_id = ns("confirm_send_back"), confirm_label = "Send it back", keep_label = "Cancel", easy_close = TRUE
   )
 }
 
-#' What is shown when there is nothing to list.
-#'
-#' @param whose `"me"`, `"mine"` or `"everyone"`.
-#' @return A UI element.
+# What is shown when there is nothing to list.
+# whose: `"me"`, `"mine"` or `"everyone"`.
 no_change_requests <- function(whose) {
   div(
     class = "list-card is-empty",

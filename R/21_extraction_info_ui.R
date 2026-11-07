@@ -1,16 +1,13 @@
-#' Where an extraction goes in the MATR metadata database (its Basic Info): its registry, study,
-#' questionnaire and wave.
-#'
-#' Filled in on Change Requests, after its change request is submitted from the Edit Extraction page.
-#' Four drop-downs in one row, each holding what is in the one before it. The extraction always goes
-#' into a recorded questionnaire's wave that asks no questions yet; one that isn't there is added from
-#' the drop-down's own "+ Add new …" choice, which opens the pop-up that adds it
-#' (`quick_add_server()`). Like every form on the site the drop-downs have no labels: the empty choice
-#' says what each holds, and a blank one is outlined in red, since the request can't be approved
-#' without it. Their choices and the notes under them come from the server.
-#'
-#' @param id The module's id.
-#' @return The form's UI.
+# Where an extraction goes in the MATR metadata database (its Basic Info): its registry, study,
+# questionnaire and wave.
+# Filled in on Change Requests, after its change request is submitted from the Edit Extraction page.
+# Four drop-downs in one row, each holding what is in the one before it. The extraction always goes
+# into a recorded questionnaire's wave that asks no questions yet; one that isn't there is added from
+# the drop-down's own "+ Add new …" choice, which opens the pop-up that adds it
+# (`quick_add_server()`). Like every form on the site the drop-downs have no labels: the empty choice
+# says what each holds, and a blank one is outlined in red, since the request can't be approved
+# without it. Their choices and the notes under them come from the server.
+# Returns: The form's UI.
 extraction_info_ui <- function(id) {
   ns <- NS(id)
   div(
@@ -46,12 +43,11 @@ select_field <- function(ns, input_id, name) {
   )
 }
 
-#' Add attributes to the element inside a Shiny input's markup.
-#'
-#' @param field A Shiny input.
-#' @param element The HTML element to find inside it, e.g. `"select"`.
-#' @param ... The attributes.
-#' @return The input, changed.
+# Add attributes to the element inside a Shiny input's markup.
+# field: A Shiny input.
+# element: The HTML element to find inside it, e.g. `"select"`.
+# ...: The attributes.
+# Returns: The input, changed.
 tag_input_attributes <- function(field, element, ...) {
   htmltools::tagQuery(field)$find(element)$addAttrs(...)$allTags()
 }

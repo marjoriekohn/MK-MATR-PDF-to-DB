@@ -12,26 +12,21 @@
 
 auth_timeout_seconds <- 20
 
-#' The connection to Supabase Auth.
-#'
-#' @param url The project's address; defaults to `SUPABASE_URL`.
-#' @param key The publishable key; defaults to `SUPABASE_PUBLISHABLE_KEY`.
-#' @return `list(url, key)`, as `connection` is for the database.
+# The connection to Supabase Auth.
+# url: The project's address; defaults to `SUPABASE_URL`.
+# key: The publishable key; defaults to `SUPABASE_PUBLISHABLE_KEY`.
+# Returns: `list(url, key)`, as `connection` is for the database.
 auth_model_connection <- function(url = Sys.getenv("SUPABASE_URL"), key = Sys.getenv("SUPABASE_PUBLISHABLE_KEY")) {
   list(url = url, key = key)
 }
 
-#' Email a sign-in link.
-#'
-#' Auth sends the email; clicking the link brings the person back to `redirect_to` with their tokens
-#' after `#`, which the page script hands to the server (`staff_service_from_tokens()`). Only an
-#' existing account gets a link: nobody signs up this way.
-#'
-#' @param auth The Auth connection, `list(url, key)`; see `auth_model_connection()`.
-#' @param email The email.
-#' @param redirect_to Where the link brings them back to: the site's own address. Auth only accepts
-#'   addresses listed in its settings (Authentication, URL Configuration).
-#' @return Called for its effect. An error with a sentence if Auth refused.
+# Email a sign-in link.
+# Auth sends the email; clicking the link brings the person back to `redirect_to` with their tokens
+# after `#`, which the page script hands to the server (`staff_service_from_tokens()`). Only an
+# existing account gets a link: nobody signs up this way.
+# redirect_to: Where the link brings them back to: the site's own address. Auth only accepts
+#   addresses listed in its settings (Authentication, URL Configuration).
+# Returns: Called for its effect. An error with a sentence if Auth refused.
 auth_model_send_link <- function(auth, email, redirect_to) {
   auth_request(auth, "otp") |>
     httr2::req_url_query(redirect_to = redirect_to) |>
@@ -40,13 +35,10 @@ auth_model_send_link <- function(auth, email, redirect_to) {
   invisible()
 }
 
-#' Sign in with an email and password.
-#'
-#' @param auth The Auth connection, `list(url, key)`; see `auth_model_connection()`.
-#' @param email The email.
-#' @param password The password.
-#' @return A list with `access_token` and `refresh_token`, as a sign-in link brings back. An error with
-#'   a sentence if Auth refused.
+# Sign in with an email and password.
+# password: The password.
+# Returns: A list with `access_token` and `refresh_token`, as a sign-in link brings back. An error with
+#   a sentence if Auth refused.
 auth_model_sign_in <- function(auth, email, password) {
   auth_request(auth, "token") |>
     httr2::req_url_query(grant_type = "password") |>
@@ -54,13 +46,9 @@ auth_model_sign_in <- function(auth, email, password) {
     auth_perform()
 }
 
-#' Who a token belongs to.
-#'
-#' Asks Auth, so a token that was made up, has expired or was revoked is turned down.
-#'
-#' @param auth The Auth connection, `list(url, key)`; see `auth_model_connection()`.
-#' @param access_token The access token.
-#' @return A list: `id` and `email`. An error with a sentence if the token isn't good.
+# Who a token belongs to.
+# Asks Auth, so a token that was made up, has expired or was revoked is turned down.
+# Returns: A list: `id` and `email`. An error with a sentence if the token isn't good.
 auth_model_user <- function(auth, access_token) {
   user <- auth_request(auth, "user") |>
     httr2::req_headers(Authorization = paste("Bearer", access_token), .redact = "Authorization") |>
@@ -68,16 +56,12 @@ auth_model_user <- function(auth, access_token) {
   list(id = user$id, email = user$email)
 }
 
-#' Change the signed-in person's password.
-#'
-#' If the project asks for a recent sign-in before a password is changed (Authentication, Providers,
-#' Email, Secure password change), a sign-in more than a day old is turned down; signing in again fixes it.
-#'
-#' @param auth The Auth connection, `list(url, key)`; see `auth_model_connection()`.
-#' @param access_token The access token.
-#' @param password The new password.
-#' @return Called for its effect. An error with a sentence if Auth refused (a password that is too weak
-#'   or the same as before, for instance).
+# Change the signed-in person's password.
+# If the project asks for a recent sign-in before a password is changed (Authentication, Providers,
+# Email, Secure password change), a sign-in more than a day old is turned down; signing in again fixes it.
+# password: The new password.
+# Returns: Called for its effect. An error with a sentence if Auth refused (a password that is too weak
+#   or the same as before, for instance).
 auth_model_set_password <- function(auth, access_token, password) {
   auth_request(auth, "user") |>
     httr2::req_method("PUT") |>
@@ -87,13 +71,10 @@ auth_model_set_password <- function(auth, access_token, password) {
   invisible()
 }
 
-#' Swap a refresh token for new tokens.
-#'
-#' Auth stops accepting the refresh token it was given, so the new one has to be kept instead.
-#'
-#' @param auth The Auth connection, `list(url, key)`; see `auth_model_connection()`.
-#' @param refresh_token The refresh token.
-#' @return A list with `access_token` and `refresh_token`. An error with a sentence if Auth refused.
+# Swap a refresh token for new tokens.
+# Auth stops accepting the refresh token it was given, so the new one has to be kept instead.
+# refresh_token: The refresh token.
+# Returns: A list with `access_token` and `refresh_token`. An error with a sentence if Auth refused.
 auth_model_refresh <- function(auth, refresh_token) {
   auth_request(auth, "token") |>
     httr2::req_url_query(grant_type = "refresh_token") |>
@@ -101,13 +82,9 @@ auth_model_refresh <- function(auth, refresh_token) {
     auth_perform()
 }
 
-#' Sign out.
-#'
-#' Auth revokes the session's refresh token, so the link or sign-in can't be used again.
-#'
-#' @param auth The Auth connection, `list(url, key)`; see `auth_model_connection()`.
-#' @param access_token The access token.
-#' @return Called for its effect. An error with a sentence if Auth refused.
+# Sign out.
+# Auth revokes the session's refresh token, so the link or sign-in can't be used again.
+# Returns: Called for its effect. An error with a sentence if Auth refused.
 auth_model_sign_out <- function(auth, access_token) {
   auth_request(auth, "logout") |>
     httr2::req_method("POST") |>
@@ -120,14 +97,12 @@ auth_model_sign_out <- function(auth, access_token) {
 # The site doesn't call these: staff accounts are made in Supabase (Authentication > Users). The tests use them to
 # make a sign-in account for a test staff member and remove it afterwards (tests/testthat/helper-auth.R).
 
-#' Make an account, as the project's administrator.
-#'
-#' The email is marked confirmed, so the account can sign in at once.
-#'
-#' @param connection The MATR database, `list(url, key)`; see `model_database.R`. The secret key.
-#' @param email The account's email.
-#' @param password Its password.
-#' @return The account's `id`.
+# Make an account, as the project's administrator.
+# The email is marked confirmed, so the account can sign in at once.
+# connection: The MATR database, `list(url, key)`; see `model_database.R`. The secret key.
+# email: The account's email.
+# password: Its password.
+# Returns: The account's `id`.
 auth_model_admin_create_user <- function(connection, email, password) {
   user <- auth_request(connection, "admin/users") |>
     httr2::req_headers(Authorization = paste("Bearer", connection$key), .redact = "Authorization") |>
@@ -136,11 +111,9 @@ auth_model_admin_create_user <- function(connection, email, password) {
   user$id
 }
 
-#' Remove an account, as the project's administrator.
-#'
-#' @param connection The MATR database, `list(url, key)`; see `model_database.R`. The secret key.
-#' @param user_id The account's id.
-#' @return Called for its effect.
+# Remove an account, as the project's administrator.
+# connection: The MATR database, `list(url, key)`; see `model_database.R`. The secret key.
+# user_id: The account's id.
 auth_model_admin_delete_user <- function(connection, user_id) {
   if (!grepl("^[A-Za-z0-9-]+$", user_id %||% "")) stop("That isn't an account id.", call. = FALSE)
   auth_request(connection, paste0("admin/users/", user_id)) |>

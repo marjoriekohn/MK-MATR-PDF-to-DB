@@ -15,7 +15,7 @@ respondent_type_entity <- list(
     n_q <- count_in(snap$questionnaire$respondent_type_id, rows$respondent_type_id)
     edit_cards(
       key_text(rows$respondent_type_id),
-      paste0(rows$name, " (", edit_age_range(rows$minimum_age, rows$maximum_age), ")"),
+      paste0(rows$name, " (", age_range_text(rows$minimum_age, rows$maximum_age), ")"),
       subtitle = ifelse(is.na(rows$description), "", rows$description),
       facts = lapply(n_q, function(n) edit_count(n, "questionnaire"))
     )
@@ -262,14 +262,11 @@ wave_entity <- list(
   }
 )
 
-#' The lines of a row's details that say which study it belongs to.
-#'
-#' Its registry, its name and its investigators, and its status if asked for.
-#'
-#' @param snap The tables the kind needs, as `edit_service_load()` reads them: a list of data frames named after the tables.
-#' @param study_id The study's id.
-#' @param status Whether to say the study's status.
-#' @return Lines, as `edit_details_lines()` makes them.
+# The lines of a row's details that say which study it belongs to.
+# Its registry, its name and its investigators, and its status if asked for.
+# study_id: The study's id.
+# status: Whether to say the study's status.
+# Returns: Lines, as `edit_details_lines()` makes them.
 edit_study_lines <- function(snap, study_id, status = FALSE) {
   study <- snap$study[match(study_id, snap$study$study_id), , drop = FALSE]
   registry <- snap$registry[match(study$registry_id, snap$registry$registry_id), , drop = FALSE]

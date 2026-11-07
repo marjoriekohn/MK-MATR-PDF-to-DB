@@ -1,14 +1,9 @@
-#' The Edit History page's server.
-#'
-#' The edits applied to the MATR metadata database, newest first, filtered by kind and by words typed.
-#' "See what changed" opens the fields an edit changed, old and new.
-#'
-#' @param id The module's id.
-#' @param connection The MATR database, `list(url, key)`; see `model_database.R`.
-#' @param active A reactive that says whether this page is the one on screen, or `NULL`. Opening
-#'   the page reads the history again, since an add or an update goes in at once and the list
-#'   was read before it.
-#' @return Called for its effect.
+# The Edit History page's server.
+# The edits applied to the MATR metadata database, newest first, filtered by kind and by words typed.
+# "See what changed" opens the fields an edit changed, old and new.
+# active: A reactive that says whether this page is the one on screen, or `NULL`. Opening
+#   the page reads the history again, since an add or an update goes in at once and the list
+#   was read before it.
 edit_history_server <- function(
   id,
   connection,
@@ -22,19 +17,10 @@ edit_history_server <- function(
     showing <- reactiveVal(history_page_size) # how many edits are listed
 
     # If the database can't be reached the last edits read stay on screen, with a message.
-    last_records <- list()
+    read_records <- last_good_read(function() history_service_get_all(connection))
     records <- reactive({
       refreshed()
-      tryCatch(
-        {
-          last_records <<- history_service_get_all(connection)
-          last_records
-        },
-        error = function(problem) {
-          showNotification(conditionMessage(problem), type = "error", id = "database_problem")
-          last_records
-        }
-      )
+      read_records()
     })
 
     matching <- reactive(history_service_filter(records(), input$kind %||% "all", input$search %||% ""))
@@ -55,13 +41,7 @@ edit_history_server <- function(
     })
 
     show_changes <- function(record) {
-      changes <- tryCatch(
-        history_service_changes(connection, record$id),
-        error = function(problem) {
-          show_problem(problem, "Couldn't read what changed")
-          NULL
-        }
-      )
+      changes <- try_showing(history_service_changes(connection, record$id), "Couldn't read what changed")
       if (is.null(changes)) {
         return()
       }

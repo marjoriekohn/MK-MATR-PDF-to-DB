@@ -1,30 +1,22 @@
-#' The Change Requests page's server.
-#'
-#' The requests waiting for approval (a STAFF member's delete, or an extraction they submitted),
-#' longest waiting first. "Review" shows what a request changes; from there a person other than
-#' who prepared or last changed it approves it, which adds it to the MATR metadata database at once, or sends
-#' it back with a note; whoever prepared it can withdraw it; anyone can open it to edit it, which
-#' makes a new revision. The database does the approving and the applying and checks the rules
-#' again (`model_change_request.R`); this page offers the buttons that make sense.
-#'
-#' An extraction's Basic Info (the registry, study, questionnaire and wave it goes into) is filled in
-#' and saved here, in its dialog (`extraction_info_server()`). Saving it is a change like any other: it
-#' makes a new revision, so whoever saves it can't approve it. Approve (and Add, for an ADMIN's own
-#' request) stay disabled until the Basic Info is saved, complete and as the form shows it.
-#'
-#' @param id The module's id.
-#' @param connection The MATR database, `list(url, key)`; see `model_database.R`.
-#' @param me Who is using the site: `list(staff_id, name, role)`.
-#' @param open_edit A function taking an edit request's record and opening it on Make an edit.
-#' @param open_edit_extraction A function taking an extraction request's record and opening it on the Edit Extraction page.
-#' @param catalog The live tables the Basic Info form picks from, as `server.R` shares them: `get()`
-#'   reads them and `refresh()` reads them again.
-#' @param extractions The extraction drafts as `server.R` shares them: `all()` is a reactive list of
-#'   records, and `changed()` tells it this session changed one.
-#' @param active A reactive that says whether this page is the one on screen, or `NULL`. Opening the
-#'   page reads the requests again, since other staff send and approve them too.
-#' @return A list with `review`, a function taking a request's id that opens it in its dialog (the Home page's
-#'   Review).
+# The Change Requests page's server.
+# The requests waiting for approval (a STAFF member's delete, or an extraction they submitted),
+# longest waiting first. "Review" shows what a request changes; from there a person other than
+# who prepared or last changed it approves it, which adds it to the MATR metadata database at once, or sends
+# it back with a note; whoever prepared it can withdraw it; anyone can open it to edit it, which
+# makes a new revision. The database does the approving and the applying and checks the rules
+# again (`model_change_request.R`); this page offers the buttons that make sense.
+# An extraction's Basic Info (the registry, study, questionnaire and wave it goes into) is filled in
+# and saved here, in its dialog (`extraction_info_server()`). Saving it is a change like any other: it
+# makes a new revision, so whoever saves it can't approve it. Approve (and Add, for an ADMIN's own
+# request) stay disabled until the Basic Info is saved, complete and as the form shows it.
+# open_edit: A function taking an edit request's record and opening it on Make an edit.
+# open_edit_extraction: A function taking an extraction request's record and opening it on the Edit Extraction page.
+# catalog: The live tables the Basic Info form picks from, as `server.R` shares them: `get()`
+#   reads them and `refresh()` reads them again.
+# active: A reactive that says whether this page is the one on screen, or `NULL`. Opening the
+#   page reads the requests again, since other staff send and approve them too.
+# Returns: A list with `review`, a function taking a request's id that opens it in its dialog (the Home page's
+#   Review).
 change_requests_server <- function(
   id,
   connection,
@@ -49,19 +41,10 @@ change_requests_server <- function(
     if (!is.null(active)) {
       observeEvent(active(), if (isTRUE(active())) refreshed(refreshed() + 1L), ignoreInit = TRUE)
     }
-    last_requests <- list()
+    read_requests <- last_good_read(function() change_request_service_waiting(connection))
     requests <- reactive({
       refreshed()
-      tryCatch(
-        {
-          last_requests <<- change_request_service_waiting(connection)
-          last_requests
-        },
-        error = function(problem) {
-          showNotification(conditionMessage(problem), type = "error", id = "database_problem")
-          last_requests
-        }
-      )
+      read_requests()
     })
     shown <- reactive(change_request_service_filter(requests(), me, whose()))
 
@@ -202,13 +185,7 @@ change_requests_server <- function(
 
     observeEvent(input$save_info, {
       opened <- req(reviewing())
-      saved <- tryCatch(
-        extraction_service_save_info(connection, opened, form_info(), me, catalog$get()),
-        error = function(problem) {
-          show_problem(problem, "Couldn't save the Basic Info")
-          NULL
-        }
-      )
+      saved <- try_showing(extraction_service_save_info(connection, opened, form_info(), me, catalog$get()), "Couldn't save the Basic Info")
       if (is.null(saved)) {
         return()
       }
@@ -244,36 +221,36 @@ change_requests_server <- function(
       TRUE
     }
 
+    # Approving, adding or withdrawing the request open: the dialog closes, `act` runs (saying `done` if it worked,
+    # or what went wrong after `doing`), and the list is read again without it.
+    finish_request <- function(act, done, doing) {
+      removeModal()
+      try_showing({
+        act
+        showNotification(done, type = "message")
+      }, doing)
+      reviewing(NULL)
+      refreshed(refreshed() + 1L)
+    }
+
     # What was approved is what the person was shown: the revision they opened.
     observeEvent(input$approve, {
       opened <- reviewing()
       req(opened, ready_to_add())
-      removeModal()
-      tryCatch(
-        {
-          change_request_service_approve(connection, opened, me)
-          showNotification("Approved. It is in the MATR metadata database now, and in the Edit History.", type = "message")
-        },
-        error = function(problem) show_problem(problem, "Couldn't approve it")
+      finish_request(
+        change_request_service_approve(connection, opened, me),
+        "Approved. It is in the MATR metadata database now, and in the Edit History.", "Couldn't approve it"
       )
-      reviewing(NULL)
-      refreshed(refreshed() + 1L)
       extractions$changed()
     })
 
     observeEvent(input$add, {
       opened <- reviewing()
       req(opened, ready_to_add())
-      removeModal()
-      tryCatch(
-        {
-          change_request_service_add(connection, opened, me)
-          showNotification("Added to the MATR metadata database. It is in the Edit History.", type = "message")
-        },
-        error = function(problem) show_problem(problem, "Couldn't add it")
+      finish_request(
+        change_request_service_add(connection, opened, me),
+        "Added to the MATR metadata database. It is in the Edit History.", "Couldn't add it"
       )
-      reviewing(NULL)
-      refreshed(refreshed() + 1L)
       extractions$changed()
     })
 
@@ -323,16 +300,7 @@ change_requests_server <- function(
     observeEvent(input$confirm_withdraw, {
       opened <- reviewing()
       req(opened)
-      removeModal()
-      tryCatch(
-        {
-          change_request_service_withdraw(connection, opened, me)
-          showNotification("Withdrawn.", type = "message")
-        },
-        error = function(problem) show_problem(problem, "Couldn't withdraw it")
-      )
-      reviewing(NULL)
-      refreshed(refreshed() + 1L)
+      finish_request(change_request_service_withdraw(connection, opened, me), "Withdrawn.", "Couldn't withdraw it")
     })
 
     # Editing opens the request where it was made, with everything filled in. Saving there makes a new

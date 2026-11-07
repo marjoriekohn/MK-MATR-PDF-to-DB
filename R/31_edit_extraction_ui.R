@@ -1,17 +1,12 @@
-#' The Edit Extraction page: a title on the left and a row of buttons on the right, with how far the checking
-#' has got across the page under both, over the extracted questionnaire.
-#'
-#' One panel: the whole questionnaire as it was extracted, as a list with the picked block's details
-#' beside it (`extraction_outline_ui()`). The header's buttons: Undo, Save, Normalize (answer choices worded as
-#' the database words them, and questions that differ only in who they ask about linked: `normalize_dialog()`),
-#' Open PDF (if the file is here: it opens in its own tab, at the page of the block picked) and Preview (of the
-#' change request).
-#' On a phone the buttons are only their icons, sharing a row of their own evenly under the progress bar.
-#'
-#' (It was called the review page. Change Requests has its own review, of requests waiting for approval.)
-#'
-#' @param id The module's id.
-#' @return The page's UI.
+# The Edit Extraction page: a title on the left and a row of buttons on the right, with how far the checking
+# has got across the page under both, over the extracted questionnaire.
+# One panel: the whole questionnaire as it was extracted, as a list with the picked block's details
+# beside it (`extraction_outline_ui()`). The header's buttons: Undo, Save, Normalize (answer choices worded as
+# the database words them, and questions that differ only in who they ask about linked: `normalize_dialog()`),
+# Open PDF (if the file is here: it opens in its own tab, at the page of the block picked) and Preview (of the
+# change request).
+# On a phone the buttons are only their icons, sharing a row of their own evenly under the progress bar.
+# (It was called the review page. Change Requests has its own review, of requests waiting for approval.)
 edit_extraction_ui <- function(id) {
   ns <- NS(id)
   as_fill_carrier(div(
@@ -49,14 +44,12 @@ edit_extraction_ui <- function(id) {
   ))
 }
 
-#' A button that opens the questionnaire's PDF in a new window, if the file is on this server.
-#'
-#' On Edit Extraction it opens at the page the picked block was read from (`at_picked`, www/js/review.js),
-#' when that is known.
-#'
-#' @param url The address the browser gets the PDF from, or `NULL`.
-#' @param at_picked Whether it opens at the picked block's page.
-#' @return A UI element, or `NULL`.
+# A button that opens the questionnaire's PDF in a new window, if the file is on this server.
+# On Edit Extraction it opens at the page the picked block was read from (`at_picked`, www/js/review.js),
+# when that is known.
+# url: The address the browser gets the PDF from, or `NULL`.
+# at_picked: Whether it opens at the picked block's page.
+# Returns: A UI element, or `NULL`.
 pdf_open_button <- function(url, at_picked = FALSE) {
   if (is.null(url)) {
     return(NULL)
@@ -69,10 +62,9 @@ pdf_open_button <- function(url, at_picked = FALSE) {
   )
 }
 
-#' How far the checking has got: a bar that fills as blocks are marked as checked.
-#'
-#' @param counts From `draft_service_counts()`.
-#' @return A UI element saying "N% human-reviewed", with the counts in its tooltip.
+# How far the checking has got: a bar that fills as blocks are marked as checked.
+# counts: From `draft_service_counts()`.
+# Returns: A UI element saying "N% human-reviewed", with the counts in its tooltip.
 structure_progress_ui <- function(counts) {
   percent <- draft_service_percent_checked(counts)
   bslib::tooltip(
@@ -89,10 +81,8 @@ structure_progress_ui <- function(counts) {
   )
 }
 
-#' What is said above the panel: a note from a reviewer who sent the draft back, or that it is waiting.
-#'
-#' @param record The extraction's record.
-#' @return A UI element or `NULL`.
+# What is said above the panel: a note from a reviewer who sent the draft back, or that it is waiting.
+# Returns: A UI element or `NULL`.
 edit_extraction_banner <- function(record) {
   if (identical(record$status, "Sent Back") && !is.null(record$sent_back)) {
     return(edit_callout(
@@ -110,13 +100,11 @@ edit_extraction_banner <- function(record) {
   }
 }
 
-#' What is said above the panel while this page doesn't have the draft to work on: who does, or that it
-#' was let go while staff were away. The page only shows the draft then (`.claim-lost`).
-#'
-#' @param ns The module's namespace function.
-#' @param claim Why the page doesn't have it, as `edit_extraction_server()` keeps it: `NULL` while it does.
-#' @param unsaved Whether there are changes on screen that aren't saved.
-#' @return A UI element or `NULL`.
+# What is said above the panel while this page doesn't have the draft to work on: who does, or that it
+# was let go while staff were away. The page only shows the draft then (`.claim-lost`).
+# claim: Why the page doesn't have it, as `edit_extraction_server()` keeps it: `NULL` while it does.
+# unsaved: Whether there are changes on screen that aren't saved.
+# Returns: A UI element or `NULL`.
 edit_extraction_claim_banner <- function(ns, claim, unsaved = FALSE) {
   if (is.null(claim)) {
     return(NULL)
@@ -140,13 +128,9 @@ edit_extraction_claim_banner <- function(ns, claim, unsaved = FALSE) {
   ))
 }
 
-#' The Preview Change Request dialog: the questionnaire as its change request shows it.
-#'
-#' Nothing is written while it is open. Submit Change Request goes on to sending it. Where it goes
-#' (its Basic Info) isn't asked here: it is filled in on Change Requests.
-#'
-#' @param ns The module's namespace function.
-#' @return A `modalDialog()`, for `showModal()`.
+# The Preview Change Request dialog: the questionnaire as its change request shows it.
+# Nothing is written while it is open. Submit Change Request goes on to sending it. Where it goes
+# (its Basic Info) isn't asked here: it is filled in on Change Requests.
 preview_request_dialog <- function(ns) {
   modalDialog(
     title = "Preview Change Request",
@@ -161,17 +145,13 @@ preview_request_dialog <- function(ns) {
   )
 }
 
-#' The dialog that submits an extraction's change request.
-#'
-#' Every request goes to Change Requests, where its Basic Info is filled in.
-#'
-#' @param ns The module's namespace function.
-#' @param summary What the questionnaire holds, in words.
-#' @param unchecked How many blocks haven't been marked as checked.
-#' @param approval Whether it needs another staff member's approval (a STAFF member's request) rather
-#'   than being added by whoever submits it (an ADMIN).
-#' @param reviewers People who can be asked to review it: a named vector of staff ids, or empty.
-#' @return A `modalDialog()`, for `showModal()`.
+# The dialog that submits an extraction's change request.
+# Every request goes to Change Requests, where its Basic Info is filled in.
+# summary: What the questionnaire holds, in words.
+# unchecked: How many blocks haven't been marked as checked.
+# approval: Whether it needs another staff member's approval (a STAFF member's request) rather
+#   than being added by whoever submits it (an ADMIN).
+# reviewers: People who can be asked to review it: a named vector of staff ids, or empty.
 submit_request_dialog <- function(ns, summary, unchecked, approval, reviewers) {
   modalDialog(
     title = "Submit Change Request",
@@ -210,12 +190,9 @@ submit_request_dialog <- function(ns, summary, unchecked, approval, reviewers) {
   )
 }
 
-#' The Normalize dialog: what could be worded as the database words it, and the questions that could be linked,
-#' each with a button that does it (a change like any other, which Undo takes back). Nothing is written to the
-#' database: it is all in the draft until its change request is approved.
-#'
-#' @param ns The module's namespace function.
-#' @return A `modalDialog()`, for `showModal()`.
+# The Normalize dialog: what could be worded as the database words it, and the questions that could be linked,
+# each with a button that does it (a change like any other, which Undo takes back). Nothing is written to the
+# database: it is all in the draft until its change request is approved.
 normalize_dialog <- function(ns) {
   modalDialog(
     title = "Normalize",
@@ -226,14 +203,12 @@ normalize_dialog <- function(ns) {
   )
 }
 
-#' What the Normalize dialog lists.
-#'
-#' @param ns The module's namespace function.
-#' @param choices From `normalize_service_choice_suggestions()`.
-#' @param groups From `normalize_service_question_groups()`.
-#' @param draft The questionnaire on screen.
-#' @return A UI element. Its buttons are data-action buttons of the page (`use_choice`, `link`, `link_all`,
-#'   `unlink`), so the body carries the page's namespace.
+# What the Normalize dialog lists.
+# choices: From `normalize_service_choice_suggestions()`.
+# groups: From `normalize_service_question_groups()`.
+# draft: The questionnaire on screen.
+# Returns: A UI element. Its buttons are data-action buttons of the page (`use_choice`, `link`, `link_all`,
+#   `unlink`), so the body carries the page's namespace.
 normalize_ui <- function(ns, choices, groups, draft) {
   open <- Filter(function(group) !group$linked, groups)
   div(

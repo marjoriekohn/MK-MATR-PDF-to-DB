@@ -186,11 +186,6 @@ test_that("linking gives questions their stem and subjects, and choices that nam
   expect_equal(unlinked$variables$subject, draft$variables$subject)
 })
 
-test_that("[subject] is filled in with who a variable is about", {
-  expect_equal(normalize_service_fill("describes [subject] very well", "Twin A"), "describes Twin A very well")
-  expect_equal(normalize_service_fill("Has [subject] ever smoked?", NA), "Has the respondent ever smoked?")
-})
-
 # ------ Questions about different times -------------------------------------------------------------------------
 # The same question asked about three times, as AAATS H.3-H.5 asks it, and one asked about each twin over a year.
 times_draft <- function() {
@@ -250,15 +245,6 @@ test_that("linking gives each variable its time frame, and a subject only to que
   # the time frame is kept with the draft
   again <- draft_service_from_json(draft_service_to_json(draft))
   expect_equal(again$variables$time_frame, draft$variables$time_frame)
-})
-
-test_that("[time frame] is filled in with the time a variable is about", {
-  stem <- "[time frame], how would you say your relationship with [subject] has been?"
-  expect_equal(
-    normalize_service_fill(stem, "Twin A", "in the past year"),
-    "in the past year, how would you say your relationship with Twin A has been?"
-  )
-  expect_equal(normalize_service_fill("have you smoked [time frame]?", NA, NA), "have you smoked [time frame]?") # none to fill
 })
 
 # ------ Questions about different people, by pronoun or reworded ------------------------------------------------

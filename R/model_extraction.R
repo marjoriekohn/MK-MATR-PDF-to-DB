@@ -68,59 +68,27 @@ extraction_list_columns <- c(
 )
 
 # ------ Reading --------------------------------------------------------------------
-#' Every extraction draft still being prepared or waiting for approval (not applied or discarded).
-#'
-#' @param connection The MATR database, `list(url, key)`; see `model_database.R`.
-#' @return A list of records, newest saved first, named by id; see the top of this file for
-#'   what a record holds. The questionnaire itself isn't in it; see `draft_model_get()`.
-extraction_model_get_all <- function(connection) {
-  extraction_model_records(connection)
+# Every extraction draft still being prepared or waiting for approval (not applied or discarded).
+# Returns: A list of records, newest saved first, named by id; see the top of this file for
+#   what a record holds. The questionnaire itself isn't in it; see `draft_model_get()`.
+extraction_model_get_all <- function(connection, status = NULL) {
+  draft_row_model_records(connection, extraction_kind, extracted_draft_table, extraction_list_columns, extraction_model_record, status)
 }
 
-# The records of the extraction drafts, only those with this status if given.
-extraction_model_records <- function(connection, status = NULL) {
-  parents <- draft_row_model_list(connection, extraction_kind, status)
-  ids <- vapply(parents, function(row) as.character(row$draft_id), character(1))
-  details <- draft_row_model_details(connection, extracted_draft_table, ids, extraction_list_columns)
-  records <- lapply(Filter(function(row) !is.null(details[[as.character(row$draft_id)]]), parents), function(row) {
-    extraction_model_record(row, details[[as.character(row$draft_id)]])
-  })
-  stats::setNames(records, vapply(records, function(record) record$id, character(1)))
-}
-
-#' One extraction draft.
-#'
-#' @param connection The MATR database, `list(url, key)`; see `model_database.R`.
-#' @param id The draft's id.
-#' @return The record, as in `extraction_model_get_all()`. An error if there is none.
+# One extraction draft.
+# Returns: The record, as in `extraction_model_get_all()`. An error if there is none.
 extraction_model_get <- function(connection, id) {
-  gone <- "That draft is no longer in the database."
-  parent <- draft_row_model_get(connection, id)
-  if (is.null(parent) || !identical(parent$kind, extraction_kind)) stop(gone, call. = FALSE)
-  detail <- draft_row_model_details(connection, extracted_draft_table, id, extraction_list_columns)[[as.character(id)]]
-  if (is.null(detail)) stop(gone, call. = FALSE)
-  extraction_model_record(parent, detail)
+  draft_row_model_one(
+    connection, id, extraction_kind, extracted_draft_table, extraction_list_columns, extraction_model_record,
+    "That draft is no longer in the database."
+  )
 }
 
 extraction_model_record <- function(parent, detail) {
   pdf <- draft_row_one(detail$pdf)
   reading <- draft_row_one(detail$reading)
-  list(
-    id = as.character(parent$draft_id),
+  c(draft_row_record(parent), list(
     kind = extraction_kind,
-    status = parent$status,
-    summary = parent$summary,
-    prepared_by = parent$preparer$name,
-    prepared_by_id = parent$prepared_by,
-    started = database_time(parent$created_at),
-    saved = database_time(parent$saved_at),
-    saved_by = parent$saver$name,
-    saved_by_id = parent$saved_by,
-    revision = parent$revision,
-    submitted = draft_row_submitted(parent),
-    submitted_exact = draft_row_submitted_exact(parent),
-    requested_reviewer = draft_row_person(parent$requested_reviewer, parent$reviewer),
-    sent_back = draft_row_sent_back(parent),
     editing = draft_row_editing(parent),
     method = detail$method,
     pdf = list(
@@ -140,16 +108,13 @@ extraction_model_record <- function(parent, detail) {
     info = detail$info,
     matr_csv = detail$matr_csv,
     supplement = if (!is.null(detail$supplement_name)) list(name = detail$supplement_name, sha256 = detail$supplement_sha256)
-  )
+  ))
 }
 
 # ------ Writing --------------------------------------------------------------------
-#' Add an extraction draft.
-#'
-#' @param connection The MATR database, `list(url, key)`; see `model_database.R`.
-#' @param record A record as in `extraction_model_get_all()`, without an `id`; `prepared_by_id`
-#'   says who is starting it.
-#' @return The record as saved, with its id.
+# Add an extraction draft.
+# record: A record as in `extraction_model_get_all()`, without an `id`; `prepared_by_id`
+#   says who is starting it.
 extraction_model_create <- function(connection, record) {
   rows <- extraction_model_rows(record, setdiff(names(record), "requested_reviewer"))
   rows$parent$created_at <- record$started
@@ -158,19 +123,15 @@ extraction_model_create <- function(connection, record) {
   extraction_model_get(connection, id)
 }
 
-#' Save some fields of an extraction draft, as a person.
-#'
-#' Only the columns of the fields named in `changed` are written, so what the reading
-#' job and staff change at the same moment doesn't undo each other. The database records
-#' who saved it and, unless told not to, raises the revision.
-#'
-#' @param connection The MATR database, `list(url, key)`; see `model_database.R`.
-#' @param record The whole record, including its `id`.
-#' @param changed The names of the fields to save.
-#' @param staff_id The staff id of the person saving.
-#' @param expected_revision The revision the person was looking at, or `NULL` not to check.
-#' @param new_revision `FALSE` for a change that isn't to the content.
-#' @return The record as saved. An error with the database's sentence if it refused.
+# Save some fields of an extraction draft, as a person.
+# Only the columns of the fields named in `changed` are written, so what the reading
+# job and staff change at the same moment doesn't undo each other. The database records
+# who saved it and, unless told not to, raises the revision.
+# record: The whole record, including its `id`.
+# changed: The names of the fields to save.
+# expected_revision: The revision the person was looking at, or `NULL` not to check.
+# new_revision: `FALSE` for a change that isn't to the content.
+# Returns: The record as saved. An error with the database's sentence if it refused.
 extraction_model_save <- function(connection, record, changed, staff_id, expected_revision = NULL, new_revision = TRUE) {
   rows <- extraction_model_rows(record, setdiff(changed, "requested_reviewer"))
   if ("requested_reviewer" %in% changed) rows$parent["requested_reviewer"] <- list(record$requested_reviewer$id)
@@ -178,18 +139,13 @@ extraction_model_save <- function(connection, record, changed, staff_id, expecte
   extraction_model_get(connection, record$id)
 }
 
-#' Save the reading job's progress.
-#'
-#' Only the reading's own columns (ai_extracted_draft), and only while the draft is still being
-#' read for the reading it was started for, so what the job and staff change at the same moment doesn't
-#' undo each other, and a job that was overtaken by "Try reading again" saves nothing.
-#'
-#' @param connection The MATR database, `list(url, key)`; see `model_database.R`.
-#' @param id The draft's id.
-#' @param changes A named list of record fields (`extraction_status`, `error`, `model`,
-#'   `prompt_version`, `reading_pid`) to their new values.
-#' @param reading_started The reading's start time the job was started for.
-#' @return `TRUE` if saved, `FALSE` if the draft no longer matches and nothing was.
+# Save the reading job's progress.
+# Only the reading's own columns (ai_extracted_draft), and only while the draft is still being
+# read for the reading it was started for, so what the job and staff change at the same moment doesn't
+# undo each other, and a job that was overtaken by "Try reading again" saves nothing.
+# changes: A named list of record fields (`extraction_status`, `error`, `model`,
+#   `prompt_version`, `reading_pid`) to their new values.
+# Returns: `TRUE` if saved, `FALSE` if the draft no longer matches and nothing was.
 extraction_model_save_reading <- function(connection, id, changes, reading_started) {
   not_its_own <- setdiff(names(changes), extraction_reading_fields)
   if (length(not_its_own) > 0) stop("The reading job can't save ", paste(not_its_own, collapse = ", "), ".", call. = FALSE)
@@ -219,16 +175,11 @@ extraction_model_rows <- function(record, changed) {
   list(parent = parent, detail = detail)
 }
 
-#' Claim a draft for reading.
-#'
-#' The database does this in one step, so two copies of the site never both start a job.
-#'
-#' @param connection The MATR database, `list(url, key)`; see `model_database.R`.
-#' @param id The draft's id.
-#' @param reading_started The reading's start time, as the draft records it.
-#' @param now The time to record as the claim.
-#' @return `TRUE` if the draft was free, `FALSE` if another copy claimed it first (or
-#'   the reading has since restarted).
+# Claim a draft for reading.
+# The database does this in one step, so two copies of the site never both start a job.
+# now: The time to record as the claim.
+# Returns: `TRUE` if the draft was free, `FALSE` if another copy claimed it first (or
+#   the reading has since restarted).
 extraction_model_claim_reading <- function(connection, id, reading_started, now = Sys.time()) {
   claimed <- draft_row_model_update_detail(
     connection, ai_extracted_draft_table, id, list(reading_claimed_at = format_time(now)),
@@ -237,25 +188,18 @@ extraction_model_claim_reading <- function(connection, id, reading_started, now 
   !is.null(claimed)
 }
 
-#' A draft's whole file of MATR IDs and codes (a record only names it).
-#'
-#' @param connection The MATR database, `list(url, key)`; see `model_database.R`.
-#' @param id The draft's id.
-#' @return `list(name, sha256, bytes)` for a PDF, `list(name, text)` for text, or `NULL` for none.
+# A draft's whole file of MATR IDs and codes (a record only names it).
+# Returns: `list(name, sha256, bytes)` for a PDF, `list(name, text)` for text, or `NULL` for none.
 extraction_model_supplement <- function(connection, id) {
   rows <- draft_row_model_details(connection, extracted_draft_table, id, "supplement")
   rows[[as.character(id)]]$supplement
 }
 
-#' Delete an extraction draft that hasn't been applied, with everything under it.
-#'
-#' `discard_draft()` in the database checks who may (only the person who prepared it) and that it isn't
-#' applied. Its PDF's row (`pdf_file`) goes too when no other draft uses the file.
-#'
-#' @param connection The MATR database, `list(url, key)`; see `model_database.R`.
-#' @param id The draft's id.
-#' @param staff_id Who discards it.
-#' @return Called for its effect. An error with a sentence if the database refused.
+# Delete an extraction draft that hasn't been applied, with everything under it.
+# `discard_draft()` in the database checks who may (only the person who prepared it) and that it isn't
+# applied. Its PDF's row (`pdf_file`) goes too when no other draft uses the file.
+# staff_id: Who discards it.
+# Returns: Called for its effect. An error with a sentence if the database refused.
 extraction_model_discard <- function(connection, id, staff_id) {
   database_model_call(connection, "discard_draft", list(p_draft_id = draft_row_number(id), p_staff_id = staff_id))
   invisible()
@@ -268,15 +212,12 @@ extraction_model_pdf_path <- function(sha256) {
   file.path(extraction_model_pdf_dir(), paste0(sha256, ".pdf"))
 }
 
-#' Keep an uploaded PDF: in Storage, and a copy on this server.
-#'
-#' Named by its hash, so the same file is only ever kept once: in Storage (`storage_pdf_bucket`), and
-#' in `uploads/pdfs/` (the option `matr.pdf_dir` changes the folder).
-#'
-#' @param connection The MATR database, `list(url, key)`; see `model_database.R`.
-#' @param upload_path Where the upload is now.
-#' @param sha256 Its SHA-256, from `extraction_model_sha256()`.
-#' @return Where the copy on this server is. An error with a sentence if Storage refused it.
+# Keep an uploaded PDF: in Storage, and a copy on this server.
+# Named by its hash, so the same file is only ever kept once: in Storage (`storage_pdf_bucket`), and
+# in `uploads/pdfs/` (the option `matr.pdf_dir` changes the folder).
+# upload_path: Where the upload is now.
+# sha256: Its SHA-256, from `extraction_model_sha256()`.
+# Returns: Where the copy on this server is. An error with a sentence if Storage refused it.
 extraction_model_save_pdf <- function(connection, upload_path, sha256) {
   storage_model_upload(connection, storage_pdf_bucket, paste0(sha256, ".pdf"), upload_path)
   dir.create(extraction_model_pdf_dir(), recursive = TRUE, showWarnings = FALSE)
@@ -285,13 +226,11 @@ extraction_model_save_pdf <- function(connection, upload_path, sha256) {
   path
 }
 
-#' A draft's PDF on this server, fetched from Storage first if this server hasn't got it.
-#'
-#' @param connection The MATR database, `list(url, key)`; see `model_database.R`.
-#' @param sha256 The PDF's SHA-256, as the record keeps it.
-#' @return Where it is on this server, or `NULL` if Storage hasn't got it either (it was uploaded
-#'   before PDFs were kept there, and the server that had it has lost it). An error with a sentence
-#'   if Storage couldn't be asked.
+# A draft's PDF on this server, fetched from Storage first if this server hasn't got it.
+# sha256: The PDF's SHA-256, as the record keeps it.
+# Returns: Where it is on this server, or `NULL` if Storage hasn't got it either (it was uploaded
+#   before PDFs were kept there, and the server that had it has lost it). An error with a sentence
+#   if Storage couldn't be asked.
 extraction_model_local_pdf <- function(connection, sha256) {
   if (length(sha256) != 1 || is.na(sha256) || !nzchar(sha256)) {
     return(NULL)
@@ -304,15 +243,12 @@ extraction_model_local_pdf <- function(connection, sha256) {
   if (storage_model_download(connection, storage_pdf_bucket, paste0(sha256, ".pdf"), path)) path
 }
 
-#' Remove a PDF no draft uses any more: from Storage, and this server's copy.
-#'
-#' The database lets a PDF's row (`pdf_file`) go when the last draft that used it is discarded, unless a wave
-#' was extracted from it; while the row is there, the file stays. A PDF of MATR IDs and codes (a draft's
-#' `supplement`) has a row too, and also stays while another draft's supplement is the same file.
-#'
-#' @param connection The MATR database, `list(url, key)`; see `model_database.R`.
-#' @param sha256 The PDF's SHA-256, or `NULL`.
-#' @return `TRUE` if it was removed, `FALSE` if a draft still uses it (or there is none), invisibly.
+# Remove a PDF no draft uses any more: from Storage, and this server's copy.
+# The database lets a PDF's row (`pdf_file`) go when the last draft that used it is discarded, unless a wave
+# was extracted from it; while the row is there, the file stays. A PDF of MATR IDs and codes (a draft's
+# `supplement`) has a row too, and also stays while another draft's supplement is the same file.
+# sha256: The PDF's SHA-256, or `NULL`.
+# Returns: `TRUE` if it was removed, `FALSE` if a draft still uses it (or there is none), invisibly.
 extraction_model_forget_pdf <- function(connection, sha256) {
   if (length(sha256) != 1 || is.na(sha256) || !nzchar(sha256)) {
     return(invisible(FALSE))
@@ -327,40 +263,31 @@ extraction_model_forget_pdf <- function(connection, sha256) {
   invisible(TRUE)
 }
 
-#' The SHA-256 of a file.
-#'
-#' It names the file's copy in the cache and says it's the same PDF.
-#'
-#' @param path The file.
-#' @return The hash, as a string.
+# The SHA-256 of a file.
+# It names the file's copy in the cache and says it's the same PDF.
+# Returns: The hash, as a string.
 extraction_model_sha256 <- function(path) {
   digest::digest(file = path, algo = "sha256")
 }
 
-#' The text of an uploaded CSV.
-#'
-#' @param path The file.
-#' @return Its lines joined by newlines, read as UTF-8.
+# The text of an uploaded CSV.
+# Returns: Its lines joined by newlines, read as UTF-8.
 extraction_model_read_csv <- function(path) {
   paste(readLines(path, warn = FALSE, encoding = "UTF-8"), collapse = "\n")
 }
 
 # ------ Reading a PDF's first bytes ----------------------------------------------
-#' Whether a file starts like a PDF.
-#'
-#' @param path The file.
-#' @return `TRUE` if it begins `%PDF-`.
+# Whether a file starts like a PDF.
+# Returns: `TRUE` if it begins `%PDF-`.
 extraction_model_is_pdf <- function(path) {
   identical(readBin(path, "raw", 5), charToRaw("%PDF-"))
 }
 
-#' Count a PDF's pages.
-#'
-#' Counts the page objects the PDF lists in plain view. PDFs that pack them into
-#' compressed streams show none.
-#'
-#' @param path The PDF.
-#' @return The count, or `NULL` (unknown, not 0) if none were found.
+# Count a PDF's pages.
+# Counts the page objects the PDF lists in plain view. PDFs that pack them into
+# compressed streams show none.
+# path: The PDF.
+# Returns: The count, or `NULL` (unknown, not 0) if none were found.
 extraction_model_page_count <- function(path) {
   bytes <- readBin(path, "raw", file.size(path))
   n_pages <- length(grepRaw("/Type[[:space:]]*/Page[^s]", bytes, all = TRUE))

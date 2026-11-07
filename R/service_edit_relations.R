@@ -22,18 +22,17 @@
 #
 # A row's identity is its key columns joined with "|" (edit_key()).
 
-#' Describe how one table points at another, and what deleting the parent does.
-#'
-#' @param child The table that holds the reference.
-#' @param parent The table it points at.
-#' @param by The child's columns, named, each holding the parent's column of that name's value.
-#' @param on_delete What happens to the child's rows when the parent's go: `"remove"`, `"block"` or `"clear"`.
-#' @param needs_child `"remove_parent"` if a parent left with none of these rows goes too; `NULL` otherwise.
-#' @param why,fix For a block: why the child's rows are in the way, and what to do.
-#' @param clears For a clear: what is emptied, e.g. `"contact investigator"`.
-#' @param kept_by With `needs_child`: the tables whose rows, while they stay, keep a parent left with none of these
-#'   rows; each names its columns as `by` does.
-#' @return A list.
+# Describe how one table points at another, and what deleting the parent does.
+# child: The table that holds the reference.
+# parent: The table it points at.
+# by: The child's columns, named, each holding the parent's column of that name's value.
+# on_delete: What happens to the child's rows when the parent's go: `"remove"`, `"block"` or `"clear"`.
+# needs_child: `"remove_parent"` if a parent left with none of these rows goes too; `NULL` otherwise.
+# why,fix: For a block: why the child's rows are in the way, and what to do.
+# clears: For a clear: what is emptied, e.g. `"contact investigator"`.
+# kept_by: With `needs_child`: the tables whose rows, while they stay, keep a parent left with none of these
+#   rows; each names its columns as `by` does.
+# Returns: A list.
 relation <- function(child, parent, by, on_delete, needs_child = NULL, why = NULL, fix = NULL, clears = NULL,
                      kept_by = list()) {
   list(
@@ -169,11 +168,10 @@ edit_delete_order <- c(
 )
 
 # ------ Rows and their identity -------------------------------------------------------
-#' Name rows by their key columns.
-#'
-#' @param rows A data frame.
-#' @param columns The key columns.
-#' @return One string per row; the columns' values joined with `|`. Empty for no rows.
+# Name rows by their key columns.
+# rows: A data frame.
+# columns: The key columns.
+# Returns: One string per row; the columns' values joined with `|`. Empty for no rows.
 edit_key <- function(rows, columns) {
   if (nrow(rows) == 0) {
     return(character())
@@ -182,28 +180,21 @@ edit_key <- function(rows, columns) {
   do.call(paste, c(parts, sep = "|"))
 }
 
-#' Key values as text.
-#'
-#' Numbers are written in full, never in scientific notation.
-#'
-#' @param values A vector.
-#' @return A character vector.
+# Key values as text.
+# Numbers are written in full, never in scientific notation.
+# values: A vector.
 key_text <- function(values) {
   if (is.numeric(values)) format(values, scientific = FALSE, trim = TRUE, digits = 15) else as.character(values)
 }
 
-#' A table's key columns.
-#'
-#' @param table A table in `database_tables`.
-#' @return The column names.
+# A table's key columns.
+# table: A table in `database_tables`.
+# Returns: The column names.
 edit_table_key <- function(table) database_tables[[table]]$key
 
-#' The rows of a table with these keys.
-#'
-#' @param snap The tables the kind needs, as `edit_service_load()` reads them: a list of data frames named after the tables.
-#' @param table The table.
-#' @param keys Keys as text, from `edit_key()`.
-#' @return The matching rows, in the table's order.
+# The rows of a table with these keys.
+# keys: Keys as text, from `edit_key()`.
+# Returns: The matching rows, in the table's order.
 edit_rows <- function(snap, table, keys) {
   rows <- snap[[table]]
   rows[edit_key(rows, edit_table_key(table)) %in% keys, , drop = FALSE]
@@ -230,12 +221,10 @@ edit_descendant_tables <- function(table) {
   found
 }
 
-#' The rows that point at some rows of their parent table.
-#'
-#' @param snap The tables the kind needs, as `edit_service_load()` reads them: a list of data frames named after the tables.
-#' @param relation A `relation()`.
-#' @param parent_keys The keys of rows of `relation$parent`.
-#' @return The keys of the rows of `relation$child` that point at them.
+# The rows that point at some rows of their parent table.
+# relation: A `relation()`.
+# parent_keys: The keys of rows of `relation$parent`.
+# Returns: The keys of the rows of `relation$child` that point at them.
 edit_referencing <- function(snap, relation, parent_keys) {
   parents <- edit_rows(snap, relation$parent, parent_keys)
   children <- snap[[relation$child]]
@@ -246,14 +235,12 @@ edit_referencing <- function(snap, relation, parent_keys) {
 }
 
 # ------ The cascade ----------------------------------------------------------------------
-#' What deleting some rows takes with it.
-#'
-#' @param snap The tables the kind needs, as `edit_service_load()` reads them: a list of data frames named after the tables.
-#' @param start A list of keys named after their tables: the rows being deleted.
-#' @return A list: `start` (as given), `removed` (the keys of every row that goes, by table,
-#'   the starting rows first), `cleared` (rows that stay but have a column emptied: `table`, `columns`,
-#'   `keys`, `what`) and `blocked` (what is in the way, if anything: each says `text` and
-#'   `fix` and lists the `labels` of the rows involved).
+# What deleting some rows takes with it.
+# start: A list of keys named after their tables: the rows being deleted.
+# Returns: A list: `start` (as given), `removed` (the keys of every row that goes, by table,
+#   the starting rows first), `cleared` (rows that stay but have a column emptied: `table`, `columns`,
+#   `keys`, `what`) and `blocked` (what is in the way, if anything: each says `text` and
+#   `fix` and lists the `labels` of the rows involved).
 edit_service_cascade <- function(snap, start) {
   removed <- list()
   queue <- list()
@@ -397,13 +384,9 @@ edit_nouns <- list(
   extracted_draft = c("extraction", "extractions")
 )
 
-#' A count of rows with their table's noun.
-#'
-#' For example "1 wave", "3 studies".
-#'
-#' @param n The count.
-#' @param table The table.
-#' @return A string; see `plural()`.
+# A count of rows with their table's noun.
+# For example "1 wave", "3 studies".
+# Returns: A string; see `plural()`.
 plural_noun <- function(n, table) {
   nouns <- edit_nouns[[table]]
   plural(n, nouns[1], plural_form = nouns[2])
@@ -442,12 +425,10 @@ edit_label_needs <- list(
   extracted_draft = "draft"
 )
 
-#' Every table to read to work out what deleting rows of some tables reaches.
-#'
-#' And to name what it finds.
-#'
-#' @param tables Table names.
-#' @return Table names.
+# Every table to read to work out what deleting rows of some tables reaches.
+# And to name what it finds.
+# tables: Table names.
+# Returns: Table names.
 edit_tables_to_read <- function(tables) {
   reached <- unique(unlist(lapply(tables, edit_descendant_tables)))
   # and what keeps a parent that would otherwise go
@@ -457,14 +438,10 @@ edit_tables_to_read <- function(tables) {
   unique(c(reached, named_by, unlist(edit_label_needs[named_by])))
 }
 
-#' One name per row.
-#'
-#' For example "AHP · Do you now smoke cigarettes?".
-#'
-#' @param snap The tables the kind needs, as `edit_service_load()` reads them: a list of data frames named after the tables.
-#' @param table The table.
-#' @param rows Rows of the table.
-#' @return A character vector; empty for no rows.
+# One name per row.
+# For example "AHP · Do you now smoke cigarettes?".
+# rows: Rows of the table.
+# Returns: A character vector; empty for no rows.
 edit_label <- function(snap, table, rows) {
   if (nrow(rows) == 0) {
     return(character())
@@ -472,54 +449,40 @@ edit_label <- function(snap, table, rows) {
   edit_labels[[table]](snap, rows)
 }
 
-#' Look up a column of a table by id.
-#'
-#' @param snap The tables the kind needs, as `edit_service_load()` reads them: a list of data frames named after the tables.
-#' @param table The table.
-#' @param id_column The column holding the ids.
-#' @param ids The ids to look up.
-#' @param column The column to read.
-#' @return The values of `column`, one for each id, `NA` where there is no such row.
+# Look up a column of a table by id.
+# id_column: The column holding the ids.
+# ids: The ids to look up.
+# column: The column to read.
+# Returns: The values of `column`, one for each id, `NA` where there is no such row.
 edit_lookup <- function(snap, table, id_column, ids, column) {
   snap[[table]][[column]][match(ids, snap[[table]][[id_column]])]
 }
 
-#' The rows of a table for one placement: one place a questionnaire prints a block.
-#'
-#' What a block carries there: a question's settings (`questionnaire_question`), or the number it was given in
-#' each wave (`wave_question`).
-#'
-#' @param snap The tables the kind needs, as `edit_service_load()` reads them: a list of data frames named after the tables.
-#' @param table `"questionnaire_question"` or `"wave_question"`.
-#' @param placement_id The placement.
-#' @return The matching rows of `table`.
+# The rows of a table for one placement: one place a questionnaire prints a block.
+# What a block carries there: a question's settings (`questionnaire_question`), or the number it was given in
+# each wave (`wave_question`).
+# table: `"questionnaire_question"` or `"wave_question"`.
+# placement_id: The placement.
+# Returns: The matching rows of `table`.
 edit_placed_rows <- function(snap, table, placement_id) {
   rows <- snap[[table]]
   rows[rows$placement_id %in% placement_id, , drop = FALSE]
 }
 
-#' Questionnaires' short names.
-#'
-#' A questionnaire's abbreviation, or its name if it has none.
-#'
-#' @param snap The tables the kind needs, as `edit_service_load()` reads them: a list of data frames named after the tables.
-#' @param ids Questionnaire ids.
-#' @return A character vector.
+# Questionnaires' short names.
+# A questionnaire's abbreviation, or its name if it has none.
+# ids: Questionnaire ids.
 edit_questionnaire_short <- function(snap, ids) {
   short <- edit_lookup(snap, "questionnaire", "questionnaire_id", ids, "abbreviation")
   name <- edit_lookup(snap, "questionnaire", "questionnaire_id", ids, "name")
   ifelse(is.na(short) | !nzchar(short), ifelse(is.na(name), "?", name), short)
 }
 
-#' A component's printed words, shortened.
-#'
-#' Sections can be untitled, and blocks can have no words; those get a placeholder.
-#'
-#' @param snap The tables the kind needs, as `edit_service_load()` reads them: a list of data frames named after the tables.
-#' @param ids Component ids.
-#' @param max_characters Where to cut the words short: only in a sentence (a summary, a warning). The page shows
-#'   them whole, since it has the room.
-#' @return A character vector.
+# A component's printed words, shortened.
+# Sections can be untitled, and blocks can have no words; those get a placeholder.
+# ids: Component ids.
+# max_characters: Where to cut the words short: only in a sentence (a summary, a warning). The page shows
+#   them whole, since it has the room.
 edit_component_text <- function(snap, ids, max_characters = Inf) {
   text <- edit_lookup(snap, "component", "component_id", ids, "text")
   type <- edit_lookup(
@@ -537,9 +500,7 @@ edit_labels <- list(
   principal_investigator = function(snap, rows) rows$name,
   study = function(snap, rows) rows$name,
   respondent_type = function(snap, rows) rows$name,
-  questionnaire = function(snap, rows) {
-    ifelse(is.na(rows$abbreviation) | !nzchar(rows$abbreviation), rows$name, paste0(rows$name, " (", rows$abbreviation, ")"))
-  },
+  questionnaire = function(snap, rows) name_with_abbreviation(rows$name, rows$abbreviation),
   wave = function(snap, rows) paste(edit_questionnaire_short(snap, rows$questionnaire_id), rows$name),
   component_type = function(snap, rows) rows$name,
   component = function(snap, rows) edit_component_text(snap, rows$component_id),
@@ -606,15 +567,12 @@ edit_labels <- list(
 )
 
 # ------ What a delete reaches, for staff ---------------------------------------------------------
-#' The cascade as lists staff can read.
-#'
-#' How many of each kind of row go, a few of each by name, how it falls on each
-#' questionnaire, and what is changed without going.
-#'
-#' @param snap The tables the kind needs, as `edit_service_load()` reads them: a list of data frames named after the tables.
-#' @param cascade The result of `edit_service_cascade()`.
-#' @param examples How many rows to name for each kind.
-#' @return A list: `lines`, `changed`, `by_questionnaire` and `total` (how many other rows are affected).
+# The cascade as lists staff can read.
+# How many of each kind of row go, a few of each by name, how it falls on each
+# questionnaire, and what is changed without going.
+# cascade: The result of `edit_service_cascade()`.
+# examples: How many rows to name for each kind.
+# Returns: A list: `lines`, `changed`, `by_questionnaire` and `total` (how many other rows are affected).
 edit_service_reach <- function(snap, cascade, examples = 5) {
   start_keys <- cascade$start
   shown <- intersect(edit_display_order, names(cascade$removed))

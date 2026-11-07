@@ -1,25 +1,22 @@
-#' What a variable editor's buttons and fields do (33_variable_editor_ui.R).
-#'
-#' One for every page that edits a question's variables: Edit Extraction's outline (in the picked question's
-#' details) and Make an edit (`variable_editor_server()`). The page keeps the draft and says how a change is
-#' made; this keeps how the editor shows it: which variables' choices are open (`choices_open`), which optional
-#' fields were added empty (`shown`, as "v3:subject" or "o12:respondent_count"), the questions whose shared
-#' choices are edited one by one (`split`), and the field just added, which gets the cursor when it is drawn.
-#'
-#' Its buttons add variables (from a dialog: Choices or Write-in) and choices, give a variable's codes to the
-#' other questions with the same choices (Apply to All?), open and close a variable's choices, edit a grid's
-#' shared choices together or one by one, add and take away optional fields, and delete variables and choices.
-#'
-#' @param draft A reactive of the draft.
-#' @param change The page's way of changing it: `change(new_draft, typed = FALSE)`, TRUE if it took the change.
-#'   A change it refuses puts the fields back as the draft has them.
-#' @param redraw Called with a question's id when its variables are to be drawn again without the draft
-#'   changing (choices opened, a field added).
-#' @param ns The page module's namespace function, for its dialogs.
-#' @return A list: `action(event)` (TRUE if it was one of the editor's), `edit(event)` and `reorder(event)`
-#'   (TRUE if the draft took them), `apply_codes()` (Apply in the Apply to All? dialog), `view()` (how the editor
-#'   shows the draft, for `variable_cards()`), `take_focus()` (the field to put the cursor in, once), `reset()`
-#'   (forget the fields added empty, when everything is drawn again), and the reactive values above.
+# What a variable editor's buttons and fields do (33_variable_editor_ui.R).
+# One for every page that edits a question's variables: Edit Extraction's outline (in the picked question's
+# details) and Make an edit (`variable_editor_server()`). The page keeps the draft and says how a change is
+# made; this keeps how the editor shows it: which variables' choices are open (`choices_open`), which optional
+# fields were added empty (`shown`, as "v3:subject" or "o12:respondent_count"), the questions whose shared
+# choices are edited one by one (`split`), and the field just added, which gets the cursor when it is drawn.
+# Its buttons add variables (from a dialog: Choices or Write-in) and choices, give a variable's codes to the
+# other questions with the same choices (Apply to All?), open and close a variable's choices, edit a grid's
+# shared choices together or one by one, add and take away optional fields, and delete variables and choices.
+# draft: A reactive of the draft.
+# change: The page's way of changing it: `change(new_draft, typed = FALSE)`, TRUE if it took the change.
+#   A change it refuses puts the fields back as the draft has them.
+# redraw: Called with a question's id when its variables are to be drawn again without the draft
+#   changing (choices opened, a field added).
+# ns: The page module's namespace function, for its dialogs.
+# Returns: A list: `action(event)` (TRUE if it was one of the editor's), `edit(event)` and `reorder(event)`
+#   (TRUE if the draft took them), `apply_codes()` (Apply in the Apply to All? dialog), `view()` (how the editor
+#   shows the draft, for `variable_cards()`), `take_focus()` (the field to put the cursor in, once), `reset()`
+#   (forget the fields added empty, when everything is drawn again), and the reactive values above.
 variable_editor <- function(draft, change, redraw, ns) {
   shown <- reactiveVal(character())
   choices_open <- reactiveVal(character())
@@ -190,17 +187,14 @@ variable_editor <- function(draft, change, redraw, ns) {
   )
 }
 
-#' Make an edit's variable editor: the variables of the question being added, edited as Edit Extraction edits a
-#' question's (`variable_editor()`), with Skip to as the words printed for it (there is no outline here to link
-#' it to) and without Apply to All? (there are no other questions).
-#'
-#' The form holds the variables as JSON (`edit_variables_parse()`): `load()` gives them to the editor when the
-#' form is drawn, and `value()` is them again, as they are now. Changes aren't kept for Undo: each field and
-#' button is its own small change, and the form isn't sent until it is checked.
-#'
-#' @param id The module's id.
-#' @return A list: `load(json, options)`, where `options` is the field's (`subjects`, `answer_data_types`,
-#'   `answer_options`), and `value()`, a reactive of the variables as JSON (`NULL` until loaded).
+# Make an edit's variable editor: the variables of the question being added, edited as Edit Extraction edits a
+# question's (`variable_editor()`), with Skip to as the words printed for it (there is no outline here to link
+# it to) and without Apply to All? (there are no other questions).
+# The form holds the variables as JSON (`edit_variables_parse()`): `load()` gives them to the editor when the
+# form is drawn, and `value()` is them again, as they are now. Changes aren't kept for Undo: each field and
+# button is its own small change, and the form isn't sent until it is checked.
+# Returns: A list: `load(json, options)`, where `options` is the field's (`subjects`, `answer_data_types`,
+#   `answer_options`), and `value()`, a reactive of the variables as JSON (`NULL` until loaded).
 variable_editor_server <- function(id) {
   moduleServer(id, function(input, output, session) {
     ns <- session$ns

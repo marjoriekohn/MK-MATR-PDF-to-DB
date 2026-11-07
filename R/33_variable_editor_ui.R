@@ -4,12 +4,10 @@
 # both pages. Its fields and buttons say what they change (data-field, data-action) and the page script sends
 # that to the module they sit in (www/js/review.js); what they do is variable_editor() (33_variable_editor_server.R).
 
-#' The variable editor of Make an edit's form: its variables and their choices, drawn by its server
-#' (`variable_editor_server()`, output `cards`) once the form gives it the variables.
-#'
-#' @param id The editor module's id.
-#' @param label Names it for screen readers, e.g. "Variables".
-#' @return A UI element.
+# The variable editor of Make an edit's form: its variables and their choices, drawn by its server
+# (`variable_editor_server()`, output `cards`) once the form gives it the variables.
+# id: The editor module's id.
+# label: Names it for screen readers, e.g. "Variables".
 variable_editor_ui <- function(id, label) {
   ns <- NS(id)
   div(
@@ -19,11 +17,8 @@ variable_editor_ui <- function(id, label) {
   )
 }
 
-#' What a variable editor draws for a question on its own (Make an edit): its variables, the lists their fields
-#' offer, and + Variable under them.
-#'
-#' @inheritParams variable_cards
-#' @return A UI element.
+# What a variable editor draws for a question on its own (Make an edit): its variables, the lists their fields
+# offer, and + Variable under them.
 variable_editor_body <- function(block, draft, view, lookups, ns) {
   tagList(
     variable_editor_lists(ns, lookups, draft),
@@ -35,21 +30,16 @@ variable_editor_body <- function(block, draft, view, lookups, ns) {
   )
 }
 
-#' The words a variable's fields offer as they are typed: the answer choices, who and when a variable can be about,
-#' the labels the draft's variables have, and MATR IDs (the uploaded ones no variable has yet).
-#'
-#' @param ns The module's namespace function.
-#' @param lookups The pick lists: `answer_options`, `subjects` and `time_frames`.
-#' @param draft A draft.
-#' @param matr_ids The MATR IDs to offer.
-#' @return A tag list of `datalist`s.
-variable_editor_lists <- function(ns, lookups, draft, matr_ids = character()) {
+# The words a variable's fields offer as they are typed: the answer choices, who and when a variable can be about,
+# and the labels the draft's variables have.
+# lookups: The pick lists: `answer_options`, `subjects` and `time_frames`.
+# Returns: A tag list of `datalist`s.
+variable_editor_lists <- function(ns, lookups, draft) {
   tagList(
     suggestions(ns("answer-options"), lookups$answer_options),
     suggestions(ns("subjects"), lookups$subjects),
     suggestions(ns("time-frames"), lookups$time_frames),
-    suggestions(ns("labels"), label_suggestions(draft)),
-    suggestions(matr_id_list_id(ns), matr_ids)
+    suggestions(ns("labels"), label_suggestions(draft))
   )
 }
 
@@ -59,30 +49,24 @@ list_sortable_options <- function(handle) {
   sortable::sortable_options(handle = handle, onEnd = htmlwidgets::JS("editExtractionPage.sendList"))
 }
 
-#' A question's variables, as a table: one line for each, in printed order.
-#'
-#' A line has the variable's MATR ID and its response: for a write-in the kind of answer, for a variable with
-#' choices the choices in short ("1 Yes · 2 No"), which open their editor under the line when clicked. Who it's
-#' about and its label have their own columns, there once a variable of the question has one (Subject is blank
-#' for the respondent); a line's "+" adds them. The order the variables are in is kept (they are dragged into
-#' a new one) but not shown. A write-in can also skip, for an answer it names ("If the answer is None, skip to
-#' Question 57"), on a line of its own under it, added from its "+". When the question's variables all offer the
-#' same choices (a grid's columns), the
-#' choices are shown once under the table and edited once for all of them, unless staff chose to edit each
-#' variable's own (`view$split`). + Variable, at the bottom of the details, asks whether it has choices or is a
-#' write-in. What each field holds is said in it while it is empty, and its label is kept for screen readers.
-#'
-#' @param block One row of a draft's `components`: a question.
-#' @param draft A draft.
-#' @param view How the editor shows the draft (`variable_editor()`'s `view()`, with the page's own): `problems`
-#'   outlines the fields at fault, `choices` lists the variables whose choices are open, `split` the questions
-#'   whose variables' choices are edited one by one, `shown` the optional fields added empty and `focus` the one
-#'   to put the cursor in. A page can leave out what it can't offer: `skip_words` makes Skip to the words
-#'   printed for it instead of a link to the question it skips to, and `apply_codes = FALSE` leaves out Apply to
-#'   All? (for a draft that has one question).
-#' @param lookups The pick lists, from `lookup_service_get_all()`.
-#' @param ns The module's namespace function.
-#' @return A UI element.
+# A question's variables, as a table: one line for each, in printed order.
+# A line has the variable's MATR ID and its response: for a write-in the kind of answer, for a variable with
+# choices the choices in short ("1 Yes · 2 No"), which open their editor under the line when clicked. Who it's
+# about and its label have their own columns, there once a variable of the question has one (Subject is blank
+# for the respondent); a line's "+" adds them. The order the variables are in is kept (they are dragged into
+# a new one) but not shown. A write-in can also skip, for an answer it names ("If the answer is None, skip to
+# Question 57"), on a line of its own under it, added from its "+". When the question's variables all offer the
+# same choices (a grid's columns), the
+# choices are shown once under the table and edited once for all of them, unless staff chose to edit each
+# variable's own (`view$split`). + Variable, at the bottom of the details, asks whether it has choices or is a
+# write-in. What each field holds is said in it while it is empty, and its label is kept for screen readers.
+# block: One row of a draft's `components`: a question.
+# view: How the editor shows the draft (`variable_editor()`'s `view()`, with the page's own): `problems`
+#   outlines the fields at fault, `choices` lists the variables whose choices are open, `split` the questions
+#   whose variables' choices are edited one by one, `shown` the optional fields added empty and `focus` the one
+#   to put the cursor in. A page can leave out what it can't offer: `skip_words` makes Skip to the words
+#   printed for it instead of a link to the question it skips to, and `apply_codes = FALSE` leaves out Apply to
+#   All? (for a draft that has one question).
 variable_cards <- function(block, draft, view, lookups, ns) {
   boxes <- draft_service_children(draft, "variables", block$id)
   shared <- if (block$id %in% view$split) character() else draft_service_shared_choices(draft, block$id)
@@ -131,7 +115,7 @@ variable_line <- function(box, draft, view, lookups, ns, shared = character(), c
       span(class = "box-handle", title = "Drag to reorder", app_icon("drag")),
       variable_cell("MATR ID", field_text(
         "variables", box, "matr_id",
-        placeholder = "MATR ID", list = matr_id_list_id(ns), label = "MATR ID", problems = problems
+        placeholder = "MATR ID", label = "MATR ID", problems = problems
       ), class = "is-id"),
       variable_cell(
         "Response",
@@ -255,18 +239,13 @@ choice_fields <- function(view = list()) {
   if (isFALSE(view$counts)) optional_choice_fields[names(optional_choice_fields) != "respondent_count"] else optional_choice_fields
 }
 
-#' The editor of a variable's choices: one line per choice, then + Choice (a wide gold button). Once a code is
-#' changed, Apply to All? shows over it (the page script shows it): it lists the other questions with the same
-#' choices whose codes would change, to give them these codes too.
-#'
-#' @param box One row of a draft's `variables`.
-#' @param draft A draft.
-#' @param view What the outline shows; see `outline_tree()`.
-#' @param ns The module's namespace function.
-#' @param shared The ids of the question's variables these choices are edited for (all of them get each
-#'   change), or none for this variable's own.
-#' @param question The question's id, for "Edit each variable's own" (with `shared`).
-#' @return A UI element.
+# The editor of a variable's choices: one line per choice, then + Choice (a wide gold button). Once a code is
+# changed, Apply to All? shows over it (the page script shows it): it lists the other questions with the same
+# choices whose codes would change, to give them these codes too.
+# box: One row of a draft's `variables`.
+# shared: The ids of the question's variables these choices are edited for (all of them get each
+#   change), or none for this variable's own.
+# question: The question's id, for "Edit each variable's own" (with `shared`).
 choice_editor <- function(box, draft, view, ns, shared = character(), question = NULL) {
   choices <- draft_service_children(draft, "response_options", box$id)
   if (any(!is.na(choices$skip_to_id))) view$targets <- skip_targets(draft) # to name where they skip to
@@ -409,11 +388,8 @@ remove_field_button <- function(row, field, names) {
   )
 }
 
-#' + Variable: choices or a write-in, for the question `id`.
-#'
-#' @param ns The module's namespace function.
-#' @param id The question's id.
-#' @return A `modalDialog()`.
+# + Variable: choices or a write-in, for the question `id`.
+# id: The question's id.
 add_variable_dialog <- function(ns, id) {
   pick_dialog("Add a variable", ns, list(
     list(
@@ -427,24 +403,20 @@ add_variable_dialog <- function(ns, id) {
   ))
 }
 
-#' Apply to All?: the questions whose variables offer the same choices as this one but code them
-#' differently, which Apply gives these codes.
-#'
-#' @param ns The module's namespace function.
-#' @param draft A draft.
-#' @param boxes The ids of the variables that would change (`draft_service_codes_differ()`).
-#' @param codes This variable's choices with their codes ("1 = Yes · 2 = No").
-#' @return A `modalDialog()`.
+# Apply to All?: the questions whose variables offer the same choices as this one but code them
+# differently, which Apply gives these codes.
+# boxes: The ids of the variables that would change (`draft_service_codes_differ()`).
+# codes: This variable's choices with their codes ("1 = Yes · 2 = No").
 apply_codes_dialog <- function(ns, draft, boxes, codes) {
   questions <- outline_questions(draft)$questions
   affected <- unique(draft$variables$component_id[match(boxes, draft$variables$id)])
   labels <- questions$label[match(affected, questions$id)]
-  modalDialog(
-    title = "Apply these codes to all?", easyClose = TRUE,
+  confirm_dialog(
+    "Apply these codes to all?",
     p("Codes: ", strong(codes)),
     p(sprintf("%s the same choices with other codes. Apply gives them these codes:", if (length(affected) == 1) "This question has" else paste(length(affected), "questions have"))),
     tags$ul(class = "apply-codes-list", lapply(labels[!is.na(labels)], tags$li)),
-    footer = tagList(modalButton("Cancel"), actionButton(ns("apply_codes"), "Apply", class = "btn-primary"))
+    confirm_id = ns("apply_codes"), confirm_label = "Apply", keep_label = "Cancel", easy_close = TRUE
   )
 }
 

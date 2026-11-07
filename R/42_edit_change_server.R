@@ -1,23 +1,20 @@
-#' A row's details, the form for adding or changing one, or the review before deleting one: what Make an
-#' edit's details panel shows.
-#'
-#' The details (`verb` "view") are the row's fields as text, with where it is used. Nothing is saved here: the
-#' page saves proposals. The form is drawn once for each kind and row. What it says about what you have typed
-#' (the notes under fields, what changed, what it reaches) is drawn apart from it, so typing never redraws the
-#' fields. A form is marked
-#' with a number (`form_token`) the browser sends back once it has drawn it, and what was
-#' typed counts only once the number matches, so the fields of the form before are never
-#' read as the new form's.
-#'
-#' @param id The module's id.
-#' @param entity,verb,snapshot,row,scope,resume Reactives from the page: the kind, the verb ("view",
-#'   "add", "update" or "delete"), the tables, the row picked, the questionnaire, and a saved draft being
-#'   opened again.
-#' @return A list of reactives: `active`, `stuck` (a delete something stands in the way
-#'   of), `ready` (it can be sent), `blockers` (what is left to do), `built` (the items and
-#'   summary), `form` (as it would be opened again), `jump` (a request to go to another
-#'   kind), `token` (which form is on screen), and `fields` and `values` (the form's fields and
-#'   what is typed in them).
+# A row's details, the form for adding or changing one, or the review before deleting one: what Make an
+# edit's details panel shows.
+# The details (`verb` "view") are the row's fields as text, with where it is used. Nothing is saved here: the
+# page saves proposals. The form is drawn once for each kind and row. What it says about what you have typed
+# (the notes under fields, what changed, what it reaches) is drawn apart from it, so typing never redraws the
+# fields. A form is marked
+# with a number (`form_token`) the browser sends back once it has drawn it, and what was
+# typed counts only once the number matches, so the fields of the form before are never
+# read as the new form's.
+# entity,verb,snapshot,row,scope,resume: Reactives from the page: the kind, the verb ("view",
+#   "add", "update" or "delete"), the tables, the row picked, the questionnaire, and a saved draft being
+#   opened again.
+# Returns: A list of reactives: `active`, `stuck` (a delete something stands in the way
+#   of), `ready` (it can be sent), `blockers` (what is left to do), `built` (the items and
+#   summary), `form` (as it would be opened again), `jump` (a request to go to another
+#   kind), `token` (which form is on screen), and `fields` and `values` (the form's fields and
+#   what is typed in them).
 edit_change_server <- function(
   id,
   entity,
@@ -204,7 +201,7 @@ edit_change_server <- function(
 
       rows <- Map(function(field, i) {
         heading <- if (!is.null(field$part_title) && (i == 1 || all_fields[[i - 1]]$part_index != field$part_index)) {
-          edit_part_heading(field$part_title, edit_part_why(ctx$entity, field$part_index))
+          edit_part_heading(field$part_title, ctx$entity$parts[[field$part_index]]$why)
         }
         tagList(heading, edit_field_ui(ns, field, start[[field$id]], ns(paste0("note_", i))))
       }, all_fields, seq_along(all_fields))
@@ -244,10 +241,6 @@ edit_change_server <- function(
       start[kept] <- lapply(saved$form$values[kept], as.character)
       isolate(resume(NULL))
       start
-    }
-
-    edit_part_why <- function(kind, index) {
-      kind$parts[[index]]$why
     }
 
     output$changes <- renderUI(edit_changes_ui(changes()))

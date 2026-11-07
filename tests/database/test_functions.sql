@@ -18,6 +18,11 @@
 --   test_forget_tree(p_tree)
 --     Removes what test_make_tree() made, given what it returned.
 --
+--   test_remove_applied(p_draft_ids)
+--     Removes the rows applied drafts added to the live tables, from each draft's list of them (applied_item):
+--     the tables that point at others first. Only drafts prepared by the tests' own staff. Returns how many
+--     rows went. The drafts and their lists stay; test_forget_staff() removes those.
+--
 -- Callable only with the secret key (service_role), which is what the tests use.
 
 begin;
@@ -145,12 +150,73 @@ begin
 end;
 $$;
 
+-- ------ test_remove_applied ----------------------------------------------------------------------
+create or replace function public.test_remove_applied(p_draft_ids bigint[])
+returns integer
+language plpgsql
+security definer
+set search_path = public, pg_temp
+as $$
+declare
+  -- The tables an edit or a push can add to, children before the rows they point at. A variable's subtype row
+  -- and its choices (and their counts), and a component's question row, go with it (on delete cascade), and
+  -- the database wants a variable and its subtype removed in one statement, so those aren't removed here.
+  -- A table that isn't listed goes last.
+  v_order    text[] := array[
+    'variable', 'answer_option_set', 'option_set', 'answer_option',
+    'wave_question', 'questionnaire_question', 'question_category', 'question_scale',
+    'questionnaire_component', 'component',
+    'wave', 'questionnaire', 'study', 'registry', 'principal_investigator', 'respondent_type', 'subject',
+    'category', 'measurement_scale'
+  ];
+  v_cascaded text[] := array['open_ended', 'closed_ended', 'response_option', 'response_option_count', 'question'];
+  v_table    text;
+  v_where    text;
+  v_rows     integer;
+  v_removed  integer := 0;
+begin
+  if exists (
+    select 1 from public.draft d left join public.staff s on s.staff_id = d.prepared_by
+    where d.draft_id = any(p_draft_ids) and coalesce(s.name, '') not like 'ZZTEST%'
+  ) then
+    raise exception 'Only what the tests applied is removed: drafts prepared by staff whose names start with ZZTEST.';
+  end if;
+  for v_table in
+    select t.entity_name
+    from (select distinct entity_name from public.applied_item
+          where draft_id = any(p_draft_ids) and action = 'Insert') t
+    where not t.entity_name = any(v_cascaded)
+    order by array_position(v_order, t.entity_name) nulls last, t.entity_name
+  loop
+    -- an edit's item names one row ({"column": value}); a push's line for a table lists every row it added ([...])
+    select string_agg('(' || k.clause || ')', ' or ') into v_where
+    from public.applied_item i
+    cross join lateral jsonb_array_elements(
+      case when jsonb_typeof(i.record_identifier::jsonb) = 'array' then i.record_identifier::jsonb
+           else jsonb_build_array(i.record_identifier::jsonb) end
+    ) as rk(row_key)
+    cross join lateral (
+      select string_agg(format('%I = %L', c.key, c.value), ' and ') as clause from jsonb_each_text(rk.row_key) c
+    ) k
+    where i.draft_id = any(p_draft_ids) and i.action = 'Insert' and i.entity_name = v_table;
+    if v_where is not null then
+      execute format('delete from public.%I where %s', v_table, v_where);
+      get diagnostics v_rows = row_count;
+      v_removed := v_removed + v_rows;
+    end if;
+  end loop;
+  return v_removed;
+end;
+$$;
+
 revoke all on function public.test_forget_staff(bigint[], text, boolean) from public, anon, authenticated;
 revoke all on function public.test_make_tree(text) from public, anon, authenticated;
 revoke all on function public.test_forget_tree(jsonb) from public, anon, authenticated;
 grant execute on function public.test_forget_staff(bigint[], text, boolean) to service_role;
 grant execute on function public.test_make_tree(text) to service_role;
 grant execute on function public.test_forget_tree(jsonb) to service_role;
+revoke all on function public.test_remove_applied(bigint[]) from public, anon, authenticated;
+grant execute on function public.test_remove_applied(bigint[]) to service_role;
 
 commit;
 

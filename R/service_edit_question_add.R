@@ -13,11 +13,8 @@
 # no outline here to link them to. They are added the way an extraction adds them (push_variables(),
 # service_extraction_push.R), so an answer choice or a set of choices that is there already is used again.
 
-#' The form for adding a question to one questionnaire.
-#'
-#' @param snap The tables the kind needs, as `edit_service_load()` reads them: a list of data frames named after the tables.
-#' @param scope The questionnaire's key.
-#' @return A list of fields; see `edit_field()`.
+# The form for adding a question to one questionnaire.
+# Returns: A list of fields; see `edit_field()`.
 edit_question_add_fields <- function(snap, scope) {
   q <- as.numeric(scope)
   placed <- edit_service_placements(snap, q)
@@ -140,10 +137,8 @@ edit_question_add_wave_fields <- function(snap, q) {
 }
 
 # ------ The variables, typed as JSON ----------------------------------------------------------------------
-#' What the variables field starts with: one variable with one blank choice, about the respondent.
-#'
-#' @param snap The tables the kind needs, as `edit_service_load()` reads them.
-#' @return A JSON string.
+# What the variables field starts with: one variable with one blank choice, about the respondent.
+# Returns: A JSON string.
 edit_variables_default <- function(snap) {
   as.character(jsonlite::toJSON(
     list(list(
@@ -154,10 +149,9 @@ edit_variables_default <- function(snap) {
   ))
 }
 
-#' The variables typed, read from the field's JSON.
-#'
-#' @param value The field's value.
-#' @return A list of variables, each a list; an error if it isn't a list of them.
+# The variables typed, read from the field's JSON.
+# value: The field's value.
+# Returns: A list of variables, each a list; an error if it isn't a list of them.
 edit_variables_parse <- function(value) {
   if (!has_text(value)) {
     return(list())
@@ -174,16 +168,12 @@ edit_variable_text <- function(value) {
   if (is.null(value) || length(value) == 0 || is.na(value[1])) "" else trimws(as.character(value[1]))
 }
 
-#' The check of the variables field.
-#'
-#' The rules the Edit Extraction page checks (service_draft_checks.R), for the variables of one question:
-#' each has a MATR ID no other variable of the questionnaire has (BR93), who it's about, and either the
-#' kind of answer it takes (a write-in) or its choices, each filled in, listed once and with a code of its
-#' own (BR103).
-#'
-#' @param snap The tables the kind needs, as `edit_service_load()` reads them.
-#' @param q The questionnaire's id.
-#' @return A function of `(value, values)` giving the first problem as a sentence, or `NULL`.
+# The check of the variables field.
+# The rules the Edit Extraction page checks (service_draft_checks.R), for the variables of one question:
+# each has a MATR ID no other variable of the questionnaire has (BR93), who it's about, and either the
+# kind of answer it takes (a write-in) or its choices, each filled in, listed once and with a code of its
+# own (BR103).
+# Returns: A function of `(value, values)` giving the first problem as a sentence, or `NULL`.
 edit_variables_problem <- function(snap, q) {
   taken <- snap$variable$matr_id[snap$variable$questionnaire_id %in% q]
   function(value, values) {
@@ -237,10 +227,9 @@ edit_variables_problem <- function(snap, q) {
   }
 }
 
-#' The variables typed, as the rows of a draft, so they can be added the way an extraction adds them.
-#'
-#' @param variables From `edit_variables_parse()`.
-#' @return A draft holding one question, `c1`, with the variables and their choices.
+# The variables typed, as the rows of a draft, so they can be added the way an extraction adds them.
+# variables: From `edit_variables_parse()`.
+# Returns: A draft holding one question, `c1`, with the variables and their choices.
 edit_variables_draft <- function(variables) {
   boxes <- lapply(variables, function(box) {
     closed <- !identical(box$variable_type, "open_ended")
@@ -269,10 +258,9 @@ edit_variables_draft <- function(variables) {
   draft_service_from_json(list(components = list(list(component_type = "Question", variables = boxes))))
 }
 
-#' The variables of a draft's question, as the field's JSON again: the other way from `edit_variables_draft()`.
-#'
-#' @param draft A draft from `edit_variables_draft()`, as the editor has changed it.
-#' @return A JSON string; what isn't filled in is "".
+# The variables of a draft's question, as the field's JSON again: the other way from `edit_variables_draft()`.
+# draft: A draft from `edit_variables_draft()`, as the editor has changed it.
+# Returns: A JSON string; what isn't filled in is "".
 edit_variables_json <- function(draft) {
   text <- function(value) if (length(value) == 0 || is.na(value)) "" else as.character(value)
   boxes <- draft_service_children(draft, "variables", draft$components$id[1])
@@ -298,18 +286,11 @@ edit_variables_json <- function(draft) {
 }
 
 # ------ Writing it as items -----------------------------------------------------------------------------
-#' The items for a question added to one questionnaire.
-#'
-#' In the order the database needs them: the question (if its wording is new), its place in the outline
-#' (the blocks after it moving over to make room), its settings, its place among the questions of each wave
-#' that asks it (the questions after it numbered again) and the number printed beside it there, and its
-#' variables with their choices.
-#'
-#' @param snap The tables the kind needs, as `edit_service_load()` reads them.
-#' @param scope The questionnaire's key.
-#' @param fields The form's fields, from `edit_service_fields()`.
-#' @param values What is in the form, by field id.
-#' @return A data frame of items; see `edit_item()`.
+# The items for a question added to one questionnaire.
+# In the order the database needs them: the question (if its wording is new), its place in the outline
+# (the blocks after it moving over to make room), its settings, its place among the questions of each wave
+# that asks it (the questions after it numbered again) and the number printed beside it there, and its
+# variables with their choices.
 edit_question_add_items_in <- function(snap, scope, fields, values) {
   q <- as.numeric(scope)
   prefix <- "questionnaire_question"
@@ -392,13 +373,9 @@ edit_question_add_items_in <- function(snap, scope, fields, values) {
   do.call(rbind, items)
 }
 
-#' The proposal's sentence for a question added to a questionnaire.
-#'
-#' @param snap The tables the kind needs, as `edit_service_load()` reads them.
-#' @param scope The questionnaire's key.
-#' @param fields The form's fields.
-#' @param values What is in the form, by field id.
-#' @return A string, e.g. `"Added the question “Do you smoke?” to AHP"`.
+# The proposal's sentence for a question added to a questionnaire.
+# fields: The form's fields.
+# Returns: A string, e.g. `"Added the question “Do you smoke?” to AHP"`.
 edit_question_add_summary <- function(snap, scope, fields, values) {
   value_of <- function(name) values[[paste0("questionnaire_question__", name)]] %||% ""
   words <- if (identical(value_of("source"), "existing")) {

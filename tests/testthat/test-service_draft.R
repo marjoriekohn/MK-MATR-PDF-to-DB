@@ -211,20 +211,6 @@ grid_draft <- function(lead_in = "In the past 4 weeks, how often", children = NU
   )))
 }
 
-test_that("a question in a grid is its grid's lead-in and its own words; one in no grid is its own words", {
-  draft <- grid_draft()
-  questions <- draft$components$id[draft$components$component_type == "Question"]
-  expect_equal(draft_service_full_question(draft, questions), c(
-    "In the past 4 weeks, how often have you felt calm and peaceful?",
-    "In the past 4 weeks, how often have you had a lot of energy?",
-    "Overall, how is your health?"
-  ))
-  # a lead-in ending with a comma or a question mark joins the same way
-  comma <- grid_draft("In the last 12 months,")
-  expect_match(draft_service_full_question(comma, comma$components$id[comma$components$component_type == "Question"][1]),
-    "^In the last 12 months, have you felt calm and peaceful\\?$")
-})
-
 test_that("a grid keeps its words and its skip when saved and opened again", {
   draft <- grid_draft()
   grid <- draft$components$id[draft$components$component_type == "Grid"]
@@ -271,18 +257,17 @@ test_that("a write-in's unit is written one way, kept with the draft, and change
   expect_equal(again$variables$unit[again$variables$id == box], "pounds")
 })
 
-test_that("a section, grid or group can say who answers everything in it, and a question has its containers' too", {
+test_that("a section, grid or group can say who answers everything in it, and a question its own", {
   draft <- gold_draft()
   grid <- block_numbered(draft, "14a")$parent_id # "during the worst time:"
   draft <- draft_service_update(draft, "components", grid, "condition", "Female")
   expect_equal(component(draft, grid)$condition, "female")
   again <- draft_service_from_json(draft_service_to_json(draft))
   expect_equal(component(again, grid)$condition, "female")
-  # a question inside it is for whoever the grid is for, and keeps its own condition too
+  # a question inside it keeps a condition of its own
   item <- block_numbered(draft, "14a")$id
-  expect_equal(draft_service_conditions(draft, item), "female")
   draft <- draft_service_update(draft, "components", item, "condition", "If yes")
-  expect_equal(draft_service_conditions(draft, item), c("female", "if yes"))
+  expect_equal(component(draft, item)$condition, "if yes")
   # an instruction is for whoever its section or group is for: it has no condition of its own
   instruction <- draft$components$id[draft$components$component_type == "Instruction"][1]
   expect_error(draft_service_update(draft, "components", instruction, "condition", "Female"), "section, grid or group")

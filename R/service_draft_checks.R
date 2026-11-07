@@ -4,15 +4,12 @@
 # to fix (id) and says what to do next (message), in printed order, and, where
 # one field is at fault, which (table, row, field), so the page can outline it.
 
-#' Check a draft against the rules a questionnaire has to meet.
-#'
-#' @param draft A draft: `list(questionnaire, components, variables, response_options)`; see the top of `service_draft.R`.
-#' @param lookups The pick lists, from `lookup_service_get_all()`.
-#' @param matr_ids Whether a variable without a MATR ID is a problem. It is for staff reviewing a
-#'   draft; not for the reading job, since Gemini never reads MATR IDs.
-#' @return A data frame of `id` (the block to fix), `message` (what to do), and `table`, `row` and
-#'   `field` (the field at fault: `NA` for a problem with the block as a whole, and `field` `NA` for
-#'   one with a whole variable), in printed order; no rows if all is well.
+# Check a draft against the rules a questionnaire has to meet.
+# matr_ids: Whether a variable without a MATR ID is a problem. It is for staff reviewing a
+#   draft; not for the reading job, since Gemini never reads MATR IDs.
+# Returns: A data frame of `id` (the block to fix), `message` (what to do), and `table`, `row` and
+#   `field` (the field at fault: `NA` for a problem with the block as a whole, and `field` `NA` for
+#   one with a whole variable), in printed order; no rows if all is well.
 draft_service_check <- function(draft, lookups, matr_ids = TRUE) {
   problems <- rbind(
     block_problems(draft, lookups),
@@ -24,13 +21,11 @@ draft_service_check <- function(draft, lookups, matr_ids = TRUE) {
   problems[order(position), , drop = FALSE]
 }
 
-#' The next block with a problem.
-#'
-#' @param draft A draft: `list(questionnaire, components, variables, response_options)`; see the top of `service_draft.R`.
-#' @param problems The result of `draft_service_check()`.
-#' @param after_id The block to look after; `NULL` starts at the top.
-#' @return The id of the first block with a problem after `after_id`, starting over at
-#'   the top.
+# The next block with a problem.
+# problems: The result of `draft_service_check()`.
+# after_id: The block to look after; `NULL` starts at the top.
+# Returns: The id of the first block with a problem after `after_id`, starting over at
+#   the top.
 draft_service_next_problem <- function(draft, problems, after_id) {
   ids <- unique(problems$id)
   printed <- draft_service_printed_order(draft)
@@ -39,12 +34,9 @@ draft_service_next_problem <- function(draft, problems, after_id) {
   if (length(later) > 0) later[1] else ids[1]
 }
 
-#' Problems with blocks themselves: their kind, the words a block must have (and a group mustn't),
-#' and where a section can be.
-#'
-#' @param draft A draft: `list(questionnaire, components, variables, response_options)`; see the top of `service_draft.R`.
-#' @param lookups The pick lists, from `lookup_service_get_all()`.
-#' @return A data frame of `id` and `message`.
+# Problems with blocks themselves: their kind, the words a block must have (and a group mustn't),
+# and where a section can be.
+# Returns: A data frame of `id` and `message`.
 block_problems <- function(draft, lookups) {
   blocks <- draft$components
   is_group <- blocks$component_type == "Group"

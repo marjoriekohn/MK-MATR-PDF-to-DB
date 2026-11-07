@@ -1,11 +1,8 @@
-#' The Manual mode of the Extraction page: a PDF if staff have one, and a button that starts.
-#'
-#' No AI reads anything. Starting opens a blank Edit Extraction page, the same page an AI-Powered
-#' extraction is edited on, where every block, question and choice is typed in, with the PDF beside it
-#' if one was added.
-#'
-#' @param id The module's id.
-#' @return The mode's UI.
+# The Manual mode of the Extraction page: a PDF if staff have one, and a button that starts.
+# No AI reads anything. Starting opens a blank Edit Extraction page, the same page an AI-Powered
+# extraction is edited on, where every block, question and choice is typed in, with the PDF beside it
+# if one was added.
+# Returns: The mode's UI.
 extraction_manual_ui <- function(id) {
   ns <- NS(id)
   div(
@@ -23,11 +20,8 @@ extraction_manual_ui <- function(id) {
   )
 }
 
-#' Somewhere to drop a PDF for a Manual extraction, or the one that was chosen.
-#'
-#' @param upload One row of a `fileInput`'s value, or `NULL`.
-#' @param ns The module's namespace function.
-#' @return A UI element.
+# Somewhere to drop a PDF for a Manual extraction, or the one that was chosen.
+# upload: One row of a `fileInput`'s value, or `NULL`.
 manual_pdf_card <- function(upload, ns) {
   if (is.null(upload)) {
     return(drop_zone(

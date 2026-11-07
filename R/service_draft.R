@@ -36,8 +36,8 @@ draft_schema_version <- 2L
 # The kinds of block that hold others:
 #   Section  a part of the questionnaire under a printed heading (its words).
 #   Grid     questions that share a printed lead-in which is part of each one: the lead-in is its words, and each
-#            question's words are the rest ("In the past 4 weeks, how often" + "have you felt calm and peaceful?";
-#            draft_service_full_question()). It holds only its questions, with their instructions and definitions.
+#            question's words are the rest ("In the past 4 weeks, how often" + "have you felt calm and peaceful?").
+#            It holds only its questions, with their instructions and definitions.
 #   Group    blocks that belong together with no words of their own: an instruction or definition with the
 #            questions it is about, or questions that route together. Each question in it is whole on its own.
 # A group or a grid can skip on the answers to the questions in it ("If you answered No to items 22a-d, go to
@@ -50,11 +50,9 @@ skipping_types <- c("Grid", "Group")
 # questions and what explains them.
 not_held_by <- list(Section = character(), Group = "Section", Grid = c("Section", "Group", "Grid"))
 
-#' Whether blocks of these kinds can sit in blocks of those.
-#'
-#' @param outer The kinds of what would hold them; NA for the top level.
-#' @param inner Their kinds.
-#' @return A logical vector.
+# Whether blocks of these kinds can sit in blocks of those.
+# outer: The kinds of what would hold them; NA for the top level.
+# inner: Their kinds.
 can_hold <- function(outer, inner) {
   vapply(seq_along(inner), function(k) {
     holder <- outer[k]
@@ -88,7 +86,7 @@ normal_answer <- function(text) {
   text <- gsub("[\u2013\u2014]", "-", text)
   text[grepl("^[[:space:]]*[?]+[[:space:]]*$", text)] <- "uncertain"
   text <- gsub("?", "", text, fixed = TRUE)
-  text <- tolower(trimws(gsub("[[:space:]]+", " ", text)))
+  text <- tolower(squish(text))
   text <- gsub("([0-9])\\+", "\\1 or more", text, perl = TRUE)
   text <- gsub("\\bbetween ([0-9][0-9.,]*) and (?=[0-9])", "\\1-", text, perl = TRUE)
   text <- gsub("([0-9]) ?(?:-|to) ?(?=[0-9])", "\\1-", text, perl = TRUE)
@@ -141,16 +139,14 @@ answer_letters <- c(m = "male", f = "female")
 # Units printed by a write-in's box, written out (with answer_abbreviations' "yrs", "hrs" and the rest).
 unit_abbreviations <- c(lbs = "pounds", lb = "pounds", ozs = "ounces", oz = "ounces", ft = "feet", kgs = "kilograms", kg = "kilograms", cm = "centimeters")
 
-#' The unit a write-in's number is in, written one way.
-#'
-#' Lower case, abbreviations written out and no full stop at the end ("yrs." is "years", "LBS" is "pounds"), so the
-#' answers in the same unit are found together across forms, and the forms in other units ("pounds" and
-#' "kilograms") can be told apart.
-#'
-#' @param text Units as printed or typed.
-#' @return The units, with `NA` for a blank.
+# The unit a write-in's number is in, written one way.
+# Lower case, abbreviations written out and no full stop at the end ("yrs." is "years", "LBS" is "pounds"), so the
+# answers in the same unit are found together across forms, and the forms in other units ("pounds" and
+# "kilograms") can be told apart.
+# text: Units as printed or typed.
+# Returns: The units, with `NA` for a blank.
 normal_unit <- function(text) {
-  text <- trimws(gsub("[[:space:]]+", " ", normal_text(as.character(text))))
+  text <- squish(normal_text(as.character(text)))
   text <- sub("[.:]+$", "", text)
   for (short in names(c(answer_abbreviations, unit_abbreviations))) {
     long <- c(answer_abbreviations, unit_abbreviations)[[short]]
@@ -223,18 +219,16 @@ time_frame_past <- paste0(
 time_frame_preposition <- "(?:in|during|over|within|for)\\s+"
 time_frame_pattern <- paste0("(?:", time_frame_lifetime, "|", time_frame_preposition, time_frame_past, ")")
 
-#' Time frames written one way.
-#'
-#' The time a variable's answer is about, as the database keeps it, so the questions about the same time are found
-#' together whatever words the forms use: "in your lifetime" ("in your life", "during your whole lifetime"), and "in
-#' the past" a number of days, weeks, months or years ("during the last 12 months" and "over the past twelve
-#' months" are "in the past 12 months"; "in the last year" is "in the past year"). Any other is kept as typed, in
-#' lower case ("since your last birthday").
-#'
-#' @param text Time frames as printed or typed.
-#' @return The time frames, with `NA` for a blank.
+# Time frames written one way.
+# The time a variable's answer is about, as the database keeps it, so the questions about the same time are found
+# together whatever words the forms use: "in your lifetime" ("in your life", "during your whole lifetime"), and "in
+# the past" a number of days, weeks, months or years ("during the last 12 months" and "over the past twelve
+# months" are "in the past 12 months"; "in the last year" is "in the past year"). Any other is kept as typed, in
+# lower case ("since your last birthday").
+# text: Time frames as printed or typed.
+# Returns: The time frames, with `NA` for a blank.
 normal_time_frame <- function(text) {
-  text <- trimws(gsub("[[:space:]]+", " ", normal_text(as.character(text))))
+  text <- squish(normal_text(as.character(text)))
   text[!is.na(text) & !nzchar(text)] <- NA
   whole <- paste0(
     "(?i)^(?:", time_frame_lifetime, "|(?:in\\s+)?your\\s+lifetime|lifetime|(?:", time_frame_preposition, ")?",
@@ -257,10 +251,8 @@ time_frame_words <- function(found) {
   if (count == 1) paste("in the past", unit) else paste("in the past", count, paste0(unit, "s"))
 }
 
-#' Whether blocks of these kinds hold other blocks.
-#'
-#' @param component_types Kinds of block.
-#' @return A logical vector.
+# Whether blocks of these kinds hold other blocks.
+# component_types: Kinds of block.
 is_container <- function(component_types) component_types %in% container_types
 
 # Who a variable is about when it is about the respondent: the subject the database keeps for them, and the
@@ -269,11 +261,10 @@ is_container <- function(component_types) component_types %in% container_types
 respondent_subject <- "Respondent"
 respondent_names <- c("Respondent", "Self")
 
-#' Who a variable is about, with the respondent as a blank.
-#'
-#' @param subjects Subjects as typed or read; "Respondent" or "Self" in any capitals, or a blank, is the
-#'   respondent.
-#' @return The subjects, trimmed and with straight quotes, with `NA` for the respondent.
+# Who a variable is about, with the respondent as a blank.
+# subjects: Subjects as typed or read; "Respondent" or "Self" in any capitals, or a blank, is the
+#   respondent.
+# Returns: The subjects, trimmed and with straight quotes, with `NA` for the respondent.
 blank_respondent <- function(subjects) {
   subjects <- trimws(straight_quotes(as.character(subjects)))
   subjects[!is.na(subjects) & (!nzchar(subjects) | tolower(subjects) %in% tolower(respondent_names))] <- NA
@@ -315,49 +306,38 @@ new_row_defaults <- list(
   )
 )
 
-#' Open a draft's questionnaire for review.
-#'
-#' It opens where staff left it (their saved copy) or, if they haven't saved one,
-#' fresh from the reading job.
-#'
-#' @param connection The MATR database, `list(url, key)`; see `model_database.R`.
-#' @param id The extraction draft's id.
-#' @return A draft (see `draft_service_from_json()`). An error if reading hasn't finished.
+# Open a draft's questionnaire for review.
+# It opens where staff left it (their saved copy) or, if they haven't saved one,
+# fresh from the reading job.
+# id: The extraction draft's id.
+# Returns: A draft (see `draft_service_from_json()`). An error if reading hasn't finished.
 draft_service_load <- function(connection, id) {
   json <- draft_model_get(connection, id)
   if (is.null(json)) stop("This draft hasn't been read yet.", call. = FALSE)
   draft_service_from_json(json)
 }
 
-#' Save staff's reviewed copy of a draft.
-#'
-#' @param connection The MATR database, `list(url, key)`; see `model_database.R`.
-#' @param id The extraction draft's id.
-#' @param draft A draft: `list(questionnaire, components, variables, response_options)`; see the top of `service_draft.R`.
-#' @param staff_id The staff id of the person saving.
-#' @param review_edits How this copy differs from what the AI returned (see
-#'   `draft_service_review_edits()`), which replaces what was kept, or `NULL` to leave it as it is.
-#' @param expected_revision The revision the person was looking at, or `NULL` not to check.
-#' @return The draft's revision after the save, invisibly. An error with a sentence if someone saved
-#'   it after `expected_revision`.
+# Save staff's reviewed copy of a draft.
+# id: The extraction draft's id.
+# review_edits: How this copy differs from what the AI returned (see
+#   `draft_service_review_edits()`), which replaces what was kept, or `NULL` to leave it as it is.
+# expected_revision: The revision the person was looking at, or `NULL` not to check.
+# Returns: The draft's revision after the save, invisibly. An error with a sentence if someone saved
+#   it after `expected_revision`.
 draft_service_save <- function(connection, id, draft, staff_id, review_edits = NULL, expected_revision = NULL) {
   draft_model_save_reviewed(connection, id, draft_service_to_json(draft), staff_id, review_edits, expected_revision)
 }
 
-#' A draft with nothing in it.
-#'
-#' What a Manual extraction starts as: no blocks, no variables, no choices.
-#'
-#' @return A draft: `list(questionnaire, components, variables, response_options)`.
+# A draft with nothing in it.
+# What a Manual extraction starts as: no blocks, no variables, no choices.
+# Returns: A draft: `list(questionnaire, components, variables, response_options)`.
 draft_service_empty <- function() {
   draft_service_from_json(list(questionnaire = list(), components = list()))
 }
 
-#' How far a draft's review has got.
-#'
-#' @param draft A draft: `list(questionnaire, components, variables, response_options)`; see the top of `service_draft.R`.
-#' @return A list: `blocks` and how many are `checked`, `boxes` (variables) and how
-#'   many have a MATR ID (`matr_ids`).
+# How far a draft's review has got.
+# Returns: A list: `blocks` and how many are `checked`, `boxes` (variables) and how
+#   many have a MATR ID (`matr_ids`).
 draft_service_counts <- function(draft) {
   list(
     blocks = nrow(draft$components), checked = sum(draft$components$checked),
@@ -365,28 +345,24 @@ draft_service_counts <- function(draft) {
   )
 }
 
-#' How much of a draft has been checked, as a whole percentage.
-#'
-#' The Edit Extraction page's "N% human-reviewed" and the Extraction Drafts cards both show it.
-#'
-#' @param counts From `draft_service_counts()`.
-#' @return A whole number from 0 to 100, rounded down; 0 for a draft with no blocks.
+# How much of a draft has been checked, as a whole percentage.
+# The Edit Extraction page's "N% human-reviewed" and the Extraction Drafts cards both show it.
+# counts: From `draft_service_counts()`.
+# Returns: A whole number from 0 to 100, rounded down; 0 for a draft with no blocks.
 draft_service_percent_checked <- function(counts) {
   if (counts$blocks > 0) as.integer(floor(100 * counts$checked / counts$blocks)) else 0L
 }
 
 # ------ JSON to tables ---------------------------------------------------------
-#' Turn the questionnaire JSON into the three tables the Edit Extraction page edits.
-#'
-#' Rows get ids when a draft is loaded (c1, v1, o1...); ids aren't saved, but `ref` is (see the top of
-#' this file). Positions are numbered 1, 2, 3... within each parent, the questions by their place among
-#' the questions, and choices without a code are coded. A variable about the respondent has a blank
-#' subject, however the JSON says it. Skip instructions are linked to where they send respondents, and the
-#' questions they skip past follow their question (service_draft_skips.R).
-#'
-#' @param json The questionnaire as nested lists: `questionnaire` and `components`, and `schema_version`
-#'   for a reviewed copy (without it, it is what the reading job returned).
-#' @return A draft: `list(questionnaire, components, variables, response_options)`.
+# Turn the questionnaire JSON into the three tables the Edit Extraction page edits.
+# Rows get ids when a draft is loaded (c1, v1, o1...); ids aren't saved, but `ref` is (see the top of
+# this file). Positions are numbered 1, 2, 3... within each parent, the questions by their place among
+# the questions, and choices without a code are coded. A variable about the respondent has a blank
+# subject, however the JSON says it. Skip instructions are linked to where they send respondents, and the
+# questions they skip past follow their question (service_draft_skips.R).
+# json: The questionnaire as nested lists: `questionnaire` and `components`, and `schema_version`
+#   for a reviewed copy (without it, it is what the reading job returned).
+# Returns: A draft: `list(questionnaire, components, variables, response_options)`.
 draft_service_from_json <- function(json) {
   reviewed <- !is.null(json$schema_version)
   blocks <- flatten_blocks(json$components)
@@ -464,12 +440,11 @@ draft_service_from_json <- function(json) {
   draft_service_skip_parents(draft)
 }
 
-#' Every block in the order a respondent meets it.
-#'
-#' @param blocks A list of blocks, each possibly holding `children`.
-#' @param parent The position of the section the blocks sit in; `NA` for the top level.
-#' @param flat The blocks found so far (used while it recurses).
-#' @return A list of blocks, each noting the position of its section as `.parent`.
+# Every block in the order a respondent meets it.
+# blocks: A list of blocks, each possibly holding `children`.
+# parent: The position of the section the blocks sit in; `NA` for the top level.
+# flat: The blocks found so far (used while it recurses).
+# Returns: A list of blocks, each noting the position of its section as `.parent`.
 flatten_blocks <- function(blocks, parent = NA_integer_, flat = list()) {
   for (block in blocks) {
     flat[[length(flat) + 1]] <- c(block, list(.parent = parent))
@@ -486,12 +461,11 @@ flatten_children <- function(rows, field) {
   unlist(children, recursive = FALSE)
 }
 
-#' One field from every row.
-#'
-#' @param rows A list of rows (lists).
-#' @param field The field's name.
-#' @param missing What fills in for a row without the field; its type is the result's type.
-#' @return A vector with one value for each row.
+# One field from every row.
+# rows: A list of rows (lists).
+# field: The field's name.
+# missing: What fills in for a row without the field; its type is the result's type.
+# Returns: A vector with one value for each row.
 pluck <- function(rows, field, missing = NA_character_) {
   vapply(
     rows,
@@ -625,12 +599,10 @@ skip_json <- function(skip_to_id, printed) {
   if (identical(skip_to_id, skip_to_end_id)) list(skip_to = NA, skip_to_end = TRUE) else list(skip_to = match(skip_to_id, printed), skip_to_end = NA)
 }
 
-#' A JSON object without its empty fields.
-#'
-#' A missing field reads back as empty, so nothing is lost.
-#'
-#' @param fields A named list.
-#' @return `fields` without the ones that are `NULL` or a single `NA`.
+# A JSON object without its empty fields.
+# A missing field reads back as empty, so nothing is lost.
+# fields: A named list.
+# Returns: `fields` without the ones that are `NULL` or a single `NA`.
 without_blanks <- function(fields) {
   blank <- vapply(fields, function(value) {
     is.null(value) || (is.atomic(value) && length(value) == 1 && is.na(value))
@@ -639,25 +611,19 @@ without_blanks <- function(fields) {
 }
 
 # ------ Finding things in a draft ----------------------------------------------
-#' The rows of one table that sit under a parent, in order.
-#'
-#' @param draft A draft: `list(questionnaire, components, variables, response_options)`; see the top of `service_draft.R`.
-#' @param table `"components"`, `"variables"` or `"response_options"`.
-#' @param parent_id The parent's id; `NA` for the top level (components only).
-#' @return The rows of `draft[[table]]` under `parent_id`, by `display_order`.
+# The rows of one table that sit under a parent, in order.
+# parent_id: The parent's id; `NA` for the top level (components only).
+# Returns: The rows of `draft[[table]]` under `parent_id`, by `display_order`.
 draft_service_children <- function(draft, table, parent_id) {
   rows <- draft[[table]]
   rows <- rows[rows[[parent_columns[[table]]]] %in% parent_id, , drop = FALSE]
   rows[order(rows$display_order), , drop = FALSE]
 }
 
-#' Block ids in the order a respondent meets them.
-#'
-#' Each block, then what is inside it.
-#'
-#' @param draft A draft: `list(questionnaire, components, variables, response_options)`; see the top of `service_draft.R`.
-#' @param parent_id Where to start; `NA` for the whole questionnaire.
-#' @return A character vector of component ids.
+# Block ids in the order a respondent meets them.
+# Each block, then what is inside it.
+# parent_id: Where to start; `NA` for the whole questionnaire.
+# Returns: A character vector of component ids.
 draft_service_printed_order <- function(draft, parent_id = NA) {
   ids <- draft_service_children(draft, "components", parent_id)$id
   as.character(unlist(lapply(ids, function(id) {
@@ -665,23 +631,9 @@ draft_service_printed_order <- function(draft, parent_id = NA) {
   })))
 }
 
-#' Variable ids in the order a respondent meets them.
-#'
-#' Question by question in printed order, and each question's variables in their own order.
-#'
-#' @param draft A draft: `list(questionnaire, components, variables, response_options)`; see the top of `service_draft.R`.
-#' @return A character vector of variable ids.
-draft_service_boxes_in_order <- function(draft) {
-  boxes <- draft$variables
-  question_position <- match(boxes$component_id, draft_service_printed_order(draft))
-  boxes$id[order(question_position, boxes$display_order)]
-}
-
-#' The sections a block sits inside.
-#'
-#' @param draft A draft: `list(questionnaire, components, variables, response_options)`; see the top of `service_draft.R`.
-#' @param id A component id.
-#' @return The ids of its sections, innermost first; empty at the top level.
+# The sections a block sits inside.
+# id: A component id.
+# Returns: The ids of its sections, innermost first; empty at the top level.
 draft_service_ancestors <- function(draft, id) {
   parent_id <- draft$components$parent_id[match(id, draft$components$id)]
   if (length(parent_id) == 0 || is.na(parent_id)) {
@@ -690,67 +642,28 @@ draft_service_ancestors <- function(draft, id) {
   c(parent_id, draft_service_ancestors(draft, parent_id))
 }
 
-#' Who a block is for: the conditions of the sections, grids and groups it is in, outermost first, then its own.
-#'
-#' A section, grid or group can be for some respondents only ("For Females Only", "Complete this section if …");
-#' everything in it is, and a question in it can also have a condition of its own ("if yes"), so it is for both.
-#'
-#' @param draft A draft: `list(questionnaire, components, variables, response_options)`; see the top of `service_draft.R`.
-#' @param id A block's id.
-#' @return A character vector of conditions, maybe empty.
-draft_service_conditions <- function(draft, id) {
-  ids <- c(rev(draft_service_ancestors(draft, id)), id)
-  conditions <- draft$components$condition[match(ids, draft$components$id)]
-  conditions[!is.na(conditions)]
-}
-
-#' Questions as a researcher reads them: a question in a grid is the grid's lead-in, a space, and its own words.
-#'
-#' @param draft A draft: `list(questionnaire, components, variables, response_options)`; see the top of `service_draft.R`.
-#' @param ids Questions' ids.
-#' @return A character vector, one for each id.
-draft_service_full_question <- function(draft, ids) {
-  blocks <- draft$components
-  vapply(ids, function(id) {
-    words <- blocks$text[match(id, blocks$id)]
-    for (holder in draft_service_ancestors(draft, id)) {
-      if (identical(blocks$component_type[match(holder, blocks$id)], "Grid")) {
-        words <- paste(trimws(blocks$text[match(holder, blocks$id)]), trimws(words))
-      }
-    }
-    words
-  }, character(1), USE.NAMES = FALSE)
-}
-
-#' The id the next new rows of a table get.
-#'
-#' @param draft A draft: `list(questionnaire, components, variables, response_options)`; see the top of `service_draft.R`.
-#' @param table `"components"`, `"variables"` or `"response_options"`.
-#' @param n How many ids; none gives none.
-#' @return A character vector, e.g. `"c132"` after `"c131"`.
+# The id the next new rows of a table get.
+# n: How many ids; none gives none.
+# Returns: A character vector, e.g. `"c132"` after `"c131"`.
 draft_service_next_id <- function(draft, table, n = 1) {
   used <- as.integer(substring(draft[[table]]$id, 2))
   # recycle0: without it, no numbers would still paste one id (the prefix alone)
   paste0(id_prefixes[[table]], max(c(0L, used)) + seq_len(n), recycle0 = TRUE)
 }
 
-#' A question's place among the questions (1, 2, 3...), which links a follow-up to its parent in the JSON.
-#'
-#' @param draft A draft: `list(questionnaire, components, variables, response_options)`; see the top of `service_draft.R`.
-#' @param id Component ids.
-#' @return Their question numbers, `NA` for a block with none.
+# A question's place among the questions (1, 2, 3...), which links a follow-up to its parent in the JSON.
+# id: Component ids.
+# Returns: Their question numbers, `NA` for a block with none.
 question_number_of <- function(draft, id) {
   draft$components$question_number[match(id, draft$components$id)]
 }
 
-#' The number a question is called by: the one printed beside it, or, where none is printed, its
-#' place among the questions.
-#'
-#' What the outline, the preview and the messages call a question. (The wave records both numbers:
-#' see the top of this file.)
-#'
-#' @param blocks Rows of a draft's `components`.
-#' @return A character vector, one number for each row; `NA` for a block that isn't a question.
+# The number a question is called by: the one printed beside it, or, where none is printed, its
+# place among the questions.
+# What the outline, the preview and the messages call a question. (The wave records both numbers:
+# see the top of this file.)
+# blocks: Rows of a draft's `components`.
+# Returns: A character vector, one number for each row; `NA` for a block that isn't a question.
 draft_service_question_number <- function(blocks) {
   printed <- trimws(blocks$printed_number %||% rep(NA_character_, nrow(blocks)))
   ifelse(!is.na(printed) & nzchar(printed), printed, blocks$question_number)
@@ -759,22 +672,19 @@ draft_service_question_number <- function(blocks) {
 # What goes between a question's number and its words where a list names it: "7 · Have you smoked…".
 outline_number_separator <- " · "
 
-#' What a question is called in sentences: "question 1a4".
-#'
-#' @param draft A draft: `list(questionnaire, components, variables, response_options)`; see the top of `service_draft.R`.
-#' @param id A component id.
-#' @return A string; "an unnumbered question" for a question without a number.
+# What a question is called in sentences: "question 1a4".
+# id: A component id.
+# Returns: A string; "an unnumbered question" for a question without a number.
 draft_service_question_name <- function(draft, id) {
   number <- draft_service_question_number(draft$components[match(id, draft$components$id), , drop = FALSE])
   if (length(number) == 0 || is.na(number)) "an unnumbered question" else paste("question", number)
 }
 
-#' Apply a function to each row of a data frame.
-#'
-#' @param rows A data frame.
-#' @param fn A function taking a one-row data frame.
-#' @param ... More arguments for `fn`.
-#' @return A list with one result for each row.
+# Apply a function to each row of a data frame.
+# rows: A data frame.
+# fn: A function taking a one-row data frame.
+# ...: More arguments for `fn`.
+# Returns: A list with one result for each row.
 map_rows <- function(rows, fn, ...) {
   lapply(seq_len(nrow(rows)), function(i) fn(rows[i, , drop = FALSE], ...))
 }

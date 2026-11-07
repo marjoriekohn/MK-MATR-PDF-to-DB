@@ -10,12 +10,10 @@ login_screen_id <- "login_screen"
 # Where "Report a problem" goes: a Google Form, opened in a new tab.
 report_problem_url <- "https://forms.gle/YhRLMXYgLUKbjFHB9"
 
-#' The login screen: an email and password, or a sign-in link emailed instead.
-#'
-#' Its inputs are `login_email`, `login_password`, `login_sign_in` (the password), `login_send_link`
-#' and `login_message` (what went wrong, or that a link was sent).
-#'
-#' @return A UI element that covers the page.
+# The login screen: an email and password, or a sign-in link emailed instead.
+# Its inputs are `login_email`, `login_password`, `login_sign_in` (the password), `login_send_link`
+# and `login_message` (what went wrong, or that a link was sent).
+# Returns: A UI element that covers the page.
 login_ui <- function() {
   login_card(
     id = login_screen_id,
@@ -38,9 +36,8 @@ login_ui <- function() {
   )
 }
 
-#' Setting or changing the password from the menu, once signed in.
-#'
-#' @return A modal dialog with `password_fields()`.
+# Setting or changing the password from the menu, once signed in.
+# Returns: A modal dialog with `password_fields()`.
 password_dialog <- function() {
   modalDialog(
     title = "Update Password",
@@ -51,12 +48,9 @@ password_dialog <- function() {
   )
 }
 
-#' The new password, twice, and the button that saves it.
-#'
-#' Its inputs are `new_password`, `new_password_again`, `password_change_submit` and
-#' `password_message` (what went wrong).
-#'
-#' @return A UI element.
+# The new password, twice, and the button that saves it.
+# Its inputs are `new_password`, `new_password_again`, `password_change_submit` and
+# `password_message` (what went wrong).
 password_fields <- function() {
   div(
     class = "password-fields",
@@ -95,24 +89,19 @@ login_button <- function(id, label, busy, primary = TRUE) {
   )
 }
 
-#' What the login screen says under the button.
-#'
-#' @param text The sentence.
-#' @param kind `"problem"` or `"note"`.
-#' @return A UI element.
+# What the login screen says under the button.
+# text: The sentence.
+# kind: `"problem"` or `"note"`.
 login_message <- function(text, kind = "problem") {
   p(class = paste0("login-note is-", kind), if (kind == "problem") app_icon("problem") else app_icon("email"), " ", text)
 }
 
-#' The account menu under the signed-in name (top right).
-#'
-#' "Update Password" is the input `change_password` (not for a development sign-in, which has no
-#' password); "Report a problem" is a link to the problem form (`report_problem_url`), opened in a new
-#' tab; "Log out" is the input `log_out`.
-#'
-#' @param me Who is signed in: `list(staff_id, name, role, email)`.
-#' @param development Whether this is a development sign-in (STAFF_EMAIL), which the menu says.
-#' @return A UI element.
+# The account menu under the signed-in name (top right).
+# "Update Password" is the input `change_password` (not for a development sign-in, which has no
+# password); "Report a problem" is a link to the problem form (`report_problem_url`), opened in a new
+# tab; "Log out" is the input `log_out`.
+# me: Who is signed in: `list(staff_id, name, role, email)`.
+# development: Whether this is a development sign-in (STAFF_EMAIL), which the menu says.
 user_menu <- function(me, development = FALSE) {
   div(
     class = "dropdown navbar-user",
@@ -140,21 +129,17 @@ user_menu <- function(me, development = FALSE) {
   )
 }
 
-#' Whether the browser reached the site on this computer, as while developing: a development sign-in
-#' (`STAFF_EMAIL`) only works then, so a deployed site that has it set still asks everyone to sign in.
-#'
-#' @param session The Shiny session.
-#' @return `TRUE` for localhost (or Shiny's test session, `testServer()`'s), `FALSE` otherwise.
+# Whether the browser reached the site on this computer, as while developing: a development sign-in
+# (`STAFF_EMAIL`) only works then, so a deployed site that has it set still asks everyone to sign in.
+# Returns: `TRUE` for localhost (or Shiny's test session, `testServer()`'s), `FALSE` otherwise.
 site_is_local <- function(session) {
   # isolate(): it is read as the session starts, outside anything reactive
   host <- tryCatch(isolate(session$clientData$url_hostname), error = function(problem) NULL)
   isTRUE(host %in% c("localhost", "127.0.0.1", "::1", "[::1]", "mocksession"))
 }
 
-#' The site's own address, for a sign-in link to bring the person back to.
-#'
-#' @param session The Shiny session.
-#' @return A string such as `"https://marjoriekohn-matr-admin.share.connect.posit.cloud/"`, or `""` if the browser hasn't said.
+# The site's own address, for a sign-in link to bring the person back to.
+# Returns: A string such as `"https://marjoriekohn-matr-admin.share.connect.posit.cloud/"`, or `""` if the browser hasn't said.
 site_address <- function(session) {
   tryCatch(
     {

@@ -13,7 +13,7 @@ has_class <- function(html, class, id) grepl(sprintf('class="[^"]*%s[^"]*" [^>]*
 tree_html <- function(output) paste(output$tree$html, collapse = "")
 # The marks the page script is sent now. Called inside testServer(), where `collapsed` is the outline's.
 marks_now <- function(page, collapsed, ns) {
-  outline_marks(page$draft(), page$state$problems(), page$selected(), collapsed(), character(), ns)
+  outline_marks(page$draft(), page$state$problems(), page$selected(), collapsed(), ns)
 }
 # The details of the block picked, as drawn now. Called inside testServer().
 detail_html <- function(output) paste(output$detail$html, collapse = "")
@@ -396,22 +396,6 @@ test_that("a field the checks find at fault is outlined, says why, and the marks
   })
 })
 
-test_that("each MATR ID field offers the uploaded IDs no variable has yet", {
-  page <- edit_extraction_state(with_matr_ids(short_gold_draft()))
-  page$state$matr_ids <- function() c("x1", "x2")
-  seen <- local_browser()
-  shiny::testServer(extraction_outline_server, args = outline_args(page), {
-    html <- tree_html(output)
-    ids_list <- regmatches(html, regexpr('<datalist id="[^"]*matr-ids">.*?</datalist>', html))
-    expect_length(ids_list, 1)
-    expect_match(ids_list, '<option value="x1">')
-    page$selected("c3")
-    session$flushReact()
-    expect_match(detail_html(output), 'data-field="matr_id"')
-    expect_match(detail_html(output), 'list="[^"]*matr-ids"')
-  })
-})
-
 test_that("the words offered for a kind of block are those the Edit Extraction page shares", {
   page <- short_page()
   page$state$suggestions <- function() list(Section = c("Part A", "Part B"), Instruction = "Tick one.")
@@ -441,7 +425,7 @@ test_that("editing a checked block takes its check off, and marking it as checke
 test_that("the marks say which blocks are checked, and a section only counts as all checked once everything in it is", {
   draft <- with_checked(short_gold_draft(), c("c1", "c3"))
   inside <- draft_service_printed_order(draft, "c1")
-  marks <- outline_marks(draft, draft_service_check(draft, test_lookups()), "c3", "c1", character(), shiny::NS("x"))
+  marks <- outline_marks(draft, draft_service_check(draft, test_lookups()), "c3", "c1", shiny::NS("x"))
   expect_setequal(unlist(marks$checked), c("c1", "c3"))
   expect_equal(unlist(marks$all_checked), "c3") # c1 has blocks inside that aren't checked
   expect_equal(marks$collapsed, list("c1"))
@@ -450,7 +434,7 @@ test_that("the marks say which blocks are checked, and a section only counts as 
 
   everything <- with_checked(short_gold_draft(), c("c1", inside))
   all_marks <- outline_marks(
-    everything, draft_service_check(everything, test_lookups()), NULL, character(), character(), shiny::NS("x")
+    everything, draft_service_check(everything, test_lookups()), NULL, character(), shiny::NS("x")
   )
   expect_true("c1" %in% unlist(all_marks$all_checked))
 })
@@ -520,7 +504,7 @@ test_that("the outline grows with the questionnaire, not with its square: every 
   draft <- gold_draft()
   view <- list(
     selected = NULL, collapsed = character(), opened = character(), problems = draft_service_check(draft, test_lookups()),
-    suggestions = list(), matr_ids = character(), shown = character()
+    suggestions = list(), shown = character()
   )
   html <- htmltools::renderTags(outline_tree(draft, view, test_lookups(), shiny::NS("x")))$html
   n_questions <- sum(draft$components$component_type == "Question")
@@ -693,46 +677,6 @@ test_that("Skip to is a pick of where the choice sends respondents, its printed 
   })
 })
 
-test_that("a question's row sums up its variables: one has its MATR ID there, several are counted", {
-  draft <- short_gold_draft()
-  n_boxes <- table(draft$variables$component_id)
-  one <- names(n_boxes)[n_boxes == 1][1]
-  several <- names(n_boxes)[n_boxes > 1][1]
-  box <- draft$variables$id[draft$variables$component_id == one]
-  draft <- draft_service_update(draft, "variables", box, "matr_id", "GNA_1")
-  view <- list(problems = draft_service_check(draft, test_lookups()), selected = NULL, collapsed = character(), opened = character())
-  row_of <- function(id) htmltools::renderTags(outline_row(draft$components[draft$components$id == id, ], draft, view, shiny::NS("x")))$html
-
-  single <- row_of(one)
-  expect_match(single, 'class="outline-row-summary"')
-  expect_match(single, sprintf('data-field="matr_id" data-id="%s"[^>]*value="GNA_1"', box))
-  expect_match(single, variable_summary_text(draft, box), fixed = TRUE)
-  many <- row_of(several)
-  expect_match(many, sprintf("<strong>%s</strong>", plural(n_boxes[[several]], "variable")))
-  expect_false(grepl('data-field="matr_id"', many))
-  # a write-in says its kind of answer, and who it is about when that isn't the respondent
-  write_in <- draft_service_update(draft_service_update(draft, "variables", box, "variable_type", "open_ended"), "variables", box, "subject", "Respondent's Family")
-  expect_match(variable_summary_text(write_in, box), "^Write-in: .* · Subject: Respondent's Family$")
-})
-
-test_that("giving out MATR IDs by hand opens every section, so each question's MATR ID can be typed under it", {
-  page <- short_page()
-  ticks <- shiny::reactiveVal(0L)
-  page$state$show_variables <- ticks
-  shiny::testServer(extraction_outline_server, args = outline_args(page), {
-    session$setInputs(action = list(action = "collapse_all"))
-    expect_setequal(collapsed(), sections_of(short_gold_draft()))
-    ticks(1L) # Manual Assignment
-    session$flushReact()
-    expect_length(collapsed(), 0)
-  })
-  # the rows have each question's variables in short, the page script shows them then (is-assigning)
-  draft <- short_gold_draft()
-  view <- list(problems = draft_service_check(draft, test_lookups()), selected = NULL, collapsed = character())
-  row <- htmltools::renderTags(outline_row(component(draft, "c3"), draft, view, shiny::NS("x")))$html
-  expect_match(row, 'class="outline-row-summary"')
-})
-
 test_that("each block notes the PDF page it was read from, for Open PDF to open at", {
   draft <- short_gold_draft()
   draft$components$page <- seq_len(nrow(draft$components))
@@ -768,12 +712,12 @@ test_that("the marks say which blocks differ from what the AI read, for the Chan
   page <- short_page()
   page$state$original <- function() ai_read
   shiny::testServer(extraction_outline_server, args = outline_args(page), {
-    expect_length(outline_marks(page$draft(), page$state$problems(), NULL, character(), character(), ns)$changed, 0)
+    expect_length(outline_marks(page$draft(), page$state$problems(), NULL, character(), ns)$changed, 0)
     page$state$change(draft_service_update(page$draft(), "components", "c4", "text", "Something else"))
     expect_identical(original(), ai_read) # the module's own, as the page gives it
     expect_equal(draft_service_changed_blocks(original(), page$draft()), "c4")
     changed <- outline_marks(
-      page$draft(), page$state$problems(), NULL, character(), character(), ns,
+      page$draft(), page$state$problems(), NULL, character(), ns,
       changed = draft_service_changed_blocks(original(), page$draft())
     )$changed
     expect_equal(changed, list("c4"))

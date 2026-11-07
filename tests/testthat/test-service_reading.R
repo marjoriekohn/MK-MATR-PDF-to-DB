@@ -213,17 +213,12 @@ test_that("the prompt lists what the lookup tables hold", {
   expect_match(instructions, "  - Not Difficult At All", fixed = TRUE)
 })
 
-test_that("the prompt's example is a draft with no problems, whose grids rebuild each item as a whole question", {
+test_that("the prompt's example is a draft with no problems", {
   prompt <- paste(readLines(app_file("prompts", "extraction.md"), warn = FALSE), collapse = "\n")
   example <- sub("(?s).*```json\n(.*?)\n```.*", "\\1", prompt, perl = TRUE)
   draft <- draft_service_from_json(list(questionnaire = list(), components = jsonlite::fromJSON(example, simplifyVector = FALSE)))
   problems <- draft_service_check(draft, test_lookups(), matr_ids = FALSE)
   expect_equal(nrow(problems), 0, info = paste(problems$message, collapse = "; "))
-  numbered <- function(n) draft$components$id[draft$components$printed_number %in% n]
-  expect_equal(
-    unname(draft_service_full_question(draft, numbered(c("4a", "6b")))),
-    c("On a typical day: How many cups of coffee do you drink?", "In the past week I have cooked dinner at home.")
-  )
 })
 
 test_that("the JSON is found in Gemini's answer, fenced or not", {

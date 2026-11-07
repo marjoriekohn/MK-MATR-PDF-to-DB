@@ -19,10 +19,11 @@ empty_table <- function(table) {
 # A proposal as the page makes it before saving: staff `staff` delete the respondent type `respondent_type`.
 # A delete is the change a STAFF member can't apply on their own, so it is the one that waits for
 # approval. It has no id until edit_model_save() gives it one.
-sample_edit <- function(staff, respondent_type, status = "Draft", now = Sys.time(), previous = NULL) {
+# `snap` is the tables it is built from, if they have been read already.
+sample_edit <- function(staff, respondent_type, status = "Draft", now = Sys.time(), previous = NULL, snap = NULL) {
   force(respondent_type) # the row has to exist before the tables are read
   entity <- edit_entities$respondent_type
-  snap <- test_edit_snap(entity)
+  snap <- snap %||% test_edit_snap(entity)
   key <- as.character(respondent_type$respondent_type_id)
   built <- edit_service_build(entity, "delete", snap, edit_service_row(entity, snap, key))
   form <- list(action = "delete", entity = "respondent_type", scope = "", target = key, values = list())
@@ -30,11 +31,25 @@ sample_edit <- function(staff, respondent_type, status = "Draft", now = Sys.time
 }
 
 # A proposal saved in the database for the test, as `staff` saved it, and removed when the test ends with the
-# other drafts of the test's staff (test_clear_drafts()).
-local_edit <- function(staff, respondent_type = local_respondent_type(env = env), status = "Draft", ..., env = parent.frame()) {
-  force(respondent_type)
-  saved <- edit_model_save(test_connection, sample_edit(staff, respondent_type, status, ...), staff$staff_id)
-  saved
+# other drafts of the test's staff (test_clear_drafts()). With no `respondent_type` it proposes to delete the
+# file's (shared_respondent_type()); a test that applies the delete gives one of its own.
+local_edit <- function(staff, respondent_type = NULL, status = "Draft", ..., env = parent.frame()) {
+  shared <- if (is.null(respondent_type)) shared_respondent_type(env)
+  respondent_type <- respondent_type %||% shared$row
+  edit_model_save(test_connection, sample_edit(staff, respondent_type, status, ..., snap = shared$snap), staff$staff_id)
+}
+
+# A respondent type made once for a test file, for the proposals that only propose to delete it, and the
+# tables a proposal about it is built from (test_edit_snap()), read once too. Removed when the file ends.
+# Returns: A list: `row` (the respondent type, as stored) and `snap` (`NULL` outside a test, to be read then).
+shared_respondent_type <- function(env = parent.frame()) {
+  if (!is_test_body(env)) {
+    return(list(row = local_respondent_type(env = env), snap = NULL))
+  }
+  file_shared(env, "respondent_type", function(file_env) {
+    row <- local_respondent_type(env = file_env)
+    list(row = row, snap = test_edit_snap(edit_entities$respondent_type))
+  })
 }
 
 # An edit applied by `staff`, the way Make an edit does it: the form for kind `key` in mode `verb`, with

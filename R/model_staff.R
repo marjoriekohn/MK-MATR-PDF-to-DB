@@ -4,14 +4,11 @@
 
 staff_columns <- c("staff_id", "name", "email", "active", "role")
 
-#' Find a staff member by email.
-#'
-#' Emails are unique ignoring case. The search also treats `_` as any character, so
-#' only the exact match is kept.
-#'
-#' @param connection The MATR database, `list(url, key)`; see `model_database.R`.
-#' @param email The email to look for.
-#' @return A list with `staff_id`, `name`, `email`, `active` and `role`, or `NULL` if there is no one.
+# Find a staff member by email.
+# Emails are unique ignoring case. The search also treats `_` as any character, so
+# only the exact match is kept.
+# email: The email to look for.
+# Returns: A list with `staff_id`, `name`, `email`, `active` and `role`, or `NULL` if there is no one.
 staff_model_find_by_email <- function(connection, email) {
   rows <- database_model_get(
     connection, "staff", staff_columns,
@@ -22,10 +19,8 @@ staff_model_find_by_email <- function(connection, email) {
   if (nrow(rows) == 1) as.list(rows)
 }
 
-#' The staff who are still active.
-#'
-#' @param connection The MATR database, `list(url, key)`; see `model_database.R`.
-#' @return A data frame with `staff_id`, `name` and `role`, by name; no rows if there are none.
+# The staff who are still active.
+# Returns: A data frame with `staff_id`, `name` and `role`, by name; no rows if there are none.
 staff_model_active <- function(connection) {
   database_model_get(
     connection, "staff", c("staff_id", "name", "role"),

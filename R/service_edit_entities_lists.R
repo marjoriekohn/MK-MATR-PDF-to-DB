@@ -103,11 +103,9 @@ time_frame_entity <- list(
 )
 
 # ------ Sets of choices ---------------------------------------------------------------------------------
-#' The answer choices of option sets, as the field of a set's choices holds them.
-#'
-#' @param snap The tables the kind needs, as `edit_service_load()` reads them: a list of data frames named after the tables.
-#' @param set_ids Option set ids.
-#' @return One string per set: its answer choices' ids joined by commas, smallest first.
+# The answer choices of option sets, as the field of a set's choices holds them.
+# set_ids: Option set ids.
+# Returns: One string per set: its answer choices' ids joined by commas, smallest first.
 edit_set_members <- function(snap, set_ids) {
   members <- snap$answer_option_set
   vapply(set_ids, function(id) edit_several_text(members$answer_option_id[members$option_set_id %in% id]), character(1), USE.NAMES = FALSE)
@@ -199,14 +197,8 @@ edit_sets_with <- function(snap, value, row = NULL) {
   sets[edit_set_members(snap, sets$option_set_id) == wanted, , drop = FALSE]
 }
 
-#' The items of adding or changing an option set: its own row, then the answer choices it gains and loses.
-#'
-#' @param mode `"add"` or `"update"`.
-#' @param snap The tables the kind needs, as `edit_service_load()` reads them: a list of data frames named after the tables.
-#' @param row The set being changed; `NULL` for an add.
-#' @param fields The form's fields, from `edit_service_fields()`.
-#' @param values What is in the form: a named list of strings by field id.
-#' @return A data frame of items; see `edit_item()`.
+# The items of adding or changing an option set: its own row, then the answer choices it gains and loses.
+# row: The set being changed; `NULL` for an add.
 edit_option_set_items <- function(mode, snap, row, fields, values) {
   entity <- edit_entities[["option_set"]]
   own <- Filter(function(field) field$name != "answer_option_ids", fields)

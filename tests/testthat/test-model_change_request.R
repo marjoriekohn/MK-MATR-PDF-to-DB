@@ -150,7 +150,7 @@ test_that("a request is withdrawn and kept, and can't be approved afterwards", {
 test_that("something already applied can't be applied or changed again", {
   me <- local_staff()
   admin <- local_staff("ADMIN")
-  request <- local_edit(admin)
+  request <- local_edit(admin, local_respondent_type()) # its own: applying it deletes it
   history_id <- change_request_model_apply(test_connection, request$id, admin$staff_id)
   local_applied(history_id)
   expect_error(change_request_model_apply(test_connection, request$id, admin$staff_id), "already been applied")

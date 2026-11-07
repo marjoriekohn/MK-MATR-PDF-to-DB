@@ -1,13 +1,10 @@
-#' The AI-Powered mode of the Extraction page: the PDF and how reading it is going.
-#'
-#' Staff choose the questionnaire PDF (and, if they have one, the file of Variable Names and Coding), and
-#' reading starts when they click Begin Extraction. From then on the files are the draft's and can't be
-#' changed. Reading happens in the background, so staff can leave and find the draft under Extraction Drafts; once it
-#' has finished, the whole extraction opens on the Edit Extraction page to review and edit before its
-#' change request is submitted.
-#'
-#' @param id The module's id.
-#' @return The mode's UI.
+# The AI-Powered mode of the Extraction page: the PDF and how reading it is going.
+# Staff choose the questionnaire PDF (and, if they have one, the file of Variable Names and Coding), and
+# reading starts when they click Begin Extraction. From then on the files are the draft's and can't be
+# changed. Reading happens in the background, so staff can leave and find the draft under Extraction Drafts; once it
+# has finished, the whole extraction opens on the Edit Extraction page to review and edit before its
+# change request is submitted.
+# Returns: The mode's UI.
 extraction_ai_ui <- function(id) {
   ns <- NS(id)
   div(
@@ -26,14 +23,11 @@ extraction_ai_ui <- function(id) {
   )
 }
 
-#' A dashed box files can be dropped on.
-#'
-#' `www/js/extraction.js` passes dropped files to the file input inside.
-#'
-#' @param file_input The file input.
-#' @param ... What to say about it.
-#' @param icon The icon, by its name in `app_icons`.
-#' @return A UI element.
+# A dashed box files can be dropped on.
+# `www/js/extraction.js` passes dropped files to the file input inside.
+# file_input: The file input.
+# ...: What to say about it.
+# icon: The icon, by its name in `app_icons`.
 drop_zone <- function(file_input, ..., icon = "pdf") {
   div(
     class = "drop-zone",
@@ -44,10 +38,7 @@ drop_zone <- function(file_input, ..., icon = "pdf") {
 }
 
 # ------ Step 1: the PDF -------------------------------------------------------------
-#' Somewhere to drop the PDF, before one is chosen.
-#'
-#' @param ns The module's namespace function.
-#' @return A UI element.
+# Somewhere to drop the PDF, before one is chosen.
 pdf_drop_zone <- function(ns) {
   drop_zone(
     fileInput(ns("pdf"), NULL, accept = c(".pdf", "application/pdf"), buttonLabel = "Choose PDF"),
@@ -56,12 +47,9 @@ pdf_drop_zone <- function(ns) {
   )
 }
 
-#' The PDF: the one chosen, which can be swapped until the extraction begins, or the draft's.
-#'
-#' @param pdf `list(name, bytes)`, and `pages` once the draft has it.
-#' @param ns The module's namespace function.
-#' @param begun Whether the extraction has begun: the draft has the file, so it can't be swapped.
-#' @return A UI element.
+# The PDF: the one chosen, which can be swapped until the extraction begins, or the draft's.
+# pdf: `list(name, bytes)`, and `pages` once the draft has it.
+# begun: Whether the extraction has begun: the draft has the file, so it can't be swapped.
 pdf_file <- function(pdf, ns, begun = TRUE) {
   facts <- c(if (!is.null(pdf$pages)) plural(pdf$pages, "page"), file_size(pdf$bytes))
   div(
@@ -76,15 +64,12 @@ pdf_file <- function(pdf, ns, begun = TRUE) {
 }
 
 # ------ The file of Variable Names and Coding (optional) ---------------------------------
-#' Somewhere to give the file of Variable Names and Coding (MATR IDs and codes), or the file given.
-#'
-#' Optional. Gemini applies it once the questionnaire is read and checked, as a step of its own. It can be
-#' given, changed or taken away until the extraction begins; after that the page only says which file it is.
-#'
-#' @param name The file's name, or `NULL` if none is given.
-#' @param begun Whether the extraction has begun.
-#' @param ns The module's namespace function.
-#' @return A UI element, or `NULL` once the extraction has begun without one.
+# Somewhere to give the file of Variable Names and Coding (MATR IDs and codes), or the file given.
+# Optional. Gemini applies it once the questionnaire is read and checked, as a step of its own. It can be
+# given, changed or taken away until the extraction begins; after that the page only says which file it is.
+# name: The file's name, or `NULL` if none is given.
+# begun: Whether the extraction has begun.
+# Returns: A UI element, or `NULL` once the extraction has begun without one.
 supplement_card <- function(name, begun, ns) {
   accept <- c(".pdf", ".csv", ".tsv", ".txt")
   if (begun) {
@@ -112,11 +97,7 @@ supplement_card <- function(name, begun, ns) {
 }
 
 # ------ Reading progress --------------------------------------------------------------
-#' How reading the PDF is going.
-#'
-#' @param record An extraction record.
-#' @param ns The module's namespace function.
-#' @return A UI element.
+# How reading the PDF is going.
 reading_card <- function(record, ns) {
   steps <- extraction_service_reading_steps(record)
   finished <- extraction_service_is_read(record)
@@ -143,13 +124,11 @@ reading_card <- function(record, ns) {
   ))
 }
 
-#' How long reading has taken so far.
-#'
-#' The browser counts on from here each second (`www/js/extraction.js`), so the server isn't asked,
-#' and the page doesn't show it is busy, every second.
-#'
-#' @param started When reading started, as the database writes times, or `NULL`.
-#' @return A UI element, or `NULL` when reading hasn't started.
+# How long reading has taken so far.
+# The browser counts on from here each second (`www/js/extraction.js`), so the server isn't asked,
+# and the page doesn't show it is busy, every second.
+# started: When reading started, as the database writes times, or `NULL`.
+# Returns: A UI element, or `NULL` when reading hasn't started.
 reading_elapsed <- function(started) {
   started <- if (!is.null(started) && length(started) == 1 && !is.na(started)) parse_time(started)
   if (is.null(started) || is.na(started)) {
@@ -167,11 +146,9 @@ reading_step <- function(step) {
   )
 }
 
-#' The line at the top of a mode of the Extraction page: what it is for, and a control on the right.
-#'
-#' @param text What the mode is for.
-#' @param ... Anything shown on the right (a save indicator, a toggle).
-#' @return A UI element.
+# The line at the top of a mode of the Extraction page: what it is for, and a control on the right.
+# text: What the mode is for.
+# ...: Anything shown on the right (a save indicator, a toggle).
 mode_intro <- function(text, ...) {
   div(class = "mode-intro", p(class = "subhead", text), div(class = "mode-intro-aside", ...))
 }

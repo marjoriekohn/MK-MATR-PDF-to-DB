@@ -1,10 +1,6 @@
-#' The form for adding or changing a row, with what you changed and what it reaches.
-#'
-#' For a delete: what goes with it and the confirmations. The server draws it all once the
-#' kind and row are known.
-#'
-#' @param id The module's id.
-#' @return The page's UI.
+# The form for adding or changing a row, with what you changed and what it reaches.
+# For a delete: what goes with it and the confirmations. The server draws it all once the
+# kind and row are known.
 edit_change_ui <- function(id) {
   ns <- NS(id)
   div(
@@ -23,12 +19,9 @@ edit_reference_kinds <- c(
   component_id = "question" # a scale item's question (the other forms' are only shown for an existing one)
 )
 
-#' Notes above the form for drop-downs that need a pick and have nothing to pick from.
-#'
-#' Each has a link to add the first.
-#'
-#' @param fields The form's fields, from `edit_service_fields()`.
-#' @return A UI element, or `NULL` if none is needed.
+# Notes above the form for drop-downs that need a pick and have nothing to pick from.
+# Each has a link to add the first.
+# Returns: A UI element, or `NULL` if none is needed.
 edit_empty_choices_ui <- function(fields) {
   notes <- lapply(fields, function(field) {
     real <- unname(field$choices)[nzchar(unname(field$choices))]

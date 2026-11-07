@@ -4,10 +4,9 @@
 
 edit_detail <- function() list(edit_kind = "Update", form = list(action = "update", entity = "wave", values = list(wave__name = "R")), items = list())
 
-new_edit <- function(me, parent = list(), detail = edit_detail(), env = parent.frame()) {
-  id <- draft_row_model_create(test_connection, "Edit", me$staff_id, parent, detail)
-  withr::defer(test_delete("draft", list(draft_id = database_eq(id))), envir = env)
-  id
+# An edit draft of `me`'s, removed when the test ends with the other drafts of the test's staff (test_clear_drafts()).
+new_edit <- function(me, parent = list(), detail = edit_detail()) {
+  draft_row_model_create(test_connection, "Edit", me$staff_id, parent, detail)
 }
 
 test_that("only numbers go into a draft's filter", {
@@ -60,7 +59,6 @@ test_that("a draft that isn't there is NULL, and its details are left out", {
 test_that("an extraction's details are its own columns, with defaults for the rest", {
   me <- local_staff()
   id <- draft_row_model_create(test_connection, "Extraction", me$staff_id, list(), list(method = "Manual", info = list(kind = "new_wave")))
-  withr::defer(test_delete("draft", list(draft_id = database_eq(id))))
   details <- draft_row_model_details(test_connection, extracted_draft_table, id, c("method", "info", "reading:ai_extracted_draft(reading_status)"))
   expect_equal(details[[id]]$method, "Manual")
   expect_equal(details[[id]]$info$kind, "new_wave")
@@ -106,21 +104,19 @@ test_that("drafts are listed by kind, newest saved first, narrowed by status, wi
   first <- new_edit(me)
   second <- new_edit(other)
   extraction <- draft_row_model_create(test_connection, "Extraction", me$staff_id, list(), list(method = "Manual"))
-  withr::defer(test_delete("draft", list(draft_id = database_eq(extraction))))
   draft_row_model_save(test_connection, first, me$staff_id, list(status = "Awaiting Review"))
 
   ours <- c(first, second)
-  ids_of <- function(rows) vapply(rows, function(row) as.character(row$draft_id), character(1))
-  listed <- ids_of(draft_row_model_list(test_connection, "Edit"))
+  listed <- names(edit_model_get_all(test_connection))
   expect_equal(listed[listed %in% ours], c(first, second)) # the one saved last comes first
-  waiting <- ids_of(draft_row_model_list(test_connection, "Edit", "Awaiting Review"))
+  waiting <- names(edit_model_get_all(test_connection, "Awaiting Review"))
   expect_equal(waiting[waiting %in% ours], first)
   expect_false(extraction %in% listed)
-  expect_true(extraction %in% ids_of(draft_row_model_list(test_connection, "Extraction")))
+  expect_true(extraction %in% names(extraction_model_get_all(test_connection)))
 
   # one finished with (withdrawn, or applied) is left out: the lists only grow with those
   draft_row_model_save(test_connection, second, other$staff_id, parent = list(status = "Withdrawn"), new_revision = FALSE)
-  expect_false(second %in% ids_of(draft_row_model_list(test_connection, "Edit")))
+  expect_false(second %in% names(edit_model_get_all(test_connection)))
   expect_equal(draft_row_model_get(test_connection, second)$status, "Withdrawn") # read on its own, it is there
 })
 
@@ -260,7 +256,6 @@ test_that("a draft's reviews are read newest first, and only a sent-back draft s
 test_that("a detail row can be changed where it still matches, without raising the revision", {
   me <- local_staff()
   id <- draft_row_model_create(test_connection, "Extraction", me$staff_id, list(), list(method = "AI-Powered", pdf_name = "a.pdf", pdf_sha256 = "zztest", reading_status = "queued", reading_started = "2026-10-02T10:00:00Z"))
-  withr::defer(test_delete("draft", list(draft_id = database_eq(id))))
   revision <- draft_row_model_get(test_connection, id)$revision
 
   stale <- draft_row_model_update_detail(

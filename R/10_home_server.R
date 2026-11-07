@@ -1,24 +1,17 @@
-#' The Home page's server.
-#'
-#' Reads this person's saved edits, the requests waiting for them and the newest changes when the page is
-#' shown; their extraction drafts are the ones the site shares, which `server.R` reads again as the page opens.
-#' Continue opens a draft where it is worked on, Review opens a request in its dialog, and the buttons under
-#' the lists open the pages that list them all.
-#'
-#' @param id The module's id.
-#' @param connection The MATR database, `list(url, key)`; see `model_database.R`.
-#' @param me Who is using the site: `list(staff_id, name, role)`.
-#' @param show_page A function taking a page's name and showing it.
-#' @param extractions The extraction drafts as `server.R` shares them: `all()` is a reactive list of records.
-#' @param catalog The live tables, as `server.R` shares them: `get()` reads them. An extraction is named by its
-#'   questionnaire and wave.
-#' @param open_extraction A function taking an extraction record and opening it: on Edit Extraction, or on New
-#'   Extraction while it is being read.
-#' @param open_edit A function taking an edit record and opening it on the Metadata page.
-#' @param review_request A function taking a change request's id and opening it on Change Requests.
-#' @param active A reactive that says whether this page is the one on screen, or `NULL`. Coming
-#'   back to the page reads its lists again, since the other pages change them.
-#' @return Called for its effect.
+# The Home page's server.
+# Reads this person's saved edits, the requests waiting for them and the newest changes when the page is
+# shown; their extraction drafts are the ones the site shares, which `server.R` reads again as the page opens.
+# Continue opens a draft where it is worked on, Review opens a request in its dialog, and the buttons under
+# the lists open the pages that list them all.
+# extractions: The extraction drafts as `server.R` shares them: `all()` is a reactive list of records.
+# catalog: The live tables, as `server.R` shares them: `get()` reads them. An extraction is named by its
+#   questionnaire and wave.
+# open_extraction: A function taking an extraction record and opening it: on Edit Extraction, or on New
+#   Extraction while it is being read.
+# open_edit: A function taking an edit record and opening it on the Metadata page.
+# review_request: A function taking a change request's id and opening it on Change Requests.
+# active: A reactive that says whether this page is the one on screen, or `NULL`. Coming
+#   back to the page reads its lists again, since the other pages change them.
 home_server <- function(
   id,
   connection,

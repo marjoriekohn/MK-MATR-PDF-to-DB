@@ -5,14 +5,11 @@
 # add something from a drop-down), and the drop-downs and the checks on what staff
 # type use this copy, so typing never waits on the database.
 
-#' The live tables the extraction pages pick from and check against.
-#'
-#' Read when a session starts, and again after staff add something from a drop-down, so typing
-#' never waits on the database.
-#'
-#' @param connection The MATR database, `list(url, key)`; see `model_database.R`.
-#' @return A list of data frames: `registries`, `studies` (with `principal_investigator`),
-#'   `questionnaires` (with `respondent_type` and `n_waves`), `waves` and `respondent_types`.
+# The live tables the extraction pages pick from and check against.
+# Read when a session starts, and again after staff add something from a drop-down, so typing
+# never waits on the database.
+# Returns: A list of data frames: `registries`, `studies` (with `principal_investigator`),
+#   `questionnaires` (with `respondent_type` and `n_waves`), `waves` and `respondent_types`.
 questionnaire_service_get_catalog <- function(connection) {
   # three requests: the studies come with their investigators, questionnaires and waves
   questionnaire_service_catalog(c(
@@ -22,14 +19,12 @@ questionnaire_service_get_catalog <- function(connection) {
   ))
 }
 
-#' Join the tables the catalog is made of.
-#'
-#' Each study gets its investigator's name, and each questionnaire its respondent type's name and
-#' how many waves it has.
-#'
-#' @param tables A list of data frames, as the models read them: `registries`, `studies`,
-#'   `investigators`, `questionnaires`, `waves` and `respondent_types`.
-#' @return The catalog; see `questionnaire_service_get_catalog()`.
+# Join the tables the catalog is made of.
+# Each study gets its investigator's name, and each questionnaire its respondent type's name and
+# how many waves it has.
+# tables: A list of data frames, as the models read them: `registries`, `studies`,
+#   `investigators`, `questionnaires`, `waves` and `respondent_types`.
+# Returns: The catalog; see `questionnaire_service_get_catalog()`.
 questionnaire_service_catalog <- function(tables) {
   studies <- tables$studies
   studies$principal_investigator <- tables$investigators$name[
@@ -51,32 +46,26 @@ questionnaire_service_catalog <- function(tables) {
   )
 }
 
-#' One questionnaire from the catalog.
-#'
-#' @param catalog The live tables the pages pick from, from `questionnaire_service_get_catalog()`.
-#' @param questionnaire_id The id.
-#' @return A one-row data frame, or `NULL` if there is not exactly one.
+# One questionnaire from the catalog.
+# questionnaire_id: The id.
+# Returns: A one-row data frame, or `NULL` if there is not exactly one.
 questionnaire_service_get <- function(catalog, questionnaire_id) {
   questionnaires <- catalog$questionnaires
   questionnaire <- questionnaires[questionnaires$questionnaire_id %in% questionnaire_id, ]
   if (nrow(questionnaire) == 1) questionnaire
 }
 
-#' One study from the catalog.
-#'
-#' @param catalog The live tables the pages pick from, from `questionnaire_service_get_catalog()`.
-#' @param study_id The id.
-#' @return A one-row data frame, or `NULL` if there is not exactly one.
+# One study from the catalog.
+# study_id: The id.
+# Returns: A one-row data frame, or `NULL` if there is not exactly one.
 questionnaire_service_get_study <- function(catalog, study_id) {
   study <- catalog$studies[catalog$studies$study_id %in% study_id, ]
   if (nrow(study) == 1) study
 }
 
-#' How many questions each of a questionnaire's waves asks.
-#'
-#' @param connection The MATR database, `list(url, key)`; see `model_database.R`.
-#' @param questionnaire_id The questionnaire's id; blank gives none.
-#' @return A named integer vector: the count by wave id. A wave that asks nothing isn't in it.
+# How many questions each of a questionnaire's waves asks.
+# questionnaire_id: The questionnaire's id; blank gives none.
+# Returns: A named integer vector: the count by wave id. A wave that asks nothing isn't in it.
 questionnaire_service_wave_question_counts <- function(connection, questionnaire_id) {
   if (!grepl("^[0-9]+$", questionnaire_id %||% "")) {
     return(integer())
@@ -91,23 +80,17 @@ questionnaire_service_wave_question_counts <- function(connection, questionnaire
 # With no rows there are no labels (recycle0), rather than one made of the
 # words around them.
 
-#' Registries for a drop-down.
-#'
-#' @param catalog The live tables the pages pick from, from `questionnaire_service_get_catalog()`.
-#' @return A named character vector: the names are shown, and the values, the ids, are
-#'   saved. Empty if there are none.
+# Registries for a drop-down.
+# Returns: A named character vector: the names are shown, and the values, the ids, are
+#   saved. Empty if there are none.
 questionnaire_service_registry_choices <- function(catalog) {
   registries <- catalog$registries
   stats::setNames(as.character(registries$registry_id), registries$name)
 }
 
-#' A registry's studies for a drop-down, each with who leads it.
-#'
-#' For example "Adult Health Study (Dana Reyes)".
-#'
-#' @param catalog The live tables the pages pick from, from `questionnaire_service_get_catalog()`.
-#' @param registry_id The registry's id.
-#' @return A named character vector, as `questionnaire_service_registry_choices()`.
+# A registry's studies for a drop-down, each with who leads it.
+# For example "Adult Health Study (Dana Reyes)".
+# registry_id: The registry's id.
 questionnaire_service_study_choices <- function(catalog, registry_id) {
   studies <- catalog$studies[catalog$studies$registry_id %in% registry_id, ]
   labels <- ifelse(
@@ -118,28 +101,10 @@ questionnaire_service_study_choices <- function(catalog, registry_id) {
   stats::setNames(as.character(studies$study_id), labels)
 }
 
-#' Respondent types, with their ages, for a drop-down.
-#'
-#' For example "Child (5-17)", "Adult (18+)" if there is no upper age, or "Parent of Twins (any age)"
-#' if there are no ages.
-#'
-#' @param catalog The live tables the pages pick from, from `questionnaire_service_get_catalog()`.
-#' @return A named character vector, as `questionnaire_service_registry_choices()`.
-questionnaire_service_respondent_type_choices <- function(catalog) {
-  types <- catalog$respondent_types
-  ages <- age_range_text(types$minimum_age, types$maximum_age)
-  stats::setNames(as.character(types$respondent_type_id), paste0(types$name, " (", ages, ")", recycle0 = TRUE))
-}
-
-#' A questionnaire's waves that ask no questions yet, for a drop-down.
-#'
-#' An extraction can go into one of them (a wave added on Make an edit before its questionnaire was
-#' extracted); a wave that asks questions already can't take another extraction's.
-#'
-#' @param catalog The live tables the pages pick from, from `questionnaire_service_get_catalog()`.
-#' @param questionnaire_id The questionnaire's id.
-#' @param question_counts From `questionnaire_service_wave_question_counts()`.
-#' @return A named character vector, as `questionnaire_service_registry_choices()`.
+# A questionnaire's waves that ask no questions yet, for a drop-down.
+# An extraction can go into one of them (a wave added on Make an edit before its questionnaire was
+# extracted); a wave that asks questions already can't take another extraction's.
+# question_counts: From `questionnaire_service_wave_question_counts()`.
 questionnaire_service_empty_wave_choices <- function(catalog, questionnaire_id, question_counts = integer()) {
   waves <- catalog$waves[catalog$waves$questionnaire_id %in% questionnaire_id, , drop = FALSE]
   waves <- waves[!as.character(waves$wave_id) %in% names(question_counts)[question_counts > 0], , drop = FALSE]
@@ -147,14 +112,10 @@ questionnaire_service_empty_wave_choices <- function(catalog, questionnaire_id, 
   stats::setNames(as.character(waves$wave_id), paste0(waves$name, dates, " · no questions yet", recycle0 = TRUE))
 }
 
-#' A study's questionnaires for a drop-down.
-#'
-#' Names can repeat, so each choice also shows its respondent type and how many waves it has,
-#' for example "Adult Health and Personality (AHP) · Adult · 2 waves so far".
-#'
-#' @param catalog The live tables the pages pick from, from `questionnaire_service_get_catalog()`.
-#' @param study_id The study's id.
-#' @return A named character vector, as `questionnaire_service_registry_choices()`.
+# A study's questionnaires for a drop-down.
+# Names can repeat, so each choice also shows its respondent type and how many waves it has,
+# for example "Adult Health and Personality (AHP) · Adult · 2 waves so far".
+# study_id: The study's id.
 questionnaire_service_choices <- function(catalog, study_id) {
   questionnaires <- catalog$questionnaires[catalog$questionnaires$study_id %in% study_id, ]
   questionnaires <- questionnaires[order(questionnaires$name, questionnaires$abbreviation), ]

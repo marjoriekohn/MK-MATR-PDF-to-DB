@@ -22,12 +22,15 @@ test_that("your work in progress is your open drafts of both kinds, those sent b
 test_that("waiting for you is the Change Requests page's For me, a few at most, with how many there are", {
   me <- local_staff()
   colleague <- local_staff()
-  for (i in 1:5) local_edit(colleague, status = "Awaiting Review")
+  for (i in 1:2) local_edit(colleague, status = "Awaiting Review")
+  # one read of what is waiting, for both: other runs of the tests send and remove requests meanwhile
+  waiting <- change_request_service_waiting(test_connection)
+  local_stub("change_request_service_waiting", function(connection) waiting)
   everything <- home_service_waiting_for_me(test_connection, me, n = 1000)
-  expect_equal(everything$total, length(change_request_service_filter(change_request_service_waiting(test_connection), me, "me")))
-  expect_gte(everything$total, 5)
-  few <- home_service_waiting_for_me(test_connection, me)
-  expect_length(few$shown, home_recent_n)
+  expect_equal(everything$total, length(change_request_service_filter(waiting, me, "me")))
+  expect_gte(everything$total, 2)
+  few <- home_service_waiting_for_me(test_connection, me, n = 1) # fewer than there are, as home_recent_n is on the page
+  expect_length(few$shown, 1)
   expect_equal(few$total, everything$total)
 })
 
@@ -35,10 +38,13 @@ test_that("the newest applied changes come first, with how many there are", {
   admin <- local_staff("ADMIN")
   first <- local_applied_edit(admin, "respondent_type", "add", respondent_type__name = test_name("First"))
   second <- local_applied_edit(admin, "respondent_type", "add", respondent_type__name = test_name("Second"))
+  # one count for both: other runs of the tests apply changes and remove them meanwhile
+  counted <- history_model_count(test_connection)
+  local_stub("history_model_count", function(connection) counted)
   everything <- home_service_recent_history(test_connection, n = 1000)
   ids <- vapply(everything$shown, function(record) record$id, character(1))
   expect_lt(match(as.character(second), ids), match(as.character(first), ids))
-  expect_equal(everything$total, history_model_count(test_connection))
+  expect_equal(everything$total, counted)
   expect_lte(length(home_service_recent_history(test_connection)$shown), home_recent_n)
 })
 

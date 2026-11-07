@@ -324,11 +324,11 @@
   // ------ Marks the server sends as words are typed ---------------------------------------
   // The outline is only redrawn when its layout changes (drawing it takes seconds), so the selected row,
   // the closed sections and open question panels, the checked blocks, each block's problems, the fields
-  // at fault (outlined in red) and the uploaded MATR IDs still free come separately (outline_marks() in
+  // at fault (outlined in red) and the variables' labels to offer come separately (outline_marks() in
   // R), and are put on again whenever Shiny redraws something. Until the first marks come, the classes
   // the outline was drawn with stay as they are.
   let marks = {
-    selected: null, problems: [], fields: [], matr_ids: null, matr_list: null, labels: null, label_list: null,
+    selected: null, problems: [], fields: [], labels: null, label_list: null,
     collapsed: null, checked: null, all_checked: null, check_titles: null, changed: null, matr: {}
   };
 
@@ -398,8 +398,7 @@
     shownLists.set(list, offered);
   }
 
-  function applyMatrIds() {
-    fillList(marks.matr_list, marks.matr_ids);
+  function applyLabels() {
     fillList(marks.label_list, marks.labels);
   }
 
@@ -426,7 +425,7 @@
     });
     applyFieldMarks(tree.closest('.outline-panel') || tree);
     applyDetailMarks();
-    applyMatrIds();
+    applyLabels();
     applyFilter(tree);
     sizeFreshBoxes(); // the boxes of sections just opened
   }
@@ -488,7 +487,7 @@
     const row = node.querySelector(':scope > .outline-row');
     if (!row) return false;
     const words = [];
-    row.querySelectorAll(':scope > .outline-text, :scope > .outline-numbers > *, :scope > .outline-row-summary > *').forEach(function (el) {
+    row.querySelectorAll(':scope > .outline-text, :scope > .outline-numbers > *').forEach(function (el) {
       words.push(el.matches('input, textarea') ? el.value : el.textContent);
     });
     return words.join(' ').toLowerCase().indexOf(search) !== -1;
@@ -809,12 +808,6 @@
 
   function register() {
     Shiny.addCustomMessageHandler('edit-extraction-patch', applyPatch);
-    // giving out MATR IDs by hand opens every question's variables, which is the outline's
-    // giving out MATR IDs by hand shows each question's variables in short under its row
-    Shiny.addCustomMessageHandler('edit-extraction-assign', function (on) {
-      const panel = document.querySelector('.outline-panel[data-ns]');
-      if (panel) panel.classList.toggle('is-assigning', !!on);
-    });
     // Make an edit picked an item itself (the first of a section opened): only it is marked
     Shiny.addCustomMessageHandler('make-edit-picked', function (id) {
       document.querySelectorAll('.edit-page .outline-row.is-selected').forEach(function (row) {
@@ -827,7 +820,6 @@
       const set = function (ids) { return ids ? new Set(ids) : null; };
       marks = {
         selected: sent.selected || null, problems: sent.problems || [], fields: sent.fields || [],
-        matr_ids: sent.matr_ids || [], matr_list: sent.matr_list || null,
         labels: sent.labels || [], label_list: sent.label_list || null,
         collapsed: set(sent.collapsed), checked: set(sent.checked),
         all_checked: set(sent.all_checked) || new Set(), check_titles: sent.check_titles || null,

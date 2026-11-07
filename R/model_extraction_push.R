@@ -10,13 +10,11 @@
 # How many ids go in one request's filter, so the address stays short.
 push_chunk_size <- 150
 
-#' The answer choices and option sets in the database.
-#'
-#' @param connection The MATR database, `list(url, key)`; see `model_database.R`.
-#' @return A list of data frames: `answer_options` (`answer_option_id`, `standardized_label`), `aliases`
-#'   (`alias`, `answer_option_id`: wordings merged into a choice), `option_sets` (`option_set_id`, `name`),
-#'   `members` (`option_set_id`, `answer_option_id`), `stems` (`question_stem_id`, `text`) and `linked`
-#'   (`component_id`, `question_stem_id`: the questions that have a stem).
+# The answer choices and option sets in the database.
+# Returns: A list of data frames: `answer_options` (`answer_option_id`, `standardized_label`), `aliases`
+#   (`alias`, `answer_option_id`: wordings merged into a choice), `option_sets` (`option_set_id`, `name`),
+#   `members` (`option_set_id`, `answer_option_id`), `stems` (`question_stem_id`, `text`) and `linked`
+#   (`component_id`, `question_stem_id`: the questions that have a stem).
 push_model_options <- function(connection) {
   list(
     answer_options = database_model_get(
@@ -36,23 +34,18 @@ push_model_options <- function(connection) {
   )
 }
 
-#' The components there are: what a block can be, since there is one for each kind and words (and one Group,
-#' which has none).
-#'
-#' @param connection The MATR database, `list(url, key)`; see `model_database.R`.
-#' @return A data frame: `component_id`, `component_type_id`, `text`.
+# The components there are: what a block can be, since there is one for each kind and words (and one Group,
+# which has none).
+# Returns: A data frame: `component_id`, `component_type_id`, `text`.
 push_model_components <- function(connection) {
   database_model_get(connection, "component", c("component_id", "component_type_id", "text"), order_by = "component_id")
 }
 
-#' What a recorded questionnaire has printed already.
-#'
-#' @param connection The MATR database, `list(url, key)`; see `model_database.R`.
-#' @param questionnaire_id The questionnaire's id.
-#' @return A list of data frames: `placements` (`placement_id`, `component_id`, `parent_placement_id`,
-#'   `display_order`), `components` (`component_id`, `component_type_id`, `text`), `questions`
-#'   (`placement_id`), `variables` (`variable_key`, `placement_id`, `matr_id`, `display_order`),
-#'   `waves` (`wave_id`, `name`) and `wave_questions` (`wave_id`, `placement_id`: what each wave asks).
+# What a recorded questionnaire has printed already.
+# Returns: A list of data frames: `placements` (`placement_id`, `component_id`, `parent_placement_id`,
+#   `display_order`), `components` (`component_id`, `component_type_id`, `text`), `questions`
+#   (`placement_id`), `variables` (`variable_key`, `placement_id`, `matr_id`, `display_order`),
+#   `waves` (`wave_id`, `name`) and `wave_questions` (`wave_id`, `placement_id`: what each wave asks).
 push_model_existing <- function(connection, questionnaire_id) {
   here <- list(questionnaire_id = database_eq(questionnaire_id))
   placements <- database_model_get(
@@ -87,12 +80,10 @@ push_model_existing <- function(connection, questionnaire_id) {
   )
 }
 
-#' Which questionnaires print each component, and what each questionnaire is called: to say where a block another
-#' questionnaire prints already is used.
-#'
-#' @param connection The MATR database, `list(url, key)`; see `model_database.R`.
-#' @return A list of data frames: `placed` (`component_id`, `questionnaire_id`) and `questionnaires`
-#'   (`questionnaire_id`, `name`, `abbreviation`).
+# Which questionnaires print each component, and what each questionnaire is called: to say where a block another
+# questionnaire prints already is used.
+# Returns: A list of data frames: `placed` (`component_id`, `questionnaire_id`) and `questionnaires`
+#   (`questionnaire_id`, `name`, `abbreviation`).
 push_model_placed <- function(connection) {
   list(
     placed = database_model_get(

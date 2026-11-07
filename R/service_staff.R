@@ -8,18 +8,11 @@
 # link. It only works where the site is opened on this computer (site_is_local()), so a site that serves real use
 # asks everyone to sign in even if it is set.
 
-# The two roles. An ADMIN never needs approval to change the database; see
-# service_change_request.R for what a STAFF member needs it for.
-staff_roles <- c("STAFF", "ADMIN")
-
-#' The staff member an email belongs to.
-#'
-#' Errors are sentences saying what to do.
-#'
-#' @param connection The MATR database, `list(url, key)`; see `model_database.R`.
-#' @param email The email, as the sign-in gave it.
-#' @return `list(staff_id, name, role, email)`; the role is `"STAFF"` or `"ADMIN"`. An error if the
-#'   email is unknown or the person is inactive.
+# The staff member an email belongs to.
+# Errors are sentences saying what to do.
+# email: The email, as the sign-in gave it.
+# Returns: `list(staff_id, name, role, email)`; the role is `"STAFF"` or `"ADMIN"`. An error if the
+#   email is unknown or the person is inactive.
 staff_service_for_email <- function(connection, email) {
   email <- trimws(email %||% "")
   staff <- if (nzchar(email)) staff_model_find_by_email(connection, email)
@@ -36,14 +29,11 @@ staff_service_for_email <- function(connection, email) {
   list(staff_id = staff$staff_id, name = staff$name, role = staff$role %||% "STAFF", email = staff$email)
 }
 
-#' Who is using the site, while developing.
-#'
-#' The staff member whose email is in `STAFF_EMAIL`, with no sign-in link. Errors are sentences saying
-#' what to do.
-#'
-#' @param connection The MATR database, `list(url, key)`; see `model_database.R`.
-#' @param email The email; defaults to `STAFF_EMAIL`.
-#' @return `list(staff_id, name, role, email)`. An error if the email is missing, unknown or inactive.
+# Who is using the site, while developing.
+# The staff member whose email is in `STAFF_EMAIL`, with no sign-in link. Errors are sentences saying
+# what to do.
+# email: The email; defaults to `STAFF_EMAIL`.
+# Returns: `list(staff_id, name, role, email)`. An error if the email is missing, unknown or inactive.
 staff_service_current <- function(connection, email = Sys.getenv("STAFF_EMAIL")) {
   email <- trimws(email)
   if (!nzchar(email)) {
@@ -58,16 +48,13 @@ staff_service_current <- function(connection, email = Sys.getenv("STAFF_EMAIL"))
   })
 }
 
-#' Sign in with the tokens a sign-in link brought back.
-#'
-#' @param connection The MATR database, `list(url, key)`; see `model_database.R`.
-#' @param auth The Auth connection, `list(url, key)`; see `auth_model_connection()`.
-#' @param tokens A list with `access_token` and, if there is one, `refresh_token`: from a sign-in link,
-#'   a password (`staff_service_sign_in()`), or from swapping a kept refresh token on a reload
-#'   (`auth_model_refresh()`).
-#' @return A list: `me` (`list(staff_id, name, role, email)`) and `tokens` (`access_token`,
-#'   `refresh_token`), which the session keeps for signing out and changing the password. An error
-#'   with a sentence if the token isn't good or the person isn't an active staff member.
+# Sign in with the tokens a sign-in link brought back.
+# tokens: A list with `access_token` and, if there is one, `refresh_token`: from a sign-in link,
+#   a password (`staff_service_sign_in()`), or from swapping a kept refresh token on a reload
+#   (`auth_model_refresh()`).
+# Returns: A list: `me` (`list(staff_id, name, role, email)`) and `tokens` (`access_token`,
+#   `refresh_token`), which the session keeps for signing out and changing the password. An error
+#   with a sentence if the token isn't good or the person isn't an active staff member.
 staff_service_from_tokens <- function(connection, auth, tokens) {
   access_token <- tokens$access_token %||% ""
   if (!nzchar(access_token)) stop("The sign-in link didn't bring a sign-in with it. Ask for another.", call. = FALSE)
@@ -79,15 +66,12 @@ staff_service_from_tokens <- function(connection, auth, tokens) {
   list(me = me, tokens = list(access_token = access_token, refresh_token = tokens$refresh_token))
 }
 
-#' Sign in again with a refresh token the browser kept, after a reload.
-#'
-#' Auth swaps it for new tokens and stops accepting the old one, so the browser has to keep the
-#' new `refresh_token` this returns.
-#'
-#' @inheritParams staff_service_from_tokens
-#' @param refresh_token The refresh token the browser kept.
-#' @return As `staff_service_from_tokens()`. An error with a sentence if Auth refused or the person
-#'   isn't an active staff member.
+# Sign in again with a refresh token the browser kept, after a reload.
+# Auth swaps it for new tokens and stops accepting the old one, so the browser has to keep the
+# new `refresh_token` this returns.
+# refresh_token: The refresh token the browser kept.
+# Returns: As `staff_service_from_tokens()`. An error with a sentence if Auth refused or the person
+#   isn't an active staff member.
 staff_service_resume <- function(connection, auth, refresh_token) {
   fresh <- auth_model_refresh(auth, refresh_token)
   staff_service_from_tokens(connection, auth, list(
@@ -95,16 +79,11 @@ staff_service_resume <- function(connection, auth, refresh_token) {
   ))
 }
 
-#' Email a sign-in link.
-#'
-#' Only to an email that is an active staff member's, so the site never asks Auth about anyone else.
-#'
-#' @param connection The MATR database, `list(url, key)`; see `model_database.R`.
-#' @param auth The Auth connection, `list(url, key)`; see `auth_model_connection()`.
-#' @param email The email.
-#' @param redirect_to The site's own address, which the link brings them back to.
-#' @return Called for its effect. An error with a sentence if the email is blank or isn't a staff member's,
-#'   the site's address isn't known (`site_address()` gives `""` when the browser hasn't said it), or Auth refused.
+# Email a sign-in link.
+# Only to an email that is an active staff member's, so the site never asks Auth about anyone else.
+# redirect_to: The site's own address, which the link brings them back to.
+# Returns: Called for its effect. An error with a sentence if the email is blank or isn't a staff member's,
+#   the site's address isn't known (`site_address()` gives `""` when the browser hasn't said it), or Auth refused.
 staff_service_send_link <- function(connection, auth, email, redirect_to) {
   if (!has_text(email)) stop("Type your email.", call. = FALSE)
   if (!has_text(redirect_to)) stop("The browser didn't say the site's address. Reload the page and try again.", call. = FALSE)
@@ -113,15 +92,12 @@ staff_service_send_link <- function(connection, auth, email, redirect_to) {
   invisible()
 }
 
-#' Sign in with an email and password.
-#'
-#' As with a sign-in link, the email has to be a staff member's before Auth is asked.
-#'
-#' @inheritParams staff_service_from_tokens
-#' @param email The email typed.
-#' @param password The password typed.
-#' @return As `staff_service_from_tokens()`. An error with a sentence if either is missing, the email
-#'   isn't an active staff member's, or Auth turned the password down.
+# Sign in with an email and password.
+# As with a sign-in link, the email has to be a staff member's before Auth is asked.
+# email: The email typed.
+# password: The password typed.
+# Returns: As `staff_service_from_tokens()`. An error with a sentence if either is missing, the email
+#   isn't an active staff member's, or Auth turned the password down.
 staff_service_sign_in <- function(connection, auth, email, password) {
   if (!has_text(email)) stop("Type your email.", call. = FALSE)
   if (!nzchar(password %||% "")) stop("Type your password, or have a sign-in link emailed to you.", call. = FALSE)
@@ -133,17 +109,14 @@ staff_service_sign_in <- function(connection, auth, email, password) {
 # The shortest password the site takes. Auth's own rules (Authentication, Providers, Email) apply too.
 password_min_length <- 8L
 
-#' Set or change the password.
-#'
-#' For the person signed in with `tokens`: someone who has only signed in with a link sets their first
-#' password this way.
-#'
-#' @param auth The Auth connection, `list(url, key)`; see `auth_model_connection()`.
-#' @param tokens The session's tokens, from signing in.
-#' @param password The new password.
-#' @param again The new password typed a second time.
-#' @return Called for its effect. An error with a sentence if the two don't match, the password is too
-#'   short, or Auth turned it down.
+# Set or change the password.
+# For the person signed in with `tokens`: someone who has only signed in with a link sets their first
+# password this way.
+# tokens: The session's tokens, from signing in.
+# password: The new password.
+# again: The new password typed a second time.
+# Returns: Called for its effect. An error with a sentence if the two don't match, the password is too
+#   short, or Auth turned it down.
 staff_service_change_password <- function(auth, tokens, password, again) {
   password <- password %||% ""
   if (is.null(tokens$access_token)) stop("A development sign-in has no password to change.", call. = FALSE)
@@ -155,24 +128,18 @@ staff_service_change_password <- function(auth, tokens, password, again) {
   invisible()
 }
 
-#' Sign out.
-#'
-#' @param auth The Auth connection, `list(url, key)`; see `auth_model_connection()`.
-#' @param tokens The session's tokens, from signing in; `NULL` for a development sign-in, which has none.
-#' @return Called for its effect. A refusal from Auth is not an error: the session ends either way.
+# Sign out.
+# tokens: The session's tokens, from signing in; `NULL` for a development sign-in, which has none.
+# Returns: Called for its effect. A refusal from Auth is not an error: the session ends either way.
 staff_service_sign_out <- function(auth, tokens) {
   if (!is.null(tokens$access_token)) try(auth_model_sign_out(auth, tokens$access_token), silent = TRUE)
   invisible()
 }
 
-#' The staff a request can be sent to for review.
-#'
-#' Active staff other than the person asking.
-#'
-#' @param connection The MATR database, `list(url, key)`; see `model_database.R`.
-#' @param me Who is using the site: `list(staff_id, name, role)`.
-#' @return A named character vector for a drop-down: the names are shown, the values are the
-#'   staff ids; empty if there is no one else.
+# The staff a request can be sent to for review.
+# Active staff other than the person asking.
+# Returns: A named character vector for a drop-down: the names are shown, the values are the
+#   staff ids; empty if there is no one else.
 staff_service_reviewers <- function(connection, me) {
   staff <- staff_model_active(connection)
   staff <- staff[staff$staff_id != me$staff_id, , drop = FALSE]

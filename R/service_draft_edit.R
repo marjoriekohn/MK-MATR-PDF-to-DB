@@ -24,17 +24,12 @@ word_fields <- list(
   response_options = "skip_instruction"
 )
 
-#' Change one field of one row.
-#'
-#' What staff type is stored as the column's type, blanks as `NA`. A block's kind decides
-#' what else it can hold, so changing it may change other rows. Errors are sentences.
-#'
-#' @param draft A draft: `list(questionnaire, components, variables, response_options)`; see the top of `service_draft.R`.
-#' @param table `"components"`, `"variables"` or `"response_options"`.
-#' @param id The row's id.
-#' @param field One of the table's editable fields.
-#' @param value The new value, as typed.
-#' @return The changed draft.
+# Change one field of one row.
+# What staff type is stored as the column's type, blanks as `NA`. A block's kind decides
+# what else it can hold, so changing it may change other rows. Errors are sentences.
+# id: The row's id.
+# field: One of the table's editable fields.
+# value: The new value, as typed.
 draft_service_update <- function(draft, table, id, field, value) {
   if (!field %in% editable_fields[[table]]) stop("That can't be changed here.")
   row <- which(draft[[table]]$id == id)
@@ -219,15 +214,13 @@ block_contents <- function(draft) {
   stats::setNames(paste(row_text(blocks, c("checked", "display_order")), of_block[blocks$id], sep = "\n"), blocks$id)
 }
 
-#' Take the check off the blocks a change has edited.
-#'
-#' A block that was marked as checked is no longer checked once it, its variables or their
-#' choices have changed (their words, kind, codes, which there are, or the order they come in), or
-#' once it has been moved into another section. Moving a block among its neighbours in the same
-#' section doesn't count. New blocks and blocks that are only checked or unchecked are left alone.
-#'
-#' @param before,after The draft before and after a change; see the top of `service_draft.R`.
-#' @return `after`, with the blocks that were checked and have been edited no longer checked.
+# Take the check off the blocks a change has edited.
+# A block that was marked as checked is no longer checked once it, its variables or their
+# choices have changed (their words, kind, codes, which there are, or the order they come in), or
+# once it has been moved into another section. Moving a block among its neighbours in the same
+# section doesn't count. New blocks and blocks that are only checked or unchecked are left alone.
+# before,after: The draft before and after a change; see the top of `service_draft.R`.
+# Returns: `after`, with the blocks that were checked and have been edited no longer checked.
 draft_service_uncheck_edited <- function(before, after) {
   was <- block_contents(before)
   now <- block_contents(after)
@@ -237,14 +230,11 @@ draft_service_uncheck_edited <- function(before, after) {
   after
 }
 
-#' Sections and groups are checked once everything in them is.
-#'
-#' Staff verify questions and the other blocks; a section or group counts as checked (for the progress bar,
-#' the list's colours and what is left to check before submitting) once every block inside it is, and stops
-#' counting as soon as one isn't. One with nothing in it isn't checked.
-#'
-#' @param draft A draft.
-#' @return The draft, with its sections' and groups' `checked` worked out.
+# Sections and groups are checked once everything in them is.
+# Staff verify questions and the other blocks; a section or group counts as checked (for the progress bar,
+# the list's colours and what is left to check before submitting) once every block inside it is, and stops
+# counting as soon as one isn't. One with nothing in it isn't checked.
+# Returns: The draft, with its sections' and groups' `checked` worked out.
 draft_service_check_containers <- function(draft) {
   blocks <- draft$components
   for (id in blocks$id[is_container(blocks$component_type)]) {
@@ -256,15 +246,12 @@ draft_service_check_containers <- function(draft) {
 }
 
 # ------ Moving blocks ----------------------------------------------------------
-#' Apply a drag and drop in the outline.
-#'
-#' The browser reports where every block now sits.
-#'
-#' @param draft A draft: `list(questionnaire, components, variables, response_options)`; see the top of `service_draft.R`.
-#' @param ids All the block ids in printed order.
-#' @param parent_ids The section or group each block is in; `NA` for the top level.
-#' @return The changed draft. An error if the outline was out of date, a block that isn't a section or
-#'   group would hold blocks, or a section would be inside a group.
+# Apply a drag and drop in the outline.
+# The browser reports where every block now sits.
+# ids: All the block ids in printed order.
+# parent_ids: The section or group each block is in; `NA` for the top level.
+# Returns: The changed draft. An error if the outline was out of date, a block that isn't a section or
+#   group would hold blocks, or a section would be inside a group.
 draft_service_apply_order <- function(draft, ids, parent_ids) {
   blocks <- draft$components
   if (length(ids) != nrow(blocks) || !setequal(ids, blocks$id)) {
@@ -294,12 +281,9 @@ draft_service_apply_order <- function(draft, ids, parent_ids) {
   draft
 }
 
-#' Apply a drag and drop within one question's variables, or one variable's choices.
-#'
-#' @param draft A draft: `list(questionnaire, components, variables, response_options)`; see the top of `service_draft.R`.
-#' @param table `"variables"` or `"response_options"`.
-#' @param ids The ids of the rows being reordered, in their new order.
-#' @return The changed draft.
+# Apply a drag and drop within one question's variables, or one variable's choices.
+# table: `"variables"` or `"response_options"`.
+# ids: The ids of the rows being reordered, in their new order.
 draft_service_reorder <- function(draft, table, ids) {
   rows <- match(ids, draft[[table]]$id)
   if (anyNA(rows)) stop("That list was out of date. Try that again.")
@@ -308,17 +292,13 @@ draft_service_reorder <- function(draft, table, ids) {
 }
 
 # ------ Adding and deleting ----------------------------------------------------
-#' Add a block.
-#'
-#' It goes right after the selected one, or inside it if that is a section or group (unless
-#' the new block is a section), or at the very end. A new section never lands inside a group:
-#' it goes after the group.
-#'
-#' @param draft A draft: `list(questionnaire, components, variables, response_options)`; see the top of `service_draft.R`.
-#' @param component_type The kind of block.
-#' @param id The new block's id.
-#' @param near_id The selected block's id, or `NULL`.
-#' @return The changed draft.
+# Add a block.
+# It goes right after the selected one, or inside it if that is a section or group (unless
+# the new block is a section), or at the very end. A new section never lands inside a group:
+# it goes after the group.
+# component_type: The kind of block.
+# id: The new block's id.
+# near_id: The selected block's id, or `NULL`.
 draft_service_add_block <- function(draft, component_type, id, near_id = NULL) {
   blocks <- draft$components
   near <- blocks[blocks$id %in% near_id, ]
@@ -344,19 +324,15 @@ draft_service_add_block <- function(draft, component_type, id, near_id = NULL) {
   ))
 }
 
-#' Add a variable to a question.
-#'
-#' It copies the question's last variable (its kind, who it is about and its choices), since
-#' one question's variables are usually alike; a write-in has no choices to copy. A question's first
-#' variable starts with one blank choice: a lone check box has only the one. Staff pick its kind as they
-#' add it (`variable_type`): one of another kind than the variable it copies keeps who it is about, and
-#' starts with a blank choice, or none for a write-in.
-#'
-#' @param draft A draft: `list(questionnaire, components, variables, response_options)`; see the top of `service_draft.R`.
-#' @param component_id The question's id.
-#' @param variable_type `"closed_ended"` (choices) or `"open_ended"` (write-in), or `NULL` for the kind
-#'   of the variable it copies.
-#' @return The changed draft.
+# Add a variable to a question.
+# It copies the question's last variable (its kind, who it is about and its choices), since
+# one question's variables are usually alike; a write-in has no choices to copy. A question's first
+# variable starts with one blank choice: a lone check box has only the one. Staff pick its kind as they
+# add it (`variable_type`): one of another kind than the variable it copies keeps who it is about, and
+# starts with a blank choice, or none for a write-in.
+# component_id: The question's id.
+# variable_type: `"closed_ended"` (choices) or `"open_ended"` (write-in), or `NULL` for the kind
+#   of the variable it copies.
 draft_service_add_box <- function(draft, component_id, variable_type = NULL) {
   id <- draft_service_next_id(draft, "variables")
   added <- add_box(draft, component_id, id)
@@ -391,11 +367,8 @@ add_box <- function(draft, component_id, id) {
   add_rows(draft, "response_options", choices)
 }
 
-#' Add a blank choice to a variable.
-#'
-#' @param draft A draft: `list(questionnaire, components, variables, response_options)`; see the top of `service_draft.R`.
-#' @param variable_id The variable's id.
-#' @return The changed draft.
+# Add a blank choice to a variable.
+# variable_id: The variable's id.
 draft_service_add_choice <- function(draft, variable_id) {
   add_blank_choices(draft, variable_id, 1)
 }
@@ -408,14 +381,11 @@ add_blank_choices <- function(draft, variable_id, n) {
   default_codes(draft, variable_id)
 }
 
-#' Take away a section or group but keep what is inside it.
-#'
-#' The blocks inside move up to where it was, in the same order, and it is deleted. Says so with
-#' `message()`, since Undo puts it back.
-#'
-#' @param draft A draft: `list(questionnaire, components, variables, response_options)`; see the top of `service_draft.R`.
-#' @param id The section's or group's id.
-#' @return The changed draft. An error if the block holds nothing it could keep.
+# Take away a section or group but keep what is inside it.
+# The blocks inside move up to where it was, in the same order, and it is deleted. Says so with
+# `message()`, since Undo puts it back.
+# id: The section's or group's id.
+# Returns: The changed draft. An error if the block holds nothing it could keep.
 draft_service_ungroup <- function(draft, id) {
   blocks <- draft$components
   row <- match(id, blocks$id)
@@ -441,14 +411,11 @@ draft_service_ungroup <- function(draft, id) {
 # The page shows those choices once and edits them once: each change is made to the choice in the same place
 # of every one of the variables.
 
-#' The variables of a question that offer the same choices.
-#'
-#' The same answers in the same order, with the same codes, printed words and skip instructions and links.
-#'
-#' @param draft A draft: `list(questionnaire, components, variables, response_options)`; see the top of `service_draft.R`.
-#' @param component_id The question's id.
-#' @return The ids of its variables with choices, when there are two or more and they all offer the same
-#'   choices; otherwise none.
+# The variables of a question that offer the same choices.
+# The same answers in the same order, with the same codes, printed words and skip instructions and links.
+# component_id: The question's id.
+# Returns: The ids of its variables with choices, when there are two or more and they all offer the same
+#   choices; otherwise none.
 draft_service_shared_choices <- function(draft, component_id) {
   boxes <- draft_service_children(draft, "variables", component_id)
   ids <- boxes$id[boxes$variable_type == "closed_ended"]
@@ -464,23 +431,18 @@ draft_service_shared_choices <- function(draft, component_id) {
   if (length(unique(lists)) == 1 && nzchar(lists[1])) ids else character()
 }
 
-#' The choices in the same place as `choice_id` in each of these variables.
-#'
-#' @param draft A draft.
-#' @param variable_ids Variables that offer the same choices (`draft_service_shared_choices()`).
-#' @param choice_id A choice of one of them.
-#' @return Choice ids, one for each variable that has a choice in that place.
+# The choices in the same place as `choice_id` in each of these variables.
+# variable_ids: Variables that offer the same choices (`draft_service_shared_choices()`).
+# choice_id: A choice of one of them.
+# Returns: Choice ids, one for each variable that has a choice in that place.
 same_place_choices <- function(draft, variable_ids, choice_id) {
   choices <- draft$response_options
   at <- choices$display_order[match(choice_id, choices$id)]
   choices$id[choices$variable_id %in% variable_ids & choices$display_order %in% at]
 }
 
-#' Change one field of a choice in every variable that offers the same choices.
-#'
-#' @inheritParams same_place_choices
-#' @param field,value As for `draft_service_update()`.
-#' @return The changed draft.
+# Change one field of a choice in every variable that offers the same choices.
+# field,value: As for `draft_service_update()`.
 draft_service_update_shared <- function(draft, variable_ids, choice_id, field, value) {
   for (id in same_place_choices(draft, variable_ids, choice_id)) {
     draft <- draft_service_update(draft, "response_options", id, field, value)
@@ -488,28 +450,20 @@ draft_service_update_shared <- function(draft, variable_ids, choice_id, field, v
   draft
 }
 
-#' Add a blank choice to every variable that offers the same choices.
-#'
-#' @inheritParams same_place_choices
-#' @return The changed draft.
+# Add a blank choice to every variable that offers the same choices.
 draft_service_add_choice_shared <- function(draft, variable_ids) {
   for (id in variable_ids) draft <- add_blank_choices(draft, id, 1)
   draft
 }
 
-#' Delete a choice from every variable that offers the same choices.
-#'
-#' @inheritParams same_place_choices
-#' @return The changed draft; says so once with `message()`.
+# Delete a choice from every variable that offers the same choices.
+# Returns: The changed draft; says so once with `message()`.
 draft_service_delete_shared <- function(draft, variable_ids, choice_id) {
   draft_service_delete(draft, "response_options", same_place_choices(draft, variable_ids, choice_id))
 }
 
-#' Put the choices of every variable that offers the same choices in a new order.
-#'
-#' @inheritParams same_place_choices
-#' @param ids One variable's choice ids, in their new order.
-#' @return The changed draft.
+# Put the choices of every variable that offers the same choices in a new order.
+# ids: One variable's choice ids, in their new order.
 draft_service_reorder_shared <- function(draft, variable_ids, ids) {
   choices <- draft$response_options
   places <- choices$display_order[match(ids, choices$id)]
@@ -521,16 +475,11 @@ draft_service_reorder_shared <- function(draft, variable_ids, ids) {
   draft
 }
 
-#' Delete a block, variable or choice.
-#'
-#' A section takes everything inside it, a question its variables, and a variable its
-#' choices. Questions that followed a deleted question lose the link. Says nothing: what went is gone from
-#' the page at once, and Undo brings it back.
-#'
-#' @param draft A draft: `list(questionnaire, components, variables, response_options)`; see the top of `service_draft.R`.
-#' @param table `"components"`, `"variables"` or `"response_options"`.
-#' @param id The row's id.
-#' @return The changed draft.
+# Delete a block, variable or choice.
+# A section takes everything inside it, a question its variables, and a variable its
+# choices. Questions that followed a deleted question lose the link. Says nothing: what went is gone from
+# the page at once, and Undo brings it back.
+# id: The row's id.
 draft_service_delete <- function(draft, table, id) {
   if (table == "components") id <- c(id, draft_service_printed_order(draft, id))
   draft[[table]] <- draft[[table]][!draft[[table]]$id %in% id, ]
@@ -538,15 +487,11 @@ draft_service_delete <- function(draft, table, id) {
 }
 
 # ------ Codes ------------------------------------------------------------------
-#' Give choices their default codes.
-#'
-#' Codes count 1, 2, 3... down a variable's choices until staff change them: a choice without a
-#' code gets the next one after the highest in its variable. Codes are text, so a variable coded with
-#' letters (a, b, c) carries on with the next letter.
-#'
-#' @param draft A draft: `list(questionnaire, components, variables, response_options)`; see the top of `service_draft.R`.
-#' @param variable_ids Only these variables; `NULL` for all.
-#' @return The changed draft.
+# Give choices their default codes.
+# Codes count 1, 2, 3... down a variable's choices until staff change them: a choice without a
+# code gets the next one after the highest in its variable. Codes are text, so a variable coded with
+# letters (a, b, c) carries on with the next letter.
+# variable_ids: Only these variables; `NULL` for all.
 default_codes <- function(draft, variable_ids = NULL) {
   choices <- draft$response_options
   rows <- which(is.null(variable_ids) | choices$variable_id %in% variable_ids)
@@ -584,13 +529,10 @@ next_codes <- function(codes, n) {
   as.character(max(c(0, numbers)) + seq_len(n))
 }
 
-#' Give every variable that offers the same choices the codes this variable uses.
-#'
-#' So a Yes/No coding is typed once rather than per variable.
-#'
-#' @param draft A draft: `list(questionnaire, components, variables, response_options)`; see the top of `service_draft.R`.
-#' @param variable_id The variable whose codes to copy.
-#' @return The changed draft. An error if a choice in the variable has no code.
+# Give every variable that offers the same choices the codes this variable uses.
+# So a Yes/No coding is typed once rather than per variable.
+# variable_id: The variable whose codes to copy.
+# Returns: The changed draft. An error if a choice in the variable has no code.
 draft_service_copy_codes <- function(draft, variable_id) {
   source <- draft_service_children(draft, "response_options", variable_id)
   if (nrow(source) == 0 || anyNA(source$code_value)) {
@@ -607,12 +549,10 @@ draft_service_copy_codes <- function(draft, variable_id) {
   draft
 }
 
-#' The other variables that offer the same choices as this one but code them differently: those
-#' `draft_service_copy_codes()` would change.
-#'
-#' @param draft A draft.
-#' @param variable_id The variable whose codes would be copied.
-#' @return The variables' ids, in the order the draft has them.
+# The other variables that offer the same choices as this one but code them differently: those
+# `draft_service_copy_codes()` would change.
+# variable_id: The variable whose codes would be copied.
+# Returns: The variables' ids, in the order the draft has them.
 draft_service_codes_differ <- function(draft, variable_id) {
   choices <- draft$response_options
   choices <- choices[order(choices$variable_id, choices$display_order), , drop = FALSE]
@@ -638,21 +578,18 @@ same_choice_variables <- function(draft, variable_id) {
 # A draft going into a recorded questionnaire takes the ones its questions have already. An ID goes to one
 # variable only (set_matr_id()).
 
-#' Fill the variables' MATR IDs from a recorded questionnaire's questions.
-#'
-#' A question with the same words as one the questionnaire asks (ignoring capitals and extra spaces) gets
-#' its variables' MATR IDs, first variable to first variable and so on. Used for the questionnaire the
-#' extraction goes into (its earlier waves). Only blank MATR IDs are filled, so nothing typed or read is
-#' lost. Says how many were filled with
-#' `message()`; a MATR ID already used by another variable of the draft isn't used again.
-#'
-#' @param draft A draft: `list(questionnaire, components, variables, response_options)`; see the top of `service_draft.R`.
-#' @param recorded The recorded questions' MATR IDs: a data frame with `text`, `matr_id` and `display_order`
-#'   (`extraction_service_recorded()$matr_ids`).
-#' @param from Where they come from, for the message: e.g. `"the questionnaire's earlier waves"`.
-#' @return The changed draft; the same draft if nothing matched.
+# Fill the variables' MATR IDs from a recorded questionnaire's questions.
+# A question with the same words as one the questionnaire asks (ignoring capitals and extra spaces) gets
+# its variables' MATR IDs, first variable to first variable and so on. Used for the questionnaire the
+# extraction goes into (its earlier waves). Only blank MATR IDs are filled, so nothing typed or read is
+# lost. Says how many were filled with
+# `message()`; a MATR ID already used by another variable of the draft isn't used again.
+# recorded: The recorded questions' MATR IDs: a data frame with `text`, `matr_id` and `display_order`
+#   (`extraction_service_recorded()$matr_ids`).
+# from: Where they come from, for the message: e.g. `"the questionnaire's earlier waves"`.
+# Returns: The changed draft; the same draft if nothing matched.
 draft_service_fill_recorded_matr_ids <- function(draft, recorded, from = "the questionnaire's earlier waves") {
-  same_words <- function(text) tolower(trimws(gsub("[[:space:]]+", " ", ifelse(is.na(text), "", text))))
+  same_words <- function(text) tolower(squish(ifelse(is.na(text), "", text)))
   blocks <- draft$components
   questions <- blocks[blocks$component_type == "Question" & !is.na(blocks$text), , drop = FALSE]
   recorded <- recorded[order(recorded$display_order), , drop = FALSE]
@@ -678,15 +615,12 @@ draft_service_fill_recorded_matr_ids <- function(draft, recorded, from = "the qu
   draft
 }
 
-#' The words to offer while a block's words are typed.
-#'
-#' For each kind of block: the words the draft's other blocks of that kind have, and the words the
-#' recorded questionnaire prints for that kind (a new wave), each once, in alphabetical order.
-#'
-#' @param draft A draft: `list(questionnaire, components, variables, response_options)`; see the top of `service_draft.R`.
-#' @param recorded_texts The recorded questionnaire's blocks: a data frame with `component_type` and
-#'   `text` (`extraction_service_recorded()$texts`), or `NULL`.
-#' @return A named list: for each kind of block that has any, a character vector of words.
+# The words to offer while a block's words are typed.
+# For each kind of block: the words the draft's other blocks of that kind have, and the words the
+# recorded questionnaire prints for that kind (a new wave), each once, in alphabetical order.
+# recorded_texts: The recorded questionnaire's blocks: a data frame with `component_type` and
+#   `text` (`extraction_service_recorded()$texts`), or `NULL`.
+# Returns: A named list: for each kind of block that has any, a character vector of words.
 draft_service_text_suggestions <- function(draft, recorded_texts = NULL) {
   own <- draft$components[c("component_type", "text")]
   all_texts <- rbind(own, if (!is.null(recorded_texts)) recorded_texts[c("component_type", "text")])
@@ -697,14 +631,10 @@ draft_service_text_suggestions <- function(draft, recorded_texts = NULL) {
   lapply(split(all_texts$text, all_texts$component_type), function(texts) sort(unique(trimws(texts))))
 }
 
-#' Number the questions 1, 2, 3... in the order they are printed.
-#'
-#' A question's place follows its place in the questionnaire, so moving, adding or deleting a question
-#' renumbers the ones after it. Blocks that aren't questions (sections and groups included) have
-#' no number and aren't counted. The number printed beside a question (`printed_number`) is left as it is.
-#'
-#' @param draft A draft: `list(questionnaire, components, variables, response_options)`; see the top of `service_draft.R`.
-#' @return The changed draft.
+# Number the questions 1, 2, 3... in the order they are printed.
+# A question's place follows its place in the questionnaire, so moving, adding or deleting a question
+# renumbers the ones after it. Blocks that aren't questions (sections and groups included) have
+# no number and aren't counted. The number printed beside a question (`printed_number`) is left as it is.
 draft_service_renumber_questions <- function(draft) {
   blocks <- draft$components
   printed <- draft_service_printed_order(draft)
@@ -727,14 +657,9 @@ add_rows <- function(draft, table, new_rows) {
   renumber(draft, table)
 }
 
-#' Number each parent's rows 1, 2, 3... keeping their order.
-#'
-#' A move parks a row at an in-between `display_order` (2.5 lands between 2 and 3), then
-#' calls this.
-#'
-#' @param draft A draft: `list(questionnaire, components, variables, response_options)`; see the top of `service_draft.R`.
-#' @param table `"components"`, `"variables"` or `"response_options"`.
-#' @return The changed draft.
+# Number each parent's rows 1, 2, 3... keeping their order.
+# A move parks a row at an in-between `display_order` (2.5 lands between 2 and 3), then
+# calls this.
 renumber <- function(draft, table) {
   rows <- draft[[table]]
   parent <- rows[[parent_columns[[table]]]]

@@ -168,10 +168,7 @@ function(input, output, session) {
     catalog <- list(
       get = catalog_tables,
       refresh = function() {
-        tryCatch(
-          catalog_tables(questionnaire_service_get_catalog(database)),
-          error = function(problem) show_problem(problem, "Couldn't read the database again", type = "warning")
-        )
+        try_showing(catalog_tables(questionnaire_service_get_catalog(database)), "Couldn't read the database again", type = "warning")
       }
     )
 
@@ -187,21 +184,12 @@ function(input, output, session) {
     reading_checked <- reactiveVal(0L)
     # If the database can't be reached the last drafts read stay on screen, with a
     # message, and the next change tries again.
-    last_extractions <- list()
+    read_extractions <- last_good_read(function() extraction_service_get_all(database))
     extractions <- list(
       all = reactive({
         extractions_written()
         reading_checked()
-        tryCatch(
-          {
-            last_extractions <<- extraction_service_get_all(database)
-            last_extractions
-          },
-          error = function(problem) {
-            showNotification(conditionMessage(problem), type = "error", id = "database_problem")
-            last_extractions
-          }
-        )
+        read_extractions()
       }),
       changed = function() extractions_written(extractions_written() + 1L)
     )

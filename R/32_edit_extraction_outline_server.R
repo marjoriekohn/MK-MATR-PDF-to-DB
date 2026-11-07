@@ -1,32 +1,23 @@
-#' The questionnaire outline of the Edit Extraction page.
-#'
-#' Blocks as a list, with the picked block's details beside it (`block_detail()`): type a section's or a text
-#' block's words in the list, or any block's in its details, change a block's kind, open and close sections and
-#' groups (by clicking them), add skip logic to a question (the answer to an earlier question it
-#' depends on, or who the respondent is), verify a block, add blocks (from a dialog of the kinds there are),
-#' delete them, take a section or group away but keep what is inside, and drag any of them into a new order. A
-#' question's variables and choices are the variable editor's (`variable_editor()`), as on Make an edit. Every
-#' change goes through `state$change()`.
-#'
-#' Drawing the whole list takes seconds for a long questionnaire, for the server and again for the
-#' browser, so it is drawn only when a draft opens or much of it changes. What a click or keystroke
-#' changes without changing the layout (which block is selected, which sections are closed, which blocks
-#' are checked, which blocks and fields have problems, and which uploaded MATR IDs are still free) is sent to
-#' the page script, which marks the rows and fields (`outline_marks()`). When the layout changes (a block or
-#' variable added, deleted, moved or picked from a list) only what is different is drawn and put in place
-#' (`outline_patch()`). Words being typed are never drawn again, so the field being typed in is left alone.
-#' The details are drawn again when the block picked or the layout changes, never for words typed.
-#'
-#' @param id The module's id.
-#' @param state What the Edit Extraction page shares: `list(draft, change, selected, problems,
-#'   layout_version, suggestions, matr_ids)`; `suggestions` (a reactive of
-#'   `draft_service_text_suggestions()`), `matr_ids` (a reactive of the uploaded MATR IDs no variable
-#'   has, `draft_service_available_matr_ids()`), `show_variables` (a reactive that ticks when the list should
-#'   show each question's MATR IDs, to give them out by hand), `original` (a reactive of the draft as the AI
-#'   read it, for the "Changed from AI" filter; `NULL` for a draft typed by hand) and `loaded` (a reactive that
-#'   ticks when a draft is opened) may be left out.
-#' @param lookups The pick lists, from `lookup_service_get_all()`.
-#' @return Called for its effect.
+# The questionnaire outline of the Edit Extraction page.
+# Blocks as a list, with the picked block's details beside it (`block_detail()`): type a section's or a text
+# block's words in the list, or any block's in its details, change a block's kind, open and close sections and
+# groups (by clicking them), add skip logic to a question (the answer to an earlier question it
+# depends on, or who the respondent is), verify a block, add blocks (from a dialog of the kinds there are),
+# delete them, take a section or group away but keep what is inside, and drag any of them into a new order. A
+# question's variables and choices are the variable editor's (`variable_editor()`), as on Make an edit. Every
+# change goes through `state$change()`.
+# Drawing the whole list takes seconds for a long questionnaire, for the server and again for the
+# browser, so it is drawn only when a draft opens or much of it changes. What a click or keystroke
+# changes without changing the layout (which block is selected, which sections are closed, which blocks
+# are checked, which blocks and fields have problems, and which uploaded MATR IDs are still free) is sent to
+# the page script, which marks the rows and fields (`outline_marks()`). When the layout changes (a block or
+# variable added, deleted, moved or picked from a list) only what is different is drawn and put in place
+# (`outline_patch()`). Words being typed are never drawn again, so the field being typed in is left alone.
+# The details are drawn again when the block picked or the layout changes, never for words typed.
+# state: What the Edit Extraction page shares: `list(draft, change, selected, problems,
+#   layout_version, suggestions)`; `suggestions` (a reactive of `draft_service_text_suggestions()`),
+#   `original` (a reactive of the draft as the AI read it, for the "Changed from AI" filter; `NULL` for a
+#   draft typed by hand) and `loaded` (a reactive that ticks when a draft is opened) may be left out.
 extraction_outline_server <- function(
   id,
   state,
@@ -42,7 +33,6 @@ extraction_outline_server <- function(
     patched <- reactiveVal(NULL) # the last change put on the tree already drawn (outline_patch())
     shown_version <- isolate(state$layout_version()) # the layout_version the tree on the page is up to date with
     suggestions <- state$suggestions %||% function() list()
-    matr_ids <- state$matr_ids %||% function() character()
     original <- state$original %||% function() NULL
     logic_for <- reactiveVal(NULL) # the question Add Skip Logic is adding to
     detail_version <- reactiveVal(0L) # ticks when the details must be drawn again without the layout changing
@@ -290,22 +280,11 @@ extraction_outline_server <- function(
       session$sendCustomMessage("edit-extraction-patch", patch)
     }
 
-    # Giving out MATR IDs by hand: the list shows each question's variables in short under its row, a lone
-    # variable's MATR ID typed there (the page script shows them: "edit-extraction-assign"); a question with
-    # several has them in its details. Every section opens.
-    if (!is.null(state$show_variables)) {
-      observeEvent(state$show_variables(), {
-        session$sendCustomMessage("edit-extraction-assign", TRUE)
-        collapsed(character())
-      }, ignoreInit = TRUE)
-    }
-
-    # A draft opens with every section and group closed, and the MATR IDs in the list put away.
+    # A draft opens with every section and group closed.
     if (!is.null(state$loaded)) {
       observeEvent(state$loaded(), {
         blocks <- state$draft()$components
         collapsed(blocks$id[is_container(blocks$component_type)])
-        session$sendCustomMessage("edit-extraction-assign", FALSE)
       })
     }
 
@@ -318,7 +297,7 @@ extraction_outline_server <- function(
     observe({
       draft <- state$draft()
       session$sendCustomMessage("edit-extraction-marks", outline_marks(
-        draft, state$problems(), state$selected(), collapsed(), matr_ids(), ns,
+        draft, state$problems(), state$selected(), collapsed(), ns,
         changed = draft_service_changed_blocks(original(), draft)
       ))
     })
@@ -328,7 +307,7 @@ extraction_outline_server <- function(
       c(
         list(
           selected = state$selected(), collapsed = collapsed(),
-          problems = state$problems(), suggestions = suggestions(), matr_ids = matr_ids(),
+          problems = state$problems(), suggestions = suggestions(),
           component_types = lookups$component_types
         ),
         variables$view()

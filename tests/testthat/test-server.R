@@ -113,11 +113,10 @@ test_that("the menu's title and the home page's buttons show the pages they name
     session$setInputs(`home-new_extraction` = 1)
     session$setInputs(`home-extraction_drafts` = 1)
     catalog <- session_state()$site$catalog
-    before <- nrow(catalog$get()$registries)
     added <- local_registry(env = here)
-    expect_equal(nrow(catalog$get()$registries), before) # nothing has asked yet
+    expect_false(added$registry_id %in% catalog$get()$registries$registry_id) # nothing has asked yet
     session$setInputs(nav = "extraction")
-    expect_equal(nrow(catalog$get()$registries), before + 1)
+    expect_true(added$registry_id %in% catalog$get()$registries$registry_id)
   })
   expect_equal(seen$pages, c("home", "extraction", "drafts"))
 })

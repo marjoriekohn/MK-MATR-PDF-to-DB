@@ -39,7 +39,8 @@ ours <- function(shown, drafts) intersect(ids_shown(shown), vapply(drafts, funct
 card_title <- function(tree) paste0(tree$questionnaire$name, " (ZZQ) · ", tree$wave$name)
 count_on <- function(toggle, label) as.integer(sub(sprintf(".*%s \\(([0-9]+)\\).*", label), "\\1", toggle))
 
-test_that("the open drafts are cards, everyone's by default, with whose they are and how far they have got", {
+# One set of drafts for all three (seeding them is some fifteen requests), since nothing here changes them.
+test_that("the open drafts are cards, everyone's by default; Mine keeps this person's; Continue opens a draft where it can go on", {
   me <- local_staff()
   colleague <- local_staff()
   tree <- shared_tree()
@@ -47,6 +48,7 @@ test_that("the open drafts are cards, everyone's by default, with whose they are
   page <- drafts_page(me)
   shiny::testServer(extraction_drafts_server, args = page$args, {
     errors <- collect_errors(session)
+    # the cards: everyone's open drafts, with whose they are and how far they have got
     expect_setequal(ours(shown(), drafts), c(drafts$mine$id, drafts$theirs$id, drafts$reading$id))
     cards <- text_of(output$drafts)
     expect_match(cards, card_title(tree), fixed = TRUE) # named from where it goes
@@ -54,18 +56,7 @@ test_that("the open drafts are cards, everyone's by default, with whose they are
     expect_match(cards, "Started by you")
     expect_match(cards, "Yours")
     expect_match(cards, "Read by Gemini")
-    # expect_false(grepl("Wave 6|Wave 7", cards)) # set aside and sent: not open
-    expect_length(errors(), 0)
-  })
-})
-
-test_that("Mine keeps only this person's drafts, and the buttons count each list", {
-  me <- local_staff()
-  colleague <- local_staff()
-  tree <- shared_tree()
-  drafts <- seed_drafts(me, colleague, tree)
-  page <- drafts_page(me)
-  shiny::testServer(extraction_drafts_server, args = page$args, {
+    # Mine keeps only this person's drafts, and the buttons count each list
     toggle <- text_of(output$whose_toggle)
     expect_equal(count_on(toggle, "Mine"), 2L)
     expect_gte(count_on(toggle, "Everyone's"), 3L) # the dev database has other people's drafts too
@@ -73,22 +64,14 @@ test_that("Mine keeps only this person's drafts, and the buttons count each list
     expect_setequal(ids_shown(shown()), c(drafts$mine$id, drafts$reading$id))
     session$setInputs(whose = "everyone")
     expect_length(ours(shown(), drafts), 3)
-  })
-})
-
-test_that("Continue opens a draft that has been read on the Edit Extraction page, and one still being read in AI-Powered mode", {
-  me <- local_staff()
-  colleague <- local_staff()
-  tree <- shared_tree()
-  drafts <- seed_drafts(me, colleague, tree)
-  page <- drafts_page(me)
-  shiny::testServer(extraction_drafts_server, args = page$args, {
+    # Continue opens a draft that has been read on the Edit Extraction page, and one still being read in AI-Powered mode
     session$setInputs(action = list(action = "continue", id = drafts$mine$id))
     expect_equal(page$did$reviews[[1]]$id, drafts$mine$id)
     session$setInputs(action = list(action = "continue", id = drafts$reading$id))
     expect_equal(page$did$details[[1]]$id, drafts$reading$id)
     session$setInputs(action = list(action = "new"))
     expect_equal(page$did$modes, "ai")
+    expect_length(errors(), 0)
   })
 })
 

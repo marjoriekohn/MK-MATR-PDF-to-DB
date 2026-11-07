@@ -21,38 +21,30 @@
 # A "request" is a record of a draft that was sent for review: an edit (see edit_model_get_all())
 # or an extraction (see extraction_model_get_all()); its `kind` says which.
 
-#' Whether a change needs approval before it is applied.
-#'
-#' Only a STAFF member's delete, or a STAFF member's push of an extraction. An add or an
-#' update never does, and neither does anything an ADMIN does.
-#'
-#' @param me Who is making the change: `list(staff_id, name, role)`.
-#' @param kind `"Edit"` or `"Extraction"`.
-#' @param edit_kind For an edit, `"Add"`, `"Update"` or `"Delete"`.
-#' @return `TRUE` or `FALSE`.
+# Whether a change needs approval before it is applied.
+# Only a STAFF member's delete, or a STAFF member's push of an extraction. An add or an
+# update never does, and neither does anything an ADMIN does.
+# me: Who is making the change: `list(staff_id, name, role)`.
+# kind: `"Edit"` or `"Extraction"`.
+# edit_kind: For an edit, `"Add"`, `"Update"` or `"Delete"`.
 change_request_service_needs_approval <- function(me, kind, edit_kind = NULL) {
   !identical(me$role, "ADMIN") && (identical(kind, extraction_kind) || identical(edit_kind, "Delete"))
 }
 
-#' The requests waiting for review, longest waiting first.
-#'
-#' @param connection The MATR database, `list(url, key)`; see `model_database.R`.
-#' @return A list of requests named by id; empty if nothing is waiting.
+# The requests waiting for review, longest waiting first.
+# Returns: A list of requests named by id; empty if nothing is waiting.
 change_request_service_waiting <- function(connection) {
   records <- change_request_model_waiting(connection)
   waited <- vapply(records, function(record) record$submitted_exact %||% as.numeric(parse_time(record$submitted %||% record$saved)), numeric(1))
   records[order(waited)]
 }
 
-#' Where a waiting request stands for one person.
-#'
-#' @param record A request.
-#' @param me Who is using the site: `list(staff_id, name, role)`.
-#' @return A list: `mine` (this person prepared it), `changed_by_me` (they made its latest
-#'   revision, though someone else prepared it), `asked_of_me` (the preparer asked them to
-#'   review it), `needs_info` (an extraction whose Basic Info isn't filled in yet), `can_approve`,
-#'   `can_add` (an ADMIN's own extraction, which they add without approval), `can_send_back` and
-#'   `can_withdraw`.
+# Where a waiting request stands for one person.
+# Returns: A list: `mine` (this person prepared it), `changed_by_me` (they made its latest
+#   revision, though someone else prepared it), `asked_of_me` (the preparer asked them to
+#   review it), `needs_info` (an extraction whose Basic Info isn't filled in yet), `can_approve`,
+#   `can_add` (an ADMIN's own extraction, which they add without approval), `can_send_back` and
+#   `can_withdraw`.
 change_request_service_state <- function(record, me) {
   mine <- draft_row_service_is_mine(record, me)
   changed_by_me <- !mine && same_staff(record$saved_by_id, me$staff_id)
@@ -69,14 +61,12 @@ change_request_service_state <- function(record, me) {
   )
 }
 
-#' The waiting requests a person has something to do about.
-#'
-#' @param records From `change_request_service_waiting()`.
-#' @param me Who is using the site: `list(staff_id, name, role)`.
-#' @param whose `"me"` keeps those this person can approve, with the ones they were asked to
-#'   review first, and their own extractions still waiting for Basic Info, or that they can add;
-#'   `"mine"` keeps those they prepared; anything else keeps them all.
-#' @return The matching requests.
+# The waiting requests a person has something to do about.
+# records: From `change_request_service_waiting()`.
+# whose: `"me"` keeps those this person can approve, with the ones they were asked to
+#   review first, and their own extractions still waiting for Basic Info, or that they can add;
+#   `"mine"` keeps those they prepared; anything else keeps them all.
+# Returns: The matching requests.
 change_request_service_filter <- function(records, me, whose = "everyone") {
   states <- lapply(records, change_request_service_state, me = me)
   if (identical(whose, "me")) {
@@ -92,10 +82,8 @@ change_request_service_filter <- function(records, me, whose = "everyone") {
   records
 }
 
-#' The kind of request, in a word.
-#'
-#' @param record A request.
-#' @return `"Add"`, `"Update"` or `"Delete"` for an edit; `"Extraction"` for an extraction.
+# The kind of request, in a word.
+# Returns: `"Add"`, `"Update"` or `"Delete"` for an edit; `"Extraction"` for an extraction.
 change_request_service_kind <- function(record) {
   if (identical(record$kind, extraction_kind)) {
     return("Extraction")
@@ -103,34 +91,28 @@ change_request_service_kind <- function(record) {
   record$edit_kind %||% "Edit"
 }
 
-#' The rows an edit would touch, and how many of each kind.
-#'
-#' @param record An edit request.
-#' @return A list: `groups` (see `change_service_groups()`) and `counts` (see `change_service_counts()`).
+# The rows an edit would touch, and how many of each kind.
+# record: An edit request.
+# Returns: A list: `groups` (see `change_service_groups()`) and `counts` (see `change_service_counts()`).
 change_request_service_changes <- function(record) {
   groups <- change_service_groups(record$items)
   list(groups = groups, counts = change_service_counts(groups))
 }
 
-#' Approve a request, which applies it.
-#'
-#' An extraction's rows are worked out now, from the questionnaire as it is saved and the MATR
-#' data as it is now, so a reviewer approves what they read and what would go in today.
-#'
-#' @param connection The MATR database, `list(url, key)`; see `model_database.R`.
-#' @param record The request as the person read it: its `id` and `revision` say what they approve.
-#' @param me Who is approving: `list(staff_id, name, role)`.
-#' @return The id of its row in the history. An error with a sentence if the database refused,
-#'   e.g. because the request was changed after the person opened it.
+# Approve a request, which applies it.
+# An extraction's rows are worked out now, from the questionnaire as it is saved and the MATR
+# data as it is now, so a reviewer approves what they read and what would go in today.
+# record: The request as the person read it: its `id` and `revision` say what they approve.
+# me: Who is approving: `list(staff_id, name, role)`.
+# Returns: The id of its row in the history. An error with a sentence if the database refused,
+#   e.g. because the request was changed after the person opened it.
 change_request_service_approve <- function(connection, record, me) {
   items <- if (identical(record$kind, extraction_kind)) change_request_service_extraction_items(connection, record)
   change_request_model_approve(connection, record$id, record$revision, me$staff_id, items)
 }
 
-#' Add an ADMIN's own extraction request, which needs no approval.
-#'
-#' @inheritParams change_request_service_approve
-#' @return The id of its row in the history. An error with a sentence if it can't be added.
+# Add an ADMIN's own extraction request, which needs no approval.
+# Returns: The id of its row in the history. An error with a sentence if it can't be added.
 change_request_service_add <- function(connection, record, me) {
   if (!change_request_service_state(record, me)$can_add) {
     stop("Only the ADMIN who prepared this can add it without approval. Someone else approves it instead.", call. = FALSE)
@@ -148,28 +130,21 @@ change_request_service_extraction_items <- function(connection, record) {
   extraction_service_push_items(connection, record)
 }
 
-#' Send a request back to the person who prepared it.
-#'
-#' @param connection The MATR database, `list(url, key)`; see `model_database.R`.
-#' @param record The request as the person read it.
-#' @param me Who is sending it back: `list(staff_id, name, role)`.
-#' @param note What needs changing; it can't be blank.
-#' @return Called for its effect.
+# Send a request back to the person who prepared it.
+# record: The request as the person read it.
+# me: Who is sending it back: `list(staff_id, name, role)`.
+# note: What needs changing; it can't be blank.
 change_request_service_send_back <- function(connection, record, me, note) {
   note <- trimws(note %||% "")
   if (!nzchar(note)) stop("Say what needs changing, so they know what to fix.", call. = FALSE)
   change_request_model_send_back(connection, record$id, record$revision, me$staff_id, note)
 }
 
-#' Withdraw a request, or a draft, the person prepared.
-#'
-#' An edit is kept, as Withdrawn. An extraction is discarded: deleted, with its PDF
-#' (`extraction_service_discard()`).
-#'
-#' @param connection The MATR database, `list(url, key)`; see `model_database.R`.
-#' @param record The request or draft.
-#' @param me Who withdraws it: `list(staff_id, name, role)`; it has to be the person who prepared it.
-#' @return Called for its effect.
+# Withdraw a request, or a draft, the person prepared.
+# An edit is kept, as Withdrawn. An extraction is discarded: deleted, with its PDF
+# (`extraction_service_discard()`).
+# record: The request or draft.
+# me: Who withdraws it: `list(staff_id, name, role)`; it has to be the person who prepared it.
 change_request_service_withdraw <- function(connection, record, me) {
   if (!draft_row_service_is_mine(record, me)) {
     stop("Only the person who prepared this can withdraw it.", call. = FALSE)

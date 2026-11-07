@@ -48,7 +48,8 @@ test_that("rows can be narrowed by filters, and values are encoded, never pasted
 test_that("counting a table asks for no rows, and can be narrowed", {
   tree <- local_tree()
   local_wave(tree$questionnaire)
-  expect_equal(database_model_count(test_connection, "registry"), nrow(registry_model_get_all(test_connection)))
+  # (narrowed to the test's own rows: other runs of the tests add and remove registries meanwhile)
+  expect_equal(database_model_count(test_connection, "registry", filters = list(registry_id = database_eq(tree$registry$registry_id))), 1L)
   expect_equal(
     database_model_count(test_connection, "wave", filters = list(questionnaire_id = database_eq(tree$questionnaire$questionnaire_id))),
     2L
@@ -58,8 +59,7 @@ test_that("counting a table asks for no rows, and can be narrowed", {
 
 test_that("a table with jsonb comes back as lists, as it was saved, with the people it names", {
   me <- local_staff()
-  tree <- local_tree()
-  saved <- local_edit(me, local_respondent_type())
+  saved <- local_edit(me)
   rows <- database_model_select(
     test_connection, "draft", c("draft_id", "status", "preparer:staff!prepared_by(name)"),
     filters = list(draft_id = database_eq(saved$id))
@@ -173,14 +173,23 @@ test_that("a missing table and an unreachable database are sentences too", {
   )
 })
 
-test_that("the database's description of itself is read from the API's root", {
-  description <- database_model_describe(test_connection)
+test_that("the database's description of itself is read from the API's root, and has every table the edit pages read", {
+  description <- database_model_describe(test_connection) # a large reply, so read once for both
   expect_true(all(c(
     "registry", "staff", "draft", "edit_draft", "extracted_draft", "ai_extracted_draft", "pdf_file",
     "draft_review_event", "applied_item"
   ) %in% names(description$definitions)))
   expect_true("/rpc/approve_draft" %in% names(description$paths))
   expect_true("/rpc/send_back_draft" %in% names(description$paths))
+  # every table the edit pages read (database_tables, model_table.R) is in the database, with every column listed
+  for (table in names(database_tables)) {
+    expect_true(table %in% names(description$definitions), info = paste("the database has no table", table))
+    expect_true(
+      all(names(database_tables[[table]]$columns) %in% names(description$definitions[[table]]$properties)),
+      info = paste("a column of", table, "isn't in the database")
+    )
+    expect_true(all(database_tables[[table]]$key %in% names(database_tables[[table]]$columns)), info = table)
+  }
 })
 
 test_that("MATR_DATABASE picks the live or the test database, and says what's wrong with anything else", {

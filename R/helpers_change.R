@@ -5,14 +5,11 @@
 # The most rows drawn; a delete can reach thousands.
 change_rows_shown <- 150
 
-#' The rows an edit touches.
-#'
-#' A change shows the old value struck through and the new one highlighted, an add shows
-#' what is put in and a removal what is taken out.
-#'
-#' @param groups The rows an edit touches, from `change_service_groups()`.
-#' @param limit The most rows to draw.
-#' @return A UI element.
+# The rows an edit touches.
+# A change shows the old value struck through and the new one highlighted, an add shows
+# what is put in and a removal what is taken out.
+# groups: The rows an edit touches, from `change_service_groups()`.
+# limit: The most rows to draw.
 change_items_ui <- function(groups, limit = change_rows_shown) {
   if (length(groups) == 0) {
     return(p(class = "form-text", "No fields are listed for this edit."))

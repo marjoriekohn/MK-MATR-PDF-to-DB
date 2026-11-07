@@ -20,7 +20,6 @@ test_that("a proposal is saved, numbered by the database, and read back as it wa
   made <- wave_rename(me)
   expect_null(made$record$id)
   saved <- edit_model_save(test_connection, made$record, me$staff_id)
-  withr::defer(test_delete("draft", list(draft_id = database_eq(saved$id))))
 
   expect_match(saved$id, "^[0-9]+$")
   expect_equal(saved$prepared_by, me$name)
@@ -50,7 +49,6 @@ test_that("saving again changes the proposal, raises its revision, and doesn't a
   me <- local_staff()
   made <- wave_rename(me)
   saved <- edit_model_save(test_connection, made$record, me$staff_id)
-  withr::defer(test_delete("draft", list(draft_id = database_eq(saved$id))))
 
   sent <- utils::modifyList(saved, list(status = "Awaiting Review", expected_revision = saved$revision))
   again <- edit_model_save(test_connection, sent, me$staff_id)
@@ -93,7 +91,12 @@ test_that("every proposal is read, newest first, and extractions are not among t
   first <- local_edit(me)
   second <- local_edit(me)
   extraction <- local_extraction(me)
+  before <- test_requests$count
   records <- edit_service_get_all(test_connection)
+  expect_equal(test_requests$count - before, 1L) # the drafts and their details in one request
+  before <- test_requests$count
+  expect_equal(edit_model_get(test_connection, first$id), records[[first$id]])
+  expect_equal(test_requests$count - before, 1L)
   ours <- names(records)[names(records) %in% c(first$id, second$id)]
   expect_equal(ours, c(second$id, first$id))
   expect_false(extraction$id %in% names(records))
@@ -131,7 +134,6 @@ test_that("a delete's reach is saved with the proposal", {
   record <- edit_service_record(me, list(action = "delete", entity = "questionnaire", scope = "", target = key, values = list()), built, "Draft")
   expect_equal(record$reach$rows_removed, built$plan$reach$total)
   saved <- edit_model_save(test_connection, record, me$staff_id)
-  withr::defer(test_delete("draft", list(draft_id = database_eq(saved$id))))
   back <- edit_model_get(test_connection, saved$id)
   expect_equal(back$reach$rows_removed, built$plan$reach$total)
   # the row picked, which is all the history keeps once it is applied
@@ -145,7 +147,6 @@ test_that("an unfinished form is saved as typed, without items", {
   built <- list(summary = "Unfinished: update a wave", items = NULL)
   record <- edit_service_record(me, list(action = "update", entity = "wave", values = list(wave__name = "R")), built, "Draft")
   saved <- edit_model_save(test_connection, record, me$staff_id)
-  withr::defer(test_delete("draft", list(draft_id = database_eq(saved$id))))
   back <- edit_model_get(test_connection, saved$id)
   expect_equal(NROW(back$items), 0)
   expect_equal(back$form$values$wave__name, "R")
@@ -164,7 +165,6 @@ test_that("a request for a reviewer is kept with the proposal", {
   record <- sample_edit(me, local_respondent_type(), status = "Awaiting Review")
   record$requested_reviewer <- list(id = colleague$staff_id)
   saved <- edit_model_save(test_connection, record, me$staff_id)
-  withr::defer(test_delete("draft", list(draft_id = database_eq(saved$id))))
   expect_equal(saved$requested_reviewer, list(id = colleague$staff_id, name = colleague$name))
 })
 

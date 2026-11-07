@@ -2,14 +2,11 @@
 # (service_edit_kinds.R).
 
 # ------ PDFs ---------------------------------------------------------------------------------------------
-#' What PDFs were uploaded as.
-#'
-#' A PDF is kept once by its SHA-256, however many times it is uploaded and under whatever names.
-#'
-#' @param snap The tables the kind needs, as `edit_service_load()` reads them: a list of data frames named after the tables.
-#' @param hashes PDFs' SHA-256s.
-#' @return One string per PDF: its names joined by " / ", or "PDF" and the start of its hash if no draft or wave
-#'   names it.
+# What PDFs were uploaded as.
+# A PDF is kept once by its SHA-256, however many times it is uploaded and under whatever names.
+# hashes: PDFs' SHA-256s.
+# Returns: One string per PDF: its names joined by " / ", or "PDF" and the start of its hash if no draft or wave
+#   names it.
 edit_pdf_names <- function(snap, hashes) {
   drafts <- snap$extracted_draft
   waves <- snap$wave_file

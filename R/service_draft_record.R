@@ -36,14 +36,13 @@ review_edit_fields <- list(
 )
 review_edit_items <- c(components = "block", variables = "variable", response_options = "choice")
 
-#' How a reviewed copy of a questionnaire differs from what the AI returned.
-#'
-#' @param original The draft loaded from what the AI returned (`draft_service_from_json(ai_original)`):
-#'   its rows' refs are their ids.
-#' @param reviewed The reviewed copy, as the Edit Extraction page has it; see the top of
-#'   `service_draft.R`.
-#' @return A list with one entry for each thing that differs (see the top of this file); empty if
-#'   nothing does.
+# How a reviewed copy of a questionnaire differs from what the AI returned.
+# original: The draft loaded from what the AI returned (`draft_service_from_json(ai_original)`):
+#   its rows' refs are their ids.
+# reviewed: The reviewed copy, as the Edit Extraction page has it; see the top of
+#   `service_draft.R`.
+# Returns: A list with one entry for each thing that differs (see the top of this file); empty if
+#   nothing does.
 draft_service_review_edits <- function(original, reviewed) {
   entry <- function(change, item, ref, where, field = NULL, before = NULL, after = NULL) {
     list(change = change, item = item, ref = ref, where = where, field = field, before = before, after = after)
@@ -94,16 +93,14 @@ draft_service_review_edits <- function(original, reviewed) {
   edits
 }
 
-#' The blocks of a reviewed copy that differ from what the AI returned, for the outline's "Changed from
-#' AI" filter.
-#'
-#' A block is changed when it was added, when a field the accuracy record compares differs, or when one of
-#' its variables or choices was added, taken out or has such a field that differs. Moves don't count: a
-#' block moved is the same block, somewhere else.
-#'
-#' @param original The draft loaded from what the AI returned, or `NULL` (a draft typed by hand).
-#' @param reviewed The draft as the Edit Extraction page has it.
-#' @return The changed blocks' ids, or `NULL` when there is nothing to compare with.
+# The blocks of a reviewed copy that differ from what the AI returned, for the outline's "Changed from
+# AI" filter.
+# A block is changed when it was added, when a field the accuracy record compares differs, or when one of
+# its variables or choices was added, taken out or has such a field that differs. Moves don't count: a
+# block moved is the same block, somewhere else.
+# original: The draft loaded from what the AI returned, or `NULL` (a draft typed by hand).
+# reviewed: The draft as the Edit Extraction page has it.
+# Returns: The changed blocks' ids, or `NULL` when there is nothing to compare with.
 draft_service_changed_blocks <- function(original, reviewed) {
   if (is.null(original)) {
     return(NULL)

@@ -1,7 +1,4 @@
-#' The Extraction Drafts page: every extraction draft whose change request isn't submitted yet, a card each.
-#'
-#' @param id The module's id.
-#' @return The page's UI.
+# The Extraction Drafts page: every extraction draft whose change request isn't submitted yet, a card each.
 extraction_drafts_page_ui <- function(id) {
   div(
     class = "page extraction-page drafts-page",
@@ -10,10 +7,7 @@ extraction_drafts_page_ui <- function(id) {
   )
 }
 
-#' The list of drafts on the Extraction Drafts page: whose to list, what the dots mean, and a card each.
-#'
-#' @param id The module's id.
-#' @return A UI element.
+# The list of drafts on the Extraction Drafts page: whose to list, what the dots mean, and a card each.
 extraction_drafts_ui <- function(id) {
   ns <- NS(id)
   div(
@@ -37,12 +31,10 @@ progress_key <- function() {
   )
 }
 
-#' "Mine (1)" and "Everyone's (3)": whose drafts are listed.
-#'
-#' @param input_id The input's id; its value is `"mine"` or `"everyone"`.
-#' @param whose The one picked now.
-#' @param n_mine,n_everyone The counts shown on the buttons.
-#' @return A UI element.
+# "Mine (1)" and "Everyone's (3)": whose drafts are listed.
+# input_id: The input's id; its value is `"mine"` or `"everyone"`.
+# whose: The one picked now.
+# n_mine,n_everyone: The counts shown on the buttons.
 whose_buttons <- function(input_id, whose, n_mine, n_everyone) {
   choices <- c("mine", "everyone")
   names(choices) <- c(sprintf("Mine (%d)", n_mine), sprintf("Everyone's (%d)", n_everyone))
@@ -50,18 +42,12 @@ whose_buttons <- function(input_id, whose, n_mine, n_everyone) {
 }
 
 # ------ One card per draft ---------------------------------------------------------
-#' One card for a draft.
-#'
-#' Whose it is is said the same way on every card, from who started it: "Yours", or their name. While
-#' someone else is working on it (`draft_row_service_editor()`), it says so, and Continue gives way to
-#' Take over: only one person at a time works on a draft.
-#'
-#' @param record An extraction record.
-#' @param draft The questionnaire it read, or `NULL` until reading has finished.
-#' @param catalog The live tables the pages pick from, from `questionnaire_service_get_catalog()`.
-#' @param me Who is using the site: `list(staff_id, name)`.
-#' @param now The time now, which says whether someone's claim on it has lapsed.
-#' @return A UI element.
+# One card for a draft.
+# Whose it is is said the same way on every card, from who started it: "Yours", or their name. While
+# someone else is working on it (`draft_row_service_editor()`), it says so, and Continue gives way to
+# Take over: only one person at a time works on a draft.
+# draft: The questionnaire it read, or `NULL` until reading has finished.
+# now: The time now, which says whether someone's claim on it has lapsed.
 draft_card <- function(record, draft, catalog, me, now = Sys.time()) {
   mine <- draft_row_service_is_mine(record, me)
   editor <- draft_row_service_editor(record, me, now)
@@ -75,7 +61,7 @@ draft_card <- function(record, draft, catalog, me, now = Sys.time()) {
       class = "list-card-body",
       div(
         class = "list-card-title-row",
-        h2(class = "list-card-title", extraction_service_title(record, catalog, draft$questionnaire)),
+        h2(class = "list-card-title", extraction_service_title(record, catalog)),
         row_badge(if (mine) "Yours" else draft_row_service_preparer(record), class = if (mine) "is-mine"),
         if (!is.null(sent_back)) row_badge("Sent back", class = "is-warning"),
         if (identical(record$method, extraction_manual)) row_badge("Typed by hand"),
@@ -133,10 +119,8 @@ draft_meta <- function(record, me) {
   paste(pieces[has_text(pieces)], collapse = " · ")
 }
 
-#' What is shown when there are no drafts.
-#'
-#' @param whose `"mine"` or `"everyone"`.
-#' @return A UI element.
+# What is shown when there are no drafts.
+# whose: `"mine"` or `"everyone"`.
 no_drafts <- function(whose) {
   div(
     class = "list-card is-empty",

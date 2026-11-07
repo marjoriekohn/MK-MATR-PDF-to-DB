@@ -8,10 +8,7 @@
 # (the DT package): it can be searched, and downloaded as a CSV. A change request shows it before it is
 # submitted and while it waits for a reviewer to approve it.
 
-#' A draft's questionnaire, laid out to read as a table.
-#'
-#' @param draft A draft: `list(questionnaire, components, variables, response_options)`; see the top of `service_draft.R`.
-#' @return A UI element.
+# A draft's questionnaire, laid out to read as a table.
 questionnaire_preview_ui <- function(draft) {
   if (nrow(draft$components) == 0) {
     return(p(class = "form-text", "This questionnaire has no blocks."))
@@ -66,17 +63,14 @@ preview_file_name <- function(draft) {
   gsub("[^A-Za-z0-9_-]+", "_", trimws(name))
 }
 
-#' The rows of the questionnaire's table, in printed order.
-#'
-#' A question has a row for each of its variables (or one, saying it has none); any other block that isn't a
-#' section or group has one row. A group that skips has a last row saying so (kind "Skip"). Each row names
-#' the sections and groups it is in.
-#'
-#' @param draft A draft.
-#' @return A data frame: `section` (e.g. "PART B. YOUR HABITS › Group 1", or "" at the top level),
-#'   `kind`, `matr_id` (NA when there is none), `missing` ("no MATR ID", "no variables" or ""), `text`,
-#'   `tags` ("[Lifetime] [Siblings]", or "") and `coding` (a list of lines: "1 = Yes", or the write-in's kind of
-#'   answer).
+# The rows of the questionnaire's table, in printed order.
+# A question has a row for each of its variables (or one, saying it has none); any other block that isn't a
+# section or group has one row. A group that skips has a last row saying so (kind "Skip"). Each row names
+# the sections and groups it is in.
+# Returns: A data frame: `section` (e.g. "PART B. YOUR HABITS › Group 1", or "" at the top level),
+#   `kind`, `matr_id` (NA when there is none), `missing` ("no MATR ID", "no variables" or ""), `text`,
+#   `tags` ("[Lifetime] [Siblings]", or "") and `coding` (a list of lines: "1 = Yes", or the write-in's kind of
+#   answer).
 questionnaire_preview_rows <- function(draft) {
   rows <- list()
   add <- function(section, kind, matr_id = NA_character_, missing = "", text = "", tags = "", coding = character()) {
@@ -194,19 +188,17 @@ preview_coding <- function(box, draft) {
 # questionnaire before the request is submitted, and Change Requests the whole of it while it waits for
 # a reviewer.
 
-#' What an extraction's change request comes to, laid out to read.
-#'
-#' @param preview A list: `what` (a list of cards, from `extraction_service_request_preview()`),
-#'   `summary` (a sentence), `problem` (why it can't be added, or `NULL`) and `unchecked` (how many
-#'   blocks haven't been marked as checked). Any can be left out.
-#' @param draft The questionnaire, or `NULL` if it couldn't be read.
-#' @param pdf_url The address of its PDF, or `NULL`.
-#' @param basic_info The Basic Info form, to show first, or `NULL`.
-#' @param table Where the questionnaire's table goes, in place of drawing it here: a `uiOutput()` the page draws
-#'   it in once the dialog is open (a DataTables table put in a dialog as it opens stays empty). `NULL` draws it.
-#' @param questionnaire Whether to show the questionnaire (its table, its PDF and how much of it is checked).
-#'   Change Requests' Basic Info dialog leaves it to the request's Preview.
-#' @return A UI element.
+# What an extraction's change request comes to, laid out to read.
+# preview: A list: `what` (a list of cards, from `extraction_service_request_preview()`),
+#   `summary` (a sentence), `problem` (why it can't be added, or `NULL`) and `unchecked` (how many
+#   blocks haven't been marked as checked). Any can be left out.
+# draft: The questionnaire, or `NULL` if it couldn't be read.
+# pdf_url: The address of its PDF, or `NULL`.
+# basic_info: The Basic Info form, to show first, or `NULL`.
+# table: Where the questionnaire's table goes, in place of drawing it here: a `uiOutput()` the page draws
+#   it in once the dialog is open (a DataTables table put in a dialog as it opens stays empty). `NULL` draws it.
+# questionnaire: Whether to show the questionnaire (its table, its PDF and how much of it is checked).
+#   Change Requests' Basic Info dialog leaves it to the request's Preview.
 extraction_request_ui <- function(preview, draft, pdf_url = NULL, basic_info = NULL, table = NULL, questionnaire = TRUE) {
   div(
     class = "request-preview",
@@ -242,10 +234,8 @@ extraction_request_ui <- function(preview, draft, pdf_url = NULL, basic_info = N
   )
 }
 
-#' One card of a change request: a row that is there, or a NEW one, the way Make an edit shows a row.
-#'
-#' @param card A list: `kind` (e.g. `"Study"`), `title`, `subtitle`, `facts` (short notes) and `is_new`.
-#' @return A UI element.
+# One card of a change request: a row that is there, or a NEW one, the way Make an edit shows a row.
+# card: A list: `kind` (e.g. `"Study"`), `title`, `subtitle`, `facts` (short notes) and `is_new`.
 request_card_ui <- function(card) {
   div(
     class = c("edit-card", "request-card", if (isTRUE(card$is_new)) "is-new", if (isTRUE(card$is_missing)) "is-missing"),
@@ -257,12 +247,11 @@ request_card_ui <- function(card) {
   )
 }
 
-#' Each row the cards count, a list for each card to open, in the order of their words: which are added and which
-#' are already in the database and pointed at again, and how often each is used. A group has no words, so it isn't
-#' listed.
-#'
-#' @param cards The cards, from `extraction_service_what_cards()`; those with no `rows` are left out.
-#' @return A UI element, or `NULL` if no card has rows.
+# Each row the cards count, a list for each card to open, in the order of their words: which are added and which
+# are already in the database and pointed at again, and how often each is used. A group has no words, so it isn't
+# listed.
+# cards: The cards, from `extraction_service_what_cards()`; those with no `rows` are left out.
+# Returns: A UI element, or `NULL` if no card has rows.
 request_rows_ui <- function(cards) {
   cards <- Filter(function(card) NROW(card$rows) > 0, cards)
   if (length(cards) == 0) {
@@ -310,9 +299,7 @@ request_rows_ui <- function(cards) {
   )
 }
 
-#' The mark on a card for a row the request adds: a certificate with NEW on it.
-#'
-#' @return A UI element.
+# The mark on a card for a row the request adds: a certificate with NEW on it.
 new_badge <- function() {
   span(
     class = "new-badge", role = "img", `aria-label` = "New: this request adds it",

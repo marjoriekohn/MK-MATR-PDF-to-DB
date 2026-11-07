@@ -3,29 +3,19 @@
 # it. Shiny runs a session's code one piece at a time, so nothing changes it while something else is reading it; it
 # isn't made to be shared between threads or sessions, and shouldn't be.
 
-#' The form that says where an extraction goes (its Basic Info): its registry, study, questionnaire and wave.
-#'
-#' Four drop-downs, each holding what is in the one before it; the wave drop-down offers the
-#' questionnaire's waves that ask no questions yet. Each ends with "+ Add new …": picking it opens the
-#' pop-up that adds one (`quick_add_server()`), applied at once like any add, and the new row is picked
-#' when the pop-up closes. Saving is up to the page. The drop-downs and checks use `catalog`, the live
-#' tables as they were when the session started or when something was last added.
-#'
-#' The form is in the Change Requests dialog, and the pop-up takes the dialog's place, so `reopen` is
-#' called to put the dialog back, with what was in the form, when the pop-up closes.
-#'
-#' @param id The module's id.
-#' @param catalog The live tables the pages pick from, as `server.R` shares them: `get()` reads them
-#'   (`questionnaire_service_get_catalog()`) and `refresh()` reads them again.
-#' @param extractions The extraction drafts as `server.R` shares them: `all()` is a reactive list
-#'   of records, and `changed()` tells it this session changed one.
-#' @param record_id A reactive: the draft the form is about, so the wave check doesn't count it as a clash.
-#' @param me Who is using the site: `list(staff_id, name, role)`.
-#' @param connection The MATR database, `list(url, key)`; see `model_database.R`.
-#' @param reopen A function that shows the dialog the form is in again, or `NULL` if it isn't in one.
-#' @return A list: `info` (what the form holds, as `extraction_service_basic_info()` shapes it),
-#'   `missing` (the drop-downs still blank), `problems` (what to fix, by field) and `show`, a function
-#'   that fills the form from a draft's record (or anything with an `info`), or empties it for `NULL`.
+# The form that says where an extraction goes (its Basic Info): its registry, study, questionnaire and wave.
+# Four drop-downs, each holding what is in the one before it; the wave drop-down offers the
+# questionnaire's waves that ask no questions yet. Each ends with "+ Add new …": picking it opens the
+# pop-up that adds one (`quick_add_server()`), applied at once like any add, and the new row is picked
+# when the pop-up closes. Saving is up to the page. The drop-downs and checks use `catalog`, the live
+# tables as they were when the session started or when something was last added.
+# The form is in the Change Requests dialog, and the pop-up takes the dialog's place, so `reopen` is
+# called to put the dialog back, with what was in the form, when the pop-up closes.
+# record_id: A reactive: the draft the form is about, so the wave check doesn't count it as a clash.
+# reopen: A function that shows the dialog the form is in again, or `NULL` if it isn't in one.
+# Returns: A list: `info` (what the form holds, as `extraction_service_basic_info()` shapes it),
+#   `missing` (the drop-downs still blank), `problems` (what to fix, by field) and `show`, a function
+#   that fills the form from a draft's record (or anything with an `info`), or empties it for `NULL`.
 extraction_info_server <- function(
   id,
   catalog,

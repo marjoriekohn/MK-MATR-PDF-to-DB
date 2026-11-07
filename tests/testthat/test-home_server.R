@@ -65,12 +65,15 @@ test_that("waiting for you are the requests you can approve, with Review; one yo
   colleague <- local_staff()
   theirs <- local_edit(colleague, status = "Awaiting Review")
   mine <- local_edit(me, status = "Awaiting Review")
+  # the page and the test see one read of what is waiting: other runs of the tests send and remove requests meanwhile
+  snapshot <- change_request_service_waiting(test_connection)
+  local_stub("change_request_service_waiting", function(connection) snapshot)
   page <- home_args(me)
   shiny::testServer(home_server, args = page$args, {
     errors <- collect_errors(session)
     ids <- vapply(requests()$shown, function(record) record$id, character(1))
     expect_false(mine$id %in% ids)
-    waiting <- change_request_service_filter(change_request_service_waiting(test_connection), me, "me")
+    waiting <- change_request_service_filter(snapshot, me, "me")
     expect_equal(requests()$total, length(waiting))
     expect_true(theirs$id %in% names(waiting))
     if (theirs$id %in% ids) expect_match(text_of(output$requests), paste("Sent by", colleague$name))
@@ -96,18 +99,23 @@ test_that("recent changes are the newest applied, and their button says how many
 
 test_that("coming back to the page reads its lists again", {
   me <- local_staff()
-  colleague <- local_staff()
   active <- shiny::reactiveVal(TRUE)
-  here <- environment() # rows made inside the session are removed when this test ends
+  # the reads of what is waiting are counted (not what they find: other runs of the tests send requests meanwhile)
+  reads <- 0L
+  real <- local_stub("change_request_service_waiting", function(connection) {
+    reads <<- reads + 1L
+    real(connection)
+  })
   shiny::testServer(home_server, args = home_args(me, active = active)$args, {
     session$flushReact() # the page's observers start (an observer's first run is its start-up)
-    before <- requests()$total
-    local_edit(colleague, status = "Awaiting Review", env = here)
-    expect_equal(requests()$total, before) # nothing has asked yet
+    before <- reads
+    expect_gt(before, 0)
+    session$flushReact()
+    expect_equal(reads, before) # nothing has asked yet
     active(FALSE)
     active(TRUE)
     session$flushReact()
-    expect_equal(requests()$total, before + 1)
+    expect_gt(reads, before)
   })
 })
 

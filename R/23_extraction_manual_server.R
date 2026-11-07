@@ -1,16 +1,7 @@
-#' The Manual mode of the Extraction page: the server.
-#'
-#' Staff optionally add the PDF, and start: the draft is made with an empty questionnaire and opens on
-#' the Edit Extraction page, with every field there to fill in. Where it goes in the database (its Basic
-#' Info) is filled in later, on Change Requests, once its change request is submitted. Nothing here adds to the MATR metadata database itself.
-#'
-#' @param id The module's id.
-#' @param extractions The extraction drafts as `server.R` shares them: `all()` is a reactive list
-#'   of records, and `changed()` tells it this session changed one.
-#' @param connection The MATR database, `list(url, key)`; see `model_database.R`.
-#' @param me Who is using the site: `list(staff_id, name, role)`.
-#' @param open_edit_extraction A function taking a record and opening it on the Edit Extraction page.
-#' @return Called for its effect.
+# The Manual mode of the Extraction page: the server.
+# Staff optionally add the PDF, and start: the draft is made with an empty questionnaire and opens on
+# the Edit Extraction page, with every field there to fill in. Where it goes in the database (its Basic
+# Info) is filled in later, on Change Requests, once its change request is submitted. Nothing here adds to the MATR metadata database itself.
 extraction_manual_server <- function(
   id,
   extractions,
@@ -28,13 +19,7 @@ extraction_manual_server <- function(
     observeEvent(input$remove_pdf, upload(NULL))
 
     observeEvent(input$start, {
-      record <- tryCatch(
-        extraction_service_create_manual(connection, me, upload = upload()),
-        error = function(problem) {
-          show_problem(problem, "Couldn't start it", type = "warning")
-          NULL
-        }
-      )
+      record <- try_showing(extraction_service_create_manual(connection, me, upload = upload()), "Couldn't start it", type = "warning")
       if (is.null(record)) {
         return()
       }

@@ -6,14 +6,11 @@
 #   data-action  a click sends the element's data-* values to the module's `action`
 #   data-field   a change sends {table, id, field, value} to the module's `edit`
 
-#' The colored label for a kind of block.
-#'
-#' Used in outline rows and the details. A group is see-through with a gold border, like the box
-#' drawn around its blocks in the outline, so it can be told from a section. Blocks that aren't sections, groups or questions all look like Instruction, at its
-#' width, so the longer names are shortened.
-#'
-#' @param component_type The kind of block.
-#' @return A UI element.
+# The colored label for a kind of block.
+# Used in outline rows and the details. A group is see-through with a gold border, like the box
+# drawn around its blocks in the outline, so it can be told from a section. Blocks that aren't sections, groups or questions all look like Instruction, at its
+# width, so the longer names are shortened.
+# component_type: The kind of block.
 type_chip <- function(component_type) {
   kind <- switch(component_type,
     Section = "section",
@@ -35,25 +32,20 @@ type_chip <- function(component_type) {
   )
 }
 
-#' A small note at the end of a row, e.g. "5 items".
-#'
-#' @param ... The note.
-#' @param class Extra classes, e.g. `"is-warning"`.
-#' @return A UI element.
+# A small note at the end of a row, e.g. "5 items".
+# ...: The note.
+# class: Extra classes, e.g. `"is-warning"`.
 row_badge <- function(..., class = NULL) {
   span(class = c("row-badge", class), ...)
 }
 
-#' A button the page script reports to the module's `action` input.
-#'
-#' It sends its `data-*` values too, e.g. `review_button("Move up", "move", `data-id` = id)`.
-#'
-#' @param label The button's label.
-#' @param action What to report as `action`.
-#' @param ... More attributes, e.g. `data-id`.
-#' @param class The button's classes.
-#' @param disabled Whether it is disabled.
-#' @return A UI element.
+# A button the page script reports to the module's `action` input.
+# It sends its `data-*` values too, e.g. `review_button("Move up", "move", `data-id` = id)`.
+# label: The button's label.
+# action: What to report as `action`.
+# ...: More attributes, e.g. `data-id`.
+# class: The button's classes.
+# disabled: Whether it is disabled.
 review_button <- function(label, action, ..., class = "btn btn-sm btn-outline-dark",
                           disabled = FALSE) {
   tags$button(
@@ -62,12 +54,9 @@ review_button <- function(label, action, ..., class = "btn btn-sm btn-outline-da
   )
 }
 
-#' A short name for a block in sentences.
-#'
-#' For example "Drop here: inside section 3, after question 4".
-#'
-#' @param block One row of a draft's `components`.
-#' @return A string.
+# A short name for a block in sentences.
+# For example "Drop here: inside section 3, after question 4".
+# block: One row of a draft's `components`.
 block_label <- function(block) {
   switch(block$component_type,
     Section = if (is.na(block$text)) "the untitled section" else paste("section", shorten(block$text, 40)),
@@ -80,11 +69,9 @@ block_label <- function(block) {
   )
 }
 
-#' Cut text short.
-#'
-#' @param text A character vector; `NA` becomes empty.
-#' @param max_characters The most characters to keep, counting the `…` that marks a cut.
-#' @return A character vector.
+# Cut text short.
+# text: A character vector; `NA` becomes empty.
+# max_characters: The most characters to keep, counting the `…` that marks a cut.
 shorten <- function(text, max_characters) {
   text[is.na(text)] <- ""
   too_long <- nchar(text) > max_characters
@@ -127,17 +114,16 @@ field_problem_attributes <- function(problems, table, id, field) {
   list(`aria-invalid` = "true", title = paste(messages, collapse = "\n"))
 }
 
-#' A one-line text field of the Edit Extraction page.
-#'
-#' @param table The draft table the row is in.
-#' @param row One row of it, as a one-row data frame.
-#' @param field The column.
-#' @param placeholder Text shown while it is empty.
-#' @param list The id of a `suggestions()` list.
-#' @param type The input type.
-#' @param label Its name for screen readers, or `NULL`.
-#' @param problems The checks' problems, from `draft_service_check()`, to outline it if it is at fault.
-#' @return A UI element; its changes are reported through `data-field`.
+# A one-line text field of the Edit Extraction page.
+# table: The draft table the row is in.
+# row: One row of it, as a one-row data frame.
+# field: The column.
+# placeholder: Text shown while it is empty.
+# list: The id of a `suggestions()` list.
+# type: The input type.
+# label: Its name for screen readers, or `NULL`.
+# problems: The checks' problems, from `draft_service_check()`, to outline it if it is at fault.
+# Returns: A UI element; its changes are reported through `data-field`.
 field_text <- function(table, row, field, placeholder = NULL, list = NULL,
                        type = "text", label = NULL, problems = NULL) {
   tags$input(
@@ -148,16 +134,12 @@ field_text <- function(table, row, field, placeholder = NULL, list = NULL,
   )
 }
 
-#' A drop-down of the Edit Extraction page.
-#'
-#' A value that isn't one of the choices still shows, marked, so nothing changes silently.
-#'
-#' @param choices The choices; a named vector shows the names.
-#' @param blank The empty choice's text, offered when the field is optional or has no value yet: it says
-#'   what the field holds.
-#' @param optional Whether the field may be left empty.
-#' @inheritParams field_text
-#' @return A UI element.
+# A drop-down of the Edit Extraction page.
+# A value that isn't one of the choices still shows, marked, so nothing changes silently.
+# choices: The choices; a named vector shows the names.
+# blank: The empty choice's text, offered when the field is optional or has no value yet: it says
+#   what the field holds.
+# optional: Whether the field may be left empty.
 field_select <- function(table, row, field, choices, blank = "Pick one…",
                          optional = FALSE, label = NULL, problems = NULL) {
   value <- row[[field]]
@@ -178,28 +160,11 @@ field_select <- function(table, row, field, choices, blank = "Pick one…",
   )
 }
 
-#' Side-by-side buttons that pick one value, e.g. Choices / Write-in.
-#'
-#' A `toggle_buttons()`, small to suit the panel.
-#'
-#' @param choices Maps each label to the value it stores.
-#' @param label Names the group for screen readers.
-#' @inheritParams field_text
-#' @return A UI element.
-field_toggle <- function(table, row, field, choices, label) {
-  toggle_buttons(
-    paste(row$id, field, sep = "-"), choices, as.character(row[[field]]), label,
-    attributes = field_attributes(table, row, field), small = TRUE
-  )
-}
-
-#' Suggestions a text field offers as you type.
-#'
-#' The field still accepts new words.
-#'
-#' @param id The list's id, which the field names as its `list`.
-#' @param values The suggestions.
-#' @return A `datalist`.
+# Suggestions a text field offers as you type.
+# The field still accepts new words.
+# id: The list's id, which the field names as its `list`.
+# values: The suggestions.
+# Returns: A `datalist`.
 suggestions <- function(id, values) {
   tags$datalist(id = id, lapply(values, function(value) tags$option(value = value)))
 }

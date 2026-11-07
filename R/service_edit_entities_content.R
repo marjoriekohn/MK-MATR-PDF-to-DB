@@ -51,23 +51,17 @@ component_type_entity <- list(
 edit_core_types <- c("Section", "Question", "Group", "Grid")
 
 # ------ Printed content: shared by every questionnaire that prints it ------------------------------
-#' Whether components are questions.
-#'
-#' A component is kept once and any number of questionnaires place it. A question is a
-#' component of the kind Question that also has a question row.
-#'
-#' @param snap The tables the kind needs, as `edit_service_load()` reads them: a list of data frames named after the tables.
-#' @param component_ids Component ids.
-#' @return A logical vector.
+# Whether components are questions.
+# A component is kept once and any number of questionnaires place it. A question is a
+# component of the kind Question that also has a question row.
+# component_ids: Component ids.
 edit_is_question <- function(snap, component_ids) {
   component_ids %in% snap$question$component_id
 }
 
-#' The id of a kind of block.
-#'
-#' @param snap The tables the kind needs, as `edit_service_load()` reads them: a list of data frames named after the tables.
-#' @param name The kind's name, e.g. `"Question"`.
-#' @return The `component_type_id`, or `NA` if there isn't exactly one.
+# The id of a kind of block.
+# name: The kind's name, e.g. `"Question"`.
+# Returns: The `component_type_id`, or `NA` if there isn't exactly one.
 edit_type_id <- function(snap, name) {
   id <- snap$component_type$component_type_id[snap$component_type$name == name]
   if (length(id) == 1) id else NA_real_

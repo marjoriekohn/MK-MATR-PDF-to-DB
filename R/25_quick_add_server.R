@@ -1,20 +1,15 @@
-#' The pop-ups that add a row from inside a Basic Info drop-down.
-#'
-#' A registry, study, questionnaire or wave that is missing from a drop-down can be added where staff are
-#' working. It is the Make an edit form for one row (`edit_change_server()`), and like any add it is
-#' applied at once for STAFF and ADMIN alike and written to the Edit History. What was typed is checked
-#' for something like it already there as it is typed; that is a warning, not a block. What a form
-#' needs that isn't there yet (a study's investigator, a questionnaire's respondent type;
-#' `edit_quick_needs`) can be added from its pop-up, which comes back with the new one picked.
-#'
-#' @param id The module's id.
-#' @param connection The MATR database, `list(url, key)`; see `model_database.R`.
-#' @param me Who is using the site: `list(staff_id, name, role)`.
-#' @param catalog The live tables the pages pick from, as `server.R` shares them: `get()` reads them and
-#'   `refresh()` reads them again.
-#' @return A list with `open`, a function taking a kind (one of `edit_quick_kinds`), `values` (what to
-#'   start the form with, by field id), `then` (a function called with the new row's key as text) and
-#'   `back` (a function that goes back to what was open before); it returns whether the pop-up opened.
+# The pop-ups that add a row from inside a Basic Info drop-down.
+# A registry, study, questionnaire or wave that is missing from a drop-down can be added where staff are
+# working. It is the Make an edit form for one row (`edit_change_server()`), and like any add it is
+# applied at once for STAFF and ADMIN alike and written to the Edit History. What was typed is checked
+# for something like it already there as it is typed; that is a warning, not a block. What a form
+# needs that isn't there yet (a study's investigator, a questionnaire's respondent type;
+# `edit_quick_needs`) can be added from its pop-up, which comes back with the new one picked.
+# catalog: The live tables the pages pick from, as `server.R` shares them: `get()` reads them and
+#   `refresh()` reads them again.
+# Returns: A list with `open`, a function taking a kind (one of `edit_quick_kinds`), `values` (what to
+#   start the form with, by field id), `then` (a function called with the new row's key as text) and
+#   `back` (a function that goes back to what was open before); it returns whether the pop-up opened.
 quick_add_server <- function(
   id,
   connection,
@@ -52,10 +47,7 @@ quick_add_server <- function(
     # ------ Opening -----------------------------------------------------------
     open <- function(key, values = list(), then = NULL, back = NULL) {
       kind_now <- edit_service_quick_entity(key)
-      tables <- tryCatch(edit_service_load(connection, kind_now), error = function(problem) {
-        show_problem(problem, "Couldn't open the form")
-        NULL
-      })
+      tables <- try_showing(edit_service_load(connection, kind_now), "Couldn't open the form")
       if (is.null(tables)) {
         return(invisible(FALSE))
       }
@@ -130,12 +122,9 @@ quick_add_server <- function(
     observeEvent(input$add, {
       req(change$ready(), !adding())
       adding(TRUE)
-      result <- tryCatch(
+      result <- try_showing(
         edit_service_quick_add(connection, entity(), snapshot(), change$fields(), change$values(), me),
-        error = function(problem) {
-          show_problem(problem, "Couldn't add it")
-          NULL
-        }
+        "Couldn't add it"
       )
       adding(FALSE)
       if (is.null(result)) {

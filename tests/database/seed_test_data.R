@@ -89,11 +89,10 @@ none_to_four <- c("0" = "None", "1" = "1", "2" = "2", "3" = "3", "4" = "4 or mor
 risk <- c("0" = "No risk", "1" = "Slight risk", "2" = "Moderate risk", "3" = "Great risk", "4" = "Don't know")
 twin_type <- c("1" = "Identical", "2" = "Fraternal", "3" = "Not sure")
 
-#' The reviewed questionnaire JSON (schema 2, as the Edit Extraction page saves it) for blocks written
-#' with the functions above.
-#'
-#' @param blocks The top-level blocks.
-#' @return The JSON as nested lists, for `draft_service_from_json()`.
+# The reviewed questionnaire JSON (schema 2, as the Edit Extraction page saves it) for blocks written
+# with the functions above.
+# blocks: The top-level blocks.
+# Returns: The JSON as nested lists, for `draft_service_from_json()`.
 questionnaire_json <- function(blocks) {
   # every block in printed order, to number them first
   flat <- list()

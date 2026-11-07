@@ -20,12 +20,10 @@ test_auth <- function() auth_model_connection(test_connection$url, test_publisha
 # never a real one.
 test_password <- function() paste0("Zz!", paste(sample(c(letters, LETTERS, 0:9), 20, replace = TRUE), collapse = ""))
 
-#' A sign-in account for the test, removed when the test ends.
-#'
-#' @param email Its email; a marked one by default.
-#' @param password Its password.
-#' @param env The test's environment.
-#' @return A list: `id`, `email` and `password`.
+# A sign-in account for the test, removed when the test ends.
+# email: Its email; a marked one by default.
+# password: Its password.
+# Returns: A list: `id`, `email` and `password`.
 local_auth_user <- function(email = sprintf("%s-auth-%d@example.test", tolower(test_marker), test_counter()),
                             password = test_password(), env = parent.frame()) {
   id <- auth_model_admin_create_user(test_connection, email, password)
@@ -33,10 +31,9 @@ local_auth_user <- function(email = sprintf("%s-auth-%d@example.test", tolower(t
   list(id = id, email = email, password = password)
 }
 
-#' The tokens of a throwaway account, as a sign-in link would bring them back.
-#'
-#' @param account From `local_auth_user()`.
-#' @return A list: `access_token` and `refresh_token`.
+# The tokens of a throwaway account, as a sign-in link would bring them back.
+# account: From `local_auth_user()`.
+# Returns: A list: `access_token` and `refresh_token`.
 test_sign_in <- function(account) {
   body <- auth_model_sign_in(test_auth(), account$email, account$password)
   list(access_token = body$access_token, refresh_token = body$refresh_token)

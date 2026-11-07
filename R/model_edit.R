@@ -29,53 +29,35 @@ edit_item_columns <- c(
   "attribute_name", "old_value", "new_value"
 )
 
-#' Every edit proposal still being prepared or waiting for approval (not applied or withdrawn).
-#'
-#' @param connection The MATR database, `list(url, key)`; see `model_database.R`.
-#' @return A list of proposal records, newest saved first, named by id; see the top of this
-#'   file for what a record holds.
-edit_model_get_all <- function(connection) {
-  edit_model_records(connection)
+# What a proposal's record reads of edit_draft.
+edit_detail_columns <- c("edit_kind", "form", "reach", "items")
+
+# Every edit proposal still being prepared or waiting for approval (not applied or withdrawn).
+# Returns: A list of proposal records, newest saved first, named by id; see the top of this
+#   file for what a record holds.
+edit_model_get_all <- function(connection, status = NULL) {
+  draft_row_model_records(connection, edit_draft_kind, edit_draft_table, edit_detail_columns, edit_model_record, status)
 }
 
-# The records of the edit drafts, only those with this status if given.
-edit_model_records <- function(connection, status = NULL) {
-  parents <- draft_row_model_list(connection, edit_draft_kind, status)
-  ids <- vapply(parents, function(row) as.character(row$draft_id), character(1))
-  details <- draft_row_model_details(connection, edit_draft_table, ids, c("edit_kind", "form", "reach", "items"))
-  records <- lapply(Filter(function(row) !is.null(details[[as.character(row$draft_id)]]), parents), function(row) {
-    edit_model_record(row, details[[as.character(row$draft_id)]])
-  })
-  stats::setNames(records, vapply(records, function(record) record$id, character(1)))
-}
-
-#' One edit proposal.
-#'
-#' @param connection The MATR database, `list(url, key)`; see `model_database.R`.
-#' @param id The proposal's id.
-#' @return The record, as in `edit_model_get_all()`. An error if there is none.
+# One edit proposal.
+# id: The proposal's id.
+# Returns: The record, as in `edit_model_get_all()`. An error if there is none.
 edit_model_get <- function(connection, id) {
-  gone <- "That edit is no longer in the database."
-  parent <- draft_row_model_get(connection, id)
-  if (is.null(parent) || !identical(parent$kind, edit_draft_kind)) stop(gone, call. = FALSE)
-  detail <- draft_row_model_details(connection, edit_draft_table, id, c("edit_kind", "form", "reach", "items"))[[as.character(id)]]
-  if (is.null(detail)) stop(gone, call. = FALSE)
-  edit_model_record(parent, detail)
+  draft_row_model_one(
+    connection, id, edit_draft_kind, edit_draft_table, edit_detail_columns, edit_model_record,
+    "That edit is no longer in the database."
+  )
 }
 
-#' Save an edit proposal.
-#'
-#' Added if it has no id yet; otherwise the row it names is changed, as the person saving it.
-#' The database numbers a new one and raises the revision of a changed one.
-#'
-#' @param connection The MATR database, `list(url, key)`; see `model_database.R`.
-#' @param record A proposal record, as in `edit_model_get_all()`; `id` is `NULL` for a new one.
-#'   `expected_revision`, if it has one, is the revision the person was looking at: the save is
-#'   refused if someone else has saved since.
-#' @param staff_id The staff id of the person saving.
-#' @param new_revision `FALSE` for a change that isn't to the content (withdrawing).
-#' @return The record as saved, with its id. An error with the database's sentence if it refused.
-#'   A record saved with the status Awaiting Review is submitted: the database records when, and by whom.
+# Save an edit proposal.
+# Added if it has no id yet; otherwise the row it names is changed, as the person saving it.
+# The database numbers a new one and raises the revision of a changed one.
+# record: A proposal record, as in `edit_model_get_all()`; `id` is `NULL` for a new one.
+#   `expected_revision`, if it has one, is the revision the person was looking at: the save is
+#   refused if someone else has saved since.
+# new_revision: `FALSE` for a change that isn't to the content (withdrawing).
+# Returns: The record as saved, with its id. An error with the database's sentence if it refused.
+#   A record saved with the status Awaiting Review is submitted: the database records when, and by whom.
 edit_model_save <- function(connection, record, staff_id = record$prepared_by_id, new_revision = TRUE) {
   parent <- list(status = record$status, summary = record$summary)
   parent["requested_reviewer"] <- list(record$requested_reviewer$id)
@@ -113,25 +95,11 @@ edit_model_record <- function(parent, detail) {
   )
   items <- content$items
   if (is.data.frame(items) && all(edit_item_columns %in% names(items))) items <- items[edit_item_columns]
-  list(
-    id = as.character(parent$draft_id),
+  c(draft_row_record(parent), list(
     kind = edit_draft_kind,
     edit_kind = detail$edit_kind,
-    status = parent$status,
-    prepared_by = parent$preparer$name,
-    prepared_by_id = parent$prepared_by,
-    started = database_time(parent$created_at),
-    saved = database_time(parent$saved_at),
-    saved_by = parent$saver$name,
-    saved_by_id = parent$saved_by,
-    submitted = draft_row_submitted(parent),
-    submitted_exact = draft_row_submitted_exact(parent),
-    revision = parent$revision,
-    summary = parent$summary,
-    requested_reviewer = draft_row_person(parent$requested_reviewer, parent$reviewer),
-    sent_back = draft_row_sent_back(parent),
     form = content$form,
     reach = content$reach,
     items = items
-  )
+  ))
 }

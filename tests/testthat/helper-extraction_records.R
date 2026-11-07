@@ -86,16 +86,13 @@ picked_basic_info <- function(tree, questionnaire_id = tree$questionnaire$questi
   )
 }
 
-#' A questionnaire pushed to the database by an ADMIN, so it is recorded with its blocks and MATR IDs.
-#'
-#' What the push added is removed when the test ends, and the applied draft with its staff (see helper-00_realdb.R).
-#'
-#' @param admin An ADMIN, from `local_staff("ADMIN")`.
-#' @param tree The registry and study it goes in, from `local_tree()`.
-#' @param draft The questionnaire; `test_questionnaire_draft()` by default.
-#' @param env The test's environment.
-#' @return A list: `questionnaire_id` (as text), `draft`, `typed` (its Basic Info), `id` (the extraction draft's)
-#'   and `history_id` (the applied draft's, as text).
+# A questionnaire pushed to the database by an ADMIN, so it is recorded with its blocks and MATR IDs.
+# What the push added is removed when the test ends, and the applied draft with its staff (see helper-00_realdb.R).
+# admin: An ADMIN, from `local_staff("ADMIN")`.
+# tree: The registry and study it goes in, from `local_tree()`.
+# draft: The questionnaire; `test_questionnaire_draft()` by default.
+# Returns: A list: `questionnaire_id` (as text), `draft`, `typed` (its Basic Info), `id` (the extraction draft's)
+#   and `history_id` (the applied draft's, as text).
 local_pushed_questionnaire <- function(admin, tree, draft = test_questionnaire_draft(), env = parent.frame()) {
   typed <- picked_basic_info(tree)
   record <- extraction_service_create_manual(test_connection, admin, extraction_service_info(list(info = typed)))
@@ -110,4 +107,20 @@ local_pushed_questionnaire <- function(admin, tree, draft = test_questionnaire_d
 # Manual extraction, which keeps none.
 review_edits_of <- function(connection, id) {
   draft_model_detail(connection, id, character(), "review_edits")$ai$review_edits %||% list()
+}
+
+# A questionnaire pushed once for a test file and shared by its tests that only read it.
+# A push is some forty requests. It goes into a tree of its own (not shared_tree(), whose questionnaire other tests
+# read as empty), by an ADMIN of its own: a pooled one's drafts, the applied one among them, are removed after each
+# test. All of it is removed when the file ends. A test that changes what was pushed pushes its own.
+# Returns: As `local_pushed_questionnaire()`, with the `tree` it went into.
+shared_pushed_questionnaire <- function(env = parent.frame()) {
+  if (!is_test_body(env)) {
+    return(local_pushed_questionnaire(local_staff("ADMIN", env = env), local_tree(env = env), env = env))
+  }
+  file_shared(env, "pushed", function(file_env) {
+    tree <- local_tree(env = file_env)
+    pushed <- local_pushed_questionnaire(new_staff("ADMIN", TRUE, NULL, env = file_env), tree, env = file_env)
+    c(pushed, list(tree = tree))
+  })
 }

@@ -1,17 +1,6 @@
 # The edit pages read whole tables. Each is listed in database_tables with its columns and what kind of
-# value each holds; this checks the list against the real database.
-
-test_that("every table the edit pages read is in the database, with every column listed", {
-  description <- database_model_describe(test_connection)$definitions
-  for (table in names(database_tables)) {
-    expect_true(table %in% names(description), info = paste("the database has no table", table))
-    expect_true(
-      all(names(database_tables[[table]]$columns) %in% names(description[[table]]$properties)),
-      info = paste("a column of", table, "isn't in the database")
-    )
-    expect_true(all(database_tables[[table]]$key %in% names(database_tables[[table]]$columns)), info = table)
-  }
-})
+# value each holds; these check it against the real database. (That every listed table and column is in the
+# database is checked in test-model_database.R, with the one read of the database's description.)
 
 test_that("columns come back as the kinds the table lists, and a null is NA", {
   type <- local_respondent_type(minimum_age = 5, maximum_age = NULL)

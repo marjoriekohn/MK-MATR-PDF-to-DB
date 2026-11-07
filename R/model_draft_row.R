@@ -8,7 +8,8 @@
 #                       also has an AI_EXTRACTED_DRAFT row, and its PDF is a PDF_FILE row
 #   EDIT_DRAFT          an edit made on Make an edit (kind "Edit")
 # Each time it is submitted for review, sent back or approved is a DRAFT_REVIEW_EVENT row: who,
-# which revision, when, and a send back's note. A draft is read with its events.
+# which revision, when, and a send back's note. A draft is read with its events, and with its details:
+# one request for one draft or a list of them (draft_row_model_records(), draft_row_model_one()).
 # extraction_model_* and edit_model_* turn the rows into the records the services work
 # with. Anything that changes several tables at once is a function of the database called
 # through /rpc/ (create_draft, save_draft, send_back_draft, apply_draft, approve_draft;
@@ -37,36 +38,69 @@ draft_columns <- c(
 # and the finished ones only grow in number (the database keeps every applied draft as its record).
 draft_closed_statuses <- c("Applied", "Withdrawn")
 
-# The drafts of one kind still being prepared or waiting, newest saved first; only those with this status,
-# if given. (One finished with is read on its own: draft_row_model_get().)
-draft_row_model_list <- function(connection, kind, status = NULL) {
-  database_model_select(
-    connection, draft_table, draft_columns,
+# The records of the drafts of one kind still being prepared or waiting, read with their details in one request.
+# A draft whose detail row is missing is left out. (One finished with is read on its own: draft_row_model_one().)
+# kind: `"Extraction"` or `"Edit"`.
+# table: The kind's detail table: `extracted_draft_table` or `edit_draft_table`.
+# columns: The columns of it to read.
+# record: A function of a draft's shared row and its detail row, giving its record.
+# Returns: A list of records, newest saved first, named by id.
+draft_row_model_records <- function(connection, kind, table, columns, record, status = NULL) {
+  rows <- database_model_select(
+    connection, draft_table, c(draft_columns, draft_row_detail(table, columns)),
     order_by = c("saved_at.desc", "draft_id.desc"),
     filters = c(
       list(kind = database_eq(kind)),
       list(status = if (!is.null(status)) database_eq(status) else paste0("not.", database_in(draft_closed_statuses)))
     )
   )
+  rows <- Filter(function(row) !is.null(draft_row_one(row$detail)), rows)
+  records <- lapply(rows, function(row) record(row, draft_row_one(row$detail)))
+  stats::setNames(records, vapply(records, function(found) found$id, character(1)))
 }
 
-#' One draft's shared row.
-#'
-#' @param connection The MATR database, `list(url, key)`; see `model_database.R`.
-#' @param id The draft's id: digits only.
-#' @return The row as a list, or `NULL` if there is no such draft.
-draft_row_model_get <- function(connection, id) {
-  rows <- database_model_select(connection, draft_table, draft_columns, filters = draft_row_filter(id))
-  if (length(rows) > 0) rows[[1]]
+# One draft's record, read with its details in one request.
+# id: The draft's id: digits only.
+# gone: What to say if there is no such draft of this kind.
+# Returns: The record. An error saying `gone` if there is none.
+draft_row_model_one <- function(connection, id, kind, table, columns, record, gone) {
+  rows <- database_model_select(
+    connection, draft_table, c(draft_columns, draft_row_detail(table, columns)),
+    filters = c(draft_row_filter(id), list(kind = database_eq(kind)))
+  )
+  detail <- if (length(rows) > 0) draft_row_one(rows[[1]]$detail)
+  if (is.null(detail)) stop(gone, call. = FALSE)
+  record(rows[[1]], detail)
 }
 
-#' The detail rows of some drafts.
-#'
-#' @param connection The MATR database, `list(url, key)`; see `model_database.R`.
-#' @param table `extracted_draft_table` or `edit_draft_table`.
-#' @param ids The drafts' ids; digits only. None reads none.
-#' @param columns The columns to read; `draft_id` is always among them.
-#' @return A list of rows (lists), named by draft id.
+# A draft's detail row as the read of its shared row embeds it: `detail`.
+draft_row_detail <- function(table, columns) sprintf("detail:%s(%s)", table, paste(columns, collapse = ","))
+
+# What every draft's record has, from its shared row; see the tops of model_edit.R and model_extraction.R.
+draft_row_record <- function(parent) {
+  list(
+    id = as.character(parent$draft_id),
+    status = parent$status,
+    summary = parent$summary,
+    prepared_by = parent$preparer$name,
+    prepared_by_id = parent$prepared_by,
+    started = database_time(parent$created_at),
+    saved = database_time(parent$saved_at),
+    saved_by = parent$saver$name,
+    saved_by_id = parent$saved_by,
+    revision = parent$revision,
+    submitted = draft_row_submitted(parent),
+    submitted_exact = draft_row_submitted_exact(parent),
+    requested_reviewer = draft_row_person(parent$requested_reviewer, parent$reviewer),
+    sent_back = draft_row_sent_back(parent)
+  )
+}
+
+# The detail rows of some drafts.
+# table: `extracted_draft_table` or `edit_draft_table`.
+# ids: The drafts' ids; digits only. None reads none.
+# columns: The columns to read; `draft_id` is always among them.
+# Returns: A list of rows (lists), named by draft id.
 draft_row_model_details <- function(connection, table, ids, columns) {
   if (length(ids) == 0) {
     return(list())
@@ -78,17 +112,14 @@ draft_row_model_details <- function(connection, table, ids, columns) {
   stats::setNames(rows, vapply(rows, function(row) as.character(row$draft_id), character(1)))
 }
 
-#' Add a draft and its details.
-#'
-#' One database function, so a draft never exists without its details.
-#'
-#' @param connection The MATR database, `list(url, key)`; see `model_database.R`.
-#' @param kind `"Extraction"` or `"Edit"`.
-#' @param prepared_by The staff id of the person starting it.
-#' @param parent The shared columns to set, as a named list (`status`, `summary`,
-#'   `requested_reviewer`, `created_at`).
-#' @param detail The kind's own columns to set, as a named list.
-#' @return The new draft's id, as text.
+# Add a draft and its details.
+# One database function, so a draft never exists without its details.
+# kind: `"Extraction"` or `"Edit"`.
+# prepared_by: The staff id of the person starting it.
+# parent: The shared columns to set, as a named list (`status`, `summary`,
+#   `requested_reviewer`, `created_at`).
+# detail: The kind's own columns to set, as a named list.
+# Returns: The new draft's id, as text.
 draft_row_model_create <- function(connection, kind, prepared_by, parent = list(), detail = list()) {
   as.character(database_model_call(connection, "create_draft", list(
     p_kind = kind, p_prepared_by = as.numeric(prepared_by),
@@ -96,21 +127,16 @@ draft_row_model_create <- function(connection, kind, prepared_by, parent = list(
   )))
 }
 
-#' Save a change to a draft and its details together.
-#'
-#' Only the columns named are written. The database raises the revision unless told not to,
-#' and records who saved it, and who submitted it if the status becomes Awaiting Review. For an
-#' extraction, `detail` may name columns of extracted_draft, ai_extracted_draft and pdf_file
-#' (`pdf_pages`, `pdf_bytes`): the database puts each in its table.
-#'
-#' @param connection The MATR database, `list(url, key)`; see `model_database.R`.
-#' @param id The draft's id.
-#' @param staff_id The staff id of the person saving.
-#' @param parent,detail Named lists of columns to their new values; a `NULL` value empties the column.
-#' @param expected_revision The revision the person was looking at; the save is refused if
-#'   the draft has moved on. `NULL` skips the check.
-#' @param new_revision `FALSE` for a change that isn't to the content (withdrawing).
-#' @return The revision after the save. An error with the database's sentence if it refused.
+# Save a change to a draft and its details together.
+# Only the columns named are written. The database raises the revision unless told not to,
+# and records who saved it, and who submitted it if the status becomes Awaiting Review. For an
+# extraction, `detail` may name columns of extracted_draft, ai_extracted_draft and pdf_file
+# (`pdf_pages`, `pdf_bytes`): the database puts each in its table.
+# parent,detail: Named lists of columns to their new values; a `NULL` value empties the column.
+# expected_revision: The revision the person was looking at; the save is refused if
+#   the draft has moved on. `NULL` skips the check.
+# new_revision: `FALSE` for a change that isn't to the content (withdrawing).
+# Returns: The revision after the save. An error with the database's sentence if it refused.
 draft_row_model_save <- function(connection, id, staff_id, parent = list(), detail = list(),
                                  expected_revision = NULL, new_revision = TRUE) {
   arguments <- list(
@@ -122,20 +148,16 @@ draft_row_model_save <- function(connection, id, staff_id, parent = list(), deta
   as.integer(database_model_call(connection, "save_draft", arguments))
 }
 
-#' Claim a draft for one person to work on, or renew their claim.
-#'
-#' The database gives it to them if nobody has it, they have it already, or whoever has it hasn't
-#' renewed their claim for `stale_seconds` (their page is gone). `take_over` takes it whoever has it.
-#' Nothing here raises the revision.
-#'
-#' @param connection The MATR database, `list(url, key)`; see `model_database.R`.
-#' @param id The draft's id.
-#' @param staff_id The staff id of the person claiming it.
-#' @param take_over Whether to take it from whoever has it.
-#' @param stale_seconds How long a claim lasts without being renewed.
-#' @return A list: `claimed` (whether this person has it now), and who does have it: `by_id`, `by`
-#'   (their name) and `at` (when they last renewed it); and the draft's `revision`. An error with the
-#'   database's sentence if it refused (no such draft, or one finished with).
+# Claim a draft for one person to work on, or renew their claim.
+# The database gives it to them if nobody has it, they have it already, or whoever has it hasn't
+# renewed their claim for `stale_seconds` (their page is gone). `take_over` takes it whoever has it.
+# Nothing here raises the revision.
+# staff_id: The staff id of the person claiming it.
+# take_over: Whether to take it from whoever has it.
+# stale_seconds: How long a claim lasts without being renewed.
+# Returns: A list: `claimed` (whether this person has it now), and who does have it: `by_id`, `by`
+#   (their name) and `at` (when they last renewed it); and the draft's `revision`. An error with the
+#   database's sentence if it refused (no such draft, or one finished with).
 draft_row_model_claim <- function(connection, id, staff_id, take_over = FALSE, stale_seconds = 180) {
   claim <- database_model_call(connection, "claim_draft", list(
     p_draft_id = draft_row_number(id), p_staff_id = as.numeric(staff_id),
@@ -147,30 +169,23 @@ draft_row_model_claim <- function(connection, id, staff_id, take_over = FALSE, s
   )
 }
 
-#' Let go of a person's claim on a draft, if they still have it.
-#'
-#' @param connection The MATR database, `list(url, key)`; see `model_database.R`.
-#' @param id The draft's id.
-#' @param staff_id The staff id of the person letting it go.
-#' @return Whether they had it.
+# Let go of a person's claim on a draft, if they still have it.
+# staff_id: The staff id of the person letting it go.
+# Returns: Whether they had it.
 draft_row_model_release <- function(connection, id, staff_id) {
   isTRUE(database_model_call(connection, "release_draft", list(
     p_draft_id = draft_row_number(id), p_staff_id = as.numeric(staff_id)
   )))
 }
 
-#' Change columns of a detail row, only where it still matches.
-#'
-#' For the reading job, which changes its own columns while staff change others. Nothing here
-#' raises the revision.
-#'
-#' @param connection The MATR database, `list(url, key)`; see `model_database.R`.
-#' @param table `extracted_draft_table` or `edit_draft_table`.
-#' @param id The draft's id.
-#' @param changes A named list of columns to their new values.
-#' @param where More filters the row must match, such as the reading it was started for.
-#' @param select The columns to send back.
-#' @return The row as it is now, or `NULL` if no row matched, so the change didn't apply.
+# Change columns of a detail row, only where it still matches.
+# For the reading job, which changes its own columns while staff change others. Nothing here
+# raises the revision.
+# table: `extracted_draft_table` or `edit_draft_table`.
+# changes: A named list of columns to their new values.
+# where: More filters the row must match, such as the reading it was started for.
+# select: The columns to send back.
+# Returns: The row as it is now, or `NULL` if no row matched, so the change didn't apply.
 draft_row_model_update_detail <- function(connection, table, id, changes, where = list(), select = "draft_id") {
   rows <- database_model_update(
     connection, table, changes, filters = c(draft_row_filter(id), where), select = select
@@ -193,10 +208,9 @@ draft_row_object <- function(values) {
   if (length(values) == 0) structure(list(), names = character()) else values
 }
 
-#' A time from the database as the app writes times.
-#'
-#' @param text A timestamp as Postgres sends it, e.g. `"2026-09-29T14:03:22.5+00:00"`.
-#' @return The same moment in UTC as `format_time()` writes it, or `NULL` if `text` is `NULL`.
+# A time from the database as the app writes times.
+# text: A timestamp as Postgres sends it, e.g. `"2026-09-29T14:03:22.5+00:00"`.
+# Returns: The same moment in UTC as `format_time()` writes it, or `NULL` if `text` is `NULL`.
 database_time <- function(text) {
   if (!is.null(text)) format_time(parse_time(text))
 }
