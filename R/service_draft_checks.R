@@ -163,12 +163,19 @@ variable_problems <- function(draft, matr_ids = TRUE) {
   # a write-in's skip, the same way, and it says which answer skips
   box_place <- match(boxes$component_id, printed)
   # A question with several variables is a grid or battery: each row is labelled with its own words, so it can be
-  # found and told apart, but for a lone check box, whose one choice says what it records. Two rows can share
-  # words only when they are about different people ("Age" of Twin A and of Twin B).
+  # found and told apart, but for a lone check box, whose one choice says what it records, and a write-in whose unit
+  # does (feet and inches). Two rows can share words only when they are about different people ("Age" of Twin A
+  # and of Twin B), times (lifetime and the past 30 days) or units.
   label <- trimws(boxes$label)
   label[!nzchar(label)] <- NA
+  unit <- if (is.null(boxes$unit)) rep(NA_character_, nrow(boxes)) else boxes$unit
+  time_frame <- if (is.null(boxes$time_frame)) rep(NA_character_, nrow(boxes)) else boxes$time_frame
+  named <- !is.na(label) | (!is_choice_box & !is.na(unit))
   in_grid <- ave(seq_along(boxes$id), boxes$component_id, FUN = length) > 1
-  row_key <- ifelse(is.na(label), NA, paste(tolower(label), tolower(blank_respondent(boxes$subject)), sep = "\r"))
+  row_key <- ifelse(
+    !named, NA,
+    paste(tolower(label), tolower(unit), tolower(blank_respondent(boxes$subject)), tolower(time_frame), sep = "\r")
+  )
   box_names_a_place <- !is.na(boxes$skip_instruction) & (!is.na(skip_number(boxes$skip_instruction)) | !is.na(skip_section(boxes$skip_instruction)))
   rbind(
     box_problem(!is_choice_box & box_names_a_place & is.na(boxes$skip_to_id), "pick where it skips to.", "skip_to_id"),
@@ -184,7 +191,7 @@ variable_problems <- function(draft, matr_ids = TRUE) {
     ),
     box_problem(is_choice_box & n_choices < 1, "add its choices."), # BR99: a lone check box has one
     box_problem(
-      in_grid & is.na(label) & !(is_choice_box & n_choices == 1),
+      in_grid & !named & !(is_choice_box & n_choices == 1),
       "label it with its row's words, so it can be told apart from the question's other variables.", "label"
     ),
     box_problem(duplicated_within(row_key, boxes$component_id), "give it a label the question's other variables don't have.", "label"),
@@ -196,7 +203,7 @@ variable_problems <- function(draft, matr_ids = TRUE) {
     ),
     choice_problem(!is.na(choices$respondent_count) & choices$respondent_count < 0, "a count of respondents can't be below 0.", "respondent_count"),
     box_problem(!is_choice_box & is.na(boxes$answer_data_type), "pick the kind of answer it takes.", "answer_data_type"), # BR95
-    # About isn't checked: blank is the respondent, and a new subject is added when the extraction is applied
+    # The subject isn't checked: blank is the respondent, and a new subject is added when the extraction is applied
     if (matr_ids) box_problem(is.na(boxes$matr_id), "fill in its MATR ID.", "matr_id"), # every variable needs one before it is sent
     box_problem(
       duplicated_within(boxes$matr_id, "questionnaire"),

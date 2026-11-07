@@ -13,7 +13,10 @@
 #                   [subject] too ("describes [subject] very well"), so both share one set of choices. So can
 #                   questions that differ only in when they ask about ("... in your lifetime?", "... during the
 #                   last 12 months?"): their stem has [time frame] (time_frame_placeholder), and each variable is
-#                   about its question's time frame, written one way (normal_time_frame()).
+#                   about its question's time frame, written one way (normal_time_frame()). So can questions that
+#                   differ by pronoun ("how old is she?", "how old is he?": [subject]), or in one thing ("... to use
+#                   tobacco ...", "... to use alcohol ...": [item]); others, such as one reworded for another
+#                   person, are linked by hand with a stem staff type (normalize_service_link_by_hand()).
 #
 # Who a question can ask about is a subject the database has, or one a variable of the draft names, found in its
 # words as whole words, whatever their capitals ("Twin A"). The respondent isn't: they are a blank.
@@ -131,6 +134,33 @@ normalize_named <- function(texts, patterns) {
   })
 }
 
+# Pronouns for one person, by which they are: a question that uses one set only ("how old is she?") asks about
+# someone the same way another asks with the other ("how old is he?").
+normalize_pronouns <- list(
+  she = c("she", "her", "hers", "herself"),
+  he = c("he", "him", "his", "himself")
+)
+
+# Which set of pronouns some words use: "she" or "he", or NA for neither or both ("he or she", "s/he").
+normalize_pronoun_set <- function(texts) {
+  vapply(texts, function(text) {
+    words <- tolower(regmatches(text %||% "", gregexpr("[[:alpha:]]+", text %||% ""))[[1]])
+    used <- names(normalize_pronouns)[vapply(normalize_pronouns, function(set) any(words %in% set), logical(1))]
+    if (length(used) == 1 && !grepl("(?i)\\bs/he\\b", text, perl = TRUE)) used else NA_character_
+  }, character(1), USE.NAMES = FALSE)
+}
+
+# Words with the pronouns of one set as [subject].
+normalize_with_pronoun_placeholder <- function(text, set) {
+  gsub(paste0("(?i)\\b(", paste(normalize_pronouns[[set]], collapse = "|"), ")\\b"), subject_placeholder, text, perl = TRUE)
+}
+
+# Who a question's variables are about, when they agree on one (NA for the respondent or none).
+normalize_variables_subject <- function(draft, id) {
+  who <- unique(stats::na.omit(blank_respondent(draft$variables$subject[draft$variables$component_id %in% id])))
+  if (length(who) == 1) who else NA_character_
+}
+
 # Words with every mention of a subject as [subject].
 normalize_with_placeholder <- function(text, subject, patterns) {
   gsub(patterns[[subject]], subject_placeholder, text, perl = TRUE)
@@ -189,12 +219,14 @@ normalize_service_question_groups <- function(draft, subjects) {
   blocks <- draft$components[match(printed, draft$components$id), , drop = FALSE]
   named <- normalize_named(blocks$text, patterns)
   times <- normalize_time_frames_in(blocks$text)
+  pronouns <- normalize_pronoun_set(blocks$text)
   # a question naming two people compares them, and one naming two times asks about both: they are no one's
   is_question <- blocks$component_type %in% "Question" & !is.na(blocks$text) & lengths(named) <= 1
   stems <- rep(NA_character_, nrow(blocks))
   stems[is_question] <- vapply(which(is_question), function(i) {
     text <- blocks$text[i]
     if (length(named[[i]]) == 1) text <- normalize_with_placeholder(text, named[[i]], patterns)
+    if (!is.na(pronouns[i])) text <- normalize_with_pronoun_placeholder(text, pronouns[i])
     if (length(times[[i]]) == 1) text <- normalize_with_time_placeholder(text)
     text
   }, character(1))
@@ -207,19 +239,175 @@ normalize_service_question_groups <- function(draft, subjects) {
     stem <- stems[members[1]]
     timed <- grepl(time_frame_placeholder, stem, fixed = TRUE)
     who <- about[members]
-    if (!grepl(subject_placeholder, stem, fixed = TRUE) && !timed) {
+    if (grepl(subject_placeholder, stem, fixed = TRUE)) {
+      # a pronoun names no one: who it is comes from the question's variables, or the part it is in
+      for (k in which(is.na(who))) {
+        who[k] <- normalize_variables_subject(draft, blocks$id[members[k]])
+        if (is.na(who[k])) who[k] <- normalize_context_subject(draft, blocks, named, members[k])
+      }
+    } else if (!timed) {
       who <- vapply(members, function(i) normalize_context_subject(draft, blocks, named, i), character(1))
       if (anyNA(who)) next
     }
     times_of <- if (timed) when[members] else rep(NA_character_, length(members))
-    if (anyDuplicated(paste(tolower(who), times_of)) > 0) next
+    # each asks about someone else (or, by pronoun alone, another "she" or "he"), another time, or both
+    if (anyDuplicated(paste(ifelse(is.na(who), pronouns[members], tolower(who)), times_of)) > 0) next
+    # who a pronoun is isn't known for all of them: they are linked by their stem alone
+    if (anyNA(who)) who <- rep(NA_character_, length(who))
     ids <- blocks$id[members]
     groups[[length(groups) + 1]] <- list(
       stem = stem, ids = ids, subjects = who, time_frames = times_of,
       linked = all(push_words(draft$components$stem[match(ids, draft$components$id)]) == push_words(stem))
     )
   }
-  groups
+  groups <- c(groups, normalize_item_groups(draft, blocks, stems, unlist(lapply(groups, function(group) group$ids))))
+  c(groups, normalize_groups_by_hand(draft, blocks, unlist(lapply(groups, function(group) group$ids))))
+}
+
+# ------ Questions about different things ----------------------------------------------------------------------
+# Questions worded the same but for one run of up to four words ("tobacco", "alcohol", "marijuana or hashish"),
+# when what they share is at least five words and two thirds of each: shorter ones ("do you often feel lonely?",
+# "do you often feel tired?") only look alike. A grid's items differ by design, and aren't looked at.
+normalize_item_most_words <- 4
+normalize_item_least_shared <- 5
+
+# The groups of questions, not in `found`, that differ only in one thing: each with its stem ([item] for the thing),
+# its questions' ids in printed order, and the words each has for it (`items`). Their words are compared with who
+# and when they ask about as [subject] and [time frame] (`stems`), which have slots of their own.
+normalize_item_groups <- function(draft, blocks, stems, found) {
+  in_grid <- blocks$component_type[match(blocks$parent_id, blocks$id)] %in% "Grid"
+  candidates <- which(blocks$component_type %in% "Question" & !is.na(stems) & !blocks$id %in% found & !in_grid)
+  if (length(candidates) < 2) {
+    return(list())
+  }
+  words <- lapply(stems[candidates], normalize_tokens)
+  # only questions that start or end alike can be alike: compared in buckets, not every pair
+  firsts <- vapply(words, function(w) w[1], character(1))
+  lasts <- vapply(words, function(w) w[length(w)], character(1))
+  pairs <- unique(do.call(rbind, c(
+    lapply(split(seq_along(words), firsts), normalize_pairs_of),
+    lapply(split(seq_along(words), lasts), normalize_pairs_of)
+  )))
+  if (is.null(pairs) || nrow(pairs) == 0) {
+    return(list())
+  }
+  # each pair that is alike: the stem it shares, and each one's words for the thing
+  alike <- list()
+  for (k in seq_len(nrow(pairs))) {
+    found_stem <- normalize_item_stem(words[[pairs[k, 1]]], words[[pairs[k, 2]]])
+    if (is.null(found_stem)) next
+    for (side in 1:2) {
+      alike[[length(alike) + 1]] <- data.frame(stem = found_stem$stem, at = pairs[k, side], item = found_stem$items[side])
+    }
+  }
+  if (length(alike) == 0) {
+    return(list())
+  }
+  alike <- unique(do.call(rbind, alike))
+  # the biggest groups first; a question goes in one group only
+  sizes <- table(alike$stem)
+  taken <- integer()
+  groups <- list()
+  for (stem in names(sort(sizes, decreasing = TRUE))) {
+    members <- alike[alike$stem == stem & !alike$at %in% taken, , drop = FALSE]
+    members <- members[order(candidates[members$at]), , drop = FALSE]
+    if (nrow(members) < 2 || anyDuplicated(members$item) > 0) next
+    taken <- c(taken, members$at)
+    ids <- blocks$id[candidates[members$at]]
+    # the thing is who they ask about when their variables say so, each someone else: that is [subject]
+    who <- vapply(ids, function(id) normalize_variables_subject(draft, id), character(1), USE.NAMES = FALSE)
+    people <- !anyNA(who) && anyDuplicated(tolower(who)) == 0
+    if (people) stem <- sub(item_placeholder, subject_placeholder, stem, fixed = TRUE)
+    groups[[length(groups) + 1]] <- list(
+      stem = stem, ids = ids, subjects = if (people) who else rep(NA_character_, length(ids)),
+      time_frames = rep(NA_character_, length(ids)), items = members$item,
+      linked = all(push_words(draft$components$stem[match(ids, draft$components$id)]) == push_words(stem))
+    )
+  }
+  groups[order(vapply(groups, function(group) match(group$ids[1], blocks$id), numeric(1)))]
+}
+
+# Words as compared: each word, each mark of punctuation, and each [placeholder] whole.
+normalize_tokens <- function(text) {
+  regmatches(tolower(text), gregexpr("\\[[a-z ]+\\]|[[:alnum:]'-]+|[^[:space:][:alnum:]]", tolower(text)))[[1]]
+}
+
+# Tokens as words again: a space between each, none before punctuation.
+normalize_untokens <- function(tokens) gsub(" ([?.,:;!)])", "\\1", gsub("\\( ", "(", paste(tokens, collapse = " ")))
+
+# Every pair of these, as a two-column matrix (none for fewer than two).
+normalize_pairs_of <- function(at) {
+  if (length(at) < 2) {
+    return(NULL)
+  }
+  t(utils::combn(at, 2))
+}
+
+# The stem two questions' words share, with [item] for the one run of words where they differ, and each one's words
+# there; NULL when they aren't alike that way.
+normalize_item_stem <- function(a, b) {
+  shortest <- min(length(a), length(b))
+  before <- 0
+  while (before < shortest && a[before + 1] == b[before + 1]) before <- before + 1
+  after <- 0
+  while (after < shortest - before && a[length(a) - after] == b[length(b) - after]) after <- after + 1
+  shared <- before + after
+  differ <- c(length(a), length(b)) - shared
+  # what they share is counted in words, not punctuation
+  is_word <- function(tokens) sum(grepl("[[:alnum:]]", tokens))
+  shared_words <- is_word(a[seq_len(before)]) + is_word(if (after > 0) a[(length(a) - after + 1):length(a)])
+  if (any(differ < 1) || any(differ > normalize_item_most_words)) {
+    return(NULL)
+  }
+  if (shared_words < normalize_item_least_shared || shared_words < 2 / 3 * max(is_word(a), is_word(b))) {
+    return(NULL)
+  }
+  middle <- function(w) normalize_untokens(w[(before + 1):(length(w) - after)])
+  # a thing is named in words: "a" and "b", or "5" and "6", are labels, not things
+  if (!all(grepl("[[:alpha:]]{3,}", c(middle(a), middle(b))))) {
+    return(NULL)
+  }
+  list(
+    stem = normalize_untokens(c(a[seq_len(before)], item_placeholder, if (after > 0) a[(length(a) - after + 1):length(a)])),
+    items = c(middle(a), middle(b))
+  )
+}
+
+# The questions staff linked by hand (normalize_service_link_by_hand()) that aren't found above: those sharing a
+# stem, in printed order, listed as linked so they can be unlinked.
+normalize_groups_by_hand <- function(draft, blocks, found) {
+  stems <- push_words(blocks$stem)
+  shared <- unique(stems[nzchar(stems) & duplicated(stems) & !blocks$id %in% found])
+  lapply(shared, function(stem) {
+    ids <- blocks$id[stems == stem & !blocks$id %in% found]
+    list(
+      stem = blocks$stem[match(ids[1], blocks$id)], ids = ids, subjects = rep(NA_character_, length(ids)),
+      time_frames = rep(NA_character_, length(ids)), linked = TRUE
+    )
+  })
+}
+
+#' Link questions by hand: those reworded for another person ("What is your date of birth?", "What is the date of
+#' birth of the other biological parent?"), or that differ in any other way Normalize doesn't find.
+#'
+#' Each keeps its own words, number and variables, and gets the stem typed, in lower case (normal_text()).
+#'
+#' @param draft A draft: `list(questionnaire, components, variables, response_options)`; see the top of `service_draft.R`.
+#' @param numbers The questions' numbers, as the outline shows them ("B.1", "12").
+#' @param stem The words they share, with [subject] for who and [time frame] for when they ask about.
+#' @return The draft. An error with a sentence if a number is no question's, there are fewer than two, or the stem
+#'   is blank.
+normalize_service_link_by_hand <- function(draft, numbers, stem) {
+  numbers <- unique(trimws(numbers[nzchar(trimws(numbers))]))
+  if (length(numbers) < 2) stop("Name two or more questions to link, by their numbers.", call. = FALSE)
+  stem <- normal_text(trimws(stem %||% ""))
+  if (!nzchar(stem)) stop("Type the stem they share, with [subject] for who they ask about.", call. = FALSE)
+  questions <- draft$components[draft$components$component_type %in% "Question", , drop = FALSE]
+  shown <- draft_service_question_number(questions)
+  missing <- setdiff(numbers, shown)
+  if (length(missing) > 0) stop("No question is numbered ", paste(missing, collapse = ", "), ".", call. = FALSE)
+  draft$components$stem[draft$components$id %in% questions$id[shown %in% numbers]] <- stem
+  draft
 }
 
 # Who the part a block is in is about: the subject its innermost section's heading names, or failing that the one

@@ -257,3 +257,33 @@ test_that("who a variable is about and the form's words are written with straigh
   draft <- draft_service_update(gold_draft(), "variables", "v1", "subject", "Respondent’s Twin")
   expect_equal(draft$variables$subject[1], "Respondent's Twin")
 })
+
+test_that("a write-in's unit is written one way, kept with the draft, and changed like any field", {
+  expect_equal(
+    normal_unit(c("yrs.", "LBS", "oz", "Cigarettes per day", "Hrs", " ")),
+    c("years", "pounds", "ounces", "cigarettes per day", "hours", NA)
+  )
+  draft <- gold_draft()
+  box <- draft$variables$id[draft$variables$variable_type == "open_ended"][1]
+  draft <- draft_service_update(draft, "variables", box, "unit", "Lbs.")
+  expect_equal(draft$variables$unit[draft$variables$id == box], "pounds")
+  again <- draft_service_from_json(draft_service_to_json(draft))
+  expect_equal(again$variables$unit[again$variables$id == box], "pounds")
+})
+
+test_that("a section, grid or group can say who answers everything in it, and a question has its containers' too", {
+  draft <- gold_draft()
+  grid <- block_numbered(draft, "14a")$parent_id # "during the worst time:"
+  draft <- draft_service_update(draft, "components", grid, "condition", "Female")
+  expect_equal(component(draft, grid)$condition, "female")
+  again <- draft_service_from_json(draft_service_to_json(draft))
+  expect_equal(component(again, grid)$condition, "female")
+  # a question inside it is for whoever the grid is for, and keeps its own condition too
+  item <- block_numbered(draft, "14a")$id
+  expect_equal(draft_service_conditions(draft, item), "female")
+  draft <- draft_service_update(draft, "components", item, "condition", "If yes")
+  expect_equal(draft_service_conditions(draft, item), c("female", "if yes"))
+  # an instruction is for whoever its section or group is for: it has no condition of its own
+  instruction <- draft$components$id[draft$components$component_type == "Instruction"][1]
+  expect_error(draft_service_update(draft, "components", instruction, "condition", "Female"), "section, grid or group")
+})

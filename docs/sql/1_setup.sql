@@ -313,7 +313,9 @@ create table public.question (
 -- for "Has Twin A ever repeated a grade?" and "Has Twin B ever repeated a grade?". Each question keeps its own
 -- printed words, number and variables; [subject] is filled in with a variable's subject when the stem is shown.
 -- So do questions that differ only in when they ask about ("... in your lifetime?", "... during the last 12
--- months?"): "on how many occasions have you smoked cigarettes [time frame]?", filled in with a variable's time frame.
+-- months?"): "on how many occasions have you smoked cigarettes [time frame]?", filled in with a variable's time frame;
+-- and questions that differ only in one thing ("... to use tobacco ...", "... to use alcohol ..."), with [item]
+-- for it, which each question's own words say.
 -- One stem for each wording, but for runs of spaces: question_stem_text_unique, section 3.
 create table public.question_stem (
   question_stem_id bigint primary key default private.random_id('question_stem', 'question_stem_id'),
@@ -333,6 +335,9 @@ create table public.questionnaire_component (
   parent_placement_id bigint,            -- the Section or Group it is in, in the same questionnaire
   display_order       integer not null
     constraint questionnaire_component_display_order_check check (display_order > 0),
+  -- who answers everything in a Section, Grid or Group ("female" for "For Females Only", "complete this section
+  -- if: …"), so it isn't copied onto each question in it; a question's own condition is questionnaire_question's
+  condition           text,
   -- a Group can skip on the answers to the questions in it ("If you answered No to items 22a-d, go to Question 28")
   skip_condition      text,              -- the answer that skips ("No")
   skip_when           text               -- every question in the group gets it, or any
@@ -425,6 +430,9 @@ create table public.open_ended (
   variable_key     bigint primary key,                                   -- BR88, BR89
   answer_data_type text   not null                                       -- BR95
     constraint open_ended_answer_data_type_check check (answer_data_type in ('NUMBER', 'TEXT', 'DATE', 'TIME')),
+  -- the unit its number is written in, written one way (R/service_draft.R, normal_unit()): "years", "pounds"
+  unit             text
+    constraint open_ended_unit_written_one_way check (unit is null or (btrim(unit) <> '' and unit = lower(btrim(unit)))),
   skip_condition   text,                 -- the answer that skips ("None")
   skip_instruction text,                 -- the routing printed for it
   skip_to_placement_id bigint,           -- where it sends respondents
@@ -2518,8 +2526,9 @@ create constraint trigger question_is_a_question
 
 -- M3: where a questionnaire places a block, its parent is a Section, a Grid or a Group. A Section is never
 -- inside a Group or a Grid, and a Grid holds only its questions with their instructions and definitions: no
--- Section, Grid or Group. Only a Group or a Grid skips (on the answers to the questions in it). The site
--- keeps the same rules in can_hold() (R/service_draft.R).
+-- Section, Grid or Group. Only a Group or a Grid skips (on the answers to the questions in it), and only a
+-- Section, Grid or Group has a condition here (a question's is questionnaire_question's). The site keeps the same
+-- rules in can_hold() (R/service_draft.R) and draft_service_update() (R/service_draft_edit.R).
 create function private.placement_check(p_placement_id bigint)
 returns void
 language plpgsql
@@ -2531,11 +2540,13 @@ declare
   v_kind        text;
   v_parent_kind text;
   v_skips       boolean;
+  v_conditional boolean;
 begin
   select component_id, parent_placement_id,
          skip_condition is not null or skip_when is not null or skip_instruction is not null
-           or skip_to_placement_id is not null or skip_to_end
-    into v_component, v_parent, v_skips
+           or skip_to_placement_id is not null or skip_to_end,
+         condition is not null
+    into v_component, v_parent, v_skips, v_conditional
   from public.questionnaire_component
   where placement_id = p_placement_id;
   if not found then
@@ -2544,6 +2555,9 @@ begin
   v_kind := private.component_kind(v_component);
   if v_skips and v_kind is distinct from 'Group' and v_kind is distinct from 'Grid' then
     raise exception 'Placement % skips, but only a Group or a Grid skips on the answers to the questions in it.', p_placement_id;
+  end if;
+  if v_conditional and v_kind not in ('Section', 'Grid', 'Group') then
+    raise exception 'Placement % has a condition, but only a Section, Grid or Group says who answers everything in it (a question''s condition is its questionnaire_question''s).', p_placement_id;
   end if;
   if v_parent is null then
     return;
@@ -2974,6 +2988,7 @@ comment on column public.wave_file.supplement_text is 'That file''s text, when i
 comment on column public.questionnaire_component.placement_id is 'System key: this place in the questionnaire.';
 comment on column public.questionnaire_component.parent_placement_id is 'The placement of the Section or Group it is in. Empty at the top level.';
 comment on column public.questionnaire_component.display_order is 'Position among the placements sharing the same parent, counting from 1.';
+comment on column public.questionnaire_component.condition is 'Who answers everything in this Section, Grid or Group, e.g. "female" for "For Females Only". A question in it is for them, and for its own questionnaire_question.condition too. Empty for everyone, and for every other kind of block.';
 comment on column public.questionnaire_question.parent_question_placement_id is 'The placement of the question it follows (a follow-up, or one reached by routing). Empty when it follows none.';
 comment on column public.variable.placement_id is 'The placement of the question whose answer it records.';
 comment on column public.questionnaire_component.skip_condition is
@@ -2989,6 +3004,7 @@ comment on column public.questionnaire_component.skip_to_end is
 comment on column public.variable.variable_key is 'System key. Deliberately not "variable_id"; see matr_id.';
 comment on column public.variable.matr_id is 'What MATR staff call the variable ID, e.g. AH25LF. Unique within a questionnaire; never changes.';
 comment on column public.variable.subject_id is 'Who the variable is about (public.subject). Null when not known.';
+comment on column public.open_ended.unit is 'The unit the written answer is in, as printed by its box but written one way, e.g. "years", "pounds", "cigarettes per day". Null for words, dates and boxes with none printed.';
 comment on column public.variable.time_frame_id is 'When the variable''s answer is about (public.time_frame), e.g. "in the past 30 days". Null when its question names no time.';
 comment on column public.response_option.code_value is 'Stored value for this option in the response data, e.g. 1 for Yes.';
 comment on column public.response_option.skip_to_placement_id is
@@ -3114,12 +3130,15 @@ insert into public.component_type (name, description) values
   ('Definition',         'Printed explanation of a term used in the questionnaire.'),
   ('Interviewer Script', 'Text an interviewer reads aloud or follows.'),
   ('Note',               'Any other printed remark.'),
-  ('Group',              'Holds blocks that belong together but have no printed heading: a battery, a definition with its question, a question with its follow-up. Has no text, so there is one Group component, placed wherever a questionnaire groups blocks.'),
+  ('Group',              'Holds blocks that belong together but have no printed heading: questions with an instruction or definition only they share, or questions some routing skips together. A follow-up needs none: it names the question it follows. Has no text, so there is one Group component, placed wherever a questionnaire groups blocks.'),
   ('Grid',               'A lead-in its questions share, printed once above them (a table of rows, or a stem with several items): "In the past month, how often did you...". Holds those questions, each with only its own words, and any instruction or definition among them; a question''s full wording is the lead-in followed by its words. Questions that are whole without a lead-in go in a Group instead.');
 
 -- Who a variable can be about; staff keep this list on Make an edit.
+-- "Twins (compared)" is for a variable whose answer compares the twins ("Twin A much more … Twin B much more"):
+-- it is about both, not one, and a blank would mean the respondent.
 insert into public.subject (name) values
-  ('Respondent'), ('Respondent''s Family'), ('Respondent''s Children'), ('Respondent''s Siblings'), ('Twin A'), ('Twin B');
+  ('Respondent'), ('Respondent''s Family'), ('Respondent''s Children'), ('Respondent''s Siblings'), ('Twin A'), ('Twin B'),
+  ('Twins (compared)');
 
 -- When a variable can be about, as normal_time_frame() writes them; an extraction adds any other it finds.
 insert into public.time_frame (name) values
@@ -3292,6 +3311,8 @@ begin
   assert has_table_privilege('anon', 'public.subject', 'select'), 'the dashboard reads subject';
   assert not has_table_privilege('anon', 'public.subject', 'insert, update, delete'), 'but can''t change it';
   assert (select count(*) from pg_policies where tablename = 'subject' and policyname = 'Dashboard can read') = 1, 'with the one policy the other tables have';
+  -- a variable comparing the twins is about them both
+  assert exists (select 1 from public.subject where name = 'Twins (compared)'), 'there is a subject for comparing the twins';
   -- a subject's name has straight quotes
   perform pg_temp.expect_error($q$insert into public.subject (name) values ('ZZ Respondent’s Cousin')$q$, 'subject_name_straight_quotes');
   -- and time frames the same way
@@ -4136,7 +4157,8 @@ end;
 $$;
 
 -- M3 and M4 with a Grid: it has words (its lead-in), holds questions with their instructions and definitions,
--- and skips like a Group; a Section, Grid or Group never goes inside it, and a Section never inside a Group.
+-- and skips like a Group; a Section, Grid or Group never goes inside it, and a Section never inside a Group. A
+-- Section or Grid can say who answers everything in it; an Instruction can't.
 -- Everything here is undone at the end, so the checks after it see the data as it was.
 do $$
 declare
@@ -4193,6 +4215,13 @@ begin
     perform pg_temp.expect_error(format(
       'update public.questionnaire_component set skip_to_end = true where questionnaire_id = %s and component_id = %s', q, told_c),
       'only a Group or a Grid skips');
+    -- a section or grid can be for some respondents only (who answers everything in it); an instruction can't
+    update public.questionnaire_component set condition = 'female' where placement_id in (grid, pg_temp.id('section_a_place'));
+    assert (select count(*) from public.questionnaire_component where condition = 'female') = 2,
+      'a section and a grid say who answers everything in them';
+    perform pg_temp.expect_error(format(
+      'update public.questionnaire_component set condition = %L where questionnaire_id = %s and component_id = %s', 'female', q, told_c),
+      'only a Section, Grid or Group says who answers');
 
     insert into public.questionnaire_component (questionnaire_id, component_id, parent_placement_id, display_order)
       values (q, group_c, pg_temp.id('section_a_place'), 91) returning placement_id into grp;
@@ -4485,6 +4514,10 @@ begin
       from matr_keep.subject;
       get diagnostics n = row_count;
       raise notice 'Put back % subject(s).', n;
+      -- the subject for comparing the twins comes back even if the kept list predates it
+      insert into public.subject (name)
+      select 'Twins (compared)'
+      where not exists (select 1 from public.subject where lower(btrim(name)) = 'twins (compared)');
     end if;
   end if;
 

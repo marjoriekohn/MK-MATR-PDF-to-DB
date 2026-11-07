@@ -1219,6 +1219,7 @@
         {
           "variable_type": "closed_ended",
           "display_order": 1,
+          "time_frame": "in your lifetime",
           "response_options": [
             {
               "display_order": 1,
@@ -1386,8 +1387,8 @@
             {
               "variable_type": "open_ended",
               "display_order": 1,
-              "label": "cigarettes per day",
-              "answer_data_type": "NUMBER"
+              "answer_data_type": "NUMBER",
+              "unit": "cigarettes per day"
             }
           ]
         }
@@ -1471,8 +1472,8 @@
             {
               "variable_type": "open_ended",
               "display_order": 1,
-              "label": "drinks",
-              "answer_data_type": "NUMBER"
+              "answer_data_type": "NUMBER",
+              "unit": "drinks"
             }
           ]
         }
@@ -1751,6 +1752,7 @@
         {
           "variable_type": "closed_ended",
           "display_order": 1,
+          "time_frame": "in your lifetime",
           "response_options": [
             {
               "display_order": 1,
@@ -2116,8 +2118,9 @@
             {
               "variable_type": "open_ended",
               "display_order": 2,
-              "label": "age started (years)",
-              "answer_data_type": "NUMBER"
+              "label": "age started",
+              "answer_data_type": "NUMBER",
+              "unit": "years"
             },
             {
               "variable_type": "closed_ended",
@@ -2165,8 +2168,9 @@
             {
               "variable_type": "open_ended",
               "display_order": 2,
-              "label": "age started (years)",
-              "answer_data_type": "NUMBER"
+              "label": "age started",
+              "answer_data_type": "NUMBER",
+              "unit": "years"
             },
             {
               "variable_type": "closed_ended",
@@ -2214,8 +2218,9 @@
             {
               "variable_type": "open_ended",
               "display_order": 2,
-              "label": "age started (years)",
-              "answer_data_type": "NUMBER"
+              "label": "age started",
+              "answer_data_type": "NUMBER",
+              "unit": "years"
             },
             {
               "variable_type": "closed_ended",
@@ -2263,8 +2268,9 @@
             {
               "variable_type": "open_ended",
               "display_order": 2,
-              "label": "age started (years)",
-              "answer_data_type": "NUMBER"
+              "label": "age started",
+              "answer_data_type": "NUMBER",
+              "unit": "years"
             },
             {
               "variable_type": "closed_ended",
@@ -2312,8 +2318,9 @@
             {
               "variable_type": "open_ended",
               "display_order": 2,
-              "label": "age started (years)",
-              "answer_data_type": "NUMBER"
+              "label": "age started",
+              "answer_data_type": "NUMBER",
+              "unit": "years"
             },
             {
               "variable_type": "closed_ended",
@@ -2361,8 +2368,9 @@
             {
               "variable_type": "open_ended",
               "display_order": 2,
-              "label": "age started (years)",
-              "answer_data_type": "NUMBER"
+              "label": "age started",
+              "answer_data_type": "NUMBER",
+              "unit": "years"
             },
             {
               "variable_type": "closed_ended",
@@ -2410,8 +2418,9 @@
             {
               "variable_type": "open_ended",
               "display_order": 2,
-              "label": "age started (years)",
-              "answer_data_type": "NUMBER"
+              "label": "age started",
+              "answer_data_type": "NUMBER",
+              "unit": "years"
             },
             {
               "variable_type": "closed_ended",
@@ -2459,8 +2468,9 @@
             {
               "variable_type": "open_ended",
               "display_order": 2,
-              "label": "age started (years)",
-              "answer_data_type": "NUMBER"
+              "label": "age started",
+              "answer_data_type": "NUMBER",
+              "unit": "years"
             },
             {
               "variable_type": "closed_ended",
@@ -2508,8 +2518,9 @@
             {
               "variable_type": "open_ended",
               "display_order": 2,
-              "label": "age started (years)",
-              "answer_data_type": "NUMBER"
+              "label": "age started",
+              "answer_data_type": "NUMBER",
+              "unit": "years"
             },
             {
               "variable_type": "closed_ended",
@@ -2557,8 +2568,9 @@
             {
               "variable_type": "open_ended",
               "display_order": 2,
-              "label": "age started (years)",
-              "answer_data_type": "NUMBER"
+              "label": "age started",
+              "answer_data_type": "NUMBER",
+              "unit": "years"
             },
             {
               "variable_type": "closed_ended",
@@ -2606,8 +2618,9 @@
             {
               "variable_type": "open_ended",
               "display_order": 2,
-              "label": "age started (years)",
-              "answer_data_type": "NUMBER"
+              "label": "age started",
+              "answer_data_type": "NUMBER",
+              "unit": "years"
             },
             {
               "variable_type": "closed_ended",
@@ -2655,8 +2668,9 @@
             {
               "variable_type": "open_ended",
               "display_order": 2,
-              "label": "age started (years)",
-              "answer_data_type": "NUMBER"
+              "label": "age started",
+              "answer_data_type": "NUMBER",
+              "unit": "years"
             },
             {
               "variable_type": "closed_ended",
@@ -2704,8 +2718,9 @@
             {
               "variable_type": "open_ended",
               "display_order": 2,
-              "label": "age started (years)",
-              "answer_data_type": "NUMBER"
+              "label": "age started",
+              "answer_data_type": "NUMBER",
+              "unit": "years"
             },
             {
               "variable_type": "closed_ended",
@@ -2753,8 +2768,9 @@
             {
               "variable_type": "open_ended",
               "display_order": 2,
-              "label": "age started (years)",
-              "answer_data_type": "NUMBER"
+              "label": "age started",
+              "answer_data_type": "NUMBER",
+              "unit": "years"
             },
             {
               "variable_type": "closed_ended",
@@ -2802,8 +2818,9 @@
             {
               "variable_type": "open_ended",
               "display_order": 2,
-              "label": "age started (years)",
-              "answer_data_type": "NUMBER"
+              "label": "age started",
+              "answer_data_type": "NUMBER",
+              "unit": "years"
             },
             {
               "variable_type": "closed_ended",
@@ -2851,8 +2868,9 @@
             {
               "variable_type": "open_ended",
               "display_order": 2,
-              "label": "age started (years)",
-              "answer_data_type": "NUMBER"
+              "label": "age started",
+              "answer_data_type": "NUMBER",
+              "unit": "years"
             },
             {
               "variable_type": "closed_ended",
@@ -2900,8 +2918,9 @@
             {
               "variable_type": "open_ended",
               "display_order": 2,
-              "label": "age started (years)",
-              "answer_data_type": "NUMBER"
+              "label": "age started",
+              "answer_data_type": "NUMBER",
+              "unit": "years"
             },
             {
               "variable_type": "closed_ended",
@@ -2949,8 +2968,9 @@
             {
               "variable_type": "open_ended",
               "display_order": 2,
-              "label": "age started (years)",
-              "answer_data_type": "NUMBER"
+              "label": "age started",
+              "answer_data_type": "NUMBER",
+              "unit": "years"
             },
             {
               "variable_type": "closed_ended",
@@ -2998,8 +3018,9 @@
             {
               "variable_type": "open_ended",
               "display_order": 2,
-              "label": "age started (years)",
-              "answer_data_type": "NUMBER"
+              "label": "age started",
+              "answer_data_type": "NUMBER",
+              "unit": "years"
             },
             {
               "variable_type": "closed_ended",
@@ -3047,8 +3068,9 @@
             {
               "variable_type": "open_ended",
               "display_order": 2,
-              "label": "age started (years)",
-              "answer_data_type": "NUMBER"
+              "label": "age started",
+              "answer_data_type": "NUMBER",
+              "unit": "years"
             },
             {
               "variable_type": "closed_ended",
@@ -3096,8 +3118,9 @@
             {
               "variable_type": "open_ended",
               "display_order": 2,
-              "label": "age started (years)",
-              "answer_data_type": "NUMBER"
+              "label": "age started",
+              "answer_data_type": "NUMBER",
+              "unit": "years"
             },
             {
               "variable_type": "closed_ended",
@@ -3145,8 +3168,9 @@
             {
               "variable_type": "open_ended",
               "display_order": 2,
-              "label": "age started (years)",
-              "answer_data_type": "NUMBER"
+              "label": "age started",
+              "answer_data_type": "NUMBER",
+              "unit": "years"
             },
             {
               "variable_type": "closed_ended",
@@ -3194,8 +3218,9 @@
             {
               "variable_type": "open_ended",
               "display_order": 2,
-              "label": "age started (years)",
-              "answer_data_type": "NUMBER"
+              "label": "age started",
+              "answer_data_type": "NUMBER",
+              "unit": "years"
             },
             {
               "variable_type": "closed_ended",
@@ -3243,8 +3268,9 @@
             {
               "variable_type": "open_ended",
               "display_order": 2,
-              "label": "age started (years)",
-              "answer_data_type": "NUMBER"
+              "label": "age started",
+              "answer_data_type": "NUMBER",
+              "unit": "years"
             },
             {
               "variable_type": "closed_ended",
@@ -3292,8 +3318,9 @@
             {
               "variable_type": "open_ended",
               "display_order": 2,
-              "label": "age started (years)",
-              "answer_data_type": "NUMBER"
+              "label": "age started",
+              "answer_data_type": "NUMBER",
+              "unit": "years"
             },
             {
               "variable_type": "closed_ended",
@@ -3341,8 +3368,9 @@
             {
               "variable_type": "open_ended",
               "display_order": 2,
-              "label": "age started (years)",
-              "answer_data_type": "NUMBER"
+              "label": "age started",
+              "answer_data_type": "NUMBER",
+              "unit": "years"
             },
             {
               "variable_type": "closed_ended",
@@ -3390,8 +3418,9 @@
             {
               "variable_type": "open_ended",
               "display_order": 2,
-              "label": "age started (years)",
-              "answer_data_type": "NUMBER"
+              "label": "age started",
+              "answer_data_type": "NUMBER",
+              "unit": "years"
             },
             {
               "variable_type": "closed_ended",
@@ -3439,8 +3468,9 @@
             {
               "variable_type": "open_ended",
               "display_order": 2,
-              "label": "age started (years)",
-              "answer_data_type": "NUMBER"
+              "label": "age started",
+              "answer_data_type": "NUMBER",
+              "unit": "years"
             },
             {
               "variable_type": "closed_ended",
@@ -3488,8 +3518,9 @@
             {
               "variable_type": "open_ended",
               "display_order": 2,
-              "label": "age started (years)",
-              "answer_data_type": "NUMBER"
+              "label": "age started",
+              "answer_data_type": "NUMBER",
+              "unit": "years"
             },
             {
               "variable_type": "closed_ended",
@@ -3537,8 +3568,9 @@
             {
               "variable_type": "open_ended",
               "display_order": 2,
-              "label": "age started (years)",
-              "answer_data_type": "NUMBER"
+              "label": "age started",
+              "answer_data_type": "NUMBER",
+              "unit": "years"
             },
             {
               "variable_type": "closed_ended",
@@ -3586,8 +3618,9 @@
             {
               "variable_type": "open_ended",
               "display_order": 2,
-              "label": "age started (years)",
-              "answer_data_type": "NUMBER"
+              "label": "age started",
+              "answer_data_type": "NUMBER",
+              "unit": "years"
             },
             {
               "variable_type": "closed_ended",
@@ -3635,8 +3668,9 @@
             {
               "variable_type": "open_ended",
               "display_order": 2,
-              "label": "age started (years)",
-              "answer_data_type": "NUMBER"
+              "label": "age started",
+              "answer_data_type": "NUMBER",
+              "unit": "years"
             },
             {
               "variable_type": "closed_ended",
@@ -3684,8 +3718,9 @@
             {
               "variable_type": "open_ended",
               "display_order": 2,
-              "label": "age started (years)",
-              "answer_data_type": "NUMBER"
+              "label": "age started",
+              "answer_data_type": "NUMBER",
+              "unit": "years"
             },
             {
               "variable_type": "closed_ended",
@@ -3733,8 +3768,9 @@
             {
               "variable_type": "open_ended",
               "display_order": 2,
-              "label": "age started (years)",
-              "answer_data_type": "NUMBER"
+              "label": "age started",
+              "answer_data_type": "NUMBER",
+              "unit": "years"
             },
             {
               "variable_type": "closed_ended",
@@ -3782,8 +3818,9 @@
             {
               "variable_type": "open_ended",
               "display_order": 2,
-              "label": "age started (years)",
-              "answer_data_type": "NUMBER"
+              "label": "age started",
+              "answer_data_type": "NUMBER",
+              "unit": "years"
             },
             {
               "variable_type": "closed_ended",
@@ -3831,8 +3868,9 @@
             {
               "variable_type": "open_ended",
               "display_order": 2,
-              "label": "age started (years)",
-              "answer_data_type": "NUMBER"
+              "label": "age started",
+              "answer_data_type": "NUMBER",
+              "unit": "years"
             },
             {
               "variable_type": "closed_ended",
@@ -3880,8 +3918,9 @@
             {
               "variable_type": "open_ended",
               "display_order": 2,
-              "label": "age started (years)",
-              "answer_data_type": "NUMBER"
+              "label": "age started",
+              "answer_data_type": "NUMBER",
+              "unit": "years"
             },
             {
               "variable_type": "closed_ended",
@@ -3929,8 +3968,9 @@
             {
               "variable_type": "open_ended",
               "display_order": 2,
-              "label": "age started (years)",
-              "answer_data_type": "NUMBER"
+              "label": "age started",
+              "answer_data_type": "NUMBER",
+              "unit": "years"
             },
             {
               "variable_type": "closed_ended",
@@ -3978,8 +4018,9 @@
             {
               "variable_type": "open_ended",
               "display_order": 2,
-              "label": "age started (years)",
-              "answer_data_type": "NUMBER"
+              "label": "age started",
+              "answer_data_type": "NUMBER",
+              "unit": "years"
             },
             {
               "variable_type": "closed_ended",
@@ -4027,8 +4068,9 @@
             {
               "variable_type": "open_ended",
               "display_order": 2,
-              "label": "age started (years)",
-              "answer_data_type": "NUMBER"
+              "label": "age started",
+              "answer_data_type": "NUMBER",
+              "unit": "years"
             },
             {
               "variable_type": "closed_ended",
@@ -4076,8 +4118,9 @@
             {
               "variable_type": "open_ended",
               "display_order": 2,
-              "label": "age started (years)",
-              "answer_data_type": "NUMBER"
+              "label": "age started",
+              "answer_data_type": "NUMBER",
+              "unit": "years"
             },
             {
               "variable_type": "closed_ended",
@@ -4121,40 +4164,40 @@
       ]
     },
     {
-      "component_type": "Group",
+      "component_type": "Question",
       "display_order": 16,
-      "children": [
+      "text": "have you ever taken any medications regularly, including over-the-counter medications?",
+      "printed_number": "17",
+      "self_contained": true,
+      "variables": [
         {
-          "component_type": "Question",
+          "variable_type": "closed_ended",
           "display_order": 1,
-          "text": "have you ever taken any medications regularly, including over-the-counter medications?",
-          "printed_number": "17",
-          "self_contained": true,
-          "variables": [
+          "response_options": [
             {
-              "variable_type": "closed_ended",
               "display_order": 1,
-              "response_options": [
-                {
-                  "display_order": 1,
-                  "answer_option": "yes"
-                },
-                {
-                  "display_order": 2,
-                  "answer_option": "no"
-                }
-              ]
+              "answer_option": "yes"
+            },
+            {
+              "display_order": 2,
+              "answer_option": "no"
             }
           ]
-        },
+        }
+      ]
+    },
+    {
+      "component_type": "Group",
+      "display_order": 17,
+      "children": [
         {
           "component_type": "Instruction",
-          "display_order": 2,
+          "display_order": 1,
           "text": "please do not include vitamins or nutritional supplements."
         },
         {
           "component_type": "Question",
-          "display_order": 3,
+          "display_order": 2,
           "text": "if yes, write medications below.",
           "self_contained": false,
           "condition": "if yes",

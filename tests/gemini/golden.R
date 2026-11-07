@@ -60,7 +60,7 @@ golden_compare <- function(reading, answer) {
       gv <- g$variables[[i]]
       wv <- w$variables[[i]]
       box <- sprintf("%s box %d", where, i)
-      for (field in c("variable_type", "label", "subject", "answer_data_type")) {
+      for (field in c("variable_type", "label", "subject", "time_frame", "answer_data_type", "unit")) {
         same(box, field, gv[[field]], wv[[field]])
       }
       same(box, "choices", choice_field(gv, "answer_option"), choice_field(wv, "answer_option"))

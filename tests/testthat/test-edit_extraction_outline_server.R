@@ -150,6 +150,7 @@ test_that("a question's details have its variables: one line each, with its choi
     expect_match(html, 'data-action="show_field" data-id="v1" data-name="subject"')
     expect_match(html, 'data-action="show_field" data-id="v1" data-name="label"')
     expect_false(grepl('data-action="show_field" data-id="v1" data-name="skip"', html)) # a variable with choices skips by its choices
+    expect_false(grepl('data-action="show_field" data-id="v1" data-name="unit"', html)) # and has no unit
     expect_match(html, 'data-action="choices" data-id="v1"')
     expect_match(text_of(html), "1=yes; 2=no", fixed = TRUE)
     expect_false(grepl('data-field="answer_option"', html))
@@ -646,7 +647,7 @@ test_that("a variable's About and label show when they have something in them, a
   })
 })
 
-test_that("a write-in variable has the same + for its About and label, and one for where it skips to", {
+test_that("a write-in variable has the same + for its subject and label, and ones for its unit and where it skips to", {
   draft <- draft_service_update(short_gold_draft(), "variables", "v1", "variable_type", "open_ended")
   view <- list(problems = draft_service_check(draft, test_lookups()), shown = character())
   line_of <- function(draft, view) htmltools::renderTags(variable_line(draft$variables[draft$variables$id == "v1", ], draft, view, test_lookups(), shiny::NS("x")))$html
@@ -655,6 +656,7 @@ test_that("a write-in variable has the same + for its About and label, and one f
   expect_match(html, 'data-action="show_field" data-id="v1" data-name="subject"')
   expect_match(html, 'data-action="show_field" data-id="v1" data-name="label"')
   expect_match(html, 'data-action="show_field" data-id="v1" data-name="skip"')
+  expect_match(html, 'data-action="show_field" data-id="v1" data-name="unit"') # what its number is in
   expect_false(grepl("variable-skip", html))
   # added, it asks for the answer that skips and where it goes, the cursor in the answer
   html <- line_of(draft, utils::modifyList(view, list(shown = "v1:skip", focus = "v1:skip")))
@@ -710,7 +712,7 @@ test_that("a question's row sums up its variables: one has its MATR ID there, se
   expect_false(grepl('data-field="matr_id"', many))
   # a write-in says its kind of answer, and who it is about when that isn't the respondent
   write_in <- draft_service_update(draft_service_update(draft, "variables", box, "variable_type", "open_ended"), "variables", box, "subject", "Respondent's Family")
-  expect_match(variable_summary_text(write_in, box), "^Write-in: .* · About: Respondent's Family$")
+  expect_match(variable_summary_text(write_in, box), "^Write-in: .* · Subject: Respondent's Family$")
 })
 
 test_that("giving out MATR IDs by hand opens every section, so each question's MATR ID can be typed under it", {
@@ -795,7 +797,9 @@ test_that("the picked block's details are drawn: its words, its skip logic, then
     expect_match(html, 'data-field="text" data-id="c3"')
     expect_false(grepl('data-field="component_type"', html)) # its kind isn't changed here
     expect_match(html, 'class="variable-cards optional-0"')
-    expect_lt(regexpr("Skip Conditions &amp; Logic", html), regexpr("<h3>Variables</h3>", html))
+    expect_lt(regexpr("<h3>Skip Logic</h3>", html), regexpr("<h3>Variables</h3>", html))
+    expect_lt(regexpr("<h3>Variables</h3>", html), regexpr("<h3>Categories &amp; Measurement Scales</h3>", html))
+    expect_match(text_of(html), "Categories & Measurement Scales Coming soon!", fixed = TRUE)
     expect_match(html, 'data-action="check" disabled data-id="c3"') # it has no MATR ID yet
     # a question's variables are in its details: its arrow picks it
     page$selected("c5")
@@ -889,6 +893,12 @@ test_that("a section's or group's details have no variables, and Ungroup in thei
   expect_false(grepl("variable-cards|data-field=\"follower\"", html))
   expect_equal(grepl('data-field="text"', html), container$component_type == "Section") # a group has no words
   expect_match(as.character(block_detail(NULL, draft, view, test_lookups(), shiny::NS("x"))), "Pick a block in the list")
+  # who answers everything in it, typed there; and its questions say so
+  expect_match(html, sprintf('data-table="components" data-id="%s" data-field="condition"', container$id))
+  for_women <- draft_service_update(draft, "components", container$id, "condition", "Female")
+  inside <- draft$components$id[draft$components$parent_id %in% container$id & draft$components$component_type == "Question"][1]
+  question_html <- htmltools::renderTags(block_detail(component(for_women, inside), for_women, view, test_lookups(), shiny::NS("x")))$html
+  expect_match(text_of(question_html), "Everything in the group with questions 1a\u20131ag is only shown to respondents who are: female", fixed = TRUE)
 })
 
 test_that("the toolbar is + Block, Filter, Search, Expand All, Collapse All and what is to fix, and the details sit beside the list", {
@@ -914,7 +924,7 @@ test_that("a variable's line is its MATR ID and response, with About and Label c
   cards <- function(draft) htmltools::renderTags(variable_cards(component(draft, "c3"), draft, view, test_lookups(), shiny::NS("x")))$html
   html <- cards(draft)
   expect_match(text_of(html), "MATR ID Response", fixed = TRUE)
-  expect_false(grepl("About|Label|Kind", regmatches(html, regexpr('<div class="variable-line variable-head".*?</div>', html))))
+  expect_false(grepl("Subject|Label|Kind", regmatches(html, regexpr('<div class="variable-line variable-head".*?</div>', html))))
   expect_false(grepl('data-field="variable_type"|variable-card-number', html))
   # + Variable is at the bottom of the details, not under the variables
   expect_false(grepl("Add Variable|add_box|wide-menu", html))
@@ -924,7 +934,7 @@ test_that("a variable's line is its MATR ID and response, with About and Label c
   about <- draft_service_update(draft, "variables", "v1", "subject", "Respondent's Family")
   html <- cards(about)
   expect_match(html, 'class="variable-cards has-subject optional-1"')
-  expect_match(regmatches(html, regexpr('<div class="variable-line variable-head".*?</div>', html)), "<span>About</span>")
+  expect_match(regmatches(html, regexpr('<div class="variable-line variable-head".*?</div>', html)), "<span>Subject</span>")
   expect_equal(lengths(regmatches(html, gregexpr('class="variable-cell is-subject"', html))), 2)
   # and a time frame a Time frame column, written one way
   timed <- draft_service_update(about, "variables", "v1", "time_frame", "During the last 30 days")

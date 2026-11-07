@@ -260,3 +260,93 @@ test_that("[time frame] is filled in with the time a variable is about", {
   )
   expect_equal(normalize_service_fill("have you smoked [time frame]?", NA, NA), "have you smoked [time frame]?") # none to fill
 })
+
+# ------ Questions about different people, by pronoun or reworded ------------------------------------------------
+# Pink p1 Q5/6: "how old is she?" after a daughter, "how old is he?" after a son.
+pronoun_draft <- function(subjects = c(NA, NA)) {
+  question <- function(text, number, subject) {
+    list(component_type = "Question", text = text, printed_number = number,
+         variables = list(list(variable_type = "open_ended", answer_data_type = "NUMBER", subject = subject)))
+  }
+  draft_service_from_json(list(questionnaire = list(), components = list(
+    question("how old is she?", "5", subjects[1]),
+    question("how old is he?", "6", subjects[2]),
+    question("does he or she live with you?", "7", NA)
+  )))
+}
+
+test_that("questions that differ only by pronoun are found, about who their variables are about", {
+  groups <- normalize_service_question_groups(pronoun_draft(c("Respondent's Daughter", "Respondent's Son")), twins)
+  expect_length(groups, 1)
+  expect_equal(groups[[1]]$stem, "how old is [subject]?")
+  expect_equal(groups[[1]]$subjects, c("Respondent's Daughter", "Respondent's Son"))
+  # with no one named, they are linked by their stem alone, and their variables keep who they are about
+  plain <- pronoun_draft()
+  groups <- normalize_service_question_groups(plain, twins)
+  expect_equal(groups[[1]]$ids, plain$components$id[1:2])
+  linked <- normalize_service_link(plain, groups[[1]], twins)
+  expect_equal(linked$components$stem[1:2], rep("how old is [subject]?", 2))
+  expect_true(all(is.na(linked$variables$subject)))
+})
+
+test_that("questions reworded for another person are linked by hand, with the stem staff type", {
+  draft <- draft_service_from_json(list(questionnaire = list(), components = list(
+    list(component_type = "Question", text = "what is your date of birth?", printed_number = "B.1"),
+    list(component_type = "Question", text = "what is the date of birth of the other biological parent?", printed_number = "B.12")
+  )))
+  linked <- normalize_service_link_by_hand(draft, c("B.1", "B.12"), "What is the date of birth of [subject]?")
+  expect_equal(linked$components$stem, rep("what is the date of birth of [subject]?", 2))
+  # the dialog lists them as linked, so they can be unlinked
+  groups <- normalize_service_question_groups(linked, twins)
+  expect_equal(groups[[1]]$ids, linked$components$id)
+  expect_true(groups[[1]]$linked)
+  expect_error(normalize_service_link_by_hand(draft, "B.1", "x [subject]"), "two or more")
+  expect_error(normalize_service_link_by_hand(draft, c("B.1", "Q9"), "x [subject]"), "Q9")
+  expect_error(normalize_service_link_by_hand(draft, c("B.1", "B.12"), " "), "stem")
+})
+
+# ------ Questions about different things ----------------------------------------------------------------------
+# TSA's co-twin questions about tobacco, alcohol and cannabis, and two short questions that only look alike.
+things_draft <- function() {
+  question <- function(text, number) list(component_type = "Question", text = text, printed_number = number)
+  draft_service_from_json(list(questionnaire = list(), components = list(
+    question("when you were growing up, how often were you encouraged to use tobacco by your twin?", "C1"),
+    question("when you were growing up, how often were you encouraged to use alcohol by your twin?", "E1"),
+    question("when you were growing up, how often were you encouraged to use marijuana or hashish by your twin?", "G1"),
+    question("do you often feel lonely?", "1"),
+    question("do you often feel tired?", "2")
+  )))
+}
+
+test_that("questions that differ only in one thing are found, with [item] for it; short ones that only look alike aren't", {
+  groups <- normalize_service_question_groups(things_draft(), twins)
+  expect_length(groups, 1)
+  expect_equal(groups[[1]]$stem, "when you were growing up, how often were you encouraged to use [item] by your twin?")
+  expect_equal(groups[[1]]$items, c("tobacco", "alcohol", "marijuana or hashish"))
+  expect_true(all(is.na(groups[[1]]$subjects)))
+  linked <- normalize_service_link(things_draft(), groups[[1]], twins)
+  expect_equal(linked$components$stem[1:3], rep(groups[[1]]$stem, 3))
+  expect_true(normalize_service_question_groups(linked, twins)[[1]]$linked)
+  # the thing is who they ask about when their variables say so: GNA 4 and 6
+  gold <- gold_draft()
+  people <- Filter(function(group) block_numbered(gold, "4")$id %in% group$ids, normalize_service_question_groups(gold, twins))[[1]]
+  expect_equal(people$stem, "do you have more than five [subject]?")
+  expect_equal(people$subjects, c("Respondent's Children", "Respondent's Siblings"))
+  # a grid's items differ by design: they aren't linked
+  grid <- list(component_type = "Grid", text = "when you were growing up, how often were you encouraged by your twin to use", children = list(
+    list(component_type = "Question", text = "tobacco at a party with friends?", printed_number = "a"),
+    list(component_type = "Question", text = "alcohol at a party with friends?", printed_number = "b")
+  ))
+  expect_length(normalize_service_question_groups(draft_service_from_json(list(components = list(grid))), twins), 0)
+})
+
+test_that("the Normalize dialog says what each linked question is about, and links others by hand", {
+  draft <- things_draft()
+  no_choices <- data.frame(from = character(), uses = integer(), to = character(), why = character(), in_database = logical())
+  html <- htmltools::renderTags(normalize_ui(shiny::NS("x"), no_choices, normalize_service_question_groups(draft, twins), draft))$html
+  expect_match(html, "Questions about different people, times or things", fixed = TRUE)
+  expect_match(html, "(marijuana or hashish)", fixed = TRUE)
+  expect_match(html, 'id="x-link_numbers"')
+  expect_match(html, 'id="x-link_stem"')
+  expect_match(html, 'id="x-link_by_hand"')
+})

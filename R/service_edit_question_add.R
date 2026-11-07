@@ -252,6 +252,7 @@ edit_variables_draft <- function(variables) {
       time_frame = text_or_null(box$time_frame),
       matr_id = text_or_null(box$matr_id),
       answer_data_type = if (!closed) text_or_null(box$answer_data_type),
+      unit = if (!closed) text_or_null(box$unit),
       skip_condition = if (!closed) normal_text(text_or_null(box$skip_condition)),
       skip_instruction = if (!closed) normal_text(text_or_null(box$skip_instruction)),
       response_options = if (closed) {
@@ -281,8 +282,7 @@ edit_variables_json <- function(draft) {
     # a time frame only when it has one, so a form without them reads as it did
     if (nzchar(text(box$time_frame))) about$time_frame <- text(box$time_frame)
     if (about$variable_type == "open_ended") {
-      return(c(about, list(
-        answer_data_type = text(box$answer_data_type),
+      return(c(about, list(answer_data_type = text(box$answer_data_type)), if (nzchar(text(box$unit))) list(unit = text(box$unit)), list(
         skip_condition = text(box$skip_condition), skip_instruction = text(box$skip_instruction)
       )))
     }

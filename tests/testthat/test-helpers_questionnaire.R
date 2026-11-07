@@ -75,9 +75,16 @@ test_that("a variable's label and subject go in square brackets, and a number re
   row <- row[row$matr_id %in% matr, ]
   expect_equal(row$text, words)
   expect_equal(row$tags, "[Lifetime] [Respondent's Siblings]")
+  # a unit and a time frame are shown too: label, unit, time frame, subject
+  draft$variables$unit[draft$variables$id == box] <- "hours"
+  draft$variables$time_frame[draft$variables$id == box] <- "in the past 30 days"
+  row <- questionnaire_preview_rows(draft)
+  expect_equal(row$tags[row$matr_id %in% matr], "[Lifetime] [hours] [in the past 30 days] [Respondent's Siblings]")
 
   draft$variables$subject[draft$variables$id == box] <- NA
   draft$variables$label[draft$variables$id == box] <- NA
+  draft$variables$unit[draft$variables$id == box] <- NA
+  draft$variables$time_frame[draft$variables$id == box] <- NA
   row <- questionnaire_preview_rows(draft)
   expect_equal(row$tags[row$matr_id %in% matr], "")
 })

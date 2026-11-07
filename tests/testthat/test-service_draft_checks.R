@@ -138,8 +138,17 @@ test_that("each variable of a question with several has a label of its own, so t
   expect_equal(nrow(problems_of(asked(closed("Walked to work"), closed("Rode a bike")))), 0)
   # a lone check box says what it records itself ("these symptoms haven't stopped")
   expect_equal(nrow(problems_of(asked(closed("Walked to work"), closed(choices = "never did any of these")))), 0)
-  # the same words for someone else are another row ("Age" of Twin A and of Twin B)
+  # the same words for someone else are another row ("Age" of Twin A and of Twin B), and so are they for another time
   expect_equal(nrow(problems_of(asked(closed("Age", subject = "Twin A"), closed("Age", subject = "Twin B")))), 0)
+  timed <- function(label, time_frame) c(closed(label), list(time_frame = time_frame))
+  expect_equal(nrow(problems_of(asked(timed("Times", "in your lifetime"), timed("Times", "in the past 30 days")))), 0)
+  # a write-in's unit tells it apart too (AHP 1: feet and inches)
+  measured <- function(unit) list(variable_type = "open_ended", answer_data_type = "NUMBER", unit = unit)
+  expect_equal(nrow(problems_of(asked(measured("feet"), measured("inches")))), 0)
+  expect_equal(
+    problems_of(asked(measured("years"), measured("years")))$message,
+    sprintf("Variable %d: give it a label the question's other variables don't have.", 1:2)
+  )
 
   unlabelled <- problems_of(asked(closed("Walked to work"), closed()))
   expect_equal(

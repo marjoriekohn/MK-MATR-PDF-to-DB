@@ -16,7 +16,7 @@ read_draft <- function(me, tree, env = parent.frame()) {
 }
 
 # A draft with one block's words changed, as staff would change them.
-reworded <- function(draft, words = "Do you worry a lot?", id = "c3") {
+reworded <- function(draft, words = "do you worry a lot?", id = "c3") {
   draft_service_update(draft, "components", id, "text", words)
 }
 
@@ -86,12 +86,12 @@ test_that("Undo takes back one change at a time, only the last few are kept, and
   first <- read_draft(me, tree)
   shiny::testServer(edit_extraction_server, args = edit_page(me), {
     open(first)
-    for (i in seq_len(undo_depth + 5)) change_draft(reworded(draft(), paste("Words", i)))
+    for (i in seq_len(undo_depth + 5)) change_draft(reworded(draft(), paste("words", i)))
     expect_length(undo_stack(), undo_depth)
     session$setInputs(undo = 1)
-    expect_equal(component(draft(), "c3")$text, paste("Words", undo_depth + 4))
+    expect_equal(component(draft(), "c3")$text, paste("words", undo_depth + 4))
     session$setInputs(undo = 2)
-    expect_equal(component(draft(), "c3")$text, paste("Words", undo_depth + 3))
+    expect_equal(component(draft(), "c3")$text, paste("words", undo_depth + 3))
 
     added <- draft_service_next_id(draft(), "components")
     change_draft(draft_service_add_block(draft(), "Instruction", added))
@@ -147,7 +147,7 @@ test_that("a change that fails is explained, the draft stays as it was, and the 
     }))
     expect_equal(notice_texts(seen)[2], "Cleared Printed as and Skip to.")
     expect_equal(seen$notifications[[2]]$type, "message")
-    expect_equal(component(draft(), "c3")$text, "Do you worry a lot?")
+    expect_equal(component(draft(), "c3")$text, "do you worry a lot?")
   })
 })
 
@@ -163,7 +163,7 @@ test_that("Save writes the draft to the database (numbers included), and a save 
     expect_false(has_unsaved_changes())
     stored <- draft_service_load(test_connection, first$id)
     expect_identical(stored, draft())
-    expect_equal(component(stored, "c3")$text, "Do you worry a lot?")
+    expect_equal(component(stored, "c3")$text, "do you worry a lot?")
     expect_equal(component(stored, "c3")$question_number, component(numbered_gold(), "c3")$question_number)
     expect_equal(notice_texts(seen), "Saved. Nothing is added to the MATR metadata database until its change request is approved.")
     session$flushReact()
@@ -222,7 +222,7 @@ test_that("opening another draft while there are unsaved changes asks first: Don
     open(first)
     session$setInputs(save_and_open = 1)
     expect_equal(record_id(), first$id)
-    expect_equal(component(draft_service_load(test_connection, second$id), "c3")$text, "Do you worry a lot?")
+    expect_equal(component(draft_service_load(test_connection, second$id), "c3")$text, "do you worry a lot?")
     expect_equal(seen$closed, 2)
 
     # the same draft again does nothing, and keeps what was changed
@@ -311,8 +311,8 @@ test_that("editing a checked block takes the check off, and Undo brings it back"
     one_checked <- sprintf("%d%% human-reviewed", floor(100 / nrow(draft()$components)))
     expect_match(text_of(output$progress), one_checked)
 
-    session$setInputs(`outline-edit` = list(table = "components", id = "c3", field = "text", value = "Do you worry a lot?", typed = TRUE))
-    expect_equal(component(draft(), "c3")$text, "Do you worry a lot?")
+    session$setInputs(`outline-edit` = list(table = "components", id = "c3", field = "text", value = "do you worry a lot?", typed = TRUE))
+    expect_equal(component(draft(), "c3")$text, "do you worry a lot?")
     expect_length(checked_blocks(draft()), 0)
     session$flushReact()
     expect_match(text_of(output$progress), "0% human-reviewed")
@@ -566,15 +566,15 @@ test_that("a draft someone else saved within the minute is shown as they saved i
   }
   shiny::testServer(edit_extraction_server, args = claim_page(me, seen), {
     open(first)
-    saved_by_colleague("Theirs")
+    saved_by_colleague("theirs")
     session$elapse(draft_claim_renew_seconds * 1000) # nobody has it now, so the page has it again
     expect_true(has_draft())
-    expect_equal(draft()$components$text[draft()$components$id == "c3"], "Theirs") # nothing here was lost
+    expect_equal(draft()$components$text[draft()$components$id == "c3"], "theirs") # nothing here was lost
     expect_equal(loaded_revision(), first$revision + 1)
     expect_match(notice_texts(seen), "saved this draft since you opened it", all = FALSE, fixed = TRUE)
 
     change_draft(reworded(draft(), "Mine"))
-    saved_by_colleague("Theirs again")
+    saved_by_colleague("theirs again")
     session$elapse(draft_claim_renew_seconds * 1000)
     expect_true(has_draft())
     expect_true(has_unsaved_changes()) # kept, and asked about
@@ -583,12 +583,12 @@ test_that("a draft someone else saved within the minute is shown as they saved i
     expect_equal(asked(), 1)
     session$elapse(draft_claim_renew_seconds * 1000)
     expect_equal(asked(), 1) # not asked again about the same save, over whatever dialog is open now
-    saved_by_colleague("Theirs once more")
+    saved_by_colleague("theirs once more")
     session$elapse(draft_claim_renew_seconds * 1000)
     expect_equal(asked(), 2) # a later save is asked about
     session$setInputs(reopen = 1)
     expect_false(has_unsaved_changes())
-    expect_equal(draft()$components$text[draft()$components$id == "c3"], "Theirs once more")
+    expect_equal(draft()$components$text[draft()$components$id == "c3"], "theirs once more")
     expect_equal(loaded_revision(), first$revision + 3)
   })
 })
@@ -603,7 +603,7 @@ test_that("Save is refused if someone saved the draft after the page opened it, 
     open(first)
     change_draft(reworded(draft()))
     # a save that didn't go through this page (Change Requests' Basic Info, say)
-    draft_service_save(test_connection, first$id, reworded(numbered_gold(), "Theirs"), colleague$staff_id)
+    draft_service_save(test_connection, first$id, reworded(numbered_gold(), "theirs"), colleague$staff_id)
 
     session$setInputs(save = 1)
     expect_true(has_unsaved_changes())
@@ -611,7 +611,7 @@ test_that("Save is refused if someone saved the draft after the page opened it, 
 
     session$setInputs(reopen = 1)
     expect_false(has_unsaved_changes())
-    expect_equal(draft()$components$text[draft()$components$id == "c3"], "Theirs")
+    expect_equal(draft()$components$text[draft()$components$id == "c3"], "theirs")
     expect_equal(loaded_revision(), first$revision + 1)
 
     expect_true(change_draft(reworded(draft(), "Mine after all")))
@@ -633,13 +633,13 @@ test_that("a change is saved by itself half a minute after the last one, quietly
     session$flushReact() # as after each change staff make
     session$elapse(autosave_delay * 1000 - 1000)
     expect_true(has_unsaved_changes()) # still typing, as far as the page knows
-    change_draft(reworded(draft(), "Do you worry a great deal?"))
+    change_draft(reworded(draft(), "do you worry a great deal?"))
     session$flushReact()
     session$elapse(autosave_delay * 1000 - 1000)
     expect_true(has_unsaved_changes()) # the wait starts again with each change
     session$elapse(1500)
     expect_false(has_unsaved_changes())
-    expect_equal(component(draft_service_load(test_connection, first$id), "c3")$text, "Do you worry a great deal?")
+    expect_equal(component(draft_service_load(test_connection, first$id), "c3")$text, "do you worry a great deal?")
     expect_length(seen$notifications, 0) # no "Saved." notice
     expect_match(text_of(output$save_status), "Saved just now")
   })
@@ -654,7 +654,7 @@ test_that("after a save is refused, only Save tries again", {
   shiny::testServer(edit_extraction_server, args = claim_page(me, seen), {
     open(first)
     session$flushReact()
-    draft_service_save(test_connection, first$id, reworded(numbered_gold(), "Theirs"), colleague$staff_id)
+    draft_service_save(test_connection, first$id, reworded(numbered_gold(), "theirs"), colleague$staff_id)
     change_draft(reworded(draft()))
     session$flushReact() # as after each change staff make
     session$elapse(autosave_delay * 1000 + 500)

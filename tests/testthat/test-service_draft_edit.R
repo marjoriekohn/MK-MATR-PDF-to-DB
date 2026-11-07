@@ -64,7 +64,7 @@ test_that("deleting a section takes its blocks, variables and choices with it, a
   expect_false(any(deleted$components$id %in% gone))
   expect_false(any(deleted$variables$component_id %in% gone))
   expect_true(all(deleted$response_options$variable_id %in% deleted$variables$id))
-  expect_equal(draft_service_children(deleted, "components", NA)$display_order, 1:15)
+  expect_equal(draft_service_children(deleted, "components", NA)$display_order, 1:16)
 })
 
 test_that("questions that followed a deleted question lose the link", {
@@ -475,9 +475,11 @@ test_that("a question worded like a recorded one gets its variables' MATR IDs, b
 })
 
 test_that("a recorded questionnaire's MATR IDs are listed with their question's words, ready to fill a draft", {
+  # as push_model_existing() reads it: a variable is its question's placement's
   existing <- list(
+    placements = data.frame(placement_id = c(10, 12), component_id = c(100, 102)),
     components = data.frame(component_id = c(100, 102), component_type_id = c(1, 2), text = c("Part A", "Do you smoke?")),
-    variables = data.frame(variable_key = c(900, 901), component_id = c(102, 102), matr_id = c("SM1", "SM2"), display_order = c(2, 1))
+    variables = data.frame(variable_key = c(900, 901), placement_id = c(12, 12), matr_id = c("SM1", "SM2"), display_order = c(2, 1))
   )
   printed <- extraction_service_printed(existing)
   expect_equal(printed$matr_ids, data.frame(text = c("Do you smoke?", "Do you smoke?"), matr_id = c("SM1", "SM2"), display_order = c(2, 1)))

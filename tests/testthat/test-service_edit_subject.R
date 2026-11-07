@@ -3,8 +3,8 @@
 test_that("every subject is a card, by its name", {
   snap <- test_snapshot(edit_service_tables(edit_entities$subject))
   cards <- edit_service_cards(edit_entities$subject, snap, NULL)
-  expect_equal(cards$title, c("Respondent", "Respondent's Children", "Respondent's Family", "Respondent's Siblings"))
-  expect_equal(cards$key, c("1", "3", "2", "4"))
+  expect_equal(cards$title, c("Respondent", "Respondent's Children", "Respondent's Family", "Respondent's Siblings", "Twins (compared)"))
+  expect_equal(cards$key, c("1", "3", "2", "4", "5"))
 })
 
 test_that("a subject needs a name, and a name that is in the list already is a problem, ignoring case and spaces", {

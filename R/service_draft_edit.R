@@ -11,7 +11,8 @@ editable_fields <- list(
     "skip_condition", "skip_when", "skip_instruction", "skip_to_id" # a group's skip
   ),
   variables = c(
-    "variable_type", "label", "subject", "time_frame", "answer_data_type", "matr_id", "skip_condition", "skip_instruction", "skip_to_id"
+    "variable_type", "label", "subject", "time_frame", "answer_data_type", "unit", "matr_id", "skip_condition", "skip_instruction",
+    "skip_to_id"
   ),
   response_options = c("answer_option", "code_value", "respondent_count", "skip_instruction", "skip_to_id")
 )
@@ -39,6 +40,12 @@ draft_service_update <- function(draft, table, id, field, value) {
   row <- which(draft[[table]]$id == id)
   if (length(row) != 1) stop("That's no longer in the draft.")
   value <- as_field_value(value, typeof(draft[[table]][[field]]))
+  if (table == "components" && field == "condition") {
+    kind <- draft$components$component_type[row]
+    if (!identical(kind, "Question") && !is_container(kind)) {
+      stop("Only a question, or a section, grid or group (for everything in it), says who answers it.")
+    }
+  }
   if (field %in% word_fields[[table]]) value <- normal_text(value)
   switch(field,
     component_type = set_component_type(draft, row, value),
@@ -60,6 +67,10 @@ draft_service_update <- function(draft, table, id, field, value) {
     },
     time_frame = {
       draft$variables$time_frame[row] <- normal_time_frame(value)
+      draft
+    },
+    unit = {
+      draft$variables$unit[row] <- normal_unit(value)
       draft
     },
     answer_option = {
@@ -109,7 +120,9 @@ set_component_type <- function(draft, row, type) {
     if (is.na(block$self_contained)) draft$components$self_contained[row] <- TRUE
     return(draft)
   }
-  draft$components[row, c("question_number", "printed_number", "condition", "parent_question_id")] <- NA
+  draft$components[row, c("question_number", "printed_number", "parent_question_id")] <- NA
+  # a section, grid or group can be for some respondents (its condition), but not for a question's answer
+  if (!is_container(type) || identical(block$component_type, "Question")) draft$components$condition[row] <- NA
   draft$components$self_contained[row] <- NA
   n_boxes <- sum(draft$variables$component_id == block$id)
   if (n_boxes > 0) {
@@ -159,6 +172,7 @@ set_variable_type <- function(draft, row, type) {
     return(draft)
   }
   draft$variables$answer_data_type[row] <- NA
+  draft$variables$unit[row] <- NA # a choice has no unit
   draft$variables[row, c("skip_condition", "skip_instruction", "skip_to_id")] <- NA # a choice skips, not the variable
   add_blank_choices(draft, box$id, 1)
 }

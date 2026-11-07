@@ -72,7 +72,7 @@ database_tables <- list(
     key = "placement_id", order_by = c("questionnaire_id", "placement_id"),
     columns = c(
       placement_id = "id", questionnaire_id = "id", component_id = "id", parent_placement_id = "id",
-      display_order = "number", skip_to_placement_id = "id"
+      display_order = "number", condition = "text", skip_to_placement_id = "id"
     )
   ),
   question = list(
@@ -155,7 +155,7 @@ database_tables <- list(
   ),
   open_ended = list(
     key = "variable_key", order_by = "variable_key",
-    columns = c(variable_key = "id", answer_data_type = "text", skip_to_placement_id = "id")
+    columns = c(variable_key = "id", answer_data_type = "text", unit = "text", skip_to_placement_id = "id")
   ),
   closed_ended = list(
     key = "variable_key", order_by = "variable_key",

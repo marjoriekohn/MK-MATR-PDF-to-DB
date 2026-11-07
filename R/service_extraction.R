@@ -592,7 +592,9 @@ extraction_service_printed <- function(existing, component_types = NULL) {
     texts[!is.na(texts$text) & !is.na(texts$component_type), , drop = FALSE]
   }
   variables <- existing$variables
-  question_text <- components$text[match(variables$component_id, components$component_id)]
+  # a variable is its question's placement's, and the placement names the question's words
+  placed <- existing$placements$component_id[match(variables$placement_id, existing$placements$placement_id)]
+  question_text <- components$text[match(placed, components$component_id)]
   matr_ids <- data.frame(
     text = as.character(question_text), matr_id = as.character(variables$matr_id),
     display_order = as.numeric(variables$display_order), stringsAsFactors = FALSE

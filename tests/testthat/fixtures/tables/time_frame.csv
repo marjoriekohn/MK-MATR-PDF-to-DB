@@ -1,4 +1,10 @@
 time_frame_id,name
 1,in your lifetime
-2,in the past 12 months
-3,in the past 30 days
+2,in the past year
+3,in the past 12 months
+4,in the past 6 months
+5,in the past month
+6,in the past 30 days
+7,in the past 4 weeks
+8,in the past 2 weeks
+9,in the past week

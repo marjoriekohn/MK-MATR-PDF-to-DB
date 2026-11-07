@@ -296,6 +296,15 @@ test_that("words another component of that kind has already are that component, 
   expect_equal(item_lines(form_items(form)$items), 'Update questionnaire_component {"placement_id":106} component_id: 6 -> 1')
 })
 
+test_that("a section says who answers everything in it, on its placement; a question's form has its own condition", {
+  form <- form_for("questionnaire_component", "update", "101", scope = "1", questionnaire_component__condition = "For Females Only")
+  expect_equal(item_lines(form_items(form)$items), 'Update questionnaire_component {"placement_id":101} condition: - -> for females only')
+  placed <- edit_entities$questionnaire_component
+  snap <- test_snapshot(edit_service_tables(placed))
+  instruction <- edit_service_fields(placed, snap, "update", snap$questionnaire_component[snap$questionnaire_component$placement_id == 102, ], "1")
+  expect_false("condition" %in% vapply(instruction, function(field) field$name, ""))
+})
+
 test_that("a reworded section keeps what is inside it", {
   form <- form_for("questionnaire_component", "update", "101", scope = "1", questionnaire_component__text = "A. About you and your family")
   lines <- item_lines(form_items(form)$items)
@@ -416,6 +425,24 @@ test_that("a block that's new is added as a component and placed", {
   expect_match(lines[3], "Update questionnaire_component")
   expect_true('Insert questionnaire_component {"placement_id":"new:questionnaire_component:1"} parent_placement_id: - -> 210' %in% lines)
   expect_true('Update questionnaire_component {"placement_id":208} display_order: 1 -> 2' %in% lines)
+})
+
+test_that("a new section, grid or group can say who answers everything in it; another kind of block can't", {
+  form <- form_for("questionnaire_component", "add",
+    scope = "2", questionnaire_component__source = "new",
+    questionnaire_component__component_type_id = "1", questionnaire_component__text = "For women",
+    questionnaire_component__condition = "For Females Only"
+  )
+  expect_length(edit_service_check(form$fields, form$values)$problems, 0)
+  lines <- item_lines(form_items(form)$items)
+  expect_true('Insert questionnaire_component {"placement_id":"new:questionnaire_component:1"} condition: - -> for females only' %in% lines)
+
+  told <- form_for("questionnaire_component", "add",
+    scope = "2", questionnaire_component__source = "new",
+    questionnaire_component__component_type_id = "4", questionnaire_component__text = "Answer for each twin.",
+    questionnaire_component__condition = "Female"
+  )
+  expect_match(edit_service_check(told$fields, told$values)$problems[["questionnaire_component__condition"]], "section, grid or group")
 })
 
 # ------ A questionnaire question -----------------------------------------------------------------------------------------

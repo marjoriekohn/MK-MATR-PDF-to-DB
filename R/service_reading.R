@@ -238,6 +238,7 @@ tidy_blocks <- function(blocks) {
       skips <- type %in% skipping_types
       return(without_blanks(list(
         component_type = type, display_order = i, text = normal_text(clean_text(block$text)), page = block$page,
+        condition = normal_text(clean_text(block$condition)),
         skip_condition = if (skips) normal_text(clean_text(block$skip_condition)),
         skip_when = if (skips && !is.null(block$skip_condition)) tidy_skip_when(block$skip_when),
         skip_instruction = if (skips) normal_text(clean_text(block$skip_instruction)),
@@ -282,7 +283,7 @@ tidy_boxes <- function(boxes) {
       return(without_blanks(list(
         variable_type = box$variable_type, display_order = i, label = normal_text(clean_text(box$label)),
         subject = blank_respondent(clean_text(box$subject) %||% NA), time_frame = tidy_time_frame(box$time_frame),
-        answer_data_type = box$answer_data_type,
+        answer_data_type = box$answer_data_type, unit = tidy_unit(box$unit),
         skip_condition = normal_text(clean_text(box$skip_condition)), skip_instruction = normal_text(clean_text(box$skip_instruction))
       )))
     }
@@ -312,6 +313,12 @@ tidy_choices <- function(choices) {
 tidy_time_frame <- function(time_frame) {
   time_frame <- normal_time_frame(clean_text(time_frame) %||% NA)
   if (!is.na(time_frame)) time_frame
+}
+
+# The unit a write-in's number is in, written one way (normal_unit()); NULL for none.
+tidy_unit <- function(unit) {
+  unit <- normal_unit(clean_text(unit) %||% NA)
+  if (!is.na(unit)) unit
 }
 
 # NULL for nothing at all.

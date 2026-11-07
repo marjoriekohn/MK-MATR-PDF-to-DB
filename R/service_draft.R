@@ -138,6 +138,28 @@ answer_abbreviations <- c(
 )
 answer_letters <- c(m = "male", f = "female")
 
+# Units printed by a write-in's box, written out (with answer_abbreviations' "yrs", "hrs" and the rest).
+unit_abbreviations <- c(lbs = "pounds", lb = "pounds", ozs = "ounces", oz = "ounces", ft = "feet", kgs = "kilograms", kg = "kilograms", cm = "centimeters")
+
+#' The unit a write-in's number is in, written one way.
+#'
+#' Lower case, abbreviations written out and no full stop at the end ("yrs." is "years", "LBS" is "pounds"), so the
+#' answers in the same unit are found together across forms, and the forms in other units ("pounds" and
+#' "kilograms") can be told apart.
+#'
+#' @param text Units as printed or typed.
+#' @return The units, with `NA` for a blank.
+normal_unit <- function(text) {
+  text <- trimws(gsub("[[:space:]]+", " ", normal_text(as.character(text))))
+  text <- sub("[.:]+$", "", text)
+  for (short in names(c(answer_abbreviations, unit_abbreviations))) {
+    long <- c(answer_abbreviations, unit_abbreviations)[[short]]
+    text <- gsub(paste0("(?<![[:alnum:]/])", short, "(?![[:alnum:]/])"), long, text, perl = TRUE)
+  }
+  text[!is.na(text) & !nzchar(text)] <- NA
+  text
+}
+
 # A choice as "answer [qualifier]": "yes, all episodes" is "yes [all episodes]", "no - never" is "no [never]",
 # "1-2 hours" is "1-2 [hours]" and "biological (blood)" is "biological [blood]". Only a short answer (up to three
 # words, not just numbers) is split off at a comma, semicolon or spaced dash, and not before "or" ("never, or almost
@@ -183,6 +205,11 @@ subject_placeholder <- "[subject]"
 # cigarettes [time frame]?"), so the questions about a lifetime, the past 12 months and the past 30 days share it. It
 # is filled in with the variable's time frame where the words are shown (service_normalize.R).
 time_frame_placeholder <- "[time frame]"
+
+# What stands for the one thing questions that are otherwise worded the same ask about, in a question stem ("when you
+# were growing up, how often were you encouraged to use [item] by your twin?" for tobacco, alcohol and cannabis), so
+# they share it. Every form's stem says [item], so the same question about other things links across forms too.
+item_placeholder <- "[item]"
 
 # A time frame in words, as the forms print it: "in your lifetime", "during the last 12 months", "over the past
 # year", "within the past thirty days". In a question's words it starts with "in", "during", "over", "within" or
@@ -277,7 +304,7 @@ new_row_defaults <- list(
   variables = data.frame(
     id = NA_character_, component_id = NA_character_, display_order = Inf,
     variable_type = "closed_ended", label = NA_character_, subject = NA_character_, time_frame = NA_character_,
-    answer_data_type = NA_character_, matr_id = NA_character_, ref = NA_character_,
+    answer_data_type = NA_character_, unit = NA_character_, matr_id = NA_character_, ref = NA_character_,
     skip_condition = NA_character_, skip_instruction = NA_character_, skip_to_id = NA_character_
   ),
   response_options = data.frame(
@@ -411,6 +438,7 @@ draft_service_from_json <- function(json) {
       matr_id = pluck(boxes, "matr_id"),
       ref = refs(boxes, ids_for("v", seq_along(boxes))),
       # a write-in's skip: the answer that skips, the words printed for it, and where it sends respondents
+      unit = normal_unit(pluck(boxes, "unit")),
       skip_condition = pluck(boxes, "skip_condition"),
       skip_instruction = pluck(boxes, "skip_instruction"),
       skip_to_id = skip_ids(boxes)
@@ -528,6 +556,7 @@ blocks_json <- function(draft, parent_id) {
       page = block$page
     )
     if (is_container(block$component_type)) {
+      json$condition <- block$condition # who answers everything in it
       json$children <- blocks_json(draft, block$id)
     }
     if (block$component_type %in% skipping_types) {
@@ -566,6 +595,7 @@ boxes_json <- function(draft, component_id) {
       json$response_options <- choices_json(draft, box$id)
     } else {
       json$answer_data_type <- box$answer_data_type
+      json$unit <- box$unit
       json$skip_condition <- box$skip_condition
       json$skip_instruction <- box$skip_instruction
       json <- c(json, skip_json(box$skip_to_id, attr(draft, "printed")))
@@ -658,6 +688,20 @@ draft_service_ancestors <- function(draft, id) {
     return(character())
   }
   c(parent_id, draft_service_ancestors(draft, parent_id))
+}
+
+#' Who a block is for: the conditions of the sections, grids and groups it is in, outermost first, then its own.
+#'
+#' A section, grid or group can be for some respondents only ("For Females Only", "Complete this section if …");
+#' everything in it is, and a question in it can also have a condition of its own ("if yes"), so it is for both.
+#'
+#' @param draft A draft: `list(questionnaire, components, variables, response_options)`; see the top of `service_draft.R`.
+#' @param id A block's id.
+#' @return A character vector of conditions, maybe empty.
+draft_service_conditions <- function(draft, id) {
+  ids <- c(rev(draft_service_ancestors(draft, id)), id)
+  conditions <- draft$components$condition[match(ids, draft$components$id)]
+  conditions[!is.na(conditions)]
 }
 
 #' Questions as a researcher reads them: a question in a grid is the grid's lead-in, a space, and its own words.

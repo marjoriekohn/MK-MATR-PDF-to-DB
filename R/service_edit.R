@@ -892,8 +892,8 @@ edit_usage_groups <- function(snap, table, rows, labels) {
   }, names(by_name), by_name))
 }
 
-#' Who each variable is about and what it records, as the questionnaire's preview shows them: "[Smokes now]
-#' [Respondent]", each part when it has one.
+#' What each variable records, its unit, when and who it is about, as the questionnaire's preview shows them:
+#' "[Smokes now] [hours] [in the past 30 days] [Respondent]", each part when it has one.
 #'
 #' @param snap The tables the kind needs, as `edit_service_load()` reads them: a list of data frames named after the tables.
 #' @param variables Rows of `variable`.
@@ -905,8 +905,14 @@ edit_variable_tags <- function(snap, variables) {
   } else {
     edit_lookup(snap, "time_frame", "time_frame_id", variables$time_frame_id, "name")
   }
+  # a write-in's unit is on its open_ended row
+  unit <- if (is.null(snap$open_ended$unit)) {
+    rep(NA_character_, nrow(variables))
+  } else {
+    snap$open_ended$unit[match(variables$variable_key, snap$open_ended$variable_key)]
+  }
   vapply(seq_len(nrow(variables)), function(i) {
-    preview_variable_tags(list(label = variables$label[i], time_frame = when[i], subject = about[i]))
+    preview_variable_tags(list(label = variables$label[i], unit = unit[i], time_frame = when[i], subject = about[i]))
   }, character(1))
 }
 

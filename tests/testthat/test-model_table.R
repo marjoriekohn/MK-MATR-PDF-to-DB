@@ -42,7 +42,7 @@ test_that("a table the pages don't know is a sentence", {
 test_that("a table with no matching rows comes back with its columns and the right kinds", {
   rows <- table_model_get(test_connection, "questionnaire_question", list(questionnaire_id = database_eq(0)))
   expect_equal(nrow(rows), 0)
-  expect_named(rows, c("questionnaire_id", "component_id", "parent_question_id", "self_contained", "condition"))
+  expect_named(rows, c("placement_id", "questionnaire_id", "component_id", "parent_question_placement_id", "self_contained", "condition"))
   expect_type(rows$self_contained, "logical")
   expect_type(rows$component_id, "double")
 })

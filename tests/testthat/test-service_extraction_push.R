@@ -204,6 +204,31 @@ test_that("a linked question's stem is added once, or the one there with its wor
   expect_equal(reused$items$new_value[reused$items$entity_name == "question" & reused$items$attribute_name == "question_stem_id"], "77")
 })
 
+test_that("a section's condition goes on its placement, and its questions keep their own", {
+  draft <- small_draft()
+  section <- draft$components$id[draft$components$component_type == "Section"]
+  draft <- draft_service_update(draft, "components", section, "condition", "Female")
+  items <- build_for(draft)$items
+  conditions <- items[items$attribute_name %in% "condition", ]
+  expect_equal(conditions$entity_name, "questionnaire_component")
+  expect_equal(conditions$new_value, "female")
+})
+
+test_that("a write-in's unit goes with it", {
+  draft <- small_draft()
+  box <- draft$variables$id[draft$variables$variable_type == "open_ended"]
+  items <- build_for(draft_service_update(draft, "variables", box, "unit", "yrs"))$items
+  expect_equal(items$new_value[items$entity_name == "open_ended" & items$attribute_name == "unit"], "years")
+})
+
+test_that("a question whose own words have [subject] or [time frame] in them shares the stem of those words", {
+  draft <- small_draft(question = paste(test_marker, "did [subject] smoke [time frame]?"))
+  built <- build_for(draft)
+  lines <- item_lines(built$items)
+  expect_true(paste0("Insert question_stem {\"question_stem_id\":\"new:question_stem:1\"} text: - -> ", test_marker, " did [subject] smoke [time frame]?") %in% lines)
+  expect_equal(built$summary$stems, 1L) # and only that one: the other question's words have neither
+})
+
 test_that("how many of the wave's respondents gave an answer is added for the extraction's wave, and only where typed", {
   draft <- small_draft(labels = c("Yes.", "NO"))
   expect_equal(draft$response_options$answer_option, c("yes", "no")) # kept normalized

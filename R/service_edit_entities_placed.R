@@ -149,6 +149,7 @@ edit_placement_fields <- function(snap, mode, row, scope) {
   non_question <- snap$component_type[snap$component_type$name != "Question", , drop = FALSE]
   updating <- mode == "update"
   is_question <- updating && edit_is_question(snap, row$component_id)
+  kind <- if (updating) edit_lookup(snap, "component_type", "component_type_id", edit_lookup(snap, "component", "component_id", row$component_id, "component_type_id"), "name")
   has_inside <- updating && any(placed$parent_placement_id %in% row$placement_id)
   parent_choices <- edit_service_parent_choices(snap, placed, if (updating) row$placement_id)
 
@@ -202,7 +203,7 @@ edit_placement_fields <- function(snap, mode, row, scope) {
           "Changing the kind, like changing the words, changes this place only: other places keep the old block."
         }
       )
-    ), where))
+    ), where, if (isTRUE(is_container(kind))) list(edit_placement_condition_field(snap))))
   }
   candidates <- snap$component[!edit_is_question(snap, snap$component$component_id), , drop = FALSE]
   choices <- stats::setNames(
@@ -230,8 +231,29 @@ edit_placement_fields <- function(snap, mode, row, scope) {
       required = TRUE, show_when = list(field = "source", value = "new"),
       choices = edit_choices(snap, "component_type", non_question, blank = "Choose a kind")
     ),
-    edit_text_field(snap, mode, NULL) |> utils::modifyList(list(show_when = list(field = "source", value = "new")))
+    edit_text_field(snap, mode, NULL) |> utils::modifyList(list(show_when = list(field = "source", value = "new"))),
+    edit_placement_condition_field(snap)
   ), where)
+}
+
+# Who answers everything in a section, grid or group, for one being placed: only those kinds have it (a question's
+# own condition is on Questionnaire question).
+edit_placement_condition_field <- function(snap) {
+  edit_field("condition", "Who answers everything in it",
+    normalize = normal_text, placeholder = "e.g. female",
+    hint = "For a section, grid or group only. Leave empty if everyone does.",
+    problem = function(value, values) {
+      type <- if (identical(values$source, "existing")) {
+        edit_lookup(snap, "component", "component_id", as.numeric(values$component_id %||% NA), "component_type_id")
+      } else {
+        as.numeric(values$component_type_id %||% NA)
+      }
+      kind <- edit_lookup(snap, "component_type", "component_type_id", type, "name")
+      if (has_text(value) && !is.na(kind) && !is_container(kind)) {
+        "Only a section, grid or group says who answers everything in it. Leave this empty."
+      }
+    }
+  )
 }
 
 # The form for a question in one questionnaire.

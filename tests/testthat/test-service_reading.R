@@ -12,8 +12,8 @@ as_gemini_wrote_it <- function(json) {
         condition = block$condition, parent_question = block$parent_question,
         variables = lapply(block$variables, function(box) {
           list(
-            variable_type = box$variable_type, label = box$label, subject = box$subject,
-            answer_data_type = box$answer_data_type,
+            variable_type = box$variable_type, label = box$label, subject = box$subject, time_frame = box$time_frame,
+            answer_data_type = box$answer_data_type, unit = box$unit,
             response_options = lapply(box$response_options, function(choice) choice[names(choice) != "display_order"])
           )
         }),
@@ -128,7 +128,7 @@ test_that("tidying numbers each list, cleans the text and keeps only each block'
 
 test_that("a reading's words are kept in lower case, without a figure that repeats the number word before it", {
   asked <- question("4", boxes = list(list(
-    variable_type = "open_ended", label = "Age Started (years)", subject = "Respondent's Siblings",
+    variable_type = "open_ended", label = "Age Started", unit = "Yrs.", subject = "Respondent's Siblings",
     time_frame = "During the LAST 12 months", answer_data_type = "NUMBER", skip_condition = "None",
     skip_instruction = "Go to Question 9"
   )))
@@ -149,13 +149,32 @@ test_that("a reading's words are kept in lower case, without a figure that repea
   expect_equal(section$text, "section b: your health")
   expect_equal(c(grid$text, grid$skip_condition, grid$skip_instruction), c("during the worst time:", "no", "go to question 15"))
   expect_equal(c(asked$text, asked$condition), c("do you have more than five brothers and sisters?", "twins"))
-  expect_equal(c(box$label, box$skip_condition, box$skip_instruction), c("age started (years)", "none", "go to question 9"))
+  expect_equal(c(box$label, box$skip_condition, box$skip_instruction), c("age started", "none", "go to question 9"))
+  expect_equal(box$unit, "years") # its own field, abbreviation written out
   # names the database lists, numbers and the questionnaire's own name aren't the form's words
   expect_equal(box$subject, "Respondent's Siblings")
   expect_equal(box$time_frame, "in the past 12 months") # written one way (normal_time_frame())
   expect_equal(tidied$questionnaire, list(name = "General Nutrition Assessment", abbreviation = "GNA"))
   # a figure that isn't the number word's stays
   expect_equal(normal_text("Ages 5 (5-9) and Seven (8)"), "ages 5 (5-9) and seven (8)")
+})
+
+test_that("a write-in's unit is kept, written one way; a box with choices has none", {
+  write_in <- list(variable_type = "open_ended", answer_data_type = "NUMBER", unit = "yrs.")
+  choices <- yes_no_box()
+  choices$unit <- "times"
+  tidied <- reading_service_tidy(list(components = list(question("1", boxes = list(write_in, choices)))))
+  boxes <- tidied$components[[1]]$variables
+  expect_equal(boxes[[1]]$unit, "years")
+  expect_null(boxes[[2]]$unit)
+})
+
+test_that("a section, grid or group keeps who answers everything in it; other blocks have no condition", {
+  heading <- section_of(list(component_type = "Instruction", text = "Answer these.", condition = "Female"), question("1"), text = "Women")
+  heading$condition <- "Female"
+  tidied <- reading_service_tidy(list(components = list(heading)))
+  expect_equal(tidied$components[[1]]$condition, "female")
+  expect_null(tidied$components[[1]]$children[[1]]$condition)
 })
 
 test_that("a choice the reading says isn't printed is left out: a lone check box has the one choice", {
@@ -190,6 +209,7 @@ test_that("the prompt lists what the lookup tables hold", {
   expect_match(instructions, '"Grid"', fixed = TRUE)
   expect_match(instructions, '"Respondent\'s Siblings"', fixed = TRUE)
   expect_match(instructions, '"in the past 30 days"', fixed = TRUE)
+  expect_match(instructions, '"Twins (compared)"', fixed = TRUE)
   expect_match(instructions, "  - Not Difficult At All", fixed = TRUE)
 })
 

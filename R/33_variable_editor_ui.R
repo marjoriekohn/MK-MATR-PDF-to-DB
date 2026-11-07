@@ -63,7 +63,7 @@ list_sortable_options <- function(handle) {
 #'
 #' A line has the variable's MATR ID and its response: for a write-in the kind of answer, for a variable with
 #' choices the choices in short ("1 Yes · 2 No"), which open their editor under the line when clicked. Who it's
-#' about and its label have their own columns, there once a variable of the question has one (About is blank
+#' about and its label have their own columns, there once a variable of the question has one (Subject is blank
 #' for the respondent); a line's "+" adds them. The order the variables are in is kept (they are dragged into
 #' a new one) but not shown. A write-in can also skip, for an answer it names ("If the answer is None, skip to
 #' Question 57"), on a line of its own under it, added from its "+". When the question's variables all offer the
@@ -87,8 +87,8 @@ variable_cards <- function(block, draft, view, lookups, ns) {
   boxes <- draft_service_children(draft, "variables", block$id)
   shared <- if (block$id %in% view$split) character() else draft_service_shared_choices(draft, block$id)
   list_id <- ns(paste0("boxes-", block$id))
-  # the About, Time frame and Label columns, once one of the variables shows it
-  columns <- intersect(c("subject", "time_frame", "label"), unlist(map_rows(boxes, shown_optional, optional_variable_fields, view)))
+  # the Subject, Time frame and Label columns, once one of the variables shows it
+  columns <- intersect(c("subject", "time_frame", "label", "unit"), unlist(map_rows(boxes, shown_optional, optional_variable_fields, view)))
   if (any(!is.na(boxes$skip_to_id))) view$targets <- skip_targets(draft) # to name where write-ins skip to
   div(
     class = c("variable-cards", paste0("has-", columns, recycle0 = TRUE), paste0("optional-", length(columns))),
@@ -121,8 +121,8 @@ variable_line <- function(box, draft, view, lookups, ns, shared = character(), c
   choices_at_fault <- any(problems$table %in% "response_options" & problems$row %in% choices$id)
   is_open <- is_choice_box && !box$id %in% shared && box$id %in% view$choices
   showing <- shown_optional(box, optional_variable_fields, view)
-  # a variable with choices skips by its choices
-  addable <- setdiff(names(optional_variable_fields), c(showing, if (is_choice_box) "skip"))
+  # a variable with choices skips by its choices, and has no unit
+  addable <- setdiff(names(optional_variable_fields), c(showing, if (is_choice_box) c("skip", "unit")))
   div(
     class = c("variable-card", field_problem_class(problems, "variables", box$id, NA), if (is_open) "is-open"),
     `data-id` = box$id,
@@ -167,7 +167,7 @@ variable_line <- function(box, draft, view, lookups, ns, shared = character(), c
         if (length(addable) > 0) {
           add_field_menu(
             box, addable, optional_variable_fields,
-            if (is_choice_box) "Add who or when it's about, or a label" else "Add who or when it's about, a label, or where it skips to"
+            if (is_choice_box) "Add who or when it's about, or a label" else "Add who or when it's about, a label, its unit, or where it skips to"
           )
         }
       ),
@@ -183,9 +183,9 @@ variable_line <- function(box, draft, view, lookups, ns, shared = character(), c
 }
 
 # The optional fields of a variable, by what its "+" menu calls them: who it's about (blank is the
-# respondent), when it's about ("in the past 30 days"), its label, and for a write-in where it skips to. A
-# variable shows one when it has something in it, or once it is added.
-optional_variable_fields <- c(subject = "About", time_frame = "Time frame", label = "Label", skip = "Skip to")
+# respondent), when it's about ("in the past 30 days"), its label, and for a write-in the unit its number is in
+# ("years") and where it skips to. A variable shows one when it has something in it, or once it is added.
+optional_variable_fields <- c(subject = "Subject", time_frame = "Time frame", label = "Label", unit = "Unit", skip = "Skip to")
 
 # A write-in's skip, under its line: the answer that skips, and where it sends respondents (a question, section,
 # group or the end, picked like a choice's), with the delete button that takes it away.
@@ -205,12 +205,12 @@ write_in_skip <- function(box, view, ns) {
   )
 }
 
-# A variable's About, time frame or label, with its delete button that takes it away.
+# A variable's subject, time frame, label or unit, with its delete button that takes it away.
 variable_optional <- function(box, name, view, ns) {
   input <- switch(name,
     subject = field_text(
       "variables", box, "subject",
-      placeholder = "Who it's about", list = ns("subjects"), label = "About: who it's about (blank for the respondent)",
+      placeholder = "Who it's about", list = ns("subjects"), label = "Subject: who it's about (blank for the respondent)",
       problems = view$problems
     ),
     time_frame = field_text(
@@ -218,7 +218,8 @@ variable_optional <- function(box, name, view, ns) {
       placeholder = "e.g. in the past 30 days", list = ns("time-frames"), label = "Time frame: when its answer is about",
       problems = view$problems
     ),
-    label = field_text("variables", box, "label", placeholder = "Label", list = ns("labels"), label = "Label")
+    label = field_text("variables", box, "label", placeholder = "Label", list = ns("labels"), label = "Label"),
+    unit = field_text("variables", box, "unit", placeholder = "e.g. years", label = "Unit: what its number is in")
   )
   if (identical(view$focus, paste0(box$id, ":", name))) input <- tagAppendAttributes(input, `data-focus-now` = NA)
   span(class = c("variable-optional", paste0("is-", name)), input, remove_field_button(box, name, optional_variable_fields))

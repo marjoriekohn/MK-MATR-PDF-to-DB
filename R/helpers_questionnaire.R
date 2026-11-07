@@ -162,10 +162,10 @@ preview_question_words <- function(block) {
   if (nzchar(trimmed)) trimmed else block$text
 }
 
-# "[Drinks] [in the past 30 days] [Siblings]": the variable's label, when and who it is about, each when it has one
-# (a variable about the respondent has no subject), or "".
+# "[Drinks] [hours] [in the past 30 days] [Siblings]": the variable's label, a write-in's unit, when and who it is
+# about, each when it has one (a variable about the respondent has no subject), or "".
 preview_variable_tags <- function(box) {
-  tags <- c(box$label, box$time_frame, box$subject)
+  tags <- c(box$label, box$unit, box$time_frame, box$subject)
   tags <- trimws(tags[!is.na(tags)])
   tags <- tags[nzchar(tags)]
   if (length(tags) > 0) paste0("[", tags, "]", collapse = " ") else ""

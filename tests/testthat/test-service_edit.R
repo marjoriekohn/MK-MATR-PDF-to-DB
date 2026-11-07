@@ -594,3 +594,17 @@ test_that("a typed date is checked as MM/DD/YYYY, and blank is fine", {
   expect_match(edit_date_problem("13/45/2022"), "MM/DD/YYYY")
   expect_match(edit_date_problem("2022-04-15"), "MM/DD/YYYY")
 })
+
+test_that("a variable's tags in Make an edit are its label, a write-in's unit, its time frame and its subject", {
+  snap <- list(
+    subject = data.frame(subject_id = 2, name = "Respondent's Siblings"),
+    time_frame = data.frame(time_frame_id = 4, name = "in the past 30 days"),
+    open_ended = data.frame(variable_key = 11, answer_data_type = "NUMBER", unit = "hours")
+  )
+  variables <- data.frame(
+    variable_key = c(10, 11), label = c("smokes now", "sleep"), subject_id = c(NA, 2), time_frame_id = c(NA, 4)
+  )
+  expect_equal(edit_variable_tags(snap, variables), c("[smokes now]", "[sleep] [hours] [in the past 30 days] [Respondent's Siblings]"))
+  # a kind that hasn't read the write-ins shows no unit
+  expect_equal(edit_variable_tags(snap[c("subject", "time_frame")], variables)[2], "[sleep] [in the past 30 days] [Respondent's Siblings]")
+})

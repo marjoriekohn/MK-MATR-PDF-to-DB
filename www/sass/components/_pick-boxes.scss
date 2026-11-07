@@ -1,7 +1,9 @@
 // Dialogs of boxes, one for each choice: Add Skip Logic, + Variable, and + Block (squares in a grid). Pointing at
 // one lifts it with a shadow; its words stay black.
 .logic-choices, .pick-boxes { display: grid; gap: 0.75rem; }
-.pick-boxes.is-grid { grid-template-columns: repeat(auto-fill, minmax(11rem, 1fr)); }
+// + Block: three across (its nine kinds are three rows), one across on a phone
+.pick-boxes.is-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+@include media-breakpoint-down(sm) { .pick-boxes.is-grid { grid-template-columns: minmax(0, 1fr); } }
 .btn.logic-choice, .btn.pick-box {
   display: flex;
   align-items: flex-start;
@@ -25,4 +27,5 @@
   }
 }
 .pick-box-words { display: flex; flex-direction: column; gap: 0.2rem; font-size: 0.9rem; strong { font-size: 1rem; } }
-.pick-boxes.is-grid .btn.pick-box { flex-direction: column; min-height: 9rem; }
+// a box's icon and words start at its top, whatever height its row is (a .btn centres its content)
+.pick-boxes.is-grid .btn.pick-box { flex-direction: column; justify-content: flex-start; align-items: flex-start; min-height: 9rem; }

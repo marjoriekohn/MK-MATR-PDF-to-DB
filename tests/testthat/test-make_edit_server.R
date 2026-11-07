@@ -41,6 +41,7 @@ open_section <- function(session, id) session$setInputs(action = list(action = "
 test_that("a kind's section lists its items, by name, and + Add; Questions lists each question once", {
   me <- local_staff()
   tree <- shared_tree()
+  local_pushed_questionnaire(local_staff("ADMIN"), local_tree()) # questions to list, whatever the database has
   page <- page_args(me)
   shiny::testServer(make_edit_server, args = page$args, {
     errors <- collect_errors(session)

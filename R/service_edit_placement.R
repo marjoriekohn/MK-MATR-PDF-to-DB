@@ -392,6 +392,13 @@ edit_placement_items <- function(mode, snap, row, scope, fields, values) {
   if (!is.null(new_component)) {
     add(edit_service_swap_items(snap, row$placement_id, new_component, is_question = edit_is_question(snap, row$component_id)))
   }
+  if ("condition" %in% changes$name) {
+    field <- Filter(function(f) f$name == "condition", fields)[[1]]
+    add(edit_item(
+      "questionnaire_component", edit_identifier(list(placement_id = row$placement_id)), "Update", "condition",
+      row$condition %||% NA, edit_service_normalize(field, value_of("condition"))
+    ))
+  }
   if (length(items) == 0) NULL else do.call(rbind, items)
 }
 
@@ -447,6 +454,8 @@ edit_placement_add_items <- function(snap, q, placed, fields, values, parent) {
   add(edit_item("questionnaire_component", identifier, "Insert", "component_id", NA, component))
   if (!is.na(parent)) add(edit_item("questionnaire_component", identifier, "Insert", "parent_placement_id", NA, parent))
   add(edit_item("questionnaire_component", identifier, "Insert", "display_order", NA, position))
+  condition <- edit_service_normalize(field("condition"), value_of("condition"))
+  if (!is.na(condition)) add(edit_item("questionnaire_component", identifier, "Insert", "condition", NA, condition))
   do.call(rbind, items)
 }
 

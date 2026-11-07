@@ -507,6 +507,15 @@ edit_extraction_server <- function(
       )
     })
 
+    # questions linked by hand, by their numbers and the stem typed (reworded for another person)
+    observeEvent(input$link_by_hand, {
+      numbers <- strsplit(input$link_numbers %||% "", "[,;[:space:]]+")[[1]]
+      if (change_draft(normalize_service_link_by_hand(draft(), numbers, input$link_stem))) {
+        updateTextInput(session, "link_numbers", value = "")
+        updateTextInput(session, "link_stem", value = "")
+      }
+    })
+
     # ------ Normalize -------------------------------------------------------------------------
     # Answer choices worded as the database words them, and questions that differ only in who they ask about
     # linked (service_normalize.R). The dialog lists them as the draft is now, so it changes as its buttons are used.

@@ -272,13 +272,13 @@ normalize_ui <- function(ns, choices, groups, draft) {
     ),
     div(
       class = "request-section",
-      h3("Questions about different people or times"),
+      h3("Questions about different people, times or things"),
       p(
         class = "form-text",
-        "These questions differ only in who or when they ask about. Linking them keeps each one's words, number and ",
-        "variables, and gives them one stem, with [subject] for who they ask about and [time frame] for when. Each ",
-        "variable is then about who and when its question asks about, and a choice that names who says [subject] ",
-        "instead, so they share one set of choices."
+        "These questions differ only in who, when or what they ask about. Linking them keeps each one's words, number ",
+        "and variables, and gives them one stem, with [subject] for who they ask about, [time frame] for when, and ",
+        "[item] for anything else (tobacco, alcohol, cannabis). Each variable is then about who and when its question ",
+        "asks about, and a choice that names who says [subject] instead, so they share one set of choices."
       ),
       if (length(groups) == 0) {
         p(class = "text-muted", "None found.")
@@ -289,16 +289,32 @@ normalize_ui <- function(ns, choices, groups, draft) {
           },
           lapply(groups, function(group) normalize_group_ui(group, draft))
         )
-      }
+      },
+      normalize_by_hand_ui(ns)
     )
   )
 }
 
-# Who and when one question of a group asks about: "(about Twin A, in the past year)", "(in your lifetime)".
+# Linking questions Normalize doesn't find, such as one reworded for another person ("What is your date of birth?",
+# "What is the date of birth of the other biological parent?"): their numbers and the stem they share.
+normalize_by_hand_ui <- function(ns) {
+  div(
+    class = "normalize-by-hand",
+    h4("Link other questions"),
+    p(class = "form-text", "Questions that ask the same thing in other words, such as one reworded for another person."),
+    textInput(ns("link_numbers"), "Their numbers", placeholder = "e.g. B.1, B.12"),
+    textInput(ns("link_stem"), "The stem they share", placeholder = "e.g. what is the date of birth of [subject]?"),
+    actionButton(ns("link_by_hand"), "Link", class = "btn btn-sm btn-primary")
+  )
+}
+
+# Who, when and what one question of a group asks about: "(about Twin A, in the past year)", "(in your lifetime)",
+# "(tobacco)".
 normalize_group_about <- function(group, i) {
   parts <- c(
     if (!is.na(group$subjects[i])) paste("about", group$subjects[i]),
-    if (!is.na((group$time_frames %||% NA_character_)[i])) group$time_frames[i]
+    if (!is.na((group$time_frames %||% NA_character_)[i])) group$time_frames[i],
+    if (is.na(group$subjects[i]) && !is.null(group$items)) group$items[i]
   )
   if (length(parts) > 0) paste0("(", paste(parts, collapse = ", "), ")") else ""
 }

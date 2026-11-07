@@ -479,7 +479,7 @@ variable_summary_text <- function(draft, ids) {
     }
     choice_summary(choices[choices$variable_id == boxes$id[i], , drop = FALSE])
   }, character(1))
-  about <- ifelse(is.na(boxes$subject), "", paste0(" · About: ", boxes$subject))
+  about <- ifelse(is.na(boxes$subject), "", paste0(" · Subject: ", boxes$subject))
   when <- ifelse(is.na(boxes$time_frame), "", paste0(" · ", boxes$time_frame))
   label <- ifelse(is.na(boxes$label), "", paste0(" · “", shorten(boxes$label, 30), "”"))
   stats::setNames(paste0(answer, about, when, label), boxes$id)
@@ -617,8 +617,8 @@ question_panel <- function(block, draft, view, lookups, ns) {
 #' The details of the block picked in the list, edited beside it.
 #'
 #' The header is one row: the block's kind, its words (typed there; a group has none) and what there
-#' is to fix. Then, for a question, the number printed beside it, its skip conditions and logic
-#' (`skip_logic()`), and its variables and their choices (`question_panel()`); for a section or group, how many
+#' is to fix. Then, for a question, the number printed beside it, its skip logic (`skip_logic()`), its variables
+#' and their choices (`question_panel()`), and its categories and measurement scales (coming); for a section or group, how many
 #' blocks it holds, and for a group its skip (`group_skip()`). Its buttons are along the bottom (`detail_actions()`). Fields have a small label above
 #' them. They are the list's own (the same `data-field`s), so the page script keeps the row and the details in
 #' step as words are typed.
@@ -661,12 +661,19 @@ block_detail <- function(block, draft, view, lookups, ns) {
               placeholder = "None", label = "Question number as printed, e.g. 1a4 (blank if none is printed)", problems = problems
             ) |> tagAppendAttributes(class = "detail-number"))
           ),
-          detail_section("Skip Conditions & Logic", skip_logic(block, draft, ns)),
-          detail_section("Variables", question_panel(block, draft, view, lookups, ns))
+          detail_section("Skip Logic", skip_logic(block, draft, ns)),
+          detail_section("Variables", question_panel(block, draft, view, lookups, ns)),
+          # the question's MeSH categories and the measurement scales it is an item of, to come
+          detail_section("Categories & Measurement Scales", p(class = "detail-note", "Coming soon!"))
         )
       } else if (is_container(type)) {
         tagList(
           detail_section(NULL, detail_field("Holds", span(class = "detail-value", plural(sum(draft$components$parent_id %in% block$id), "block")))),
+          detail_section("Who answers it", detail_field("Only for", field_text(
+            "components", block, "condition",
+            placeholder = "Everyone", list = ns("conditions"),
+            label = "Who answers everything in it, e.g. female (blank for everyone)", problems = problems
+          ))),
           if (type %in% skipping_types) detail_section("Skip", group_skip(block, draft, problems, ns))
         )
       }
@@ -725,6 +732,15 @@ skip_logic <- function(block, draft, ns) {
       )
     }
   )
+  # for whoever the sections, grids and groups it is in are for
+  for (holder in rev(draft_service_ancestors(draft, block$id))) {
+    held_by <- blocks[blocks$id == holder, , drop = FALSE]
+    if (is.na(held_by$condition)) next
+    sentences[[length(sentences) + 1]] <- skip_sentence(review_button(
+      tagList("Everything in ", strong(container_name(draft, held_by)), " is only shown to respondents who are: ", strong(held_by$condition)),
+      "select", `data-id` = holder, class = "btn btn-link skip-link", title = "Go to it"
+    ))
+  }
   # skipped by a group's skip, on the answers to the questions in it
   by <- draft_service_group_skipped(draft)
   group <- blocks[blocks$id %in% by$group[by$question == block$id], , drop = FALSE]
@@ -788,6 +804,15 @@ group_skip <- function(block, draft, problems, ns) {
       )
     )
   )
+}
+
+# A section, grid or group in a sentence: the section “part a: your health”, the grid “during the worst time:”, or
+# a group by the questions in it (group_name()).
+container_name <- function(draft, block) {
+  if (block$component_type == "Group" || is.na(block$text)) {
+    return(group_name(draft, block$id))
+  }
+  paste0("the ", tolower(block$component_type), " ", quoted(shorten(block$text, 60)))
 }
 
 # A group by the questions in it: "the group with questions 22a–22d", "the group with question 5", or "the group".

@@ -232,7 +232,9 @@ extraction_service_build_items <- function(draft, info, ids, existing, options) 
       push$insert("questionnaire_component", list(placement_id = placement), c(
         list(
           questionnaire_id = questionnaire, component_id = component_of[[id]], parent_placement_id = parent,
-          display_order = order_in[[id]]
+          display_order = order_in[[id]],
+          # who answers everything in a section, grid or group; a question's own is on its questionnaire_question
+          condition = if (is_container(block$component_type)) block$condition else NA
         ),
         push_group_skip(push, block)
       ))
@@ -321,7 +323,7 @@ push_component <- function(push, block) {
     component_type_id = push$type_id(block$component_type), text = block$text
   ))
   if (block$component_type == "Question") {
-    push$insert("question", list(component_id = component), list(question_stem_id = push_question_stem(push, block$stem)))
+    push$insert("question", list(component_id = component), list(question_stem_id = push_question_stem(push, push_stem_of(block))))
   }
   push$summary$blocks <- push$summary$blocks + 1L
   push$note_block(block, "New", is_new = TRUE)
@@ -481,7 +483,10 @@ push_variables <- function(push, draft, block, placement, questionnaire) {
     push$note("variables", box$id, box$matr_id, box$label, "New", TRUE)
     if (box$variable_type == "open_ended") {
       push$insert("open_ended", list(variable_key = variable), c(
-        list(answer_data_type = box$answer_data_type, skip_condition = box$skip_condition, skip_instruction = box$skip_instruction),
+        list(
+          answer_data_type = box$answer_data_type, unit = box$unit %||% NA,
+          skip_condition = box$skip_condition, skip_instruction = box$skip_instruction
+        ),
         push_skip_to(push, box$skip_to_id)
       ))
       next
@@ -649,6 +654,16 @@ push_option_set <- function(push, labels) {
   name
 }
 
+# The stem a question shares: the one it was linked with, or its own words when they have [subject] or [time frame]
+# in them (a fill-in printed for a person, "(name of twin 1)", is read as [subject]); NA for none.
+push_stem_of <- function(block) {
+  if (has_text(block$stem)) {
+    return(block$stem)
+  }
+  placeholders <- c(subject_placeholder, time_frame_placeholder)
+  if (any(vapply(placeholders, function(p) grepl(p, block$text %||% "", fixed = TRUE), logical(1)))) block$text else NA_character_
+}
+
 # The id (or the name) of the stem a question shares (its words, with [subject] for who it asks about): the one
 # there with the same words, but for runs of spaces, or a new one; NA for a question that shares none.
 push_question_stem <- function(push, stem) {
@@ -674,7 +689,7 @@ push_question_stem <- function(push, stem) {
 # Update, which the database allows an extraction only for this), and one with the same stem needs nothing. One
 # linked under another stem is a sentence: linking it here would unlink it from the questions it is linked with.
 push_link_reused <- function(push, block, component) {
-  words <- push_words(block$stem)
+  words <- push_words(push_stem_of(block))
   if (!identical(block$component_type, "Question") || !nzchar(words)) {
     return(invisible())
   }
@@ -692,7 +707,7 @@ push_link_reused <- function(push, block, component) {
       stems$text[match(current, stems$question_stem_id)]
     ), call. = FALSE)
   }
-  stem <- push_question_stem(push, block$stem) # first: it may add the stem, which has to come before the update
+  stem <- push_question_stem(push, push_stem_of(block)) # first: it may add the stem, which has to come before the update
   push$update("question", list(component_id = component), "question_stem_id", NA, stem)
   push$summary$linked <- push$summary$linked + 1L
   invisible()

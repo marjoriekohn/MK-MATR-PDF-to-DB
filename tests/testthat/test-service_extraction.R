@@ -110,8 +110,8 @@ test_that("saving a reviewed copy keeps how it differs from what the AI returned
   extraction_service_save_draft(test_connection, ai, edited, opened$original, me)
   edits <- review_edits_of(test_connection, ai$id)
   expect_length(edits, 1)
-  expect_equal(edits[[1]]$before, "Would you call yourself a nervous person?")
-  expect_equal(edits[[1]]$after, "Would you describe yourself as nervous?")
+  expect_equal(edits[[1]]$before, "would you call yourself a nervous person?")
+  expect_equal(edits[[1]]$after, "would you describe yourself as nervous?")
   expect_equal(edits[[1]]$ref, q1a)
 
   # saving again, and opening the saved copy again, measure against what the AI returned: nothing piles up
@@ -123,7 +123,7 @@ test_that("saving a reviewed copy keeps how it differs from what the AI returned
   # a value put back is no difference
   restored <- draft_service_update(again, "components", block_numbered(again, "1a")$id, "text", "Would you call yourself a nervous person?")
   extraction_service_save_draft(test_connection, ai, restored, reopened$original, me)
-  expect_equal(vapply(review_edits_of(test_connection, ai$id), function(edit) edit$after, character(1)), "Do you worry?")
+  expect_equal(vapply(review_edits_of(test_connection, ai$id), function(edit) edit$after, character(1)), "do you worry?")
   expect_identical(draft_service_from_json(draft_model_get_both(test_connection, ai$id)$original), short_gold_draft())
 
   manual <- local_manual_extraction(me)
