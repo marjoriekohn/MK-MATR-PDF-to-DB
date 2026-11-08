@@ -51,7 +51,7 @@ list_sortable_options <- function(handle) {
 
 # A question's variables, as a table: one line for each, in printed order.
 # A line has the variable's MATR ID and its response: for a write-in the kind of answer, for a variable with
-# choices the choices in short ("1 Yes · 2 No"), which open their editor under the line when clicked. Who it's
+# choices the choices in short ("1 Yes · 2 No"), which are open under the line (their editor) until the line is clicked to close them. Who it's
 # about and its label have their own columns, there once a variable of the question has one (Subject is blank
 # for the respondent); a line's "+" adds them. The order the variables are in is kept (they are dragged into
 # a new one) but not shown. A write-in can also skip, for an answer it names ("If the answer is None, skip to
@@ -62,7 +62,7 @@ list_sortable_options <- function(handle) {
 # write-in. What each field holds is said in it while it is empty, and its label is kept for screen readers.
 # block: One row of a draft's `components`: a question.
 # view: How the editor shows the draft (`variable_editor()`'s `view()`, with the page's own): `problems`
-#   outlines the fields at fault, `choices` lists the variables whose choices are open, `split` the questions
+#   outlines the fields at fault, `closed` lists the variables whose choices staff closed (the others are open), `split` the questions
 #   whose variables' choices are edited one by one, `shown` the optional fields added empty and `focus` the one
 #   to put the cursor in. A page can leave out what it can't offer: `skip_words` makes Skip to the words
 #   printed for it instead of a link to the question it skips to, and `apply_codes = FALSE` leaves out Apply to
@@ -103,7 +103,7 @@ variable_line <- function(box, draft, view, lookups, ns, shared = character(), c
   is_choice_box <- box$variable_type == "closed_ended"
   choices <- draft_service_children(draft, "response_options", box$id)
   choices_at_fault <- any(problems$table %in% "response_options" & problems$row %in% choices$id)
-  is_open <- is_choice_box && !box$id %in% shared && box$id %in% view$choices
+  is_open <- is_choice_box && !box$id %in% shared && !box$id %in% view$closed
   showing <- shown_optional(box, optional_variable_fields, view)
   # a variable with choices skips by its choices, and has no unit
   addable <- setdiff(names(optional_variable_fields), c(showing, if (is_choice_box) c("skip", "unit")))

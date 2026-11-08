@@ -3,8 +3,8 @@
 # One panel: the whole questionnaire as it was extracted, as a list with the picked block's details
 # beside it (`extraction_outline_ui()`). The header's buttons: Undo, Save, Normalize (answer choices worded as
 # the database words them, and questions that differ only in who they ask about linked: `normalize_dialog()`),
-# Open PDF (if the file is here: it opens in its own tab, at the page of the block picked) and Preview (of the
-# change request).
+# Open PDF (if the file is here: it opens in its own tab, at the page of the block picked), Re-extract (an AI-Powered
+# draft read again with the latest prompt: `reextract_dialog()`) and Preview (of the change request).
 # On a phone the buttons are only their icons, sharing a row of their own evenly under the progress bar.
 # (It was called the review page. Change Requests has its own review, of requests waiting for approval.)
 edit_extraction_ui <- function(id) {
@@ -31,6 +31,7 @@ edit_extraction_ui <- function(id) {
             title = "Word answer choices as the database does, and link questions that differ only in who they ask about"
           ),
           uiOutput(ns("pdf_link"), inline = TRUE),
+          uiOutput(ns("reextract_button"), inline = TRUE),
           uiOutput(ns("request_button"), inline = TRUE)
         )
       ),
@@ -126,6 +127,18 @@ edit_extraction_claim_banner <- function(ns, claim, unsaved = FALSE) {
     p("Nobody else has it yet. Keep working to change it again."),
     actionButton(ns("keep_working"), "Keep working", class = "btn-primary")
   ))
+}
+
+# Re-extract: the PDF read again from the start, with the extraction prompt as it is now, in place of the
+# questionnaire on the page.
+reextract_dialog <- function(ns) {
+  confirm_dialog(
+    "Re-extract this questionnaire?",
+    p("Gemini reads the PDF again from the start, with the latest extraction instructions, and its Variable Names and Coding again if it has them."),
+    p(strong("The new reading replaces the questionnaire here:"), " every change made on this page, saved or not, and every block marked as checked, is lost."),
+    p("It is read in the background, as a new extraction is. You can watch it on New Extraction, or find it under Extraction Drafts."),
+    confirm_id = ns("confirm_reextract"), confirm_label = "Re-extract", keep_label = "Cancel"
+  )
 }
 
 # The Preview Change Request dialog: the questionnaire as its change request shows it.

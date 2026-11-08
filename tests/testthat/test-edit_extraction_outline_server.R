@@ -130,7 +130,7 @@ test_that("a change the draft refuses is a sentence, and nothing changes", {
   })
 })
 
-test_that("a question's details have its variables: one line each, with its choices in short until they are opened", {
+test_that("a question's details have its variables: one line each, with its choices open under it", {
   page <- edit_extraction_state(draft_service_update(short_gold_draft(), "variables", "v1", "subject", "")) # who it's about not picked yet
   shiny::testServer(extraction_outline_server, args = outline_args(page), {
     session$setInputs(action = list(action = "details", id = "c3")) # its arrow picks it
@@ -142,7 +142,7 @@ test_that("a question's details have its variables: one line each, with its choi
     expect_match(html, 'placeholder="MATR ID"[^>]*aria-label="MATR ID"')
     # every choice is printed, so there is no check box to say one isn't
     expect_false(grepl('type="checkbox"|data-field="printed"', html))
-    # one line per variable: MATR ID, and its choices in short, closed until clicked; who it's about (blank is
+    # one line per variable: MATR ID, and its choices in short, open under it until clicked; who it's about (blank is
     # the respondent) and its label show only when they have something in them, or are added
     expect_match(html, "variable-head") # the column names
     expect_match(html, 'data-table="variables" data-id="v1" data-field="matr_id"')
@@ -153,7 +153,8 @@ test_that("a question's details have its variables: one line each, with its choi
     expect_false(grepl('data-action="show_field" data-id="v1" data-name="unit"', html)) # and has no unit
     expect_match(html, 'data-action="choices" data-id="v1"')
     expect_match(text_of(html), "1=yes; 2=no", fixed = TRUE)
-    expect_false(grepl('data-field="answer_option"', html))
+    expect_match(html, 'data-action="choices" data-id="v1" aria-expanded="true"')
+    expect_match(html, 'data-field="answer_option"')
   })
 })
 
@@ -529,13 +530,12 @@ test_that("a group's row can ungroup it, keeping its blocks where it was", {
   })
 })
 
-test_that("a variable's choices open under its line, code first and both named, and close again", {
+test_that("a variable's choices are open under its line from the start, code first and both named, and close and open again", {
   page <- short_page()
   seen <- local_browser()
   shiny::testServer(extraction_outline_server, args = outline_args(page), {
     page$selected("c3")
-    session$setInputs(action = list(action = "choices", id = "v1"))
-    expect_equal(choices_open(), "v1")
+    expect_length(choices_closed(), 0)
     html <- detail_html(output)
     expect_match(html, 'aria-expanded="true"')
     expect_match(html, 'placeholder="Response option"')
@@ -550,8 +550,12 @@ test_that("a variable's choices open under its line, code first and both named, 
     expect_false(grepl('data-field="respondent_count"|data-field="skip_instruction"', html))
     expect_match(html, 'data-action="show_field" data-id="o1" data-name="respondent_count"')
     session$setInputs(action = list(action = "choices", id = "v1"))
-    expect_length(choices_open(), 0)
+    expect_equal(choices_closed(), "v1")
     expect_false(grepl('data-field="answer_option"', detail_html(output)))
+    expect_match(detail_html(output), 'data-action="choices" data-id="v1" aria-expanded="false"')
+    session$setInputs(action = list(action = "choices", id = "v1"))
+    expect_length(choices_closed(), 0)
+    expect_match(detail_html(output), 'data-field="answer_option"')
   })
 })
 
@@ -559,8 +563,8 @@ test_that("a choice's count of respondents or skip are added to that choice only
   page <- edit_extraction_state(draft_service_update(short_gold_draft(), "response_options", "o2", "skip_instruction", "Go to 1c"))
   seen <- local_browser()
   shiny::testServer(extraction_outline_server, args = outline_args(page), {
-    page$selected("c3")
-    session$setInputs(action = list(action = "choices", id = "v1"))
+    page$selected("c3") # its choices are open already
+    session$flushReact() # the details are drawn for it
     html <- detail_html(output)
     expect_equal(lengths(regmatches(html, gregexpr('data-field="skip_to_id"', html))), 1) # o2's, which has one
     session$setInputs(action = list(action = "show_field", id = "o1", name = "respondent_count"))
@@ -663,8 +667,8 @@ test_that("Skip to is a pick of where the choice sends respondents, its printed 
   expect_equal(draft$response_options$skip_to_id[draft$response_options$id == "o2"], target) # linked from its words
   shiny::testServer(extraction_outline_server, args = outline_args(page), {
     expect_match(tree_html(output), '<datalist id="[^"]*skip-targets">')
-    page$selected("c3")
-    session$setInputs(action = list(action = "choices", id = "v1"))
+    page$selected("c3") # its choices are open already
+    session$flushReact() # the details are drawn for it
     html <- detail_html(output)
     expect_match(html, 'placeholder="Skips to"[^>]*data-pick[^>]*data-id="o2" data-field="skip_to_id"')
     expect_match(html, 'value="1c · [^"]*"[^>]*data-id="o2" data-field="skip_to_id"|data-id="o2" data-field="skip_to_id"[^>]*value="1c · ')
@@ -742,8 +746,7 @@ test_that("the picked block's details are drawn: its words, its skip logic, then
     expect_false(grepl('data-field="component_type"', html)) # its kind isn't changed here
     expect_match(html, 'class="variable-cards optional-0"')
     expect_lt(regexpr("<h3>Skip Logic</h3>", html), regexpr("<h3>Variables</h3>", html))
-    expect_lt(regexpr("<h3>Variables</h3>", html), regexpr("<h3>Categories &amp; Measurement Scales</h3>", html))
-    expect_match(text_of(html), "Categories & Measurement Scales Coming soon!", fixed = TRUE)
+    expect_false(grepl("Categories|Measurement Scale|Coming soon", html)) # neither is on this page
     expect_match(html, 'data-action="check" disabled data-id="c3"') # it has no MATR ID yet
     # a question's variables are in its details: its arrow picks it
     page$selected("c5")
@@ -953,7 +956,8 @@ test_that("the editor's header is the block's words, typed there; its buttons ar
   expect_match(foot, "fa-trash")
   expect_match(html, "Question Number")
   expect_match(html, "fa-hashtag")
-  expect_false(grepl("Place among|Number as printed|component_type|Add Skip Logic|btn-wide", html))
+  expect_false(grepl("Place among|Number as printed|component_type|Add Skip Logic", html))
+  expect_false(grepl("btn-wide", foot)) # (+ Choice, over the open choices, is wide; the buttons along the bottom aren't)
   fixed <- with_matr_ids(draft)
   html <- htmltools::renderTags(block_detail(component(fixed, "c3"), fixed, list(problems = draft_service_check(fixed, test_lookups())), test_lookups(), shiny::NS("x")))$html
   expect_false(grepl('data-action="check" disabled', html))

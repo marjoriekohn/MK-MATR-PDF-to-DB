@@ -47,7 +47,7 @@ extraction_outline_server <- function(
     # fields added empty, the grids edited one by one) is the editor's.
     variables <- variable_editor(state$draft, state$change, redraw_question, ns)
     shown <- variables$shown
-    choices_open <- variables$choices_open
+    choices_closed <- variables$choices_closed
     split <- variables$split
 
     flip <- function(ids, id) if (id %in% ids) setdiff(ids, id) else c(ids, id)

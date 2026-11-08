@@ -248,7 +248,7 @@ test_that("Save is refused if someone saved the draft after the page opened it, 
   })
 })
 
-test_that("a change is saved by itself half a minute after the last one, quietly, and the header says when", {
+test_that("a change is saved by itself a minute after the last one, quietly, and the header says when", {
   me <- local_staff()
   tree <- shared_tree()
   seen <- local_browser()
@@ -269,6 +269,66 @@ test_that("a change is saved by itself half a minute after the last one, quietly
     expect_equal(component(draft_service_load(test_connection, first$id), "c3")$text, "do you worry a great deal?")
     expect_length(seen$notifications, 0) # no "Saved." notice
     expect_match(text_of(output$save_status), "Saved just now")
+  })
+})
+
+test_that("staff still at work on the site put off the save by itself until they have done nothing for a minute", {
+  me <- local_staff()
+  tree <- shared_tree()
+  local_browser()
+  first <- read_draft(me, tree)
+  shiny::testServer(edit_extraction_server, args = edit_page(me), {
+    open(first)
+    session$flushReact()
+    change_draft(reworded(draft()))
+    session$flushReact()
+    session$elapse(autosave_delay * 1000 - 1000)
+    session$setInputs(active = 1) # a key pressed, or the pointer moved, without changing the draft
+    session$elapse(autosave_delay * 1000 - 1000)
+    expect_true(has_unsaved_changes())
+    selected("c3") # a block picked
+    session$flushReact()
+    session$elapse(autosave_delay * 1000 - 1000)
+    expect_true(has_unsaved_changes())
+    session$elapse(1500)
+    expect_false(has_unsaved_changes())
+  })
+})
+
+test_that("Re-extract reads the PDF again in place of the questionnaire, lets the draft go and shows the reading", {
+  me <- local_staff()
+  tree <- shared_tree()
+  seen <- local_browser()
+  local_pdf_cache()
+  first <- read_draft(me, tree)
+  writeLines("%PDF-1.4", extraction_model_pdf_path(first$pdf$sha256)) # its PDF, on this server
+  shown <- NULL
+  args <- c(claim_page(me, seen), list(open_reading = function(record) shown <<- record))
+  shiny::testServer(edit_extraction_server, args = args, {
+    open(first)
+    session$flushReact()
+    expect_match(output$reextract_button$html, "Re-extract")
+    change_draft(reworded(draft()))
+    expect_true(save_draft(quietly = TRUE))
+    session$setInputs(reextract = 1)
+    expect_match(seen$modals[[length(seen$modals)]], "Re-extract this questionnaire?", fixed = TRUE)
+    session$setInputs(confirm_reextract = 1)
+    expect_null(record_id())
+    expect_false(has_unsaved_changes())
+    expect_equal(shown$id, first$id)
+    expect_equal(shown$extraction_status, "queued")
+    expect_null(draft_model_get_both(test_connection, first$id)$questionnaire)
+  })
+})
+
+test_that("a draft typed by hand has no Re-extract: it has no reading to do again", {
+  me <- local_staff()
+  local_browser()
+  typed <- local_manual_extraction(me)
+  shiny::testServer(edit_extraction_server, args = edit_page(me), {
+    open(typed)
+    session$flushReact()
+    expect_false(grepl("Re-extract", paste(output$reextract_button$html, collapse = "")))
   })
 })
 

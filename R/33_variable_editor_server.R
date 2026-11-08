@@ -1,7 +1,7 @@
 # What a variable editor's buttons and fields do (33_variable_editor_ui.R).
 # One for every page that edits a question's variables: Edit Extraction's outline (in the picked question's
 # details) and Make an edit (`variable_editor_server()`). The page keeps the draft and says how a change is
-# made; this keeps how the editor shows it: which variables' choices are open (`choices_open`), which optional
+# made; this keeps how the editor shows it: which variables' choices staff closed (`choices_closed`; they are open until then), which optional
 # fields were added empty (`shown`, as "v3:subject" or "o12:respondent_count"), the questions whose shared
 # choices are edited one by one (`split`), and the field just added, which gets the cursor when it is drawn.
 # Its buttons add variables (from a dialog: Choices or Write-in) and choices, give a variable's codes to the
@@ -19,7 +19,7 @@
 #   (forget the fields added empty, when everything is drawn again), and the reactive values above.
 variable_editor <- function(draft, change, redraw, ns) {
   shown <- reactiveVal(character())
-  choices_open <- reactiveVal(character())
+  choices_closed <- reactiveVal(character())
   split <- reactiveVal(character())
   codes_for <- reactiveVal(NULL) # the variable Apply to All? gives the codes of
   focus <- NULL
@@ -59,7 +59,7 @@ variable_editor <- function(draft, change, redraw, ns) {
       ),
       pick_codes = pick_codes(now, event$id),
       choices = {
-        choices_open(flip(choices_open(), event$id))
+        choices_closed(flip(choices_closed(), event$id))
         redraw(question_of("variables", event$id))
       },
       split_choices = {
@@ -176,14 +176,14 @@ variable_editor <- function(draft, change, redraw, ns) {
 
   list(
     action = action, edit = edit, reorder = reorder, apply_codes = apply_codes,
-    view = function() list(shown = shown(), choices = choices_open(), split = split()),
+    view = function() list(shown = shown(), closed = choices_closed(), split = split()),
     take_focus = function() {
       field <- focus
       focus <<- NULL
       field
     },
     reset = function() shown(character()),
-    shown = shown, choices_open = choices_open, split = split
+    shown = shown, choices_closed = choices_closed, split = split
   )
 }
 

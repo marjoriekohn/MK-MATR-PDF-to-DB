@@ -22,6 +22,7 @@ app_icons <- c(
   filter = "filter",
   search = "magnifying-glass",
   normalize = "wand-magic-sparkles",
+  reextract = "arrows-rotate",
   link = "link",
   unlink = "link-slash",
   # what something is

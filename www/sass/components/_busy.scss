@@ -5,6 +5,10 @@
   --shiny-pulse-height: 5px;
 }
 
+// ... but not for the quick round trips typing and picking send (busy.js marks the page while one is
+// quick): only for a button pressed, or work that takes a while.
+[data-shiny-busy-pulse].is-quiet-busy.shiny-busy::after { display: none !important; }
+
 // ------ The button pressed last, while the server works on it (busy.js) -------------------------------
 // It looks as it did, and can't be pressed again: the gold bar across the top says the site is working.
 .is-working { pointer-events: none; }

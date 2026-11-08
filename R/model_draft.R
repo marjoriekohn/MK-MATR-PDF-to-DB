@@ -50,6 +50,16 @@ draft_model_save_reviewed <- function(connection, id, draft_json, staff_id, revi
   invisible(draft_row_model_save(connection, id, staff_id, detail = detail, expected_revision = expected_revision))
 }
 
+# Put staff's reviewed copy aside, so the draft opens as the AI read it: for a draft that is read again. How the copy
+# differed from what the AI returned goes with it.
+# expected_revision: The revision the person was looking at; refused if someone saved the draft since. `NULL`
+#   skips the check.
+# Returns: The draft's revision after it, invisibly. An error if there is no such draft, or it has moved on.
+draft_model_clear_reviewed <- function(connection, id, staff_id, expected_revision = NULL) {
+  detail <- list(questionnaire = NULL, review_edits = list())
+  invisible(draft_row_model_save(connection, id, staff_id, detail = detail, expected_revision = expected_revision))
+}
+
 # Save what the reading job returned.
 # It is only kept if the draft is still being read for `reading_started`, so a job
 # that was overtaken by "Try reading again" saves nothing.

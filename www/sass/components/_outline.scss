@@ -219,7 +219,7 @@ body.is-resizing { cursor: col-resize; user-select: none; }
   > .is-wide { grid-column: 1 / -1; }
 }
 .detail-field { min-width: 0; .form-control, .form-select { width: 100%; } }
-.detail-field .detail-number { width: 6rem; } // a question number is a few characters
+.detail-field .detail-number { width: 3rem; } // a question number is a few characters
 .detail-label { display: block; margin-bottom: 0.2rem; color: $vcu-gray; font-size: $font-size-xs; font-weight: 500; }
 .detail-value { display: block; padding: 0.2rem 0; font-weight: 700; font-variant-numeric: tabular-nums; }
 .detail-note { margin: 0; color: $vcu-gray; font-size: $font-size-sm; }

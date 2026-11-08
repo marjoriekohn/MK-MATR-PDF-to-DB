@@ -151,6 +151,29 @@ extraction_service_retry <- function(connection, id, me) {
   change_record(connection, id, me, restart_reading, new_revision = FALSE)
 }
 
+# Read an AI-Powered draft's PDF again from the start, with the extraction prompt as it is now (and its Variable
+# Names and Coding again, if it has the file): Re-extract on the Edit Extraction page. The questionnaire staff
+# reviewed is put aside for the new reading, with what they changed and marked as checked. Not while its change
+# request is waiting for approval (each save is a version the reviewer reads), and not if someone else saved it
+# after `expected_revision`.
+# me: Who asks: `list(staff_id, name, role)`.
+# expected_revision: The revision the person was looking at, or `NULL` not to check.
+# Returns: The record as saved, being read. An error with a sentence if it can't be read again.
+extraction_service_reextract <- function(connection, id, me, expected_revision = NULL) {
+  record <- extraction_model_get(connection, id)
+  if (!identical(record$method, extraction_ai)) {
+    stop("Only an AI-Powered extraction is read from its PDF. This one was typed by hand.", call. = FALSE)
+  }
+  if (identical(record$status, "Awaiting Review")) {
+    stop("It is waiting for approval on Change Requests. It can be read again once it is sent back.", call. = FALSE)
+  }
+  if (is.null(extraction_service_pdf(connection, record))) {
+    stop("Its PDF isn't on this site any more, so it can't be read again.", call. = FALSE)
+  }
+  draft_model_clear_reviewed(connection, id, me$staff_id, expected_revision)
+  change_record(connection, id, me, restart_reading, new_revision = FALSE)
+}
+
 # The reading job saying how far it has got.
 # If reading has started again since the job began ("Try reading again"),
 # its news is stale and nothing is saved.

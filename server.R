@@ -261,9 +261,10 @@ function(input, output, session) {
     )
 
     # ------ * Edit Extraction -------------------------------------------------
+    # Re-extract shows the draft's new reading on New Extraction.
     edit_extraction <- edit_extraction_server(
       "edit_extraction", extractions, catalog, database, me, show_page,
-      active = on_page("edit_extraction")
+      active = on_page("edit_extraction"), open_reading = extraction$open_details
     )
 
     # ------ * Make an edit ----------------------------------------------------

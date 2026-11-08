@@ -23,7 +23,6 @@ test_that("Make an edit's editor draws the variables it is given, and gives back
     expect_match(html, '<option value="Yes">') # the answer choices
 
     session$setInputs(edit = list(table = "variables", id = "v1", field = "matr_id", value = "AH6", typed = TRUE))
-    session$setInputs(action = list(action = "choices", id = "v1"))
     session$setInputs(action = list(action = "add_choice", id = "v1"))
     session$setInputs(edit = list(table = "response_options", id = "o2", field = "answer_option", value = "No", typed = TRUE))
     variables <- jsonlite::fromJSON(session$returned$value(), simplifyVector = FALSE)
@@ -53,8 +52,7 @@ test_that("on Make an edit Skip to is the words printed for it, a write-in can s
     ), list(
       variable_type = "closed_ended", matr_id = "AH10", subject = "", label = "",
       response_options = list(list(code_value = "1", answer_option = "yes", skip_instruction = "Go to 12"))
-    )), editor_options)
-    session$setInputs(action = list(action = "choices", id = "v2"))
+    )), editor_options) # v2's choices are open, as every variable's are until closed
     html <- cards_html(output)
     # the write-in's skip: the answer, then the words printed for where it goes
     expect_match(html, 'data-table="variables" data-id="v1" data-field="skip_condition"')

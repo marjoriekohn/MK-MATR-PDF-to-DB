@@ -540,6 +540,29 @@ test_that("the job reads the file of MATR IDs and codes once the questionnaire i
   expect_equal(read_anyway$error, "Gemini is busy") # shown on the step, which says to type the IDs on Edit Extraction
 })
 
+test_that("Re-extract reads a draft's PDF again, putting aside the questionnaire staff reviewed", {
+  me <- local_staff()
+  local_pdf_cache()
+  record <- extraction_service_create(test_connection, fake_upload(), me)
+  read <- function(pdf_path, lookups, progress) list(json = short_gold_json(), model = "m", prompt_version = "p")
+  reading_service_run(test_connection, record$id, record$reading_started, read = read)
+  checked <- draft_service_update(short_gold_draft(), "components", "c3", "checked", TRUE)
+  revision <- draft_service_save(test_connection, record$id, checked, me$staff_id)
+  expect_false(is.null(draft_model_get_both(test_connection, record$id)$questionnaire))
+  # not over a save someone else made since it was opened
+  expect_error(extraction_service_reextract(test_connection, record$id, me, expected_revision = revision - 1L))
+
+  again <- extraction_service_reextract(test_connection, record$id, me, expected_revision = revision)
+  expect_equal(again$extraction_status, "queued")
+  expect_null(draft_model_get_both(test_connection, record$id)$questionnaire)
+  # once read again, it opens as the new reading, nothing marked as checked
+  reading_service_run(test_connection, record$id, again$reading_started, read = read)
+  expect_false(any(extraction_service_load_draft(test_connection, again)$components$checked))
+
+  typed <- extraction_service_create_manual(test_connection, me)
+  expect_error(extraction_service_reextract(test_connection, typed$id, me), "typed by hand")
+})
+
 test_that("a file of MATR IDs and codes that isn't a PDF, CSV or text is turned away", {
   path <- withr::local_tempfile(fileext = ".xlsx")
   writeLines("not really", path)

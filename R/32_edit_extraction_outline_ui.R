@@ -510,7 +510,7 @@ question_panel <- function(block, draft, view, lookups, ns) {
 # The details of the block picked in the list, edited beside it.
 # The header is one row: the block's kind, its words (typed there; a group has none) and what there
 # is to fix. Then, for a question, the number printed beside it, its skip logic (`skip_logic()`), its variables
-# and their choices (`question_panel()`), and its categories and measurement scales (coming); for a section or group, how many
+# and their choices (`question_panel()`); for a section or group, how many
 # blocks it holds, and for a group its skip (`group_skip()`). Its buttons are along the bottom (`detail_actions()`). Fields have a small label above
 # them. They are the list's own (the same `data-field`s), so the page script keeps the row and the details in
 # step as words are typed.
@@ -546,9 +546,7 @@ block_detail <- function(block, draft, view, lookups, ns) {
             ) |> tagAppendAttributes(class = "detail-number"))
           ),
           detail_section("Skip Logic", skip_logic(block, draft, ns)),
-          detail_section("Variables", question_panel(block, draft, view, lookups, ns)),
-          # the question's MeSH categories and the measurement scales it is an item of, to come
-          detail_section("Categories & Measurement Scales", p(class = "detail-note", "Coming soon!"))
+          detail_section("Variables", question_panel(block, draft, view, lookups, ns))
         )
       } else if (is_container(type)) {
         tagList(

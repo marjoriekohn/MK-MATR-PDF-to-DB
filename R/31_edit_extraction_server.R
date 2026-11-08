@@ -1,15 +1,16 @@
 # How many changes Undo can take back.
 undo_depth <- 50
 
-# How long after the last change the draft is saved by itself, in seconds. Long enough that it isn't saved
-# between every two changes: the server does nothing else while it saves, so the page can't be used then.
-autosave_delay <- 30
+# How long staff have to have done nothing (no change, no block picked, no key pressed or pointer moved) before
+# the draft is saved by itself, in seconds. Long enough that it is never saved while they work: the server does
+# nothing else while it saves, so the page can't be used then.
+autosave_delay <- 60
 
 # The Edit Extraction page's server, for one extraction draft.
 # The whole questionnaire as it was extracted, every block edited where it is
 # (`extraction_outline_server()`). Other pages open a draft here with the `open` function this
-# returns. Changes are saved to the draft's reviewed copy in the database by themselves, half a minute
-# after the last one (`autosave_delay`), or at once with Save. While its change request is waiting for
+# returns. Changes are saved to the draft's reviewed copy in the database by themselves, once staff
+# have done nothing for a minute (`autosave_delay`), or at once with Save. While its change request is waiting for
 # approval they are only saved with Save, since each save is a new version for the reviewer; and after a
 # save is refused, only Save tries again.
 # Preview shows the questionnaire the way Change Requests shows it to a reviewer;
@@ -25,7 +26,11 @@ autosave_delay <- 30
 # or do nothing for a while; then it only shows the draft until it has it again, which it tries as soon
 # as they come back. Save is refused if someone else saved the draft after this page opened it, so
 # nobody's work is overwritten.
+# Re-extract reads an AI-Powered draft's PDF again with the latest extraction prompt, in place of the questionnaire
+# on the page (`extraction_service_reextract()`); the page lets the draft go and shows the reading with `open_reading`.
 # active: A reactive: whether this page is the one showing.
+# open_reading: A function taking a draft being read that shows how reading it is going (New Extraction's), or `NULL`
+#   to go to New Extraction.
 # Returns: A list with `open`, a function taking a record (and `take_over`, whether to take it from
 #   whoever is working on it) that opens it, unless the draft on screen has unsaved changes and staff
 #   choose to stay, or someone else is working on it; it returns whether it opened.
@@ -36,7 +41,8 @@ edit_extraction_server <- function(
   connection,
   me,
   show_page,
-  active = reactive(TRUE)
+  active = reactive(TRUE),
+  open_reading = NULL
 ) {
   moduleServer(id, function(input, output, session) {
     ns <- session$ns
@@ -125,9 +131,11 @@ edit_extraction_server <- function(
 
     observeEvent(input$save, save_draft())
 
-    # Saved by itself once nothing has changed for a few seconds.
+    # Saved by itself once staff have done nothing for a minute: no change, no block picked, and no key
+    # pressed or pointer moved on the site (www/js/review.js sends `active` at most every 20 seconds).
     autosaves <- reactive(!autosave_off() && !identical(record()$status, "Awaiting Review"))
-    settled <- debounce(draft, autosave_delay * 1000)
+    activity <- reactive(list(draft(), selected(), input$active))
+    settled <- debounce(activity, autosave_delay * 1000)
     observeEvent(settled(), {
       if (has_unsaved_changes() && autosaves()) save_draft(quietly = TRUE)
     }, ignoreInit = TRUE)
@@ -527,6 +535,62 @@ edit_extraction_server <- function(
       updateActionButton(session, "save", disabled = !has_unsaved_changes() || !has_draft())
     })
 
+    # ------ Re-extract ---------------------------------------------------------------------------
+    # An AI-Powered draft read again from the start, with the latest extraction prompt. What is on the page is put
+    # aside for the new reading, so the page lets the draft go and shows the reading instead; the draft opens here
+    # again once it is read. Not for a request waiting for approval, whose saves are versions for the reviewer.
+    can_reextract <- reactive({
+      current <- req(record())
+      identical(current$method, extraction_ai) && isTRUE(current$status %in% c("Draft", "Sent Back"))
+    })
+
+    observeEvent(input$reextract, {
+      req(can_reextract(), can_change())
+      showModal(reextract_dialog(ns))
+    })
+
+    observeEvent(input$confirm_reextract, {
+      removeModal()
+      req(record_id(), can_change())
+      id <- record_id()
+      reading <- try_showing(
+        extraction_service_reextract(connection, id, me, expected_revision = loaded_revision()),
+        "Couldn't read it again"
+      )
+      if (is.null(reading)) {
+        return()
+      }
+      release_draft(id)
+      put_aside()
+      extractions$changed()
+      showNotification("Reading the PDF again. Open it from Extraction Drafts once it is read.", type = "message")
+      if (is.function(open_reading)) open_reading(reading) else show_page("extraction")
+    })
+
+    # The page holds no draft: what it showed is gone (read again).
+    put_aside <- function() {
+      record_id(NULL)
+      draft(NULL)
+      saved(NULL)
+      original(NULL)
+      recorded(NULL)
+      undo_stack(list())
+      selected(NULL)
+      claim(NULL)
+      saved_at(NULL)
+      loaded_revision(NULL)
+      offered_revision(NULL)
+    }
+
+    output$reextract_button <- renderUI({
+      if (can_reextract()) {
+        actionButton(
+          ns("reextract"), icon_label("reextract", "Re-extract"), class = "btn-outline-dark",
+          title = "Read the PDF again with the latest extraction instructions, in place of this questionnaire"
+        )
+      }
+    })
+
     # ------ Previewing and submitting the change request ---------------------------------------
     # The preview shows the questionnaire as it is on screen, the way its change request shows it:
     # nothing is saved or sent while it is open. Where it goes (its Basic Info) is filled in on
@@ -655,7 +719,7 @@ edit_extraction_server <- function(
         return(span(
           class = "save-status is-dirty",
           if (autosaves()) "Unsaved changes" else "Unsaved changes: Save to keep them",
-          title = if (autosaves()) sprintf("Saved by itself %d seconds after the last change", autosave_delay)
+          title = if (autosaves()) "Saved by itself after a minute with nothing changed, or now with Save"
         ))
       }
       at <- saved_at()
