@@ -8,7 +8,8 @@ change_requests_ui <- function(id) {
     page_header(
       "Change Requests",
       "Items waiting for approval before they go into the MATR metadata database.",
-      uiOutput(ns("whose_toggle"))
+      uiOutput(ns("whose_toggle")),
+      eyebrow = "Review", icon_name = "change_requests"
     ),
     uiOutput(ns("cases"))
   )

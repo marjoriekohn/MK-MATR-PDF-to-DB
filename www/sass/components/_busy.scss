@@ -1,3 +1,10 @@
+// ------ The bar across the top of the page while the server works (ui.R's useBusyIndicators()) ---------
+// Shiny draws it from these two (its own stylesheet only reads them, falling back to its purple).
+:root {
+  --shiny-pulse-background: linear-gradient(90deg, #{$vcu-gold}, #{$vcu-black}, #{$vcu-gold});
+  --shiny-pulse-height: 5px;
+}
+
 // ------ The button pressed last, while the server works on it (busy.js) -------------------------------
 // It looks as it did, and can't be pressed again: the gold bar across the top says the site is working.
 .is-working { pointer-events: none; }

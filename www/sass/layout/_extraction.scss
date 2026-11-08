@@ -1,9 +1,6 @@
 // The New Extraction page (its two modes, Manual and AI-Powered) and the Extraction Drafts page
 
-.extraction-page {
-  h2 { margin: 0; font-size: 1.15rem; }
-  .card-intro .form-text { margin: 0.35rem 0 0; }
-}
+.extraction-page .reading-header h2 { margin: 0; font-size: $title-font-size; }
 
 // ------ Fields ---------------------------------------------------------------------
 
@@ -38,7 +35,7 @@
 .field-note {
   display: block;
   margin: -0.6rem 0 0.75rem;
-  font-size: 0.8rem;
+  font-size: $font-size-xs;
   &:empty { margin: 0; }
 }
 .field-problem {
@@ -59,27 +56,26 @@
 }
 
 // ------ Files ----------------------------------------------------------------------
-// Somewhere to drop a file, with its file input's button on the right
-.drop-zone {
+// A file not chosen yet: its icon, what it is for, and its button on the right
+.file-box {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   gap: 0.75rem 1rem;
-  margin-bottom: 1rem;
-  padding: 1rem 1.25rem;
-  border: 2px dashed $line;
-  border-radius: $border-radius;
-  background: rgba($vcu-gray, 0.04);
+  height: 100%; // as tall as the box beside it
+  padding: 1.25rem;
+  border: 1px solid $line-light;
+  border-radius: $border-radius-lg;
+  background: $surface-soft;
 
-  &.is-dragged-over { border-color: $vcu-gold; background: rgba($vcu-gold, 0.12); }
   // as wide as its button (bslib makes inputs 300px), centred beside the words
   .shiny-input-container.shiny-input-container { position: relative; width: auto; margin: 0; }
   .input-group > .form-control { display: none; }
   // the upload's progress sits just under the button, taking no room, so the button stays in the middle
   .shiny-file-input-progress { position: absolute; top: 100%; right: 0; left: 0; margin: 0.3rem 0 0; }
 }
-.drop-zone-icon { color: $vcu-gray; font-size: 1.5rem; }
-.drop-zone-text { flex: 1 1 14rem; font-size: 0.9rem; }
+.file-box-icon { color: $vcu-gray; font-size: $icon-font-size-lg; }
+.file-box-text { flex: 1 1 14rem; font-size: $font-size-sm; }
 
 // Shiny's file buttons are drawn as the quiet button (components/_buttons.scss); the input group would square
 // off one side
@@ -90,9 +86,11 @@
   display: flex;
   align-items: center;
   gap: 1rem;
-  padding: 1rem;
-  border: 1px solid $line;
-  border-radius: $border-radius;
+  height: 100%;
+  padding: 1rem 1.25rem;
+  border: 1px solid $line-light;
+  border-radius: $border-radius-lg;
+  background: $vcu-white;
 }
 .pdf-file-icon {
   display: flex;
@@ -104,7 +102,7 @@
   padding-bottom: 0.35rem;
   border: 1px solid $line;
   border-bottom: 4px solid $vcu-gold;
-  font-size: 0.65rem;
+  font-size: $font-size-xxs;
   font-weight: 700;
   letter-spacing: 0.05em;
 }
@@ -118,15 +116,28 @@
   .input-group > .form-control, .shiny-file-input-progress { display: none; }
 }
 
-// The optional file of MATR IDs and codes: under the PDF, quieter than it
-.pdf-file + .is-supplement, .drop-zone + .is-supplement { margin-top: 0.75rem; }
-.drop-zone.is-supplement { border-width: 1px; }
-.pdf-file.is-supplement {
-  .pdf-file-icon { align-items: center; padding-bottom: 0; font-size: 1.1rem; }
+// The PDF and the optional file of MATR IDs and codes, side by side (layout_columns() in 22_extraction_ai_ui.R).
+// A box with nothing in it (no file once reading has begun) takes no room, and the other has the whole row; it
+// isn't hidden, since Shiny doesn't fill in a hidden output.
+.upload-pair {
+  > .shiny-html-output:empty { position: absolute; }
+  &:has(> .shiny-html-output:empty) > .shiny-html-output:not(:empty) { grid-column: 1 / -1; }
 }
-.supplement-note { margin: 0.75rem 0 0; }
+.supplement-note { margin: 0; }
+.pdf-file.is-supplement {
+  .pdf-file-icon { align-items: center; padding-bottom: 0; font-size: $icon-font-size; }
+}
 
 // ------ Reading progress ---------------------------------------------------------------
+// a box of its own in the Questionnaire PDF card, under the files
+.reading-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  padding: 1rem 1.25rem;
+  border: 1px solid $line;
+  border-radius: $border-radius;
+}
 .reading-header {
   display: flex;
   align-items: baseline;
@@ -160,9 +171,9 @@
   justify-content: center;
   width: 1.75rem;
   height: 1.75rem;
-  border: 2px solid rgba($vcu-gray, 0.6);
+  border: 2px solid $line;
   border-radius: 50%;
-  font-size: 0.8rem;
+  font-size: $font-size-xs;
 
   .is-done > & { border-color: $vcu-black; background: $vcu-black; color: $vcu-white; }
   .is-attention > & { border-color: $vcu-black; background: $vcu-gold; color: $vcu-black; }
@@ -178,8 +189,8 @@
 .reading-note {
   padding: 0.75rem 1rem;
   border-radius: $border-radius;
-  background: rgba($vcu-gray, 0.08);
-  font-size: 0.9rem;
+  background: $gray-faint;
+  font-size: $font-size-sm;
 }
 
 .extraction-footer {
@@ -188,9 +199,6 @@
   align-items: center;
   justify-content: space-between;
   gap: 1rem;
-  margin-top: 1.5rem;
-  padding-top: 1.25rem;
-  border-top: 1px solid $line;
   color: $vcu-gray;
   @include action-bar;
 }
@@ -204,7 +212,7 @@
   gap: 0.4rem 1.25rem;
   margin-bottom: 1.25rem;
   color: $vcu-gray;
-  font-size: 0.85rem;
+  font-size: $font-size-sm;
 }
 
 // Each draft is a list card (components/_list-card.scss), with a picture of a page on the left: a page with
@@ -218,16 +226,16 @@
   height: 5.1rem;
   padding: 0.75rem 0.6rem;
   border: 1px solid $line;
-  span { height: 3px; background: rgba($vcu-gray, 0.3); }
+  span { height: 3px; background: $gray-strong; }
   span:nth-child(even) { width: 75%; }
   @include media-breakpoint-down(md) { display: none; }
 }
 
 // Someone else is working on it now
-.row-badge.is-editing { background: rgba($vcu-gold, 0.35); font-weight: 600; }
+.row-badge.is-editing { background: $gold-highlight; font-weight: 600; }
 
 // How far it has got, under who started it
-.draft-progress { display: flex; flex-wrap: wrap; gap: 0.35rem 1.25rem; margin-top: 0.6rem; font-size: 0.85rem; }
+.draft-progress { display: flex; flex-wrap: wrap; gap: 0.35rem 1.25rem; margin-top: 0.6rem; font-size: $font-size-sm; }
 
 // ------ The Extraction page: one page, three ways to start ---------------------------------
 .mode-intro {
@@ -244,7 +252,7 @@
 // ------ Adding what a drop-down lacks -------------------------------------------------
 // The pop-up a drop-down's "add" opens (the Make an edit form for one row)
 .quick-add {
-  .quick-add-more { margin: 0 0 1rem; font-size: 0.9rem; }
+  .quick-add-more { margin: 0 0 1rem; font-size: $font-size-sm; }
 }
 // why Add it can't be pressed yet: beside the buttons (on a phone, the action bar puts it above them)
 @include media-breakpoint-up(sm) {

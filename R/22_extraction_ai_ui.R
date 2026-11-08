@@ -10,39 +10,46 @@ extraction_ai_ui <- function(id) {
   div(
     class = "extraction-mode extraction-ai",
     `data-ns` = ns(""),
-    card(card_body(
-      h2("Questionnaire PDF"),
-      uiOutput(ns("pdf_card")),
-      uiOutput(ns("supplement")),
-      uiOutput(ns("reading")),
-      div(class = "extraction-footer",
-          uiOutput(ns("footer_note"), inline = TRUE),
-          uiOutput(ns("footer_button"), inline = TRUE) # Begin Extraction, then Open in Edit Extraction
+    card(
+      card_header(h2("Questionnaire PDF & Supplemental Files")),
+      card_body(
+        # the PDF and the file of Variable Names and Coding side by side on a wide window, one under the other on
+        # a narrower one (bslib's grid); one alone, once reading has begun without a file, takes the whole row
+        layout_columns(
+          col_widths = breakpoints(sm = 12, lg = 6), class = "upload-pair",
+          uiOutput(ns("pdf_card")),
+          uiOutput(ns("supplement_box"))
+        ),
+        uiOutput(ns("reading"))
+      ),
+      card_footer(
+        class = "extraction-footer",
+        uiOutput(ns("footer_note"), inline = TRUE),
+        uiOutput(ns("footer_button"), inline = TRUE) # Begin Extraction, then Open in Edit Extraction
       )
-    ))
+    )
   )
 }
 
-# A dashed box files can be dropped on.
-# `www/js/extraction.js` passes dropped files to the file input inside.
+# A box for a file not chosen yet: its icon, what it is for, and the button that chooses it.
 # file_input: The file input.
 # ...: What to say about it.
 # icon: The icon, by its name in `app_icons`.
-drop_zone <- function(file_input, ..., icon = "pdf") {
+file_box <- function(file_input, ..., icon = "pdf") {
   div(
-    class = "drop-zone",
-    span(class = "drop-zone-icon", app_icon(icon)),
-    div(class = "drop-zone-text", ...),
+    class = "file-box",
+    span(class = "file-box-icon", app_icon(icon)),
+    div(class = "file-box-text", ...),
     file_input
   )
 }
 
 # ------ Step 1: the PDF -------------------------------------------------------------
-# Somewhere to drop the PDF, before one is chosen.
-pdf_drop_zone <- function(ns) {
-  drop_zone(
+# Where the PDF is chosen, before one is.
+pdf_choice <- function(ns) {
+  file_box(
     fileInput(ns("pdf"), NULL, accept = c(".pdf", "application/pdf"), buttonLabel = "Choose PDF"),
-    strong("Drop the questionnaire PDF here"),
+    strong("Questionnaire PDF"),
     div("Reading starts when you click Begin Extraction.")
   )
 }
@@ -78,7 +85,7 @@ supplement_card <- function(name, begun, ns) {
     })
   }
   if (is.null(name)) {
-    return(drop_zone(
+    return(file_box(
       fileInput(ns("supplement"), NULL, accept = accept, buttonLabel = "Choose file"),
       strong("Optional: Variable Names and Coding"),
       div("A codebook or list (PDF, CSV or text) giving each variable its name (MATR ID) and each answer its code.
@@ -97,12 +104,13 @@ supplement_card <- function(name, begun, ns) {
 }
 
 # ------ Reading progress --------------------------------------------------------------
-# How reading the PDF is going.
+# How reading the PDF is going: a panel in the Questionnaire PDF card, under the files.
 reading_card <- function(record, ns) {
   steps <- extraction_service_reading_steps(record)
   finished <- extraction_service_is_read(record)
   failed <- identical(record$extraction_status, "failed")
-  card(card_body(
+  div(
+    class = "reading-panel",
     div(
       class = "reading-header",
       h2(if (finished) "Finished reading" else "Reading your questionnaire"),
@@ -121,7 +129,7 @@ reading_card <- function(record, ns) {
         div(actionButton(ns("cancel"), "Cancel extraction", class = "btn-outline-dark"))
       )
     }
-  ))
+  )
 }
 
 # How long reading has taken so far.

@@ -1,50 +1,141 @@
-// Home page: this person's work in progress beside what's waiting for them and the newest changes; one column
-// on a narrow window
+// Home page: the banner, then What you can do here and How it works (bslib's grids, in 10_home_ui.R)
 
-.home-columns {
+// ------ The banner ------------------------------------------------------------------------------
+// Dark and rounded, with a gold glow: what the site is for and the two ways in on the left, and how much this
+// person has waiting under them; the MATR logo on a lit panel on the right of a wide window.
+.home-hero {
+  position: relative;
   display: grid;
-  grid-template-columns: minmax(0, 7fr) minmax(0, 5fr);
-  gap: 1.5rem;
-  align-items: start;
-  @include media-breakpoint-down(lg) { grid-template-columns: minmax(0, 1fr); }
+  grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr);
+  gap: 2.5rem;
+  align-items: center;
+  margin: 0.25rem 0 2rem;
+  padding: 3rem;
+  overflow: hidden;
+  border-radius: $border-radius-lg;
+  background:
+    radial-gradient(40rem 22rem at 85% 30%, $gold-glow, transparent 70%),
+    linear-gradient(135deg, $surface-dark, $vcu-black);
+  color: $vcu-white;
+  box-shadow: $shadow-card-lift;
+  @include media-breakpoint-down(lg) { grid-template-columns: minmax(0, 1fr); padding: 2.25rem; }
+  @include media-breakpoint-down(sm) { padding: 1.5rem; }
 }
-.home-side { display: flex; flex-direction: column; gap: 1.5rem; }
+.home-hero-text { display: flex; flex-direction: column; align-items: flex-start; gap: 1rem; min-width: 0; }
+.home-hero h1 {
+  margin: 0;
+  color: $vcu-white;
+  font-size: $hero-title-font-size;
+  line-height: 1.1;
+  @include media-breakpoint-down(sm) { font-size: $page-title-font-size-phone; }
+}
+.home-hero-lead { max-width: 38rem; margin: 0; color: rgba($vcu-white, 0.78); font-size: $lead-font-size; }
+.home-hero-actions { display: flex; flex-wrap: wrap; gap: 0.75rem; margin-top: 0.5rem; }
+.eyebrow.is-on-dark { background: $gold-glow; color: $vcu-gold; }
 
-// ------ The boxes: Your work in progress, Waiting for you, Recent changes ----------------------
-.home-box {
-  margin-bottom: 0; // the columns' gap spaces them
-  .card-body { display: flex; flex-direction: column; gap: 0.75rem; }
-}
-.home-box-head {
-  display: grid;
-  grid-template-columns: auto 1fr;
-  column-gap: 0.6rem;
-  align-items: baseline;
-  .fa, svg { grid-row: 1 / span 2; font-size: 1.25rem; }
-}
-.home-box-title { margin: 0; font-size: 1.15rem; }
-.home-box-text { grid-column: 2; margin: 0; color: $vcu-gray; font-size: 0.9rem; }
+// How much is waiting: three numbers in gold, each with what it counts under it
+.home-stats { display: flex; flex-wrap: wrap; gap: 0.75rem 2.5rem; margin-top: 1rem; }
+.home-stat { display: flex; flex-direction: column; }
+.home-stat-value { color: $vcu-gold; font-family: $font-family-serif; font-size: $section-title-font-size; font-weight: 700; line-height: 1.2; }
+.home-stat-label { color: rgba($vcu-white, 0.65); font-size: $font-size-xs; }
 
-// One line each: what it is, its title, when, a reviewer's note, and its button on the right
-.home-items { display: flex; flex-direction: column; }
-.home-item {
+// The MATR logo on a soft white panel that catches the glow, with a caption across its foot (not on a tablet
+// or a phone, where the room is the words')
+.home-hero-art {
+  position: relative;
   display: flex;
   align-items: center;
-  gap: 0.75rem;
-  padding: 0.7rem 0;
-  border-top: 1px solid $line-light;
+  justify-content: center;
+  min-height: 17rem;
+  border: 1px solid $gold-highlight;
+  border-radius: $border-radius-lg;
+  background: radial-gradient(circle at 50% 40%, $vcu-white, mix($vcu-white, $vcu-light-gray, 60%));
+  box-shadow: 0 0 60px $gold-glow;
+  img { width: 78%; max-width: 22rem; height: auto; margin-bottom: 3rem; }
+  @include media-breakpoint-down(lg) { display: none; }
 }
-.home-item-body { display: flex; flex: 1; flex-direction: column; gap: 0.15rem; min-width: 0; }
-.home-item-badges { display: flex; flex-wrap: wrap; gap: 0.3rem; }
-.home-item-title { font-weight: 500; overflow-wrap: anywhere; }
-.home-item-meta { color: $vcu-gray; font-size: 0.85rem; overflow-wrap: anywhere; }
-.home-item-note {
-  margin-top: 0.2rem;
-  padding: 0.3rem 0.5rem;
-  border-left: 3px solid $vcu-gold;
-  background: rgba($vcu-gold, 0.12);
-  font-size: 0.9rem;
+.home-hero-caption {
+  position: absolute;
+  right: 1rem;
+  bottom: 1rem;
+  left: 1rem;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.6rem 0.9rem;
+  border-radius: $border-radius;
+  background: rgba($vcu-black, 0.82);
+  color: $vcu-white;
+  font-size: $font-size-sm;
+  font-weight: 500;
+  .fa, svg { color: $vcu-gold; }
 }
-.home-item-button { flex-shrink: 0; }
-.home-empty { margin: 0; padding: 0.6rem 0; border-top: 1px solid $line-light; color: $vcu-gray; }
-.home-box-more { margin-top: auto; display: flex; justify-content: flex-end; }
+
+// ------ What you can do here, How it works -------------------------------------------------------
+.home-section { margin-top: 2.5rem; }
+.home-section + .home-section { margin-top: 3rem; padding-top: 2.5rem; border-top: 1px solid $line-light; }
+
+// A square tile holding an icon, on a card that opens a page or on a step
+.icon-tile {
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  width: 2.5rem;
+  height: 2.5rem;
+  border: 1px solid $line-light;
+  border-radius: $border-radius;
+  background: $surface;
+  color: $vcu-black;
+  &.is-dark { border-color: $vcu-black; background: $vcu-black; color: $vcu-gold; }
+}
+
+// A card that opens a page: the whole card is the link, and it lifts under the pointer
+.action-card {
+  display: block;
+  height: 100%;
+  padding: 1.35rem;
+  border: 1px solid $card-border-color;
+  border-radius: $card-border-radius;
+  background: $vcu-white;
+  color: $vcu-black;
+  text-decoration: none;
+  box-shadow: $shadow-card;
+  transition: border-color 0.15s, box-shadow 0.15s, transform 0.15s;
+  // actionLink() puts what is in it in a span of its own
+  > .action-label { display: flex; flex-direction: column; gap: 0.4rem; height: 100%; }
+  .icon-tile { margin-bottom: 0.6rem; }
+  &:hover, &:focus-visible {
+    border-color: $gold-border;
+    color: $vcu-black;
+    box-shadow: $shadow-card-lift;
+    transform: translateY(-2px);
+    .icon-tile { border-color: $vcu-gold; background: $vcu-gold; }
+    .action-card-go { color: $vcu-black; }
+  }
+}
+.action-card-title { font-family: $font-family-serif; font-size: $font-size-base; font-weight: 700; }
+.action-card-text { color: $vcu-gray; font-size: $font-size-sm; }
+.action-card-go { display: inline-flex; align-items: center; gap: 0.35rem; margin-top: auto; padding-top: 0.6rem; color: $vcu-gray; font-size: $font-size-sm; font-weight: 600; }
+
+// A step: its icon, a large faint number in the corner, what it is and a line about it
+.step-card {
+  position: relative;
+  height: 100%;
+  padding: 1.35rem;
+  border: 1px solid $card-border-color;
+  border-radius: $card-border-radius;
+  background: $vcu-white;
+  box-shadow: $shadow-card;
+}
+.step-number {
+  position: absolute;
+  top: 0.9rem;
+  right: 1.2rem;
+  color: $line-light;
+  font-family: $font-family-serif;
+  font-size: $section-title-font-size;
+  font-weight: 700;
+}
+.step-title { margin: 1rem 0 0.3rem; font-size: $font-size-base; }
+.step-text { margin: 0; color: $vcu-gray; font-size: $font-size-sm; }

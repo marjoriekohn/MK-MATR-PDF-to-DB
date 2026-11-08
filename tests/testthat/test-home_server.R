@@ -1,103 +1,47 @@
-# The Home page: this person's work in progress, the requests waiting for them and the newest changes, and what
-# their buttons open. The database is the real one.
+# The Home page: its banner (with how much this person has waiting), the cards for each part of the site and the
+# steps an extraction takes, and what their buttons open. The database is the real one.
 
-home_args <- function(me, active = NULL, connection = test_connection, extractions = test_extractions(connection),
-                      catalog = shared_catalog(env), env = parent.frame()) {
+home_args <- function(me, active = NULL, connection = test_connection, extractions = test_extractions(connection)) {
   did <- new.env()
   did$pages <- character()
-  did$extractions <- list()
-  did$edits <- list()
-  did$reviews <- character()
   list(
     args = list(
       connection = connection, me = me, show_page = function(page) did$pages <- c(did$pages, page),
-      extractions = extractions, catalog = catalog,
-      open_extraction = function(record) did$extractions[[length(did$extractions) + 1]] <- record,
-      open_edit = function(record) did$edits[[length(did$edits) + 1]] <- record,
-      review_request = function(id) did$reviews <- c(did$reviews, id),
-      active = active
+      extractions = extractions, active = active
     ),
     did = did
   )
 }
 
-press <- function(session, action, id, kind = NULL) {
-  session$setInputs(action = Filter(Negate(is.null), list(action = action, id = as.character(id), kind = kind)))
-}
-
-test_that("New Extraction and the buttons under the lists open the pages they name", {
+test_that("the banner's buttons and the cards under What you can do here open the pages they name", {
   me <- local_staff()
   page <- home_args(me)
   shiny::testServer(home_server, args = page$args, {
-    for (name in c("new_extraction", "extraction_drafts", "edit_history", "change_requests")) do.call(session$setInputs, stats::setNames(list(1), name))
+    for (name in c("new_extraction", "browse_metadata", "go_extraction", "go_drafts", "go_metadata", "go_requests")) {
+      do.call(session$setInputs, stats::setNames(list(1), name))
+    }
   })
-  expect_equal(page$did$pages, c("extraction", "drafts", "edit_history", "change_requests"))
+  expect_equal(page$did$pages, c("extraction", "make_edit", "extraction", "drafts", "make_edit", "change_requests"))
 })
 
-test_that("your work in progress is your extraction drafts and saved edits, and Continue opens each where it is worked on", {
+test_that("the banner counts this person's work in progress, what is waiting for them and the changes added", {
   me <- local_staff()
   colleague <- local_staff()
-  tree <- shared_tree()
-  extraction <- local_read_extraction(me, info = picked_basic_info(tree))
-  edit <- local_edit(me)
-  theirs <- local_edit(colleague)
-  sent <- local_edit(me, status = "Awaiting Review")
+  local_edit(me)
+  local_edit(colleague) # a colleague's isn't yours
+  local_edit(me, status = "Awaiting Review") # nor is one sent for approval
   page <- home_args(me)
   shiny::testServer(home_server, args = page$args, {
     errors <- collect_errors(session)
-    ids <- vapply(work(), function(item) item$record$id, character(1))
-    expect_setequal(ids, c(extraction$id, edit$id)) # not a colleague's, nor one sent for approval
-    listed <- text_of(output$work)
-    expect_match(listed, edit$summary, fixed = TRUE)
-    expect_match(listed, paste0(tree$questionnaire$name, " (ZZQ) · ", tree$wave$name), fixed = TRUE)
-    expect_match(listed, "Continue")
-    press(session, "continue", extraction$id, "extraction")
-    press(session, "continue", edit$id, "edit")
+    stats <- text_of(output$stats)
+    expect_match(stats, "1\\s*Your work in progress")
+    expect_match(stats, "[0-9]+\\s*Waiting for you")
+    expect_match(stats, "[0-9]+\\s*Changes added")
     expect_length(errors(), 0)
   })
-  expect_equal(page$did$extractions[[1]]$id, extraction$id)
-  expect_equal(page$did$edits[[1]]$id, edit$id)
-  expect_false(theirs$id %in% vapply(page$did$edits, function(record) record$id, character(1)))
 })
 
-test_that("waiting for you are the requests you can approve, with Review; one you sent isn't", {
-  me <- local_staff()
-  colleague <- local_staff()
-  theirs <- local_edit(colleague, status = "Awaiting Review")
-  mine <- local_edit(me, status = "Awaiting Review")
-  # the page and the test see one read of what is waiting: other runs of the tests send and remove requests meanwhile
-  snapshot <- change_request_service_waiting(test_connection)
-  local_stub("change_request_service_waiting", function(connection) snapshot)
-  page <- home_args(me)
-  shiny::testServer(home_server, args = page$args, {
-    errors <- collect_errors(session)
-    ids <- vapply(requests()$shown, function(record) record$id, character(1))
-    expect_false(mine$id %in% ids)
-    waiting <- change_request_service_filter(snapshot, me, "me")
-    expect_equal(requests()$total, length(waiting))
-    expect_true(theirs$id %in% names(waiting))
-    if (theirs$id %in% ids) expect_match(text_of(output$requests), paste("Sent by", colleague$name))
-    expect_match(text_of(output$change_requests_more), "^See (more|all [0-9]+)$")
-    press(session, "review", theirs$id)
-    expect_length(errors(), 0)
-  })
-  expect_equal(page$did$reviews, theirs$id)
-})
-
-test_that("recent changes are the newest applied, and their button says how many there are", {
-  me <- local_staff()
-  admin <- local_staff("ADMIN")
-  applied <- local_applied_edit(admin, "respondent_type", "add", respondent_type__name = test_name("Listed"))
-  shiny::testServer(home_server, args = home_args(me)$args, {
-    history_text <- text_of(output$history)
-    expect_match(history_text, history_service_get_all(test_connection)[[as.character(applied)]]$summary, fixed = TRUE)
-    expect_match(history_text, paste0("made by ", admin$name))
-    expect_match(text_of(output$edit_history_more), "^See (more|all [0-9]+)$")
-    expect_lte(length(history()$shown), home_recent_n)
-  })
-})
-
-test_that("coming back to the page reads its lists again", {
+test_that("coming back to the page counts again", {
   me <- local_staff()
   active <- shiny::reactiveVal(TRUE)
   # the reads of what is waiting are counted (not what they find: other runs of the tests send requests meanwhile)
@@ -119,30 +63,50 @@ test_that("coming back to the page reads its lists again", {
   })
 })
 
-test_that("a database that can't be reached says so in each box", {
+test_that("a database that can't be reached leaves its counts a dash, and says why", {
   me <- local_staff()
   seen <- local_browser()
   down <- list(url = "http://127.0.0.1:1", key = "sb_secret_x")
   none <- list(all = shiny::reactive(list()), changed = function() NULL)
-  shiny::testServer(home_server, args = home_args(me, connection = down, extractions = none, catalog = fixed_catalog())$args, {
+  shiny::testServer(home_server, args = home_args(me, connection = down, extractions = none)$args, {
     errors <- collect_errors(session)
-    expect_match(text_of(output$work), "Nothing in progress")
-    expect_match(text_of(output$requests), "couldn't be read")
-    expect_match(text_of(output$history), "couldn't be read")
-    expect_match(text_of(output$change_requests_more), "See more")
+    stats <- text_of(output$stats)
+    expect_match(stats, "0\\s*Your work in progress") # nothing read means nothing saved
+    expect_match(stats, "–\\s*Waiting for you")
+    expect_match(stats, "–\\s*Changes added")
     expect_match(notice_texts(seen), "Couldn't read the", all = FALSE)
     expect_length(errors(), 0)
   })
 })
 
-test_that("the home page is drawn with New Extraction, its three boxes and a place for each list", {
+test_that("the home page is the banner, a card for each page and a step for each part of an extraction's way in", {
   html <- htmltools::renderTags(home_ui("home"))$html
+  expect_match(html, 'class="home-hero"')
   expect_match(html, 'id="home-new_extraction"')
-  expect_match(html, 'id="home-work"')
-  expect_match(html, 'id="home-requests"')
-  expect_match(html, 'id="home-history"')
-  expect_match(html, "Your work in progress")
-  expect_match(html, "Waiting for you")
-  expect_match(html, "Recent changes")
-  expect_equal(lengths(regmatches(html, gregexpr("home-box-title", html))), 3)
+  expect_match(html, 'id="home-browse_metadata"')
+  expect_match(html, 'id="home-stats"')
+  expect_match(html, "logo_lg_transparent.png", fixed = TRUE)
+  expect_equal(lengths(regmatches(html, gregexpr('action-card"', html))), 4)
+  expect_equal(lengths(regmatches(html, gregexpr('class="step-card"', html))), 4)
+  # four to a row on a wide window, two on a tablet and one on a phone (bslib's grid)
+  expect_equal(lengths(regmatches(html, gregexpr('col-widths-xl="3"', html))), 2)
+  # no lists of drafts, requests or changes: the pages that list them are a click away
+  expect_no_match(html, "Your work in progress</h2>|Recent changes|home-box")
+})
+
+test_that("a count that couldn't be read is a dash, not a number", {
+  html <- htmltools::renderTags(home_stats(2L, NULL, 9L))$html
+  expect_match(html, "2</span>")
+  expect_match(html, "–</span>")
+  expect_match(html, "9</span>")
+})
+
+test_that("What you can do here has no heading of its own, and How it works has its heading and line", {
+  html <- htmltools::renderTags(home_ui("home"))$html
+  sections <- regmatches(html, gregexpr("(?s)<section class=\"home-section\">.*?</section>", html, perl = TRUE))[[1]]
+  expect_length(sections, 2)
+  expect_no_match(sections[1], "<h2")
+  expect_match(sections[2], '<h2 class="section-title">How it works</h2>', fixed = TRUE)
+  # nothing on the page is a heading holding a grid of cards
+  expect_no_match(html, "<h2[^>]*>\\s*<div", perl = TRUE)
 })

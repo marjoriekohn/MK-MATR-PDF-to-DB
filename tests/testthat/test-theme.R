@@ -113,3 +113,41 @@ test_that("the stylesheet carries a fingerprint of every file in www/sass, so a 
   # sass caches by the files global.R names; the ones they import are part of the stylesheet too
   expect_match(site_css(), "/\\* www/sass [0-9a-f]{32} \\*/")
 })
+
+test_that("no R file draws CSS of its own: every style is in www/sass", {
+  root <- test_path("..", "..")
+  files <- c(file.path(root, c("ui.R", "server.R")), list.files(file.path(root, "R"), pattern = "\\.R$", full.names = TRUE))
+  for (file in files) {
+    code <- readLines(file, warn = FALSE)
+    code <- code[!grepl("^\\s*#", code)]
+    expect_false(any(grepl("\\bstyle\\s*=|tags\\$style|busyIndicatorOptions\\(", code)), info = basename(file))
+  }
+})
+
+test_that("the busy bar across the top is gold and black, from the stylesheet", {
+  rule <- css_rule(site_css(), ":root")
+  expect_match(rule, "--shiny-pulse-background:\\s*linear-gradient\\(90deg, #FFB300, #000000, #FFB300\\)", ignore.case = TRUE)
+  expect_match(rule, "--shiny-pulse-height:\\s*5px")
+})
+
+test_that("text sizes are defaults.scss's, not typed in on a page", {
+  # a size is one of the type scale's variables (or inherits), so the same kind of words is one size everywhere
+  for (page in names(sass_sources())) {
+    expect_false(grepl("font-size:\\s*[0-9.]+(rem|px|em)", sass_sources()[[page]], perl = TRUE), info = page)
+  }
+})
+
+test_that("a note beside something (a reviewer's words, a hint, a warning) is drawn once, in components/_note.scss", {
+  pages <- sass_sources()
+  expect_true("_note.scss" %in% names(pages))
+  # a coloured rule down a box's left is a note's; only a page's title has one of its own (_page.scss)
+  for (page in setdiff(names(pages), c("_note.scss", "_page.scss"))) {
+    expect_false(grepl("border-left:\\s*[0-9]+px solid \\$vcu-", pages[[page]], perl = TRUE), info = page)
+  }
+})
+
+test_that("the gold and gray tints (a note, a hover, a highlight, a field's focus, a chip) are defaults.scss's", {
+  for (page in names(sass_sources())) {
+    expect_false(grepl("rgba\\(\\$vcu-(gold|gray)", sass_sources()[[page]], perl = TRUE), info = page)
+  }
+})

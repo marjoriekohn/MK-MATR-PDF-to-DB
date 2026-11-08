@@ -10,11 +10,12 @@ extraction_ui <- function(id) {
     `data-ns` = ns(""),
     page_header(
       "New Extraction",
-      "Add a questionnaire to the database.",
+      "Upload a PDF and supplemental files.",
       toggle_input(
         ns("mode"), c("Manual" = "manual", "AI-Powered" = "ai"),
         selected = "ai", label = "How to start"
-      )
+      ),
+      eyebrow = "Start here", icon_name = "upload"
     ),
     conditionalPanel("input.mode == 'manual'", ns = ns, extraction_manual_ui(ns("manual"))),
     conditionalPanel("input.mode == 'ai'", ns = ns, extraction_ai_ui(ns("ai")))

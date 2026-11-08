@@ -16,11 +16,18 @@ page_script <- function(path) {
 # A page's title and the sentence under it.
 # title: The title.
 # subtitle: The sentence under it.
-# ...: Anything else (buttons, a save indicator), shown on the right.
-page_header <- function(title, subtitle, ...) {
+# ...: Anything else (buttons, a toggle), shown on the right, or under it on a phone.
+# eyebrow: A few words over the title, in a gold pill (`.eyebrow`), or `NULL`.
+# icon_name: The eyebrow's icon, by its name in `app_icons`.
+page_header <- function(title, subtitle, ..., eyebrow = NULL, icon_name = NULL) {
   div(
     class = "page-header",
-    div(h1(title), p(class = "subhead", subtitle)),
+    div(
+      class = "page-header-text",
+      if (!is.null(eyebrow)) span(class = "eyebrow", if (!is.null(icon_name)) app_icon(icon_name), eyebrow),
+      h1(title),
+      p(class = "subhead", subtitle)
+    ),
     div(class = "page-header-aside", ...)
   )
 }

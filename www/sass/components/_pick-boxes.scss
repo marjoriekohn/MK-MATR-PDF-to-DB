@@ -17,7 +17,7 @@
   white-space: normal;
   transition: box-shadow 0.15s, border-color 0.15s, transform 0.15s;
   .action-label { display: flex; align-items: flex-start; gap: 0.75rem; } // the icon beside the words, not over them
-  .fa, .fas, svg { margin-top: 0.2rem; font-size: 1.2rem; }
+  .fa, .fas, svg { margin-top: 0.2rem; font-size: $icon-font-size; }
   &:hover, &:focus-visible, &:active {
     border-color: $vcu-gold;
     background: $vcu-white;
@@ -26,6 +26,6 @@
     transform: translateY(-1px);
   }
 }
-.pick-box-words { display: flex; flex-direction: column; gap: 0.2rem; font-size: 0.9rem; strong { font-size: 1rem; } }
+.pick-box-words { display: flex; flex-direction: column; gap: 0.2rem; font-size: $font-size-sm; strong { font-size: $font-size-base; } }
 // a box's icon and words start at its top, whatever height its row is (a .btn centres its content)
 .pick-boxes.is-grid .btn.pick-box { flex-direction: column; justify-content: flex-start; align-items: flex-start; min-height: 9rem; }

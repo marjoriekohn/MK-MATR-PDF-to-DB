@@ -1,16 +1,35 @@
-// Toggles: side-by-side buttons that pick one value (toggle_buttons() in
-// helpers_layout.R). The buttons are labels, so they're set like the site's
-// other buttons rather than like labels, and they share the room there is
+// Toggles: side-by-side buttons that pick one value (toggle_buttons() in helpers_layout.R), drawn as one
+// segmented control: a gray track, and the picked choice a white pill on it. The buttons are labels, so
+// they're set like the site's other buttons rather than like labels, and they share the room there is
 // rather than spill out of it.
 .toggle-buttons {
   max-width: 100%;
-  > .btn { min-width: 0; letter-spacing: normal; }
+  padding: 0.25rem;
+  gap: 0.25rem;
+  border-radius: calc(#{$border-radius} + 0.25rem);
+  background: $gray-tint;
+  > .btn {
+    --bs-btn-bg: transparent;
+    --bs-btn-border-color: transparent;
+    --bs-btn-color: #{$vcu-gray};
+    --bs-btn-hover-bg: #{rgba($vcu-white, 0.6)};
+    --bs-btn-hover-border-color: transparent;
+    --bs-btn-hover-color: #{$vcu-black};
+    min-width: 0;
+    min-height: $control-height-sm + 0.25rem;
+    border-radius: $border-radius !important; // each is its own pill, not a joined group
+    font-weight: 500;
+    letter-spacing: normal;
+    box-shadow: none;
+  }
 }
-// the picked one is filled in black (a quiet button pressed is only tinted)
+// the picked one is a white pill with a shadow
 .btn-check:checked + .btn-outline-dark {
-  --bs-btn-active-color: #{$vcu-white};
-  --bs-btn-active-bg: #{$vcu-black};
-  --bs-btn-active-border-color: #{$vcu-black};
+  --bs-btn-active-color: #{$vcu-black};
+  --bs-btn-active-bg: #{$vcu-white};
+  --bs-btn-active-border-color: transparent;
+  font-weight: 600;
+  box-shadow: 0 1px 3px rgba($vcu-black, 0.12);
 }
 
 // On a phone a toggle fills its row, each choice an equal share (a grid's columns: flex can't shrink a button

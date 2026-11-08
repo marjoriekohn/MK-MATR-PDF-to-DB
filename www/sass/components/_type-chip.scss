@@ -1,12 +1,12 @@
 // Kinds of block (outline rows, details title) and the small notes beside them
 .type-chip {
   display: inline-block;
-  padding: 0.1rem 0.45rem;
+  padding: 0.12rem 0.6rem;
   border: 1px solid transparent;
-  font-size: 0.75rem;
-  font-weight: 700;
+  font-size: $font-size-xs;
+  font-weight: 600;
   line-height: 1.4;
-  border-radius: $border-radius;
+  border-radius: $border-radius-pill;
   white-space: nowrap;
 
   &.is-section     { background: $vcu-gold; color: $vcu-black; }
@@ -26,11 +26,14 @@
   }
 }
 
+// A badge saying what something is (Extraction, Add, Yours): a pill
 .row-badge {
-  padding: 0.1rem 0.45rem;
-  border-radius: $border-radius;
-  background: rgba($vcu-gray, 0.30);
-  font-size: 0.75rem;
+  display: inline-block;
+  padding: 0.15rem 0.6rem;
+  border-radius: $border-radius-pill;
+  background: $gray-tint;
+  font-size: $font-size-xs;
+  font-weight: 500;
   white-space: nowrap;
 
   &.is-warning { background: $vcu-red; font-weight: 700; color: $vcu-white; }

@@ -15,8 +15,6 @@
 #   reads them and `refresh()` reads them again.
 # active: A reactive that says whether this page is the one on screen, or `NULL`. Opening the
 #   page reads the requests again, since other staff send and approve them too.
-# Returns: A list with `review`, a function taking a request's id that opens it in its dialog (the Home page's
-#   Review).
 change_requests_server <- function(
   id,
   connection,
@@ -328,19 +326,6 @@ change_requests_server <- function(
         return(no_change_requests(whose()))
       }
       lapply(unname(shown()), change_request_card_ui, me = me)
-    })
-
-    # ------ RETURN ------------------------------------------------------------
-    # The request is read afresh when its dialog opens; one no longer waiting (approved, sent back or withdrawn
-    # since the Home page listed it) says so instead.
-    list(review = function(id) {
-      record <- isolate(requests())[[as.character(id)]]
-      if (is.null(record)) {
-        showNotification("That request isn't waiting any more: it was approved, sent back or withdrawn.", type = "warning")
-        return(invisible(FALSE))
-      }
-      show_request(record)
-      invisible(TRUE)
     })
   })
 }

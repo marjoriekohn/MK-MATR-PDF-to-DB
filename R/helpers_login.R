@@ -66,14 +66,17 @@ password_fields <- function() {
   )
 }
 
-# The card the login screen is drawn on, covering the page.
-# TODO: add the logo here too?
+# The card the login screen is drawn on, covering the page, with the MATR logo over it.
 login_card <- function(id, title, ...) {
   div(
     id = id, class = "login-screen",
     div(
       class = "login-card",
-      div(class = "login-brand", span(class = "login-brand-mark"), "MATR Metadata Database"),
+      div(
+        class = "login-brand",
+        tags$img(src = "img/logo_sm_transparent.png", class = "brand-logo", alt = ""),
+        span(class = "brand-text", span(class = "brand-name", "MATR Metadata Database"), span(class = "brand-tagline", "Mid-Atlantic Twin Registry"))
+      ),
       h1(class = "login-title", title),
       ...
     )

@@ -64,17 +64,17 @@ pdf_open_button <- function(url, at_picked = FALSE) {
 
 # How far the checking has got: a bar that fills as blocks are marked as checked.
 # counts: From `draft_service_counts()`.
-# Returns: A UI element saying "N% human-reviewed", with the counts in its tooltip.
+# Returns: A UI element saying "N% human-reviewed", with the counts in its tooltip. The bar is the browser's
+#   own `<progress>`, drawn in _edit_extraction.scss, so the server sets how far, not how wide.
 structure_progress_ui <- function(counts) {
   percent <- draft_service_percent_checked(counts)
   bslib::tooltip(
     div(
       class = "review-structure",
       div(
-        class = "progress review-structure-bar", role = "progressbar", `aria-label` = "Blocks checked",
-        `aria-valuenow` = percent, `aria-valuemin` = 0, `aria-valuemax` = 100,
-        div(class = "progress-bar", style = paste0("width: ", percent, "%")),
-        span(class = "review-structure-text", paste0(percent, "% human-reviewed"))
+        class = "review-structure-bar",
+        tags$progress(value = percent, max = 100, `aria-label` = "Blocks checked"),
+        span(class = "review-structure-text", `aria-hidden` = "true", paste0(percent, "% human-reviewed"))
       )
     ),
     sprintf("%d of %d blocks marked as checked", counts$checked, counts$blocks)

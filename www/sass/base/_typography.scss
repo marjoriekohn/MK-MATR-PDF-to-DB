@@ -1,30 +1,42 @@
 // Clear, consistent headings; legible body copy (leading 125-150%).
-// Larger text sits tighter; smaller text is opened up for legibility.
+// Titles are Merriweather (VCU's serif), everything else Roboto. Larger text sits tighter; smaller text is
+// opened up for legibility.
 body {
   font-family: $font-family-base;
   line-height: 1.5;
-  letter-spacing: 0.01em;
+  letter-spacing: 0.005em;
 }
 
 h1, h2, h3, h4, h5, h6 {
   font-family: $headings-font-family;
-  line-height: 1.2;
+  font-weight: 700;
+  line-height: 1.25;
   color: $vcu-black;
+  letter-spacing: -0.01em;
 }
-h1 { letter-spacing: -0.02em; }
-h2 { letter-spacing: -0.015em; }
-h3 { letter-spacing: -0.01em; }
 
-// Merriweather for subheads and callouts
-.subhead, .callout, blockquote {
-  font-family: $font-family-serif;
-  line-height: 1.5;
+// The sentence under a page's or a box's title: Roboto, in gray
+.subhead { font-family: $font-family-sans-serif; line-height: 1.55; color: $vcu-gray; }
+
+// A small label over a title: gold words on a gold tint, in a pill
+.eyebrow {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.2rem 0.65rem;
+  border-radius: $border-radius-pill;
+  background: $gold-tint;
+  color: mix($vcu-gold, $vcu-black, 55%);
+  font-size: $font-size-xs;
+  font-weight: 600;
+  letter-spacing: 0.02em;
 }
+
 .callout, blockquote {
-  border-left: 4px solid $vcu-gold;
-  padding-left: 1rem;
+  padding: 0.6rem 0.9rem;
+  @include note;
   color: $vcu-black;
 }
 
-small, .small, label, .form-text { letter-spacing: 0.03em; line-height: 1.4; }
+small, .small, label, .form-text { letter-spacing: 0.02em; line-height: 1.4; }
 label, .control-label { font-weight: 500; color: $vcu-black; }

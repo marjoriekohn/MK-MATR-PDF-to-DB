@@ -1,149 +1,103 @@
-# The Home page: what this person has to do. Their work in progress (extraction drafts and saved edits, those
-# sent back first, each with Continue), the change requests waiting for them (each with Review), and the
-# newest changes added to the database. New Extraction starts one; the menu leads to every page.
+# The Home page: a banner saying what the site is for, with how much this person has waiting, then a card for
+# each part of the site and the steps an extraction takes into the database. The menu leads to every page.
 home_ui <- function(id) {
   ns <- NS(id)
   div(
     class = "page home-page",
     `data-ns` = ns(""),
-    page_header(
-      "Home", "What you've started, and what's waiting for you.",
-      actionButton(ns("new_extraction"), icon_label("add", "New Extraction"), class = "btn-primary")
+    home_hero(ns),
+    home_section(
+      # four to a row on a wide window, two by two on a tablet, one under another on a phone
+      layout_columns(
+        col_widths = breakpoints(sm = 12, md = 6, xl = 3), fill = FALSE,
+        home_action(ns("go_extraction"), "upload", "New Extraction", "Upload a questionnaire PDF for Gemini to read, or type one in yourself."),
+        home_action(ns("go_drafts"), "drafts", "Extraction Drafts", "Pick up a draft, yours or a colleague's, whose change request isn't sent yet."),
+        home_action(ns("go_metadata"), "metadata", "Metadata", "View, add, change or delete registries, studies, questionnaires, waves and more."),
+        home_action(ns("go_requests"), "change_requests", "Change Requests", "Approve what colleagues send, or follow up on your own requests.")
+      )
     ),
-    div(
-      class = "home-columns",
-      home_box(
-        ns, "work", "edit", "Your work in progress",
-        "Drafts you started and haven't sent for approval, and any sent back to you.", uiOutput(ns("work"))
-      ),
-      div(
-        class = "home-side",
-        home_box(
-          ns, "change_requests", "change_requests", "Waiting for you",
-          "Change requests you can approve, and your own that need you.", uiOutput(ns("requests"))
-        ),
-        home_box(
-          ns, "edit_history", "history", "Recent changes",
-          "The newest changes added to the MATR metadata database.", uiOutput(ns("history"))
-        )
+    home_section(
+      title = "How it works",
+      text = "From a questionnaire PDF to the MATR metadata database.",
+      layout_columns(
+        col_widths = breakpoints(sm = 12, md = 6, xl = 3), fill = FALSE,
+        home_step(1, "upload", "Upload the questionnaire", "Choose its PDF on New Extraction. Gemini reads it in the background."),
+        home_step(2, "edit", "Check every block", "On Edit Extraction, fix what was read and mark each block as checked."),
+        home_step(3, "change_requests", "Send a change request", "Submit it, and give its registry, study, questionnaire and wave."),
+        home_step(4, "verify", "A colleague approves it", "Once one other staff member approves it, it is added to the database.")
       )
     )
   )
 }
 
-# A box that lists something, with a button under it to the page that lists them all (`<key>_more`).
-home_box <- function(ns, key, icon_name, title, text, list_output) {
-  card(
-    class = "home-box",
-    card_body(
-      div(class = "home-box-head", app_icon(icon_name), h2(class = "home-box-title", title), p(class = "home-box-text", text)),
-      list_output,
-      div(class = "home-box-more", uiOutput(ns(paste0(key, "_more")), inline = TRUE))
+# The banner across the top: what the site is for, the two ways in, and how much this person has waiting
+# (`output$stats`, home_stats()). Dark, with the MATR logo on the right of a wide window.
+home_hero <- function(ns) {
+  div(
+    class = "home-hero",
+    div(
+      class = "home-hero-text",
+      span(class = "eyebrow is-on-dark", app_icon("metadata"), "Mid-Atlantic Twin Registry"),
+      h1("MATR Metadata Database"),
+      p(
+        class = "home-hero-lead",
+        "Turn questionnaire PDFs into structured metadata, review each other's changes, and keep the registry's ",
+        "studies, questionnaires and waves up to date, all in one place."
+      ),
+      div(
+        class = "home-hero-actions",
+        actionButton(ns("new_extraction"), tagList("Start a New Extraction", app_icon("next_step")), class = "btn-primary"),
+        actionButton(ns("browse_metadata"), "Browse Metadata", class = "btn-on-dark")
+      ),
+      uiOutput(ns("stats"), class = "home-stats")
+    ),
+    div(
+      class = "home-hero-art", `aria-hidden` = "true",
+      tags$img(src = "img/logo_lg_transparent.png", alt = ""),
+      div(class = "home-hero-caption", app_icon("metadata"), "Questionnaires and variables in one database")
     )
   )
 }
 
-# One line of a list: badges saying what it is, its title, a line about it, a reviewer's note if it has one,
-# and its button.
-# badges: Badges, from `row_badge()`.
-# title: What it is called.
-# meta: A line about it: who, when.
-# note: A reviewer's note, or `NULL`.
-# button: Its button, or `NULL`.
-home_item <- function(badges, title, meta, note = NULL, button = NULL) {
+# How much this person has waiting, in the banner: their work in progress, the requests waiting for them, and
+# the changes added so far. A count that couldn't be read is a dash.
+home_stats <- function(work, waiting, changes) {
+  stat <- function(n, label) div(class = "home-stat", span(class = "home-stat-value", n %||% "–"), span(class = "home-stat-label", label))
+  tagList(stat(work, "Your work in progress"), stat(waiting, "Waiting for you"), stat(changes, "Changes added"))
+}
+
+# A part of the page, under a heading of its own if it has one, with a line under the heading if that has one.
+home_section <- function(..., title = NULL, text = NULL) {
+  tags$section(
+    class = "home-section",
+    if (!is.null(title)) h2(class = "section-title", title),
+    if (!is.null(text)) p(class = "subhead section-text", text),
+    ...
+  )
+}
+
+# A card that opens a page: its icon in a tile, its name and what it is for. The whole card is the link.
+# input_id: The link's input id; the server opens the page.
+home_action <- function(input_id, icon_name, title, text) {
+  actionLink(
+    input_id,
+    tagList(
+      span(class = "icon-tile", app_icon(icon_name)),
+      span(class = "action-card-title", title),
+      span(class = "action-card-text", text),
+      span(class = "action-card-go", "Open", app_icon("next_step"))
+    ),
+    class = "action-card"
+  )
+}
+
+# A step of how an extraction gets into the database: its number, its icon, what it is and a line about it.
+home_step <- function(number, icon_name, title, text) {
   div(
-    class = "home-item",
-    div(
-      class = "home-item-body",
-      div(class = "home-item-badges", badges),
-      span(class = "home-item-title", if (has_text(title)) title else "(no description)"),
-      span(class = "home-item-meta", meta),
-      if (!is.null(note)) span(class = "home-item-note", strong(paste0(note$by %||% "A reviewer", ": ")), paste0("“", note$note, "”"))
-    ),
-    button
+    class = "step-card",
+    span(class = "icon-tile is-dark", app_icon(icon_name)),
+    span(class = "step-number", `aria-hidden` = "true", number),
+    h3(class = "step-title", span(class = "visually-hidden", paste0("Step ", number, ": ")), title),
+    p(class = "step-text", text)
   )
-}
-
-# One of this person's drafts: an extraction or an edit, with Continue.
-# A draft still being read says how far it has got, and its button shows the reading.
-# item: From `home_service_my_work()`: `list(kind, record)`.
-# catalog: The live tables, from `questionnaire_service_get_catalog()`: an extraction is named by its
-#   questionnaire and wave once they are picked.
-home_work_item <- function(item, catalog) {
-  record <- item$record
-  sent_back <- if (identical(record$status, "Sent Back")) record$sent_back
-  when <- if (!is.null(sent_back)) {
-    paste("Sent back", day_phrase(parse_time(sent_back$date)))
-  } else {
-    paste("Saved", time_ago(parse_time(record$saved)))
-  }
-  if (identical(item$kind, "extraction")) {
-    status <- record$extraction_status
-    reading <- isTRUE(status %in% reading_statuses)
-    return(home_item(
-      tagList(
-        row_badge("Extraction"),
-        if (!is.null(sent_back)) row_badge("Sent back", class = "is-warning"),
-        if (reading) row_badge("Being read"),
-        if (identical(status, "failed")) row_badge("Reading stopped", class = "is-warning")
-      ),
-      extraction_service_title(record, catalog),
-      paste(c(when, record$pdf$name), collapse = " · "),
-      note = sent_back,
-      button = home_button(if (reading) "See progress" else "Continue", "continue", record$id, "extraction")
-    ))
-  }
-  kind <- change_request_service_kind(record)
-  home_item(
-    tagList(
-      row_badge(kind, class = paste0("is-", tolower(kind))),
-      if (!is.null(sent_back)) row_badge("Sent back", class = "is-warning")
-    ),
-    record$summary, when,
-    note = sent_back,
-    button = home_button("Continue", "continue", record$id, "edit")
-  )
-}
-
-# One change request waiting for this person, with Review.
-# record: A request, from `change_request_service_waiting()`.
-home_request_item <- function(record, me) {
-  kind <- change_request_service_kind(record)
-  state <- change_request_service_state(record, me)
-  who <- if (state$mine) "you" else record$prepared_by
-  home_item(
-    tagList(
-      row_badge(kind, class = paste0("is-", tolower(kind))),
-      if (state$asked_of_me) row_badge("Asked of you", class = "is-mine")
-    ),
-    record$summary,
-    paste("Sent by", who, time_ago(parse_time(record$submitted %||% record$saved))),
-    button = home_button(if (state$mine) "Open" else "Review", "review", record$id)
-  )
-}
-
-# One applied change.
-# record: An applied change, from `history_service_get_all()`.
-home_history_item <- function(record) {
-  kind <- record$kind %||% "Edit"
-  home_item(
-    row_badge(kind, class = paste0("is-", tolower(kind))),
-    record$summary,
-    paste(c(history_service_when(record), history_service_people(record)), collapse = " · ")
-  )
-}
-
-# An item's button; the page script sends what it says (`action`, `id`, `kind`).
-home_button <- function(label, action, id, kind = NULL) {
-  review_button(label, action, `data-id` = id, `data-kind` = kind, class = "btn btn-sm btn-outline-dark home-item-button")
-}
-
-# A list of items, or a line saying there are none.
-# items: UI elements, one per item.
-# none: What to say when there are none.
-home_item_list <- function(items, none) {
-  if (length(items) == 0) {
-    return(p(class = "home-empty", none))
-  }
-  div(class = "home-items", items)
 }

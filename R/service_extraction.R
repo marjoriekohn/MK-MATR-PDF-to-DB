@@ -322,9 +322,11 @@ reading_progress <- function(record) {
   if (identical(record$method, extraction_manual)) {
     return(progress_step("Typed by hand", "done"))
   }
+  # once read, how many pages were: "8 pages read by Gemini"
+  read <- if (is.null(record$pdf$pages)) "Read by Gemini" else plural(record$pdf$pages, "page", "read by Gemini")
   switch(record$extraction_status,
     # read, but the Variable Names and Coding couldn't be applied (extraction_service_reading_steps() says why)
-    ready = if (is.null(record$error)) progress_step("Read by Gemini", "done") else progress_step("Read by Gemini · codes not applied", "attention"),
+    ready = if (is.null(record$error)) progress_step(read, "done") else progress_step(paste(read, "· codes not applied"), "attention"),
     failed = progress_step("Read by Gemini · failed", "attention"),
     progress_step("Read by Gemini", "in_progress")
   )

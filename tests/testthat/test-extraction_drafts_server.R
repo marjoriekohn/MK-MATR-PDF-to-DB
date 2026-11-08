@@ -52,10 +52,12 @@ test_that("the open drafts are cards, everyone's by default; Mine keeps this per
     expect_setequal(ours(shown(), drafts), c(drafts$mine$id, drafts$theirs$id, drafts$reading$id))
     cards <- text_of(output$drafts)
     expect_match(cards, card_title(tree), fixed = TRUE) # named from where it goes
-    expect_match(cards, paste("Started by", colleague$name))
-    expect_match(cards, "Started by you")
+    # whose it is is the badge by the title, not said again in the line under it
+    expect_match(cards, colleague$name, fixed = TRUE)
     expect_match(cards, "Yours")
-    expect_match(cards, "Read by Gemini")
+    expect_match(cards, "Started (today|yesterday|on) ")
+    expect_no_match(cards, "Started by")
+    expect_match(cards, "[Rr]ead by Gemini")
     # Mine keeps only this person's drafts, and the buttons count each list
     toggle <- text_of(output$whose_toggle)
     expect_equal(count_on(toggle, "Mine"), 2L)
@@ -174,4 +176,13 @@ test_that("a claim that has lapsed isn't shown, and Take over then just opens th
     expect_equal(page$did$reviews[[1]]$id, theirs$id)
     expect_false(page$did$take_over[1])
   })
+})
+
+test_that("a card's line under its title says when it was started and saved, not whose it is or its file", {
+  now <- format(Sys.time(), "%Y-%m-%dT%H:%M:%SZ", tz = "UTC")
+  record <- list(started = now, saved = now, prepared_by = "Danielle Coates", pdf = list(name = "KQ_Redacted.pdf", pages = 8))
+  meta <- draft_meta(record)
+  expect_match(meta, "^Started today")
+  expect_match(meta, "last saved")
+  expect_no_match(meta, "Danielle Coates|KQ_Redacted|8 pages|Started by")
 })

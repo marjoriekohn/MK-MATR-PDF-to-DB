@@ -8,12 +8,25 @@
   gap: 1.5rem;
   margin-bottom: 1rem;
   padding: 1.25rem 1.5rem;
-  border: 1px solid $line;
-  border-radius: $border-radius;
+  border: 1px solid $card-border-color;
+  border-radius: $card-border-radius;
   background: $vcu-white;
+  box-shadow: $shadow-card;
+  transition: border-color 0.15s, box-shadow 0.15s;
+  &:not(.is-empty):hover { border-color: $gold-border; box-shadow: $shadow-card-lift; }
 
   // nothing to list: what to say about that, and maybe a button to start one
-  &.is-empty { flex-direction: column; align-items: flex-start; gap: 0.25rem; }
+  // centred in a dashed box, with no shadow: nothing is there to pick
+  &.is-empty {
+    flex-direction: column;
+    align-items: center;
+    gap: 0.25rem;
+    padding-block: 2.5rem;
+    border-style: dashed;
+    color: $vcu-gray;
+    text-align: center;
+    box-shadow: none;
+  }
 
   @include media-breakpoint-down(md) { flex-wrap: wrap; gap: 1rem; }
   @include media-breakpoint-down(sm) { padding: 1rem; }
@@ -21,9 +34,10 @@
 
 .list-card-body { flex: 1 1 0; min-width: 0; }
 .list-card-title-row { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem; }
-.list-card-title { margin: 0; font-size: 1.15rem; overflow-wrap: anywhere; }
+.list-card-title { margin: 0; font-size: $title-font-size; overflow-wrap: anywhere; }
+
 // who and when, on a card and in the dialog it opens
-.list-card-meta { margin: 0.35rem 0 0; color: $vcu-gray; font-size: 0.9rem; }
+.list-card-meta { margin: 0.35rem 0 0; color: $vcu-gray; font-size: $font-size-sm; }
 
 .list-card-actions {
   display: flex;
@@ -41,8 +55,6 @@
 .list-card-note {
   margin: 0.6rem 0 0;
   padding: 0.5rem 0.8rem;
-  border-left: 4px solid $vcu-gold;
-  border-radius: $border-radius;
-  background: rgba($vcu-gold, 0.15);
-  font-size: 0.9rem;
+  @include note;
+  font-size: $font-size-sm;
 }

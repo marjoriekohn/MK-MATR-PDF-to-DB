@@ -111,7 +111,7 @@ test_that("the menu's title and the home page's buttons show the pages they name
   shiny::testServer(site_server(), {
     session$setInputs(to_home = 1)
     session$setInputs(`home-new_extraction` = 1)
-    session$setInputs(`home-extraction_drafts` = 1)
+    session$setInputs(`home-go_drafts` = 1)
     catalog <- session_state()$site$catalog
     added <- local_registry(env = here)
     expect_false(added$registry_id %in% catalog$get()$registries$registry_id) # nothing has asked yet
@@ -194,7 +194,8 @@ test_that("the site is drawn with the login screen over it, and the menu's place
     expect_match(html, sprintf('data-value="%s"', page), fixed = TRUE, info = page)
   }
   for (label in c("New Extraction", "Drafts", "Metadata", "Requests", "History")) {
-    expect_match(html, sprintf('data-value="[a-z_]+">%s</a>', label), info = label) # the menu's own link
+    # the menu's own link: its icon, then its words
+    expect_match(html, sprintf('data-value="[a-z_]+">\\s*<i[^>]*class="fas? [^"]*"[^>]*></i>\\s*%s\\s*</a>', label), perl = TRUE, info = label)
   }
   expect_match(html, 'data-bs-toggle="collapse"', fixed = TRUE)
   # while the server works, the page says so with the gold bar across the top and nothing else (no spinners);

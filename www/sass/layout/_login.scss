@@ -7,77 +7,83 @@
   align-items: center;
   justify-content: center;
   padding: 1.5rem;
-  background: $vcu-white;
+  // the page's off-white, with a soft gold glow behind the card
+  background: radial-gradient(60rem 30rem at 50% 0%, $gold-tint, transparent 70%), $surface;
 }
 
 .login-card {
   width: 100%;
-  max-width: 24rem;
-  padding: 2rem;
-  border: 1px solid $line-light;
-  border-top: 6px solid $vcu-gold;
-  border-radius: $border-radius;
+  max-width: 25rem;
+  padding: 2.25rem 2rem 2rem;
+  border: 1px solid $card-border-color;
+  border-radius: $border-radius-lg;
   background: $vcu-white;
-  box-shadow: 0 0.75rem 2rem rgba($vcu-black, 0.08);
+  box-shadow: $shadow-card-lift;
 }
+// the logo and the site's name, as in the menu bar
 .login-brand {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
-  margin-bottom: 1.25rem;
-  color: $vcu-gray;
-  font-size: 0.85rem;
-  font-weight: 700;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
+  gap: 0.7rem;
+  margin-bottom: 1.75rem;
+  padding-bottom: 1.25rem;
+  border-bottom: 1px solid $line-light;
 }
-.login-brand-mark { width: 0.75rem; height: 0.75rem; background: $vcu-gold; }
-.login-title { margin: 0 0 0.25rem; font-size: 1.6rem; }
+.login-title { margin: 0 0 0.25rem; font-size: $page-title-font-size-phone; }
 .login-text { margin: 0 0 1.25rem; color: $vcu-gray; }
 .login-field.shiny-input-container { width: 100% !important; margin-bottom: 0.9rem; }
 .login-button {
   margin-top: 0.25rem;
   & + & { margin-top: 0.6rem; }
 }
-.login-hint { margin: -0.4rem 0 0.9rem; color: $vcu-gray; font-size: 0.85rem; }
+.login-hint { margin: -0.4rem 0 0.9rem; color: $vcu-gray; font-size: $font-size-sm; }
 // While a button's request is on its way (www/js/site.js): none of the buttons can be pressed again.
 .is-busy .login-button:disabled { opacity: 0.85; }
 .login-message:empty { display: none; }
 .login-note {
   margin: 1rem 0 0;
   padding: 0.6rem 0.8rem;
-  border-left: 4px solid $vcu-gold;
-  border-radius: $border-radius;
-  background: rgba($vcu-gold, 0.15);
-  font-size: 0.9rem;
-  &.is-problem { border-left-color: $vcu-red; background: rgba($vcu-red, 0.08); }
+  @include note;
+  font-size: $font-size-sm;
+  &.is-problem { @include note($vcu-red, 0.08); }
 }
 
 // ------ The test database, when the site runs on it (MATR_DATABASE=test) -----
 .navbar-test-database {
+  padding: 0.3rem 0.7rem;
+  border-radius: $border-radius-pill;
   background-color: $vcu-gold;
   color: $vcu-black;
-  font-size: 0.8rem;
+  font-size: $font-size-xs;
   letter-spacing: 0.03em;
   text-transform: uppercase;
 }
 
 // ------ The menu under the signed-in name ------------------------------------
+// a quiet button with the person's icon in gold
 .navbar-user-button {
   display: inline-flex;
   align-items: center;
-  gap: 0.4rem;
-  padding: 0.4rem 0.6rem;
-  border: 0;
-  color: $vcu-white;
-  font-size: 0.9rem;
-  &:hover, &:focus-visible, &.show { color: $vcu-gold; }
+  gap: 0.45rem;
+  padding: 0.35rem 0.8rem;
+  border: 1px solid $control-line;
+  border-radius: $border-radius;
+  background: $vcu-white;
+  color: $vcu-black;
+  font-size: $font-size-sm;
+  font-weight: 500;
+  box-shadow: $control-shadow;
+  > .fa, > svg { color: mix($vcu-gold, $vcu-black, 80%); }
+  &:hover, &:focus-visible, &.show { border-color: $line; background: $surface; color: $vcu-black; }
 }
 .navbar-user-menu {
   min-width: 15rem;
-  border: 2px solid $vcu-black;
-  .dropdown-item { padding: 0.5rem 1rem; &:hover, &:focus { background: rgba($vcu-gold, 0.25); color: $vcu-black; } }
+  padding-block: 0.4rem;
+  border: 1px solid $card-border-color;
+  border-radius: $border-radius-lg;
+  box-shadow: $shadow-card-lift;
+  .dropdown-item { padding: 0.5rem 1rem; &:hover, &:focus { background: $gold-hover; color: $vcu-black; } }
 }
 .navbar-user-who { padding: 0.5rem 1rem; }
-.navbar-user-email { color: $vcu-gray; font-size: 0.85rem; overflow-wrap: anywhere; }
-.navbar-user-role { color: $vcu-gray; font-size: 0.8rem; letter-spacing: 0.04em; text-transform: uppercase; }
+.navbar-user-email { color: $vcu-gray; font-size: $font-size-sm; overflow-wrap: anywhere; }
+.navbar-user-role { color: $vcu-gray; font-size: $font-size-xs; letter-spacing: 0.04em; text-transform: uppercase; }

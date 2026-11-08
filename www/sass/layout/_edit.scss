@@ -2,8 +2,8 @@
 // (components/_outline.scss); this is what is Make an edit's own.
 
 .edit-page {
-  h2 { margin: 0; font-size: 1.2rem; }
-  h3 { font-size: 1.2rem; }
+  h2 { margin: 0; font-size: $title-font-size; }
+  h3 { font-size: $font-size-base; }
 }
 
 // ------ Notes ------------------------------------------------------------------------------
@@ -13,15 +13,13 @@
   margin: 0 0 1rem;
   padding: 0.9rem 1rem;
   border: 1px solid $line;
-  border-left: 6px solid $vcu-gray;
-  border-radius: $border-radius;
-  background: rgba($vcu-gray, 0.06);
+  @include note($vcu-gray, 0.06);
 
   p { margin: 0 0 0.5rem; &:last-child { margin-bottom: 0; } }
   ul { margin: 0.25rem 0 0; padding-left: 1.1rem; }
 
-  &.is-warning { border-left-color: $vcu-gold; background: rgba($vcu-gold, 0.14); }
-  &.is-danger { border-color: $vcu-red; background: rgba($vcu-red, 0.07); .edit-callout-icon { color: $vcu-red; } }
+  &.is-warning { @include note; }
+  &.is-danger { border-color: $vcu-red; @include note($vcu-red, 0.07); .edit-callout-icon { color: $vcu-red; } }
 }
 .edit-callout-icon { flex-shrink: 0; padding-top: 0.15rem; }
 .edit-callout-body { flex: 1; min-width: 0; }
@@ -33,34 +31,28 @@
   align-items: flex-start;
   gap: 0.5rem;
   padding: 1rem 1.1rem;
-  border: 1px solid $line;
-  border-radius: $border-radius;
+  border: 1px solid $line-light;
+  border-radius: $border-radius-lg;
   background: $vcu-white;
+  box-shadow: $shadow-card;
+  transition: border-color 0.15s, box-shadow 0.15s;
 
-  &:hover:not(.is-selected) { border-color: $vcu-black; }
-  &.is-selected { border-color: $vcu-black; box-shadow: inset 5px 0 0 $vcu-gold, 0 0 0 1px $vcu-black; }
-  &.is-selected.is-danger { box-shadow: inset 5px 0 0 $vcu-red, 0 0 0 1px $vcu-black; }
+  &:hover:not(.is-selected) { border-color: $gold-border; box-shadow: $shadow-card-lift; }
+  &.is-selected { border-color: $vcu-gold; box-shadow: inset 3px 0 0 $vcu-gold, 0 0 0 3px $gold-tint; }
+  &.is-selected.is-danger { border-color: $vcu-red; box-shadow: inset 3px 0 0 $vcu-red, 0 0 0 3px rgba($vcu-red, 0.12); }
   .btn { margin-top: auto; }
 }
 .edit-card-head { display: flex; align-items: flex-start; gap: 0.5rem; width: 100%; }
-.edit-card-title { margin: 0; font-size: 1rem; font-weight: 700; overflow-wrap: anywhere; }
-.edit-card-subtitle { margin: 0; color: $vcu-gray; font-size: 0.9rem; }
+.edit-card-title { margin: 0; font-size: $font-size-base; font-weight: 700; overflow-wrap: anywhere; }
+.edit-card-subtitle { margin: 0; color: $vcu-gray; font-size: $font-size-sm; }
 .edit-card-facts { display: flex; flex-wrap: wrap; gap: 0.35rem; }
-.edit-card-warn {
-  margin: 0;
-  padding: 0.25rem 0.5rem;
-  border-radius: $border-radius;
-  background: rgba($vcu-gold, 0.25);
-  font-size: 0.85rem;
-  font-weight: 500;
-}
 
 // ------ The form ---------------------------------------------------------------------------------
 // A drop-down that searches as it is typed in, left blank when it is required
 .form-field:has(.field-missing) .selectize-input { border-color: $field-problem-red; box-shadow: 0 0 0 1px $field-problem-red; }
 
 // A field's help under it, and what's wrong or worth knowing
-.field-help { margin: 0.25rem 0 0; font-size: 0.8rem; }
+.field-help { margin: 0.25rem 0 0; font-size: $font-size-xs; }
 .field-warning {
   color: $vcu-black;
   font-weight: 500;
@@ -79,7 +71,7 @@
   margin: 1.5rem 0 0.75rem;
   padding-top: 1rem;
   border-top: 1px solid $line;
-  h3 { margin: 0; font-size: 1.05rem; }
+  h3 { margin: 0; font-size: $font-size-base; }
   p { margin: 0.2rem 0 0; }
 }
 
@@ -91,7 +83,7 @@
   padding: 0.375rem 0.75rem;
   border: 1px solid $line;
   border-radius: $border-radius;
-  background: rgba($vcu-gray, 0.1);
+  background: $gray-tint;
 }
 .locked-reason { margin-top: 0.25rem; }
 
@@ -100,17 +92,17 @@
   margin-top: 1rem;
   padding: 0.9rem 1rem;
   border-radius: $border-radius;
-  background: rgba($vcu-gray, 0.08);
+  background: $gray-faint;
   &.is-empty { color: $vcu-gray; p { margin: 0.25rem 0 0; } }
 }
-.edit-changes-title { font-size: 0.75rem; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; }
+.edit-changes-title { font-size: $font-size-xs; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; }
 .edit-change { margin-top: 0.5rem; }
-.edit-change-label { display: block; color: $vcu-gray; font-size: 0.8rem; }
+.edit-change-label { display: block; color: $vcu-gray; font-size: $font-size-xs; }
 .edit-diff {
   margin: 0.1rem 0 0;
   overflow-wrap: anywhere;
   del { background: rgba($vcu-red, 0.12); color: $vcu-red; text-decoration: line-through; }
-  ins { background: rgba($vcu-gold, 0.4); text-decoration: none; font-weight: 700; }
+  ins { background: $gold-highlight; text-decoration: none; font-weight: 700; }
 }
 
 // ------ Where this appears -------------------------------------------------------------------------------
@@ -131,22 +123,22 @@
   margin: 0.35rem 0 0;
   padding: 0;
   list-style: none;
-  font-size: 0.9rem;
+  font-size: $font-size-sm;
 }
 .edit-use-wave { font-weight: 500; }
 .edit-use-boxes { display: flex; flex-direction: column; gap: 0.4rem; margin-top: 0.5rem; }
 .edit-use-box {
   padding: 0.4rem 0.6rem;
   border-radius: $border-radius;
-  background: rgba($vcu-gray, 0.08);
-  font-size: 0.9rem;
+  background: $gray-faint;
+  font-size: $font-size-sm;
   overflow-wrap: anywhere;
 }
 .edit-use-matr { margin-right: 0.4rem; font-family: $font-family-monospace; font-weight: 700; }
 .edit-use-tags { color: $vcu-gray; }
 .edit-use-coding { margin: 0.2rem 0 0; padding-left: 1.1rem; }
-.edit-use-where { color: $vcu-gray; font-size: 0.9rem; }
-.edit-use-detail { font-size: 0.9rem; }
+.edit-use-where { color: $vcu-gray; font-size: $font-size-sm; }
+.edit-use-detail { font-size: $font-size-sm; }
 .edit-usage-none { margin: 0.75rem 0 0; color: $vcu-gray; }
 
 // The rows that point at it, each on a line; a long list scrolls inside its fold
@@ -154,7 +146,7 @@
   margin: 0.4rem 0 0;
   padding: 0;
   list-style: none;
-  font-size: 0.9rem;
+  font-size: $font-size-sm;
   overflow-wrap: anywhere;
   li { padding: 0.2rem 0; border-top: 1px solid $line; }
   li:first-child { border-top: 0; }
@@ -184,8 +176,8 @@
   flex-shrink: 0;
   padding: 0 0.45rem;
   border-radius: 999px;
-  background: rgba($vcu-gray, 0.12);
-  font-size: 0.8rem;
+  background: $gray-tint;
+  font-size: $font-size-xs;
   font-variant-numeric: tabular-nums;
 }
 
@@ -199,17 +191,16 @@
   border-radius: $border-radius;
   background: $vcu-red;
   color: $vcu-white;
-  font-size: 1.5rem;
+  font-size: $icon-font-size-lg;
   > div { display: flex; flex-direction: column; min-width: 0; }
 }
-.delete-banner-label { font-size: 0.85rem; letter-spacing: 0.04em; text-transform: uppercase; }
-.delete-banner-title { font-size: 1.2rem; overflow-wrap: anywhere; }
-.delete-about { font-size: 1.05rem; }
+.delete-banner-label { font-size: $font-size-sm; letter-spacing: 0.04em; text-transform: uppercase; }
+.delete-banner-title { font-size: $title-font-size; overflow-wrap: anywhere; }
 
 .blocked-list { padding-left: 1.1rem; li { margin-bottom: 0.75rem; } }
 .blocked-fix { color: $vcu-black; }
 
-.reach-section { margin: 1.25rem 0; h3 { margin-bottom: 0.5rem; font-size: 1rem; } }
+.reach-section { margin: 1.25rem 0; h3 { margin-bottom: 0.5rem; font-size: $font-size-base; } }
 .reach-list {
   margin: 0;
   padding: 0;
@@ -221,7 +212,7 @@
   margin: 0.3rem 0 0;
   padding-left: 1.1rem;
   color: $vcu-gray;
-  font-size: 0.9rem;
+  font-size: $font-size-sm;
 }
 .blocked-rows { color: $vcu-black; }
 
@@ -253,7 +244,7 @@
   > div:first-child { flex: 1 1 18rem; min-width: 0; }
   p { margin: 0; }
 }
-.edit-draft-meta { color: $vcu-gray; font-size: 0.85rem; }
+.edit-draft-meta { color: $vcu-gray; font-size: $font-size-sm; }
 
 // ------ After sending -------------------------------------------------------------------------------------------
 .edit-sent h2 { display: flex; align-items: center; margin-bottom: 0.75rem; }
@@ -271,7 +262,7 @@
 
 // ------ The list ---------------------------------------------------------------------------------------------
 // An item's row: its name, then a line about it (where it is, what it holds)
-.edit-item-meta { display: block; color: $vcu-gray; font-size: 0.85rem; }
+.edit-item-meta { display: block; color: $vcu-gray; font-size: $font-size-sm; }
 
 // ------ An item's details ------------------------------------------------------------------------------
 // Each field on a line of its own: what it is on the left, its value beside it, whole (wrapping, never cut short).
@@ -282,10 +273,11 @@
   grid-template-columns: minmax(8rem, 14rem) minmax(0, 1fr);
   gap: 0 1rem;
   align-items: baseline;
-  padding: 0.55rem 0;
-  border-bottom: 1px solid $line;
+  padding: 0.6rem 0;
+  border-bottom: 1px solid $line-light;
   &:first-child { padding-top: 0; }
-  .detail-label { margin: 0; font-size: 0.85rem; }
+  &:last-child { padding-bottom: 0; border-bottom: 0; }
+  .detail-label { margin: 0; font-size: $font-size-sm; }
   .detail-value { padding: 0; white-space: pre-wrap; overflow-wrap: anywhere; }
 }
 @container detail (max-width: 32rem) {
@@ -295,15 +287,14 @@
 // A drop-down's words wrap too, picked or offered
 .edit-page .selectize-input > .item,
 .edit-page .selectize-dropdown .option { max-width: 100%; white-space: normal; overflow-wrap: anywhere; }
-.edit-list-note { margin: 0.25rem 0.5rem; color: $vcu-gray; font-size: 0.9rem; p { margin: 0 0 0.4rem; } }
+.edit-list-note { margin: 0.25rem 0.5rem; color: $vcu-gray; font-size: $font-size-sm; p { margin: 0 0 0.4rem; } }
 .edit-add { margin-top: 0.15rem; }
 
 // ------ The details --------------------------------------------------------------------------------------------
 // The kind and the item's name, what the kind is, the fields, and where it is used; for a form, what is left to do
 // last, over the buttons
-.detail-title { flex: 1 1 14rem; margin: 0.15rem 0 0; font-size: 1.2rem; overflow-wrap: anywhere; }
+.detail-title { flex: 1 1 14rem; margin: 0.15rem 0 0; font-size: $title-font-size; overflow-wrap: anywhere; }
 .edit-detail .detail-head > .row-badge { margin-top: 0.3rem; }
-.edit-about { margin-bottom: 1rem; }
 .edit-usage { margin-top: 1.5rem; }
 .edit-reviewer { margin-top: 1.25rem; }
-.edit-footer-note { margin-top: 1rem; color: $vcu-gray; font-size: 0.9rem; &:empty { display: none; } }
+.edit-footer-note { margin-top: 1rem; color: $vcu-gray; font-size: $font-size-sm; &:empty { display: none; } }

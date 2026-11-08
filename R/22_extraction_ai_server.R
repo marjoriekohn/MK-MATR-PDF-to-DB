@@ -8,7 +8,7 @@
 # switch_mode: A function taking a mode of the Extraction page (`"manual"` or `"ai"`), or `"drafts"`
 #   for the Extraction Drafts page, and showing it.
 # Returns: A list with `open`, a function that shows a draft opened from Extraction Drafts, or an
-#   empty drop zone for `NULL`.
+#   empty place to choose the PDF for `NULL`.
 extraction_ai_server <- function(
   id,
   extractions,
@@ -33,7 +33,7 @@ extraction_ai_server <- function(
     reading <- reactiveVal(NULL)
     observe(reading(record()[c("method", "pdf", "extraction_status", "error", "reading_started", "supplement")]))
 
-    # Shows a draft opened from Extraction Drafts, or with none, an empty drop zone.
+    # Shows a draft opened from Extraction Drafts, or with none, an empty place to choose the PDF.
     show_draft <- function(opened = NULL) {
       current_id(opened$id)
       pdf_upload(NULL)
@@ -97,10 +97,10 @@ extraction_ai_server <- function(
         return(pdf_file(reading()$pdf, ns))
       }
       chosen <- pdf_upload()
-      if (is.null(chosen)) pdf_drop_zone(ns) else pdf_file(list(name = chosen$name, bytes = chosen$size), ns, begun = FALSE)
+      if (is.null(chosen)) pdf_choice(ns) else pdf_file(list(name = chosen$name, bytes = chosen$size), ns, begun = FALSE)
     })
 
-    output$supplement <- renderUI({
+    output$supplement_box <- renderUI({
       begun <- !is.null(reading())
       name <- if (begun) reading()$supplement$name else supplement_upload()$name
       supplement_card(name, begun, ns)

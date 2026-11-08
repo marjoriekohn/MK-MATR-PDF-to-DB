@@ -747,10 +747,37 @@
   // The boxes are sized all at once (every height reset, then every height read, then set): one box at a
   // time made the browser lay the page out again for each.
   // Text boxes not sized yet are sized all at once. One in a closed section has no height to read, so it waits
-  // until its section opens (applyMarks() comes back here).
+  // until its section opens (applyMarks() comes back here). One drawn while its page was still hidden (the draft
+  // is drawn, then its page shown) waits until it shows: its width going from nothing to something says so.
   function sizeFreshBoxes() {
     watchListWidths();
-    sizeBoxes(document.querySelectorAll('textarea.outline-text:not([style*="height"])'));
+    const fresh = document.querySelectorAll('textarea.outline-text:not([style*="height"])');
+    sizeBoxes(fresh);
+    if (boxWatcher) fresh.forEach(function (field) { if (!field.offsetParent) boxWatcher.observe(field); });
+  }
+  const boxWatcher = window.ResizeObserver && new ResizeObserver(function (entries) {
+    const shown = entries.filter(function (entry) { return entry.contentRect.width > 0; }).map(function (entry) { return entry.target; });
+    shown.forEach(function (field) { boxWatcher.unobserve(field); });
+    if (shown.length) sizeBoxes(shown);
+  });
+  // Shiny puts an output's new contents on the page after its shiny:value (below), and not always by the time
+  // afterDrawing() runs, so the outline's first drawing could be left unsized: on a phone a title of two lines
+  // showed only its first until the window changed width. So boxes are also sized as soon as rows are added to
+  // a list, once a frame at most. Typing adds no rows, so it doesn't size anything.
+  let drawFrame = null;
+  const drawWatcher = window.MutationObserver && new MutationObserver(function () {
+    if (drawFrame) return;
+    drawFrame = requestAnimationFrame(function () {
+      drawFrame = null;
+      sizeFreshBoxes();
+    });
+  });
+  if (drawWatcher) {
+    $(function () {
+      document.querySelectorAll('.outline-body').forEach(function (list) {
+        drawWatcher.observe(list, { childList: true, subtree: true });
+      });
+    });
   }
   function sizeBoxes(fields) {
     const shown = Array.from(fields).filter(function (field) { return field.offsetParent; });

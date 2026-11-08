@@ -50,7 +50,10 @@ app_icons <- c(
   report = "bug",
   log_out = "right-from-bracket",
   upload = "file-arrow-up",
+  drafts = "file-pen",
+  metadata = "database",
   make_edit = "pencil",
+  next_step = "arrow-right",
   change_requests = "clipboard-check",
   history = "clock-rotate-left",
   # the kinds of block, in Add Block

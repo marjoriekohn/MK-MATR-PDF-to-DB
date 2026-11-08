@@ -8,7 +8,7 @@
 .row-badge {
   &.is-extraction { background: rgba($vcu-green, 0.15); color: $vcu-green; font-weight: 700; }
   &.is-add { background: rgba($vcu-green, 0.15); color: $vcu-green; font-weight: 700; }
-  &.is-update { background: rgba($vcu-gold, 0.35); font-weight: 700; }
+  &.is-update { background: $gold-highlight; font-weight: 700; }
   &.is-delete { background: rgba($vcu-red, 0.12); color: $vcu-red; font-weight: 700; }
 }
 
@@ -16,7 +16,7 @@
 // Before it is submitted (the Edit Extraction page's preview) and while it waits (Change Requests).
 .request-section {
   margin-top: 1.25rem;
-  h3 { margin: 0 0 0.5rem; font-size: 1.05rem; }
+  h3 { margin: 0 0 0.5rem; font-size: $font-size-base; }
 }
 .request-cards {
   display: grid;
@@ -33,7 +33,7 @@
 }
 .request-card-kind {
   color: $vcu-gray;
-  font-size: 0.75rem;
+  font-size: $font-size-xs;
   font-weight: 700;
   letter-spacing: 0.06em;
   text-transform: uppercase;
@@ -47,8 +47,8 @@
   justify-content: center;
   width: 3rem;
   height: 3rem;
-  .fa-certificate { position: absolute; color: $vcu-black; font-size: 3rem; }
-  .new-badge-text { position: relative; color: $vcu-gold; font-size: 0.7rem; font-weight: 900; letter-spacing: 0.04em; }
+  .fa-certificate { position: absolute; color: $vcu-black; font-size: $icon-font-size-xl; }
+  .new-badge-text { position: relative; color: $vcu-gold; font-size: $font-size-xxs; font-weight: 900; letter-spacing: 0.04em; }
 }
 
 // Under the cards, each row they count, a list for each card to open
@@ -72,11 +72,11 @@
   &[open] > summary { border-bottom: 1px solid $line; }
 }
 .request-rows-kind { font-weight: 700; }
-.request-rows-count { color: $vcu-gray; font-size: 0.9rem; }
+.request-rows-count { color: $vcu-gray; font-size: $font-size-sm; }
 .request-rows-table {
   max-height: 22rem;
   overflow-y: auto;
-  font-size: 0.9rem;
+  font-size: $font-size-sm;
   .table { margin: 0; }
   th { position: sticky; top: 0; z-index: 1; } // black, as every table's (components/_grid-table.scss)
   th, td { padding: 0.35rem 0.75rem; vertical-align: top; }
@@ -105,13 +105,13 @@
 // A codebook-style table (DataTables, from the DT package): Kind | Variable ID | Question Text | Variable Coding,
 // its rows grouped under the section they are printed in, with search and Download CSV above it
 .questionnaire-preview {
-  font-size: 0.9rem;
+  font-size: $font-size-sm;
   table.dataTable { margin: 0.5rem 0 !important; }
   table.dataTable th, table.dataTable td { padding: 0.4rem 0.6rem; vertical-align: top; }
   // the section heading over its rows
   table.dataTable tr.dtrg-group th, table.dataTable tr.dtrg-group td {
-    border-bottom: 1px solid rgba($vcu-gold, 0.6);
-    background: rgba($vcu-gold, 0.15) !important;
+    border-bottom: 1px solid $vcu-gold;
+    background: $gold-tint !important;
     color: $vcu-black;
     font-weight: 700;
   }
@@ -137,21 +137,21 @@
 .change-list + .edit-callout { margin-top: 1rem; }
 
 .change-row-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 0.25rem 0.6rem; }
-.change-action { font-size: 0.75rem; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; }
+.change-action { font-size: $font-size-xs; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; }
 .change-table { font-weight: 700; }
-.change-key { color: $vcu-gray; font-size: 0.85rem; overflow-wrap: anywhere; }
+.change-key { color: $vcu-gray; font-size: $font-size-sm; overflow-wrap: anywhere; }
 
 .change-fields {
   display: grid;
   grid-template-columns: max-content minmax(0, 1fr);
   gap: 0.15rem 1rem;
   margin: 0.4rem 0 0;
-  font-size: 0.9rem;
+  font-size: $font-size-sm;
 
   dt { color: $vcu-gray; font-weight: 400; }
   dd { margin: 0; overflow-wrap: anywhere; }
   del { background: rgba($vcu-red, 0.12); color: $vcu-red; text-decoration: line-through; }
-  ins { background: rgba($vcu-gold, 0.4); text-decoration: none; font-weight: 700; }
+  ins { background: $gold-highlight; text-decoration: none; font-weight: 700; }
 }
 
 // ------ An extraction's Basic Info, on Change Requests ---------------------------------------------

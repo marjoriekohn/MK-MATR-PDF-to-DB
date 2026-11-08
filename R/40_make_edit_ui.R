@@ -11,7 +11,7 @@ make_edit_ui <- function(id) {
     id = ns("main"),
     class = "page edit-page is-wide",
     `data-ns` = ns(""),
-    page_header("Metadata", "View, add, change or delete what is in the MATR metadata database."),
+    page_header("Metadata", "View, add, change or delete what is in the MATR metadata database.", eyebrow = "Database", icon_name = "metadata"),
     uiOutput(ns("drafts")),
     card(
       class = "structure-card",

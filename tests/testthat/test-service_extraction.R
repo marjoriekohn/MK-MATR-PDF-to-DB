@@ -197,6 +197,11 @@ test_that("the progress on each card is how it was read and how much of it is ch
   expect_equal(uncoded$label[1], "Read by Gemini · codes not applied")
   expect_equal(uncoded$state[1], "attention")
   expect_equal(draft_service_percent_checked(list(blocks = 0, checked = 0)), 0L)
+  # once read, how many pages were
+  paged <- utils::modifyList(record, list(pdf = list(name = "AHP.pdf", pages = 8)))
+  expect_equal(extraction_service_progress(paged, draft)$label[1], "8 pages read by Gemini")
+  expect_equal(extraction_service_progress(utils::modifyList(paged, list(pdf = list(pages = 1))), draft)$label[1], "1 page read by Gemini")
+  expect_equal(extraction_service_progress(utils::modifyList(paged, list(error = "no MATR IDs")), draft)$label[1], "8 pages read by Gemini · codes not applied")
 })
 
 test_that("every Basic Info pick left blank is named, in the form's order", {

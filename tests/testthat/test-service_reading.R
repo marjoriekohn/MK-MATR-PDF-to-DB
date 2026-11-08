@@ -593,7 +593,10 @@ test_that("a PDF this server hasn't got is fetched from Storage to read", {
 test_that("a PDF that is no longer anywhere fails the reading with a way forward", {
   me <- local_staff()
   local_pdf_cache()
-  record <- extraction_service_create(test_connection, fake_upload(), me)
+  # a PDF of its own: other runs of the tests upload the usual fake PDF to Storage meanwhile
+  upload <- fake_upload(text = paste0("%PDF-1.4\n% ", test_name("gone"), "\n<< /Type /Page >>\n"))
+  record <- extraction_service_create(test_connection, upload, me)
+  withr::defer(test_delete_pdf(record$pdf$sha256), priority = "last") # after the draft that points at it
   unlink(record$pdf$path)
   test_delete_stored_pdf(record$pdf$sha256) # uploaded before PDFs were kept in Storage
   reading_service_run(test_connection, record$id, record$reading_started, read = function(...) stop("not reached"))

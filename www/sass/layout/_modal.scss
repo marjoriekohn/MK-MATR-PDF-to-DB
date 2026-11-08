@@ -1,5 +1,12 @@
-.modal-content { border: 2px solid $vcu-black; }
-.modal-header { background: $vcu-black; color: $vcu-white; border-bottom: 4px solid $vcu-gold; .modal-title { color: $vcu-white; } .btn-close { filter: invert(1); } }
-.modal-footer { border-top-color: $vcu-gray; }
+// Dialogs: a white card over the page, its title in Merriweather over a light line
+.modal-content { border: 0; box-shadow: 0 20px 60px rgba($vcu-black, 0.25); }
+.modal-header {
+  padding: 1.1rem 1.5rem;
+  border-bottom: 1px solid $line-light;
+  .modal-title { font-family: $font-family-serif; font-size: $title-font-size; font-weight: 700; }
+}
+.modal-body { padding: 1.25rem 1.5rem; }
+.modal-footer { padding: 0.9rem 1.5rem; border-top-color: $line-light; background: $surface; }
+.modal-backdrop.show { opacity: 0.4; }
 // A change request's buttons, in a part of their own so the page can draw them again (change_request_parts())
 .change-request-footer, .change-request-footer-buttons { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 0.5rem; }

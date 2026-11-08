@@ -1,3 +1,6 @@
+// The note mixin first: the base styles and pages draw their notes with it
+@import "components/note";
+
 // Base
 @import "base/reset";
 @import "base/typography";

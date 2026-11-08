@@ -199,11 +199,16 @@ edit_extraction_state <- function(draft = gold_draft(), lookups = test_lookups()
 
 # server.R as a function that talks to `connection`: it is evaluated where R/'s functions
 # are (global.R's objects are in the environment above), with `database` replaced.
+# The site's reading watcher is a stand-in that watches nothing. The real one looks at every draft in the
+# database, so while the files run in parallel it claimed drafts other files had just made and started real
+# reading jobs for them: test-service_reading.R then found its draft taken ("a draft waiting to be read gets
+# a job" failed). Its jobs are tested on their own, in test-service_reading.R.
 site_server <- function(connection = test_connection, env = parent.frame()) {
   support <- env
   while (!exists("staff_service_current", envir = support, inherits = FALSE)) support <- parent.env(support)
   scope <- new.env(parent = support)
   scope$database <- connection
+  scope$reading_service_watch <- function(records, connection) FALSE
   eval(parse(app_file("server.R"), keep.source = FALSE, encoding = "UTF-8"), scope)
 }
 

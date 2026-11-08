@@ -8,25 +8,25 @@ extraction_manual_ui <- function(id) {
   div(
     class = "extraction-mode extraction-manual",
     `data-ns` = ns(""),
-    card(card_body(
-      h2("Questionnaire PDF (optional)"),
-      uiOutput(ns("pdf_card")),
-      div(
+    card(
+      card_header(h2("Questionnaire PDF (optional)")),
+      card_body(uiOutput(ns("pdf_card"))),
+      card_footer(
         class = "extraction-footer",
         span("You'll type the questionnaire in on the Edit Extraction page."),
         actionButton(ns("start"), "Start Manual Extraction", class = "btn-primary")
       )
-    ))
+    )
   )
 }
 
-# Somewhere to drop a PDF for a Manual extraction, or the one that was chosen.
+# Where a PDF for a Manual extraction is chosen, or the one that was.
 # upload: One row of a `fileInput`'s value, or `NULL`.
 manual_pdf_card <- function(upload, ns) {
   if (is.null(upload)) {
-    return(drop_zone(
+    return(file_box(
       fileInput(ns("pdf"), NULL, accept = c(".pdf", "application/pdf"), buttonLabel = "Choose PDF"),
-      strong("Drop the questionnaire PDF here, if you have one"),
+      strong("Questionnaire PDF, if you have one"),
       div("It stays with the draft so you can look at it while you type.")
     ))
   }

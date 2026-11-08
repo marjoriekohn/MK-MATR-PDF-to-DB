@@ -11,7 +11,7 @@
 
   &.is-done        { border-color: $vcu-green; background: $vcu-green; }
   &.is-in_progress { border-color: $vcu-gold; background: linear-gradient(90deg, $vcu-gold 50%, $vcu-white 50%); }
-  &.is-not_started { border-color: rgba($vcu-gray, 0.6); }
+  &.is-not_started { border-color: $line; }
   &.is-attention   { border-color: $vcu-red; background: $vcu-red; border-radius: 0.15rem; }
 }
 

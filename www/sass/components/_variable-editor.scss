@@ -18,8 +18,7 @@ $code-width: 4.25rem; // a choice's code: a few digits
   padding: 0.6rem 0.75rem 0.75rem;
   border: 1px solid $line;
   border-radius: $border-radius;
-  background: rgba($vcu-gray, 0.04);
-  > .wide-menu { margin-top: 0.6rem; }
+  background: $gray-faint;
 }
 
 .box-list { display: flex; flex-direction: column; margin-top: 0.25rem; }
@@ -47,7 +46,7 @@ $code-width: 4.25rem; // a choice's code: a few digits
 .variable-head {
   padding-bottom: 0;
   color: $vcu-gray;
-  font-size: 0.75rem;
+  font-size: $font-size-xs;
   font-weight: 500;
 }
 
@@ -94,13 +93,13 @@ $code-width: 4.25rem; // a choice's code: a few digits
     grid-template-columns: 1rem $code-width minmax(0, 1fr) 1.9rem 1.9rem;
     > .choice-cell { grid-column: 2 / -1; order: 5; }
     > .choice-cell:empty { display: none; }
-    > .choice-cell::before { content: attr(data-label); display: block; color: $vcu-gray; font-size: 0.7rem; font-weight: 500; }
+    > .choice-cell::before { content: attr(data-label); display: block; color: $vcu-gray; font-size: $font-size-xxs; font-weight: 500; }
   }
   .variable-cell::before {
     content: attr(data-label);
     display: block;
     color: $vcu-gray;
-    font-size: 0.7rem;
+    font-size: $font-size-xxs;
     font-weight: 500;
   }
   .variable-cell:empty { display: none; }
@@ -145,7 +144,7 @@ $code-width: 4.25rem; // a choice's code: a few digits
 // The names of the columns, over the first choice
 .choice-head {
   color: $vcu-gray;
-  font-size: 0.75rem;
+  font-size: $font-size-xs;
   font-weight: 500;
 }
 
@@ -156,7 +155,7 @@ $code-width: 4.25rem; // a choice's code: a few digits
   align-items: center;
   gap: 0.35rem;
   padding: 0 0 0.5rem 1.4rem;
-  font-size: 0.875rem;
+  font-size: $font-size-sm;
   > .form-control:not(.skip-target) { flex: 0 1 8rem; width: 8rem; }
   > .skip-target { flex: 1 1 12rem; min-width: 0; }
 }
@@ -172,7 +171,7 @@ $code-width: 4.25rem; // a choice's code: a few digits
   min-width: 0;
   .form-control { min-width: 0; }
 }
-.field-remove { padding: 0 0.2rem; line-height: 1; font-size: 0.75rem; }
+.field-remove { padding: 0 0.2rem; line-height: 1; font-size: $font-size-xs; }
 
 // Apply to All? (once a code is changed), then + Choice across the table
 .choice-actions {

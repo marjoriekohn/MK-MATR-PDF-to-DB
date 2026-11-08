@@ -14,6 +14,17 @@ $vcu-purple:     #8E6A90;
 $vcu-blue:       #006894; // edit buttons
 $vcu-light-gray: #DEDEDE;
 
+// ------ Surfaces, made from the brand's colours ------------------------------
+// The page is a warm off-white (white with a little of the light gray) so the white cards on it stand out;
+// a dark panel (the home page's banner) is black with a little of the gray.
+$surface:      mix($vcu-white, $vcu-light-gray, 72%);
+$surface-dark: mix($vcu-black, $vcu-gray, 78%);
+// halfway between white and the page: behind a list of white rows, or a panel of fields inside a card
+$surface-soft: mix($vcu-white, $surface, 50%);
+// a block that has been checked: a breath of the brand's green, with a green edge
+$verified-bg:   mix($vcu-green, $vcu-white, 7%);
+$verified-line: mix($vcu-green, $vcu-white, 38%);
+
 // just in case we need to change the warning color, its named differently
 $field-problem-red: #B02E01;
 
@@ -25,7 +36,24 @@ $field-problem-red: #B02E01;
 $font-family-sans-serif: "Roboto", "Helvetica Neue", Arial, sans-serif;
 $font-family-serif:      "Merriweather", Georgia, "Times New Roman", serif;
 $font-family-base:       $font-family-sans-serif;
-$headings-font-family:   $font-family-sans-serif;
+$headings-font-family:   $font-family-serif; // titles are Merriweather, the words under them Roboto
+
+// The type scale: every size of words on the site is one of these, so the same kind of words is the same
+// size on every page. Under the body's size: the small words beside things (who and when, hints, a card's
+// note: Bootstrap's own $font-size-sm), then badges and captions, then the tiniest labels. Over it: a card's,
+// a list item's or a section's title, and a page's title. Icons drawn on their own have sizes of their own.
+$font-size-sm:   0.875rem;
+$font-size-xs:   0.8rem;
+$font-size-xxs:  0.7rem;
+$title-font-size:            1.15rem;
+$page-title-font-size:       2.25rem;
+$page-title-font-size-phone: 1.75rem;
+$lead-font-size:             1.05rem; // the sentence under a page's title
+$section-title-font-size:    1.5rem;  // a heading over a part of a page
+$hero-title-font-size:       2.75rem; // the home page's banner
+$icon-font-size:    1.25rem;
+$icon-font-size-lg: 1.5rem;
+$icon-font-size-xl: 3rem;
 
 // Leading: 125-150% of type size for body copy
 $line-height-base: 1.5;
@@ -42,7 +70,7 @@ $danger:    $vcu-black;
 $light:     $vcu-white;
 $dark:      $vcu-black;
 
-$body-bg:      $vcu-white;
+$body-bg:      $vcu-white; // what cards, fields, menus and dialogs are drawn on; the page is $surface (_reset.scss)
 $body-color:   $vcu-black;
 $link-color:   $vcu-black;
 $link-hover-color: $vcu-gray;
@@ -51,21 +79,58 @@ $border-color: $vcu-gray;
 $btn-color: $vcu-black;
 $navbar-light-color: $vcu-black;
 
+// ------ Gold tints ---------------------------------------------------------
+// The brand's gold, see-through, for the few things drawn in it: the faintest behind a sentence of its own,
+// a tint behind a note or a quiet button under the pointer, a stronger one behind a row or menu item under
+// the pointer, the strongest behind words that changed; and the ring round a field or button that has focus.
+$gold-faint:     rgba($vcu-gold, 0.06);
+$gold-tint:      rgba($vcu-gold, 0.14);
+$gold-hover:     rgba($vcu-gold, 0.25);
+$gold-highlight: rgba($vcu-gold, 0.4);
+$gold-border:    rgba($vcu-gold, 0.55); // a card under the pointer, or the one open
+$gold-glow:      rgba($vcu-gold, 0.17); // light from the gold on a dark panel
+$focus-ring:     0 0 0 0.2rem rgba($vcu-gold, 0.5);
+
+// ------ Gray tints -----------------------------------------------------------
+// The brand's gray, see-through: the faintest behind a box of fields or a sentence, a tint behind a chip, a
+// track or a quiet panel, and a stronger one for a pressed quiet button or a chip that stands out. A field's
+// placeholder words are Bootstrap's own variable.
+$gray-faint:  rgba($vcu-gray, 0.06);
+$gray-tint:   rgba($vcu-gray, 0.12);
+$gray-strong: rgba($vcu-gray, 0.3);
+$input-placeholder-color: rgba($vcu-gray, 0.8);
+
 // ------ Corners --------------------------------------------------------------
-// One radius for cards, tags, fields, blocks and buttons, whatever their size.
-// bslib's preset sets 3px (8px for cards), so each is set here.
-$border-radius:      0.4rem;
+// Three radii: a control's (buttons, fields, tags, blocks), a card's or a panel's (rounder, as it is
+// bigger), and a pill's (badges and chips, round at each end). bslib's preset sets 3px (8px for cards), so
+// each is set here.
+$border-radius:      0.5rem;
 $border-radius-sm:   $border-radius;
-$border-radius-lg:   $border-radius;
-$border-radius-xl:   $border-radius;
-$border-radius-xxl:  $border-radius;
-$card-border-radius: $border-radius;
+$border-radius-lg:   0.875rem;
+$border-radius-xl:   $border-radius-lg;
+$border-radius-xxl:  $border-radius-lg;
+$border-radius-pill: 50rem;
+$card-border-radius: $border-radius-lg;
+$modal-content-border-radius: $border-radius-lg;
+
+// ------ Shadows --------------------------------------------------------------
+// A card rests on the page with a soft shadow; under the pointer, or when it is the one open, it lifts.
+$shadow-card:      0 1px 2px rgba($vcu-black, 0.04), 0 4px 14px rgba($vcu-black, 0.04);
+$shadow-card-lift: 0 2px 4px rgba($vcu-black, 0.05), 0 10px 28px rgba($vcu-black, 0.08);
+
 
 // ------ Lines ----------------------------------------------------------------
 // Two strengths, on every page: a card's or box's border, dark enough to see on a white screen, and the
 // lighter rule between the items inside one.
-$line:       rgba($vcu-gray, 0.6);
-$line-light: rgba($vcu-gray, 0.35);
+$line:       rgba($vcu-gray, 0.32);
+$line-light: rgba($vcu-gray, 0.18);
+
+// ------ Cards ----------------------------------------------------------------
+// A card's header (its title) and footer (its buttons) are white, set off from its body by the lighter line.
+$card-border-color:  $line-light;
+$card-cap-bg:        transparent;
+$card-cap-padding-y: 0.875rem;
+$card-cap-padding-x: 1.25rem;
 
 // ------ Page layout ----------------------------------------------------------
 // The room between the screen's edge and the page (the menu bar's title lines up with it), less on a phone.
@@ -80,9 +145,9 @@ $page-gutter-phone: 1rem;
 // cards and the editor's fields. components/_buttons.scss draws the buttons from these.
 $control-height:    2.25rem;
 $control-height-sm: 1.875rem;
-$control-font-size: 0.875rem;
+$control-font-size: $font-size-sm;
 $control-gap:  0.5rem;                // between neighbouring buttons and fields
-$control-line: rgba($vcu-gray, 0.45); // a quiet button's border
+$control-line: rgba($vcu-gray, 0.35); // a quiet button's border, and a field's
 $control-shadow: 0 1px 2px rgba($vcu-black, 0.06);
 
 // Bootstrap sizes its buttons and fields from these, so they come out at the heights above: the words'

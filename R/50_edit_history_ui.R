@@ -11,7 +11,8 @@ edit_history_ui <- function(id) {
       toggle_input(
         ns("kind"), c("All" = "all", "Added" = "Add", "Updated" = "Update", "Deleted" = "Delete"),
         selected = "all", label = "Kind of edit"
-      )
+      ),
+      eyebrow = "Audit trail", icon_name = "history"
     ),
     textInput(
       ns("search"), NULL,

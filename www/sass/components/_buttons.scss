@@ -38,6 +38,7 @@
   --bs-btn-disabled-bg: #{$vcu-gold};
   --bs-btn-disabled-border-color: #{$vcu-gold};
   box-shadow: 0 1px 2px rgba($vcu-black, 0.12);
+  font-weight: 600;
 }
 
 // Shiny's plain buttons (a dialog's Cancel, a file input's) are drawn as the quiet button too. The :not()
@@ -49,11 +50,11 @@
   --bs-btn-bg: #{$vcu-white};
   --bs-btn-border-color: #{$control-line};
   --bs-btn-hover-color: #{$vcu-black};
-  --bs-btn-hover-bg: #{rgba($vcu-gold, 0.14)};
-  --bs-btn-hover-border-color: #{$vcu-gray};
+  --bs-btn-hover-bg: #{$surface};
+  --bs-btn-hover-border-color: #{$line};
   --bs-btn-active-color: #{$vcu-black};
-  --bs-btn-active-bg: #{rgba($vcu-gold, 0.3)};
-  --bs-btn-active-border-color: #{$vcu-gray};
+  --bs-btn-active-bg: #{$gray-tint};
+  --bs-btn-active-border-color: #{$line};
   --bs-btn-disabled-color: #{$vcu-black};
   --bs-btn-disabled-bg: #{$vcu-white};
   --bs-btn-disabled-border-color: #{$control-line};
@@ -80,9 +81,9 @@
 .btn-icon {
   --bs-btn-color: #{$vcu-gray};
   --bs-btn-hover-color: #{$vcu-black};
-  --bs-btn-hover-bg: #{rgba($vcu-gray, 0.14)};
+  --bs-btn-hover-bg: #{$gray-tint};
   --bs-btn-active-color: #{$vcu-black};
-  --bs-btn-active-bg: #{rgba($vcu-gray, 0.25)};
+  --bs-btn-active-bg: #{$gray-strong};
   width: $control-height-sm;
   height: $control-height-sm;
   min-height: 0;
@@ -101,6 +102,19 @@
 }
 
 .btn-wide { display: flex; width: 100%; }
+
+// A quiet button on a dark panel (the home page's banner): see-through, with a light border
+.btn.btn-on-dark { // .btn too: it outranks Shiny's plain button, drawn as the quiet one above
+  --bs-btn-color: #{$vcu-white};
+  --bs-btn-bg: transparent;
+  --bs-btn-border-color: #{rgba($vcu-white, 0.35)};
+  --bs-btn-hover-color: #{$vcu-white};
+  --bs-btn-hover-bg: #{rgba($vcu-white, 0.1)};
+  --bs-btn-hover-border-color: #{rgba($vcu-white, 0.6)};
+  --bs-btn-active-color: #{$vcu-white};
+  --bs-btn-active-bg: #{rgba($vcu-white, 0.16)};
+  --bs-btn-active-border-color: #{$vcu-white};
+}
 
 // ------ A row of buttons that share it evenly ---------------------------------------------------------
 // Each takes the same share, whatever its words or padding (a grid's columns, not flex, which can't shrink

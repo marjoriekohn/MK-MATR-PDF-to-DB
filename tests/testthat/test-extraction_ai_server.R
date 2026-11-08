@@ -39,7 +39,7 @@ test_that("the files chosen can be swapped until Begin Extraction, which makes t
     expect_match(text_of(output$pdf_card), "first.pdf")
     session$setInputs(replace_pdf = fake_upload(), supplement = fake_csv_upload("AH01", "codes.csv"))
     expect_match(text_of(output$pdf_card), "AHP_wave3.pdf")
-    expect_match(text_of(output$supplement), "codes.csv")
+    expect_match(text_of(output$supplement_box), "codes.csv")
     expect_false(grepl("disabled", output$footer_button$html))
 
     session$setInputs(begin = 1)
@@ -50,8 +50,8 @@ test_that("the files chosen can be swapped until Begin Extraction, which makes t
     expect_equal(record()$prepared_by_id, me$staff_id)
     expect_match(text_of(output$pdf_card), "AHP_wave3.pdf 2 pages")
     expect_false(grepl("Replace", output$pdf_card$html)) # the files are the draft's now
-    expect_match(text_of(output$supplement), "^Variable Names and Coding from codes.csv")
-    expect_match(output$supplement$html, "codes.csv</strong>.", fixed = TRUE) # the full stop against the name, no space
+    expect_match(text_of(output$supplement_box), "^Variable Names and Coding from codes.csv")
+    expect_match(output$supplement_box$html, "codes.csv</strong>.", fixed = TRUE) # the full stop against the name, no space
     expect_match(text_of(output$reading), "Reading your questionnaire")
     expect_match(output$footer_button$html, "Open in Edit Extraction")
     expect_match(output$footer_button$html, "disabled")
@@ -127,9 +127,12 @@ test_that("Cancel asks first, then deletes the draft and empties the page", {
   })
 })
 
-test_that("the mode is drawn with the drop zone and a place for its buttons", {
+test_that("the mode is drawn with a place for the PDF, the file of Variable Names and Coding, and its buttons", {
   html <- htmltools::renderTags(extraction_ai_ui("ai"))$html
   expect_match(html, 'id="ai-pdf_card"')
+  # the box the file is shown in, not the file input inside it, which is ai-supplement (one id each)
+  expect_match(html, 'id="ai-supplement_box"')
+  expect_false(grepl('id="ai-supplement"', html, fixed = TRUE))
   expect_match(html, 'id="ai-footer_button"')
   expect_false(grepl("Reading happens in the background", html, fixed = TRUE))
   expect_false(grepl('id="ai-info-|About questionnaire|An AI reads it, and while it does', html, ignore.case = TRUE))
@@ -159,4 +162,17 @@ test_that("how long reading has taken is drawn once, for the browser to count on
     expect_equal(grepl('id="ai-cancel"', done), status == "failed", info = status)
   }
   expect_match(htmltools::renderTags(reading_card(reading, shiny::NS("ai")))$html, 'id="ai-cancel"')
+})
+
+test_that("a file is chosen with its button: nothing says to drop it", {
+  ns <- shiny::NS("ai")
+  for (html in c(
+    htmltools::renderTags(pdf_choice(ns))$html,
+    htmltools::renderTags(supplement_card(NULL, begun = FALSE, ns))$html,
+    htmltools::renderTags(manual_pdf_card(NULL, shiny::NS("manual")))$html
+  )) {
+    expect_match(html, 'class="file-box')
+    expect_match(html, 'type="file"')
+    expect_no_match(html, "[Dd]rop")
+  }
 })

@@ -5,5 +5,9 @@
   @include media-breakpoint-down(sm) { padding: $page-gutter-phone; }
 }
 
-// Cards have the same border as every other box (bslib's preset draws them with only a shadow)
-.card { border: 1px solid $line; }
+// Cards are white on the off-white page, with a light border and a soft shadow (bslib's preset draws them
+// with only a shadow), and every card with a title has it in its header (card_header()), the same size on
+// every page
+.card { border: 1px solid $card-border-color; box-shadow: $shadow-card; }
+.card-header, .card-footer { border-color: $line-light; }
+.card-header h2 { margin: 0; font-size: $title-font-size; }

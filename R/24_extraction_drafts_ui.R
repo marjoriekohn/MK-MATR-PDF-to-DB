@@ -2,7 +2,7 @@
 extraction_drafts_page_ui <- function(id) {
   div(
     class = "page extraction-page drafts-page",
-    page_header("Extraction Drafts", "Pick up a draft whose change request isn't submitted yet."),
+    page_header("Extraction Drafts", "Pick up a draft whose change request isn't submitted yet.", eyebrow = "Work in progress", icon_name = "drafts"),
     extraction_drafts_ui(id)
   )
 }
@@ -68,7 +68,7 @@ draft_card <- function(record, draft, catalog, me, now = Sys.time()) {
         if (failed) row_badge("Reading stopped", class = "is-warning"),
         if (!is.null(editor)) row_badge(app_icon("edit"), sprintf(" %s is actively working on this", editor$by), class = "is-editing")
       ),
-      p(class = "list-card-meta", draft_meta(record, me)),
+      p(class = "list-card-meta", draft_meta(record)),
       if (!is.null(sent_back)) {
         div(class = "list-card-note", strong(paste0(sent_back$by, ":")), paste0("“", sent_back$note, "”"))
       },
@@ -101,20 +101,18 @@ draft_card <- function(record, draft, catalog, me, now = Sys.time()) {
   )
 }
 
-# "Started by you on Sep 29 · last saved 2 hours ago · AHP_wave3.pdf, 14 pages". What there is nothing to
-# say about (no PDF, no reading error) is left out, so no piece is empty.
-draft_meta <- function(record, me) {
-  who <- if (draft_row_service_is_mine(record, me)) "you" else draft_row_service_preparer(record)
-  pdf <- record$pdf
+# "Started on Sep 29 · last saved 2 hours ago". Whose it is is the badge beside the title, and its pages are
+# in its progress ("8 pages read by Gemini"), so neither is said again. What there is nothing to say about (no
+# reading error) is left out, so no piece is empty.
+draft_meta <- function(record) {
   pieces <- c(
-    paste("Started by", who, day_phrase(parse_time(record$started))),
+    paste("Started", day_phrase(parse_time(record$started))),
     if (!is.null(record$sent_back)) {
       paste("sent back by", record$sent_back$by %||% "a reviewer", day_phrase(parse_time(record$sent_back$date)))
     } else {
       paste("last saved", time_ago(parse_time(record$saved)))
     },
-    if (identical(record$extraction_status, "failed")) record$error,
-    paste(c(pdf$name, if (!is.null(pdf$pages)) plural(pdf$pages, "page")), collapse = ", ")
+    if (identical(record$extraction_status, "failed")) record$error
   )
   paste(pieces[has_text(pieces)], collapse = " · ")
 }

@@ -351,3 +351,10 @@ test_that("a block moved into another section loses its check, and one moved in 
     expect_equal(checked_blocks(draft()), "c4")
   })
 })
+
+test_that("how far the checking has got is a progress bar the browser draws, its width not set by the server", {
+  html <- htmltools::renderTags(structure_progress_ui(list(checked = 3, blocks = 4)))$html
+  expect_match(html, '<progress[^>]*value="75"[^>]*max="100"')
+  expect_match(html, "75% human-reviewed")
+  expect_no_match(html, "style=")
+})
