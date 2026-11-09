@@ -6,6 +6,11 @@
 # removes them.
 
 test_that("the tests left no marked rows: not in the catalog, and no extractions, history or staff", {
+  # The vocabulary a push added (tags, answer options, components) is removed only when a run ends
+  # (helper-00_realdb.R). Run in parallel, each process has ended before this file starts; run in one process
+  # (tests/coverage/coverage.R, on GitHub) this file is still part of the run, so its cleanup is done here first.
+  # It removes only what nothing points at, so a tree a test left behind still shows below.
+  test_forget_marked(test_marker)
   marked <- c(
     staff = "name", registry = "name", principal_investigator = "name", study = "name",
     respondent_type = "name", questionnaire = "name", wave = "name", component = "text",

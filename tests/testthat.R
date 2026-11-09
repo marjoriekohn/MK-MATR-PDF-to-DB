@@ -185,7 +185,7 @@ StepsReporter <- R6::R6Class("StepsReporter", # nolint: object_name_linter. (tes
 # ------ Running them in parallel ---------------------------------------------------------------------------
 # The files that run on their own once the others have finished, by name (without "test-" and ".R"): those that
 # count what is in the whole database, and the check that the run left nothing behind, which has to come last.
-serial_files <- c("model_history", "zz_leftovers")
+serial_files <- c("model_history", "service_home", "zz_leftovers")
 
 # How long each file took last time, in seconds, by name: what the files are shared out by.
 timing_file <- file.path(tools::R_user_dir("matr_tests", "cache"), "file_seconds.rds")

@@ -52,8 +52,9 @@ test_that("a draft typed by hand has no reading and keeps what staff said about 
 
 test_that("records are read newest saved first, named by id, in one request, and a pushed one leaves the list", {
   me <- local_staff()
-  first <- local_extraction(me)
-  second <- local_extraction(me)
+  # saved a minute apart: ids are random, so two saved at the same moment come in either order
+  first <- local_extraction(me, saved = "2026-10-02T10:00:00Z")
+  second <- local_extraction(me, saved = "2026-10-02T10:01:00Z")
   before <- test_requests$count
   records <- extraction_model_get_all(test_connection)
   expect_equal(test_requests$count - before, 1L)

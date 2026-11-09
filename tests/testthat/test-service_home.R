@@ -17,7 +17,8 @@ test_that("changes added counts the Edit History", {
   me <- local_staff()
   local_history(me, "Added")
   # not compared with a count from before: other runs of the tests add and remove changes meanwhile, but this one
-  # stays until the test ends
+  # stays until the test ends. The two counts below are read one after the other, so this file runs on its own
+  # (serial_files in tests/testthat.R), not beside the files that add changes.
   expect_gte(home_service_changes_added(test_connection), 1)
   expect_equal(home_service_changes_added(test_connection), history_service_count(test_connection))
 })

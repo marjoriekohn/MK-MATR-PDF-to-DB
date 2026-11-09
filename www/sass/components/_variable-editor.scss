@@ -153,7 +153,7 @@ $code-width: 4.25rem; // a choice's code: a few digits
   &.is-subject { background: $vcu-purple; }
   &.is-time_frame { background: $vcu-blue; }
   &.is-unit { background: $vcu-gray; }
-  &:focus-within { box-shadow: 0 0 0 2px rgba($vcu-gold, 0.6); }
+  &:focus-within { box-shadow: $focus-ring; }
   .tag-pill-input, .variable-cell & .form-control {
     width: auto;
     max-width: 100%;
