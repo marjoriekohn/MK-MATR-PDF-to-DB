@@ -52,7 +52,7 @@ golden_compare <- function(reading, answer) {
     g <- got$questions[[number]]
     w <- want$questions[[number]]
     where <- paste0("Q", number)
-    for (field in c("text", "self_contained", "condition", "parent_question", "section", "grid")) {
+    for (field in c("text", "parent_question", "section", "grid")) {
       same(where, field, g[[field]], w[[field]])
     }
     same(where, "variables", length(g$variables), length(w$variables))
@@ -64,9 +64,6 @@ golden_compare <- function(reading, answer) {
         same(box, field, gv[[field]], wv[[field]])
       }
       same(box, "choices", choice_field(gv, "answer_option"), choice_field(wv, "answer_option"))
-      for (field in c("printed_label", "skip_instruction")) {
-        same(box, field, choice_field(gv, field), choice_field(wv, field))
-      }
     }
   }
 

@@ -3,17 +3,13 @@
 
 # ------ PDFs ---------------------------------------------------------------------------------------------
 # What PDFs were uploaded as.
-# A PDF is kept once by its SHA-256, however many times it is uploaded and under whatever names.
+# A PDF is kept once by its SHA-256, however many times it is uploaded and under whatever names; the waves
+# extracted from it keep the names.
 # hashes: PDFs' SHA-256s.
-# Returns: One string per PDF: its names joined by " / ", or "PDF" and the start of its hash if no draft or wave
-#   names it.
+# Returns: One string per PDF: its names joined by " / ", or "PDF" and the start of its hash if no wave names it.
 edit_pdf_names <- function(snap, hashes) {
-  drafts <- snap$extracted_draft
-  waves <- snap$wave_file
-  named <- c(
-    stats::setNames(drafts$pdf_name, drafts$pdf_sha256),
-    if (!is.null(waves)) stats::setNames(c(waves$pdf_name, waves$supplement_name), c(waves$pdf_sha256, waves$supplement_sha256))
-  )
+  waves <- snap$wave
+  named <- if (is.null(waves)) character() else stats::setNames(c(waves$pdf_name, waves$supplement_name), c(waves$pdf_sha256, waves$supplement_sha256))
   named <- named[!is.na(names(named)) & !is.na(named) & nzchar(named)]
   vapply(hashes, function(hash) {
     names <- unique(unname(named[names(named) %in% hash]))
@@ -33,10 +29,10 @@ pdf_file_entity <- list(
   group = "Extractions", table = "pdf_file", view_only = TRUE,
   about = paste0(
     "A questionnaire's PDF, uploaded for an extraction and kept once however many times it's uploaded. It is only ",
-    "shown here: it's the record of what extractions were read from, so it isn't changed or deleted, and new ones come ",
+    "shown here: it's the record of what waves were read from, so it isn't changed or deleted, and new ones come ",
     "in on the Extraction page."
   ),
-  reads = c("extracted_draft", "draft", "wave_file"),
+  reads = c("wave", "questionnaire"),
   can = function(snap, mode) {
     switch(mode,
       add = "PDFs come in when they're uploaded for an extraction, on the Extraction page.",
@@ -48,11 +44,11 @@ pdf_file_entity <- list(
     names <- edit_pdf_names(snap, snap$pdf_file$pdf_sha256)
     by_name <- order(tolower(names), method = "radix")
     rows <- snap$pdf_file[by_name, , drop = FALSE]
-    used <- count_in(snap$extracted_draft$pdf_sha256, rows$pdf_sha256)
+    used <- count_in(snap$wave$pdf_sha256, rows$pdf_sha256) + count_in(snap$wave$supplement_sha256, rows$pdf_sha256)
     edit_cards(
       rows$pdf_sha256, names[by_name],
       subtitle = edit_pdf_facts(rows$pdf_pages, rows$pdf_bytes),
-      facts = lapply(used, function(n) if (n > 0) paste("read for", edit_count(n, "extraction")) else "read for no extractions")
+      facts = lapply(used, function(n) if (n > 0) paste("read for", edit_count(n, "wave")) else "read for no wave yet")
     )
   },
   fields = function(snap, mode, row, scope) {

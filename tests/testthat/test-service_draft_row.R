@@ -1,4 +1,4 @@
-# What extraction drafts and edits have in common: whose they are, and who is working on one now.
+# Whose a draft is, and who is working on it now.
 
 test_that("a draft someone else claimed lately is theirs to work on, until their claim lapses", {
   me <- list(staff_id = 1)

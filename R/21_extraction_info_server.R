@@ -4,13 +4,14 @@
 # isn't made to be shared between threads or sessions, and shouldn't be.
 
 # The form that says where an extraction goes (its Basic Info): its registry, study, questionnaire and wave.
-# Four drop-downs, each holding what is in the one before it; the wave drop-down offers the
-# questionnaire's waves that ask no questions yet. Each ends with "+ Add new …": picking it opens the
-# pop-up that adds one (`quick_add_server()`), applied at once like any add, and the new row is picked
-# when the pop-up closes. Saving is up to the page. The drop-downs and checks use `catalog`, the live
-# tables as they were when the session started or when something was last added.
-# The form is in the Change Requests dialog, and the pop-up takes the dialog's place, so `reopen` is
-# called to put the dialog back, with what was in the form, when the pop-up closes.
+# Four drop-downs, each holding what is in the one before it; the wave drop-down offers every wave of the
+# questionnaire, saying which ask no questions yet (only those can take the extraction) and which have to be
+# emptied first. Each ends with "+ Add new …": picking it opens the pop-up that adds one
+# (`quick_add_server()`), applied at once like any add, and the new row is picked when the pop-up closes.
+# Saving is up to the page. The drop-downs and checks use `catalog`, the live tables as they were when the
+# session started or when something was last added.
+# The form is in the Edit Extraction page's push dialog, and the pop-up takes the dialog's place, so `reopen`
+# is called to put the dialog back, with what was in the form, when the pop-up closes.
 # record_id: A reactive: the draft the form is about, so the wave check doesn't count it as a clash.
 # reopen: A function that shows the dialog the form is in again, or `NULL` if it isn't in one.
 # Returns: A list: `info` (what the form holds, as `extraction_service_basic_info()` shapes it),
@@ -63,16 +64,16 @@ extraction_info_server <- function(
       if (!has_text(questionnaire_id)) {
         return(c("Select a questionnaire first" = ""))
       }
-      waves <- questionnaire_service_empty_wave_choices(now(), questionnaire_id, counts)
-      prompt <- if (length(waves) == 0) "No waves without questions yet" else "Select wave"
+      waves <- questionnaire_service_wave_choices(now(), questionnaire_id, counts)
+      prompt <- if (length(waves) == 0) "No waves yet" else "Select wave"
       c(stats::setNames("", prompt), waves, add_new("wave"))
     }
 
     quick <- quick_add_server("quick", connection, me, catalog)
 
     # How many questions each wave of the picked questionnaire asks, read when it is picked: only a wave
-    # with none can take an extraction. If it can't be read, every wave is offered and the database
-    # checks again when the request is approved.
+    # with none can take an extraction. If it can't be read, every wave is offered as empty and the database
+    # checks again when the extraction is pushed.
     read_counts <- function(questionnaire_id) {
       tryCatch(questionnaire_service_wave_question_counts(connection, questionnaire_id), error = function(problem) integer())
     }
@@ -103,7 +104,7 @@ extraction_info_server <- function(
     remember <- function(values) for (field in names(values)) assign(field, values[[field]], envir = last)
     before_adding <- function() {
       values <- isolate(info())
-      for (field in c("registry_id", "study_id", "questionnaire_id", "wave_id")) {
+      for (field in extraction_info_fields) {
         if (identical(isolate(input[[field]]), add_new_choice)) values[[field]] <- get0(field, envir = last, ifnotfound = "")
       }
       values
@@ -120,7 +121,7 @@ extraction_info_server <- function(
         choices = questionnaire_choices(info$study_id), selected = info$questionnaire_id
       )
       updateSelectInput(session, "wave_id", choices = wave_choices(info$questionnaire_id, counts), selected = info$wave_id)
-      remember(info[c("registry_id", "study_id", "questionnaire_id", "wave_id")])
+      remember(info)
     }
 
     # ------ Picking ---------------------------------------------------------------
@@ -218,7 +219,7 @@ extraction_info_server <- function(
     # ------ OUTPUT ------------------------------------------------------------
     # Under each drop-down: what to fix, if anything, or, for one still blank, a mark that outlines it
     # in red and says "Required" to screen readers.
-    lapply(c("registry_id", "study_id", "questionnaire_id", "wave_id"), function(field) {
+    lapply(extraction_info_fields, function(field) {
       output[[paste0(field, "_note")]] <- renderUI({
         problem <- problems()[[field]]
         if (!is.null(problem)) {

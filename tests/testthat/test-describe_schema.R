@@ -36,12 +36,12 @@ small_description <- function() {
           status = column("text", default = "Ongoing")
         )
       ),
-      question_category = list(
-        description = "Links questions to categories.",
-        required = list("component_id", "mesh_id"),
+      question_scale = list(
+        description = "A question's place in a scale.",
+        required = list("scale_id", "component_id"),
         properties = list(
-          component_id = column("bigint", "Note:\nThis is a Primary Key.<pk/>"),
-          mesh_id = column("text", "Note:\nThis is a Primary Key.<pk/>")
+          scale_id = column("bigint", "Note:\nThis is a Primary Key.<pk/>"),
+          component_id = column("bigint", "Note:\nThis is a Primary Key.<pk/>")
         )
       ),
       new_table = list(description = "A table the groups don't know yet.", properties = list(x = column("text")))
@@ -86,8 +86,8 @@ test_that("keys are said to be numbered by the database, or to point at the tabl
   expect_true("| `study_id` | bigint |  |  | Primary key, numbered by the database. |" %in% text)
   expect_true("| `registry_id` | bigint | yes |  | Points at `registry.registry_id`. |" %in% text)
   # a table keyed by two columns has none numbered by the database: both are needed
+  expect_true("| `scale_id` | bigint | yes |  | Primary key. |" %in% text)
   expect_true("| `component_id` | bigint | yes |  | Primary key. |" %in% text)
-  expect_true("| `mesh_id` | text | yes |  | Primary key. |" %in% text)
 })
 
 test_that("defaults are shown, and a pipe in a description doesn't break the table", {
@@ -100,7 +100,7 @@ test_that("tables come in their groups, and one that no group knows is listed at
   text <- written_text()
   headings <- unname(grep("^## ", text, value = TRUE))
   expect_equal(headings, c(
-    "## Registries and studies", "## Classifying questions", "## Other tables (not in any group yet)", "## Functions"
+    "## Registries and studies", "## Measurement scales", "## Other tables (not in any group yet)", "## Functions"
   ))
   expect_true("### `new_table`" %in% text)
 })
@@ -127,8 +127,8 @@ small_catalog <- function() {
       row(tbl = "registry", conname = "registry_name_unique", contype = "u", def = "UNIQUE (name)"),
       row(tbl = "study", conname = "study_registry_fk", contype = "f", def = "FOREIGN KEY (registry_id) REFERENCES registry(registry_id)"),
       row(
-        tbl = "question_category", conname = "question_category_fk", contype = "f",
-        def = "FOREIGN KEY (component_id, mesh_id) REFERENCES question(component_id, mesh_id)"
+        tbl = "question_scale", conname = "question_scale_fk", contype = "f",
+        def = "FOREIGN KEY (questionnaire_id, placement_id) REFERENCES placement(questionnaire_id, placement_id)"
       )
     ),
     indexes = list(
@@ -196,7 +196,7 @@ test_that("with the catalog, a table's checks, unique constraints and other inde
 
 test_that("with the catalog, foreign keys over several columns and triggers are listed, and one-column ones are not", {
   text <- written_with_catalog()
-  expect_true("- `FOREIGN KEY (component_id, mesh_id) REFERENCES question(component_id, mesh_id)`" %in% text)
+  expect_true("- `FOREIGN KEY (questionnaire_id, placement_id) REFERENCES placement(questionnaire_id, placement_id)`" %in% text)
   expect_false(any(grepl("study_registry_fk", text, fixed = TRUE)))
   expect_false(any(grepl("FOREIGN KEY (registry_id)", text, fixed = TRUE)))
   expect_true(

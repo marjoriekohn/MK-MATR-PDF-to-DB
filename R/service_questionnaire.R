@@ -101,15 +101,18 @@ questionnaire_service_study_choices <- function(catalog, registry_id) {
   stats::setNames(as.character(studies$study_id), labels)
 }
 
-# A questionnaire's waves that ask no questions yet, for a drop-down.
-# An extraction can go into one of them (a wave added on Make an edit before its questionnaire was
-# extracted); a wave that asks questions already can't take another extraction's.
+# A questionnaire's waves, for a drop-down, each saying whether it asks questions yet.
+# An extraction can only go into a wave that asks none (a wave added on Make an edit before its questionnaire
+# was extracted, or one emptied there): one that asks questions already is offered so staff see why it won't
+# do, and told to empty it first.
 # question_counts: From `questionnaire_service_wave_question_counts()`.
-questionnaire_service_empty_wave_choices <- function(catalog, questionnaire_id, question_counts = integer()) {
+questionnaire_service_wave_choices <- function(catalog, questionnaire_id, question_counts = integer()) {
   waves <- catalog$waves[catalog$waves$questionnaire_id %in% questionnaire_id, , drop = FALSE]
-  waves <- waves[!as.character(waves$wave_id) %in% names(question_counts)[question_counts > 0], , drop = FALSE]
+  n <- question_counts[as.character(waves$wave_id)]
+  n[is.na(n)] <- 0L
   dates <- ifelse(is.na(waves$administered_date), "", paste0(" · given ", format(as.Date(waves$administered_date), "%m/%d/%Y")))
-  stats::setNames(as.character(waves$wave_id), paste0(waves$name, dates, " · no questions yet", recycle0 = TRUE))
+  asks <- ifelse(n == 0, " · no questions yet", paste0(" · asks ", vapply(n, plural, character(1), "question"), ": empty it first"))
+  stats::setNames(as.character(waves$wave_id), paste0(waves$name, dates, asks, recycle0 = TRUE))
 }
 
 # A study's questionnaires for a drop-down.

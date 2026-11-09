@@ -1,152 +1,34 @@
-# ------ Adding one question to a recorded questionnaire ----------------------------------------------
-# Make an edit can add a single question to a questionnaire that is recorded already, as a whole: its
-# wording (new, or a question already in the database, to keep the wording shared), where it sits in the
-# outline, whether it stands on its own and what it follows up on, its number in each wave that asks it,
-# and its variables with their MATR IDs and choices. It is written as one edit, so it is added all at once
-# or not at all, and nothing is left half-finished.
-#
-# The variables are typed in one field (type "variables"), edited with the Edit Extraction page's variable
-# editor (variable_editor_server()), which keeps the field's value as JSON: a list of variables in the shape
-# the Edit Extraction page saves (service_draft.R): variable_type, matr_id, subject, label, and for a
-# write-in answer_data_type, skip_condition and skip_instruction, or for choices response_options
-# (code_value, answer_option, skip_instruction). Skips are the words printed for them: there is
-# no outline here to link them to. They are added the way an extraction adds them (push_variables(),
-# service_extraction_push.R), so an answer choice or a set of choices that is there already is used again.
+# ------ A question's variables, typed on Make an edit ----------------------------------------------
+# A question added to a questionnaire on Make an edit comes whole: its wording, where it sits, the waves that ask
+# it, and its variables with their MATR IDs, choices and tags (service_edit_placement.R). The variables are typed
+# in one field (type "variables"), edited with the Edit Extraction page's variable editor
+# (variable_editor_server()), which keeps the field's value as JSON: a list of variables in the shape an
+# extraction saves (docs/database_design.md): variable_type, matr_id, label, subject, time_frame, unit, and for
+# a write-in answer_data_type, or for choices response_options (code_value, answer_option). They are written the
+# way a push writes them: an answer choice or a tag that is there already is used again, a new one is added.
 
-# The form for adding a question to one questionnaire.
-# Returns: A list of fields; see `edit_field()`.
-edit_question_add_fields <- function(snap, scope) {
-  q <- as.numeric(scope)
-  placed <- edit_service_placements(snap, q)
-  candidates <- snap$component[edit_is_question(snap, snap$component$component_id), , drop = FALSE]
-  candidate_choices <- stats::setNames(
-    key_text(candidates$component_id),
-    paste0(
-      edit_component_text(snap, candidates$component_id), " · ",
-      vapply(candidates$component_id, function(id) edit_seen_in(snap, id), character(1)),
-      recycle0 = TRUE
-    )
-  )
-  c(
-    list(
-      edit_field(
-        "source", "Which question?", "choice",
-        required = TRUE,
-        choices = c("A new question" = "new", "One that's already in the database" = "existing"),
-        default = "new",
-        hint = "Using a question that's already in the database keeps its wording shared with the questionnaires that ask it."
-      ),
-      edit_text_field(snap, "add", NULL, "Question wording", type_field = FALSE) |>
-        utils::modifyList(list(
-          show_when = list(field = "source", value = "new"),
-          hint = "The question's words only, as printed, without its number."
-        )),
-      edit_field("component_id", "The question", "select",
-        required = TRUE, show_when = list(field = "source", value = "existing"),
-        choices = c("Choose a question" = "", candidate_choices),
-        hint = "A question this questionnaire asks already can be asked again here, as a second place that prints it."
-      ),
-      edit_field("parent_placement_id", "Inside which section, grid or group?", "select",
-        choices = edit_service_parent_choices(snap, placed), short = "section, grid or group it's in",
-        hint = "Only sections, grids and groups can hold other blocks."
-      ),
-      edit_field(
-        "display_order", "Position", "number",
-        min = 1, short = "position",
-        hint = "1 is first. The blocks next to it move over to make room. Leave empty to put it last.",
-        warn = function(value, values) {
-          position <- edit_whole_number(value)
-          parent <- if (has_text(values$parent_placement_id)) as.numeric(values$parent_placement_id) else NA_real_
-          room <- edit_service_room(placed, parent) + 1
-          if (!is.na(position) && position > room) sprintf("There are only %d places there, so it will go last (position %d).", room, room)
-        }
-      ),
-      edit_field(
-        "self_contained", "Can a researcher understand it on its own?", "choice",
-        choices = c("Yes" = "TRUE", "No, it follows up on another question" = "FALSE"),
-        default = "TRUE", short = "whether it stands on its own"
-      ),
-      edit_field(
-        "parent_question_placement_id", "Which question does it follow up on?", "select",
-        required = TRUE, short = "the question it follows up on",
-        show_when = list(field = "self_contained", value = "FALSE"),
-        choices = c("Choose a question" = "", edit_service_parent_question_choices(snap, q)),
-        hint = "Pick one printed before where this one goes."
-      ),
-      edit_field("condition", "Printed condition", normalize = normal_text,
-        placeholder = "e.g. If you answered Yes to the previous question",
-        hint = "Leave empty if the question is asked of everyone."
-      )
-    ),
-    edit_question_add_wave_fields(snap, q),
-    list(edit_field(
-      "variables", "Variables", "variables",
-      required = TRUE, default = edit_variables_default(snap),
-      options = list(
-        subjects = sort(snap$subject$name[!is.na(blank_respondent(snap$subject$name))]),
-        time_frames = sort(snap$time_frame$name),
-        answer_data_types = c("NUMBER", "TEXT", "DATE", "TIME"),
-        answer_options = sort(snap$answer_option$standardized_label)
-      ),
-      hint = paste(
-        "One for each answer a respondent can record, in printed order, each with its MATR ID. A lone check",
-        "box has one choice: only choices printed on the form are choices."
-      ),
-      problem = edit_variables_problem(snap, q)
-    ))
-  )
-}
-
-# Two fields for each of the questionnaire's waves: whether it asks the question, and the number printed
-# beside it there (which can be empty, or repeat from section to section). A question is asked in at least
-# one wave (BR69), so a questionnaire with none can't have a question added yet. Its place among the wave's
-# questions is worked out from where it goes in the outline.
-edit_question_add_wave_fields <- function(snap, q) {
-  waves <- snap$wave[snap$wave$questionnaire_id == q, , drop = FALSE]
-  waves <- waves[order(waves$wave_id), , drop = FALSE]
-  if (nrow(waves) == 0) {
-    return(list(edit_field(
-      "qn_none", "Question number", required = TRUE,
-      problem = function(value, values) {
-        "This questionnaire has no waves yet. Add one first (Add, then Wave): a question is asked in a wave."
-      }
-    )))
-  }
-  asked <- paste0("asked_", key_text(waves$wave_id))
-  unlist(lapply(seq_len(nrow(waves)), function(i) {
-    list(
-      edit_field(
-        asked[i], paste("Asked in", waves$name[i]), "choice",
-        choices = c("Yes" = "yes", "No" = "no"), default = "no", short = paste("whether", waves$name[i], "asks it"),
-        problem = if (i == 1) {
-          function(value, values) {
-            if (!any(vapply(asked, function(name) identical(values[[name]], "yes"), logical(1)))) {
-              "Pick at least one wave that asks it: a question is asked in a wave."
-            }
-          }
-        }
-      ),
-      edit_field(
-        paste0("qn_", key_text(waves$wave_id[i])), paste("Number printed in", waves$name[i]),
-        placeholder = "e.g. 14a", short = paste("number printed in", waves$name[i]),
-        show_when = list(field = asked[i], value = "yes"),
-        hint = if (i == 1) "As printed, so it can have letters: 1, 2a, 1a4. Leave it empty if none is printed."
-      )
-    )
-  }), recursive = FALSE)
-}
-
-# ------ The variables, typed as JSON ----------------------------------------------------------------------
 # What the variables field starts with: one variable with one blank choice, about the respondent.
 # Returns: A JSON string.
-edit_variables_default <- function(snap) {
+edit_variables_default <- function() {
   as.character(jsonlite::toJSON(
     list(list(
       variable_type = "closed_ended", matr_id = "", subject = "", label = "",
-      response_options = list(list(code_value = "1", answer_option = "", skip_instruction = ""))
+      response_options = list(list(code_value = "1", answer_option = ""))
     )),
     auto_unbox = TRUE
   ))
+}
+
+# What the variable editor offers in its drop-downs: the tags there are, by kind, and the answer choices.
+edit_variables_options <- function(snap) {
+  tags <- function(kind) sort(snap$tag$name[snap$tag$kind %in% kind])
+  list(
+    subjects = tags("subject")[!is.na(blank_respondent(tags("subject")))],
+    time_frames = tags("time frame"),
+    units = tags("unit"),
+    answer_data_types = c("NUMBER", "TEXT", "DATE", "TIME"),
+    answer_options = sort(snap$answer_option$standardized_label)
+  )
 }
 
 # The variables typed, read from the field's JSON.
@@ -169,10 +51,9 @@ edit_variable_text <- function(value) {
 }
 
 # The check of the variables field.
-# The rules the Edit Extraction page checks (service_draft_checks.R), for the variables of one question:
-# each has a MATR ID no other variable of the questionnaire has (BR93), who it's about, and either the
-# kind of answer it takes (a write-in) or its choices, each filled in, listed once and with a code of its
-# own (BR103).
+# The rules the database keeps, for the variables of one question: each has a MATR ID no other variable of the
+# questionnaire has, and either the kind of answer it takes (a write-in) or its choices, each filled in, listed
+# once and with a code of its own.
 # Returns: A function of `(value, values)` giving the first problem as a sentence, or `NULL`.
 edit_variables_problem <- function(snap, q) {
   taken <- snap$variable$matr_id[snap$variable$questionnaire_id %in% q]
@@ -182,7 +63,7 @@ edit_variables_problem <- function(snap, q) {
       return("The variables couldn't be read. Add them again.")
     }
     if (length(variables) == 0) {
-      return("Add at least one variable.") # BR87
+      return("Add at least one variable.")
     }
     ids <- vapply(variables, function(box) edit_variable_text(box$matr_id), character(1))
     for (i in seq_along(variables)) {
@@ -199,13 +80,13 @@ edit_variables_problem <- function(snap, q) {
       }
       if (identical(box$variable_type, "open_ended")) {
         if (!edit_variable_text(box$answer_data_type) %in% c("NUMBER", "TEXT", "DATE", "TIME")) {
-          return(say("pick the kind of answer it takes.")) # BR95
+          return(say("pick the kind of answer it takes."))
         }
         next
       }
       choices <- box$response_options %||% list()
       if (length(choices) == 0) {
-        return(say("add its choices.")) # BR99: a lone check box has one
+        return(say("add its choices."))
       }
       answers <- vapply(choices, function(choice) normal_answer(edit_variable_text(choice$answer_option)), character(1))
       answers[is.na(answers)] <- ""
@@ -220,14 +101,15 @@ edit_variables_problem <- function(snap, q) {
         return(say("give each choice a code."))
       }
       if (anyDuplicated(codes) > 0) {
-        return(say("give each choice its own code.")) # BR103
+        return(say("give each choice its own code."))
       }
     }
     NULL
   }
 }
 
-# The variables typed, as the rows of a draft, so they can be added the way an extraction adds them.
+# ------ To and from the variable editor -----------------------------------------------------------------
+# The variables typed, as the rows of a draft, so the variable editor can edit them as Edit Extraction does.
 # variables: From `edit_variables_parse()`.
 # Returns: A draft holding one question, `c1`, with the variables and their choices.
 edit_variables_draft <- function(variables) {
@@ -239,18 +121,12 @@ edit_variables_draft <- function(variables) {
       label = normal_text(text_or_null(box$label)),
       subject = text_or_null(box$subject),
       time_frame = text_or_null(box$time_frame),
+      unit = if (!closed) text_or_null(box$unit),
       matr_id = text_or_null(box$matr_id),
       answer_data_type = if (!closed) text_or_null(box$answer_data_type),
-      unit = if (!closed) text_or_null(box$unit),
-      skip_condition = if (!closed) normal_text(text_or_null(box$skip_condition)),
-      skip_instruction = if (!closed) normal_text(text_or_null(box$skip_instruction)),
       response_options = if (closed) {
         lapply(box$response_options %||% list(), function(choice) {
-          without_blanks(list(
-            answer_option = text_or_null(choice$answer_option),
-            code_value = text_or_null(choice$code_value),
-            skip_instruction = normal_text(text_or_null(choice$skip_instruction))
-          ))
+          without_blanks(list(answer_option = text_or_null(choice$answer_option), code_value = text_or_null(choice$code_value)))
         })
       }
     ))
@@ -265,127 +141,93 @@ edit_variables_json <- function(draft) {
   text <- function(value) if (length(value) == 0 || is.na(value)) "" else as.character(value)
   boxes <- draft_service_children(draft, "variables", draft$components$id[1])
   variables <- map_rows(boxes, function(box) {
-    about <- list(variable_type = if (identical(box$variable_type, "open_ended")) "open_ended" else "closed_ended",
-                  matr_id = text(box$matr_id), subject = text(box$subject), label = text(box$label))
+    about <- list(
+      variable_type = if (identical(box$variable_type, "open_ended")) "open_ended" else "closed_ended",
+      matr_id = text(box$matr_id), subject = text(box$subject), label = text(box$label)
+    )
     # a time frame only when it has one, so a form without them reads as it did
     if (nzchar(text(box$time_frame))) about$time_frame <- text(box$time_frame)
     if (about$variable_type == "open_ended") {
-      return(c(about, list(answer_data_type = text(box$answer_data_type)), if (nzchar(text(box$unit))) list(unit = text(box$unit)), list(
-        skip_condition = text(box$skip_condition), skip_instruction = text(box$skip_instruction)
-      )))
+      return(c(about, list(answer_data_type = text(box$answer_data_type)), if (nzchar(text(box$unit))) list(unit = text(box$unit))))
     }
     choices <- draft_service_children(draft, "response_options", box$id)
     c(about, list(response_options = map_rows(choices, function(choice) {
-      list(
-        code_value = text(choice$code_value), answer_option = text(choice$answer_option),
-        skip_instruction = text(choice$skip_instruction)
-      )
+      list(code_value = text(choice$code_value), answer_option = text(choice$answer_option))
     })))
   })
   as.character(jsonlite::toJSON(variables, auto_unbox = TRUE))
 }
 
-# ------ Writing it as items -----------------------------------------------------------------------------
-# The items for a question added to one questionnaire.
-# In the order the database needs them: the question (if its wording is new), its place in the outline
-# (the blocks after it moving over to make room), its settings, its place among the questions of each wave
-# that asks it (the questions after it numbered again) and the number printed beside it there, and its
-# variables with their choices.
-edit_question_add_items_in <- function(snap, scope, fields, values) {
-  q <- as.numeric(scope)
-  prefix <- "questionnaire_question"
-  value_of <- function(name) values[[paste0(prefix, "__", name)]] %||% ""
-  field <- function(name) Filter(function(f) f$name == name, fields)[[1]]
+# ------ Writing the variables as items -----------------------------------------------------------------------
+# The items that add a question's variables: each variable (`new:variable:<n>`), its choices (an answer choice
+# that is in the list already is used, a new one added once, `new:answer_option:<n>`) and its tags (the same, by
+# kind and name, `new:tag:<n>`).
+# q: The questionnaire.
+# placement: The question's placement: its id, or the token of one being added.
+# variables: From `edit_variables_parse()`.
+# Returns: A data frame of items, or `NULL` for no variables.
+edit_variable_items <- function(snap, q, placement, variables) {
   items <- list()
-  add <- function(rows) if (!is.null(rows)) items[[length(items) + 1]] <<- rows
+  add <- function(...) items[[length(items) + 1]] <<- edit_item(...)
+  made <- new.env() # the answer choices and tags this change adds, so each is added once
+  made$answer_option <- character()
+  made$tag <- character()
 
-  # the question: one that's there, or a new one
-  if (identical(value_of("source"), "existing")) {
-    component <- as.numeric(value_of("component_id"))
-  } else {
-    component <- "new:component:1"
-    add(edit_new_question_items(snap, edit_service_normalize(field("text"), value_of("text"))))
+  # the row of a shared list with these words: the one the database has, or one added here
+  find_or_add <- function(table, rows, column, value, extra = list()) {
+    if (nrow(rows) > 0) {
+      return(rows[[edit_table_key(table)]][1])
+    }
+    token <- made[[table]][value]
+    if (!is.na(token)) {
+      return(unname(token))
+    }
+    token <- sprintf("new:%s:%d", table, length(made[[table]]) + 1)
+    made[[table]][value] <- token
+    identifier <- edit_identifier(stats::setNames(list(token), edit_table_key(table)))
+    for (name in names(extra)) add(table, identifier, "Insert", name, NA, extra[[name]])
+    add(table, identifier, "Insert", column, NA, value)
+    token
+  }
+  answer_option_for <- function(words) {
+    normal <- normal_answer(words)
+    rows <- snap$answer_option[snap$answer_option$standardized_label %in% normal, , drop = FALSE]
+    find_or_add("answer_option", rows, "standardized_label", normal)
+  }
+  tag_for <- function(kind, name) {
+    name <- squish(straight_quotes(name))
+    rows <- snap$tag[snap$tag$kind %in% kind & edit_same_words(snap$tag$name) %in% edit_same_words(name), , drop = FALSE]
+    find_or_add("tag", rows, "name", name, extra = list(kind = kind))
   }
 
-  # its place in the outline
-  placed <- edit_service_placements(snap, q)
-  parent <- if (has_text(value_of("parent_placement_id"))) as.numeric(value_of("parent_placement_id")) else NA_real_
-  room <- edit_service_room(placed, parent)
-  position <- edit_whole_number(value_of("display_order"))
-  position <- if (is.na(position)) room + 1 else max(1, min(position, room + 1))
-  later <- placed[same_parent(placed$parent_placement_id, parent) & placed$display_order >= position, , drop = FALSE]
-  for (i in seq_len(nrow(later))) {
-    add(edit_item(
-      "questionnaire_component", edit_identifier(list(placement_id = later$placement_id[i])),
-      "Update", "display_order", later$display_order[i], later$display_order[i] + 1
-    ))
+  for (i in seq_along(variables)) {
+    box <- variables[[i]]
+    closed <- !identical(box$variable_type, "open_ended")
+    token <- sprintf("new:variable:%d", i)
+    here <- edit_identifier(list(variable_key = token))
+    add("variable", here, "Insert", "questionnaire_id", NA, q)
+    add("variable", here, "Insert", "placement_id", NA, placement)
+    add("variable", here, "Insert", "matr_id", NA, edit_variable_text(box$matr_id))
+    add("variable", here, "Insert", "display_order", NA, i)
+    label <- normal_text(edit_variable_text(box$label))
+    if (has_text(label)) add("variable", here, "Insert", "label", NA, label)
+    add("variable", here, "Insert", "variable_type", NA, if (closed) "closed_ended" else "open_ended")
+    if (!closed) add("variable", here, "Insert", "answer_data_type", NA, edit_variable_text(box$answer_data_type))
+    if (closed) {
+      choices <- box$response_options %||% list()
+      for (j in seq_along(choices)) {
+        choice <- edit_identifier(list(answer_option_id = answer_option_for(choices[[j]]$answer_option), variable_key = token))
+        add("response_option", choice, "Insert", "display_order", NA, j)
+        add("response_option", choice, "Insert", "code_value", NA, edit_variable_text(choices[[j]]$code_value))
+      }
+    }
+    tags <- c(subject = "subject", time_frame = "time frame", unit = "unit")
+    for (field in names(tags)) {
+      name <- edit_variable_text(box[[field]])
+      if (field == "subject") name <- edit_variable_text(blank_respondent(name))
+      if (!nzchar(name)) next
+      add("variable_tag", edit_identifier(list(tag_id = tag_for(tags[[field]], name), variable_key = token)), "Insert", NULL, NA, NA)
+    }
   }
-  placement <- "new:questionnaire_component:1"
-  here <- edit_identifier(list(placement_id = placement))
-  add(edit_item("questionnaire_component", here, "Insert", "questionnaire_id", NA, q))
-  add(edit_item("questionnaire_component", here, "Insert", "component_id", NA, component))
-  if (!is.na(parent)) add(edit_item("questionnaire_component", here, "Insert", "parent_placement_id", NA, parent))
-  add(edit_item("questionnaire_component", here, "Insert", "display_order", NA, position))
-
-  # what is true of it at that place
-  self_contained <- edit_service_normalize(field("self_contained"), value_of("self_contained"))
-  add(edit_item("questionnaire_question", here, "Insert", "questionnaire_id", NA, q))
-  add(edit_item("questionnaire_question", here, "Insert", "component_id", NA, component))
-  add(edit_item("questionnaire_question", here, "Insert", "self_contained", NA, self_contained))
-  if (identical(self_contained, "false")) {
-    add(edit_item("questionnaire_question", here, "Insert", "parent_question_placement_id", NA, as.numeric(value_of("parent_question_placement_id"))))
-  }
-  condition <- edit_service_normalize(field("condition"), value_of("condition"))
-  if (!is.na(condition)) add(edit_item("questionnaire_question", here, "Insert", "condition", NA, condition))
-
-  # each wave that asks it: its place among the wave's questions, once the outline has it, and the number
-  # printed beside it
-  keys <- function(ids) ifelse(is.na(ids), NA_character_, key_text(ids))
-  outline <- placed[c("placement_id", "parent_placement_id", "display_order")]
-  outline$display_order[match(later$placement_id, outline$placement_id)] <- later$display_order + 1
-  outline$placement_id <- keys(outline$placement_id)
-  outline$parent_placement_id <- keys(outline$parent_placement_id)
-  outline <- rbind(outline, data.frame(placement_id = placement, parent_placement_id = keys(parent), display_order = position))
-  for (name in grep("^asked_[0-9]+$", names(edit_part_values(fields, values, prefix)), value = TRUE)) {
-    if (!identical(value_of(name), "yes")) next
-    wave <- as.numeric(sub("^asked_", "", name))
-    numbers <- edit_wave_numbers(snap, q, wave, edit_wave_order(snap, q, wave, outline, also = placement))
-    add(numbers$items)
-    asked <- edit_identifier(list(placement_id = placement, wave_id = wave))
-    add(edit_item("wave_question", asked, "Insert", "questionnaire_id", NA, q))
-    add(edit_item("wave_question", asked, "Insert", "question_number", NA, numbers$numbers[[placement]]))
-    printed <- trimws(value_of(paste0("qn_", key_text(wave))))
-    if (nzchar(printed)) add(edit_item("wave_question", asked, "Insert", "printed_number", NA, printed))
-  }
-
-  # its variables, added the way an extraction adds them
-  draft <- edit_variables_draft(edit_variables_parse(value_of("variables")))
-  push <- push_start(
-    ids = list(component_types = snap$component_type, subjects = snap$subject, time_frames = snap$time_frame),
-    existing = NULL,
-    options = list(
-      answer_options = snap$answer_option, aliases = snap$answer_option_alias,
-      option_sets = snap$option_set, members = snap$answer_option_set
-    )
-  )
-  push_variables(push, draft, draft$components[1, ], placement, q)
-  add(do.call(rbind, push$items()))
-  do.call(rbind, items)
-}
-
-# The proposal's sentence for a question added to a questionnaire.
-# fields: The form's fields.
-# Returns: A string, e.g. `"Added the question “Do you smoke?” to AHP"`.
-edit_question_add_summary <- function(snap, scope, fields, values) {
-  value_of <- function(name) values[[paste0("questionnaire_question__", name)]] %||% ""
-  words <- if (identical(value_of("source"), "existing")) {
-    edit_component_text(snap, as.numeric(value_of("component_id")), 60)
-  } else {
-    shorten(trimws(value_of("text")), 60)
-  }
-  questionnaire <- snap$questionnaire[snap$questionnaire$questionnaire_id %in% as.numeric(scope), , drop = FALSE]
-  paste0(
-    "Added the question “", words, "”",
-    if (nrow(questionnaire) == 1) paste0(" to ", questionnaire$abbreviation)
-  )
+  if (length(items) == 0) NULL else do.call(rbind, items)
 }

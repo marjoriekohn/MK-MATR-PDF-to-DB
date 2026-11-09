@@ -62,15 +62,16 @@ questionnaire_entity <- list(
     "belongs to. Each time it's given is a wave."
   ),
   delete_about = paste0(
-    "Deleting a questionnaire deletes its waves and everything printed in it: every placement of a ",
-    "component, every question's settings and numbers, and every variable with its choices. A component ",
-    "another questionnaire prints stays, and so does one a measurement scale lists or another questionnaire ",
-    "skips to; the rest go too."
+    "Deleting a questionnaire deletes its waves and everything printed in it: every block, every question's ",
+    "numbers in each wave, and every variable with its choices. A component another questionnaire prints stays, ",
+    "and so does one a measurement scale lists; the rest are forgotten."
   ),
+  empty_about = "It and its waves stay, with nothing printed or asked in them.",
   cards = function(snap, scope) {
     rows <- snap$questionnaire
     n_waves <- count_in(snap$wave$questionnaire_id, rows$questionnaire_id)
-    n_questions <- count_in(snap$questionnaire_question$questionnaire_id, rows$questionnaire_id)
+    questions <- snap$placement[edit_is_question(snap, snap$placement$component_id), , drop = FALSE]
+    n_questions <- count_in(questions$questionnaire_id, rows$questionnaire_id)
     study <- edit_lookup(snap, "study", "study_id", rows$study_id, "name")
     who <- edit_lookup(snap, "respondent_type", "respondent_type_id", rows$respondent_type_id, "name")
     edit_cards(
@@ -103,19 +104,11 @@ questionnaire_entity <- list(
         required = TRUE, short = "respondent type",
         choices = edit_choices(snap, "respondent_type", blank = "Choose a respondent type")
       ),
-      edit_field(
-        "name",
-        "Name",
-        required = TRUE,
-        placeholder = "e.g. Adult Health and Personality",
-        problem = study_taken("name", "the name")
+      edit_field("name", "Name",
+        required = TRUE, placeholder = "e.g. Adult Health and Personality", problem = study_taken("name", "the name")
       ),
-      edit_field(
-        "abbreviation",
-        "Abbreviation",
-        required = TRUE,
-        placeholder = "e.g. AHP",
-        problem = study_taken("abbreviation", "the abbreviation")
+      edit_field("abbreviation", "Abbreviation",
+        required = TRUE, placeholder = "e.g. AHP", problem = study_taken("abbreviation", "the abbreviation")
       ),
       edit_field("participant_count", "Total participants", "number",
         min = 0, placeholder = "e.g. 1,200",
@@ -138,16 +131,16 @@ questionnaire_entity <- list(
       edit_details_pick(own, c("name", "respondent_type_id", "abbreviation", "participant_count", "description"))
     )
   },
-  # its components in printed order, each with its kind; not its groups, which have no words of their own
+  # its blocks in printed order, each with its kind; not its groups, which have no words of their own
   usage_rows = function(snap, row, table, rows) {
-    if (table != "questionnaire_component") {
+    if (table != "placement") {
       return(NULL)
     }
     placed <- edit_service_outline(edit_service_placements(snap, row$questionnaire_id))
-    placed <- placed[placed$placement_id %in% rows$placement_id & !placed$type %in% "Group", , drop = FALSE]
+    placed <- placed[placed$placement_id %in% rows$placement_id & !placed$kind %in% "Group", , drop = FALSE]
     list(
-      rows = placed, text = edit_count(nrow(placed), "component"),
-      labels = paste0(ifelse(is.na(placed$type), "Component", placed$type), " · ", edit_component_text(snap, placed$component_id))
+      rows = placed, text = edit_count(nrow(placed), "block"),
+      labels = paste0(ifelse(is.na(placed$kind), "Block", placed$kind), " · ", edit_component_text(snap, placed$component_id))
     )
   },
   duplicates = function(snap, values) {
@@ -165,13 +158,18 @@ questionnaire_entity <- list(
 wave_entity <- list(
   label = "Wave", noun = "wave", plural = "waves", article = "a",
   group = "Questionnaires", table = "wave",
-  # the details name the questionnaire's study, its registry and investigators, and who it is for
-  reads = c("study", "registry", "principal_investigator", "respondent_type", "variable", "subject", "questionnaire_component", "component"),
-  about = "One time a questionnaire was given. It records when, and how many people answered.",
+  # the details name the questionnaire's study, its registry and investigators, and who it is for; the questions it
+  # asked say what their variables record and who they are about
+  reads = c("study", "registry", "principal_investigator", "respondent_type", "variable", "variable_tag", "tag", "placement", "component"),
+  about = "One time a questionnaire was given. It records when, how many people answered, and the PDF it was extracted from.",
   delete_about = paste0(
-    "Deleting a wave deletes its record of which questions were asked and the number each had. A ",
-    "question asked in no other wave can't stay in the questionnaire, so it goes too, with its ",
-    "variables (unless follow-up questions still asked name it as theirs)."
+    "Deleting a wave deletes its record of which questions were asked and the number each had. The questions ",
+    "stay in the questionnaire, with their variables, for the other waves."
+  ),
+  empty_about = paste0(
+    "It stops asking its questions. A question no wave asks any more goes from the questionnaire, with its ",
+    "variables, and so do the sections and groups that are left empty. The wave keeps the PDF it was extracted ",
+    "from, so it can be extracted again."
   ),
   cards = function(snap, scope) {
     rows <- snap$wave
@@ -230,7 +228,8 @@ wave_entity <- list(
       )
     )
   },
-  # the study and questionnaire it belongs to first, then its own fields (the questionnaire is said there already)
+  # the study and questionnaire it belongs to first, then its own fields (the questionnaire is said there already),
+  # then the files it was extracted from
   details = function(snap, row, own) {
     q <- snap$questionnaire[match(row$questionnaire_id, snap$questionnaire$questionnaire_id), , drop = FALSE]
     who <- snap$respondent_type[match(q$respondent_type_id, snap$respondent_type$respondent_type_id), , drop = FALSE]
@@ -240,7 +239,14 @@ wave_entity <- list(
         NA, c("Questionnaire", "Respondent Type"),
         c(edit_label(snap, "questionnaire", q), if (is.na(who$respondent_type_id)) NA else edit_choice_labels$respondent_type(snap, who))
       ),
-      edit_details_pick(own, c("name", "administered_date", "respondent_count"))
+      edit_details_pick(own, c("name", "administered_date", "respondent_count")),
+      edit_details_lines(
+        NA, c("Extracted from", "Variable Names and Coding"),
+        c(
+          if (has_text(row$pdf_sha256)) row$pdf_name %||% NA else "not extracted from a PDF on this site",
+          if (has_text(row$supplement_name)) row$supplement_name else NA
+        )
+      )
     )
   },
   # the questions it asked in order, each by its number, with what its variables record and who they are about

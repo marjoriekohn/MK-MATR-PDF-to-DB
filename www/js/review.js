@@ -378,8 +378,7 @@
     });
   }
 
-  // Every MATR ID field offers the uploaded IDs no variable has yet, and every parent-question field the
-  // questions. A list is only replaced when what it offers has changed, and all at once: a browser works
+  // Every label field offers the labels the draft's variables have. A list is only replaced when what it offers has changed, and all at once: a browser works
   // out the suggestions of the field being typed in again for every change to its list, which took
   // seconds an option at a time.
   const shownLists = new WeakMap();
@@ -737,8 +736,6 @@
       const number = row && row.querySelector(':scope > .outline-numbers > .outline-number');
       if (number && patch.numbers[id] !== undefined) number.textContent = patch.numbers[id];
     });
-    fillList(patch.parent_list, patch.questions);
-    fillList(patch.skip_list, patch.skip_targets);
     marks.selected = patch.selected || null;
     afterDrawing();
   }

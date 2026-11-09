@@ -48,19 +48,6 @@ test_that("a staff table the key can't read is the database's own sentence", {
   expect_error(staff_service_current(publishable, me$email), "won't let the site use this table")
 })
 
-test_that("a review can be asked of any active staff member but the person asking", {
-  me <- local_staff()
-  colleague <- local_staff(name = paste(test_marker, "Colleague"))
-  admin <- local_staff("ADMIN")
-  former <- local_staff(active = FALSE)
-  reviewers <- staff_service_reviewers(test_connection, me)
-  expect_equal(reviewers[[colleague$name]], as.character(colleague$staff_id))
-  expect_equal(reviewers[[admin$name]], as.character(admin$staff_id))
-  expect_false(me$name %in% names(reviewers))
-  expect_false(former$name %in% names(reviewers))
-  expect_type(reviewers, "character")
-})
-
 # ------ Signing in ----------------------------------------------------------------------------------------
 test_that("the tokens a sign-in link brings back say who the person is for the site", {
   skip_without_auth()

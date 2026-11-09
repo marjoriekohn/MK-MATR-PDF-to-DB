@@ -1,11 +1,11 @@
 # Where an extraction goes in the MATR metadata database (its Basic Info): its registry, study,
 # questionnaire and wave.
-# Filled in on Change Requests, after its change request is submitted from the Edit Extraction page.
+# Filled in on the Edit Extraction page, in the dialog that pushes the extraction into the database.
 # Four drop-downs in one row, each holding what is in the one before it. The extraction always goes
 # into a recorded questionnaire's wave that asks no questions yet; one that isn't there is added from
 # the drop-down's own "+ Add new …" choice, which opens the pop-up that adds it
 # (`quick_add_server()`). Like every form on the site the drop-downs have no labels: the empty choice
-# says what each holds, and a blank one is outlined in red, since the request can't be approved
+# says what each holds, and a blank one is outlined in red, since the extraction can't be pushed
 # without it. Their choices and the notes under them come from the server.
 # Returns: The form's UI.
 extraction_info_ui <- function(id) {

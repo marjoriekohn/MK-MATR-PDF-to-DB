@@ -1,82 +1,95 @@
 # ------ Edit History ---------------------------------------------------------------
-# What the Edit History page shows: the edits that have been applied, newest first, who
-# was behind each, and what each changed. Only reads; edits enter the history when the
-# database applies them (service_change_request.R).
+# What the Edit History page shows: every change made to the MATR metadata database through this site,
+# newest first, who made each, and what each did. Only reads; the database writes the history as it
+# changes the catalog (model_history.R).
 
-# The kinds of edit, as staff pick them on Make an edit; "all" is no filter.
-history_kinds <- c("Add", "Update", "Delete")
+# The kinds of change, as the history records them; "all" is no filter.
+history_actions <- c("Pushed", "Emptied", "Added", "Updated", "Deleted")
 
-# How many edits are listed at first, and each time staff ask for more.
+# How many changes are listed at first, and each time staff ask for more.
 history_page_size <- 25
 
-# Every edit in the history, newest first.
+# Every change in the history, newest first.
 # most: Only the newest this many; all of them by default.
 # Returns: A list of records named by id; see `history_model_get_all()`.
 history_service_get_all <- function(connection, most = Inf) {
   history_model_get_all(connection, most)
 }
 
-# The edits of one kind that match some words.
-# records: The edits, from `history_service_get_all()`.
-# kind: `"Add"`, `"Update"` or `"Delete"`; anything else keeps every kind.
-# query: Words to find, all of which must be in the edit's sentence or the names of the
-#   people behind it, ignoring capitals.
+# How many changes there are.
+history_service_count <- function(connection) {
+  history_model_count(connection)
+}
+
+# The changes of one kind that match some words.
+# records: The changes, from `history_service_get_all()`.
+# action: One of `history_actions`; anything else keeps every kind.
+# query: Words to find, all of which must be in the change's sentence or the name of who made it,
+#   ignoring capitals.
 # Returns: The matching records, in the same order.
-history_service_filter <- function(records, kind = "all", query = "") {
+history_service_filter <- function(records, action = "all", query = "") {
   words <- strsplit(tolower(trimws(query %||% "")), "[[:space:]]+")[[1]]
   words <- words[nzchar(words)]
   Filter(function(record) {
-    if (kind %in% history_kinds && !identical(record$kind, kind)) {
+    if (action %in% history_actions && !identical(record$action, action)) {
       return(FALSE)
     }
-    text <- tolower(paste(record$summary, record$prepared_by, record$approved_by))
+    text <- tolower(paste(record$summary, record$staff))
     all(vapply(words, function(word) grepl(word, text, fixed = TRUE), logical(1)))
   }, records)
 }
 
-# Who was behind an edit, in words.
-# For example "prepared by Maggie Kohn and approved by Alex Rivera", or "made by Maggie Kohn, applied at
-# once (it needed no approval)" for an add or an update, or anything an ADMIN did.
-history_service_people <- function(record) {
-  who <- if (is.na(record$prepared_by)) "someone no longer listed" else record$prepared_by
-  if (!isFALSE(record$approval_required) && !is.na(record$approved_by %||% NA)) {
-    return(paste0("prepared by ", who, " and approved by ", record$approved_by))
-  }
-  if (isFALSE(record$approval_required)) {
-    return(paste0("made by ", who, ", applied at once (no approval needed)"))
-  }
-  paste0("prepared by ", who)
+# Who made a change, in words: "by Maggie Kohn", or "by someone no longer listed".
+history_service_who <- function(record) {
+  paste("by", if (is.na(record$staff %||% NA)) "someone no longer listed" else record$staff)
 }
 
-# When an edit was applied, in words.
-# Returns: A string, e.g. "Applied yesterday"; or its status if it hasn't been.
+# When a change was made, in words: "Today at 9:15 AM", "Yesterday", "On Sep 29".
 history_service_when <- function(record, now = Sys.time()) {
-  if (is.null(record$applied)) {
-    return(record$status)
-  }
-  paste("Applied", day_phrase(parse_time(record$applied), now))
+  when <- day_phrase(parse_time(record$occurred), now)
+  sub("^(.)", "\\U\\1", when, perl = TRUE)
 }
 
-# What one edit changed.
-# id: The edit's id.
-# Returns: A list: `groups` (the rows it touched, see `change_service_groups()`) and `counts`
-#   (see `change_service_counts()`).
+# What one change did.
+# id: The change's id.
+# Returns: A list: `record` (with its details), and for an add, an update or a delete `groups` (the rows it
+#   touched, see `change_service_groups()`), `counts` (see `change_service_counts()`) and `text` (the counts in
+#   a sentence); for a push or an emptying `lines`, its counts in words (see `history_service_count_lines()`).
 history_service_changes <- function(connection, id) {
-  groups <- change_service_groups(history_model_get_items(connection, id))
-  list(groups = groups, counts = change_service_counts(groups))
+  record <- history_model_get(connection, id)
+  if (record$action %in% c("Pushed", "Emptied")) {
+    return(list(record = record, lines = history_service_count_lines(record$details)))
+  }
+  groups <- change_service_groups(history_model_items(record$details))
+  counts <- change_service_counts(groups)
+  list(record = record, groups = groups, counts = counts, text = change_service_counts_text(counts))
 }
 
-# What an edit changed, in a sentence, over the rows it lists.
-# A delete keeps only the row picked (private.apply_draft_items()), so it isn't counted: it says what was
-# deleted, "Deleted Kid Questionnaire Wave 1". One deleted before the name was kept says it as its sentence
-# does ("Deleted the wave “KQ Wave 1”"), without the count of the rows that went with it.
-# counts: Its counts, from `history_service_changes()`.
-history_service_changes_text <- function(record, counts) {
-  if (identical(record$kind, "Delete")) {
-    if (!is.na(record$deleted %||% NA)) {
-      return(paste("Deleted", record$deleted))
-    }
-    return(sub(" and [0-9,]+ connected records?$", "", record$summary %||% ""))
+# A push's or an emptying's counts in words, one line each: "Questions: 287", "New variables: 120",
+# "Components reused: 3", "Placements removed: 12". The ids of what was pushed or emptied are left out.
+# details: A named list of counts, as the database wrote them.
+# Returns: A character vector; empty if there are no counts.
+history_service_count_lines <- function(details) {
+  if (!is.list(details) || is.null(names(details))) {
+    return(character())
   }
-  change_service_counts_text(counts)
+  counts <- details[!grepl("_id$", names(details))]
+  counts <- counts[order(names(counts) != "questions")] # questions first, the rest as recorded
+  # a push counts rows by table ("variable_new"); an emptying counts what went ("variables_removed")
+  nouns <- c(component = "components", placement = "placements", wave_question = "questions asked", variable = "variables",
+             response_option = "response options", answer_option = "answer options", tag = "tags")
+  words <- function(name) gsub("_", " ", if (name %in% names(nouns)) nouns[[name]] else name)
+  vapply(names(counts), function(name) {
+    label <- if (grepl("_new$", name)) {
+      paste("New", words(sub("_new$", "", name)))
+    } else if (grepl("_reused$", name)) {
+      paste(words(sub("_reused$", "", name)), "reused")
+    } else if (grepl("_removed$", name)) {
+      paste(words(sub("_removed$", "", name)), "removed")
+    } else {
+      words(name)
+    }
+    label <- sub("^(.)", "\\U\\1", label, perl = TRUE)
+    paste0(label, ": ", format(as.numeric(counts[[name]]), big.mark = ","))
+  }, character(1), USE.NAMES = FALSE)
 }

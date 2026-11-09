@@ -1,27 +1,29 @@
 -- The TEST project's own functions (rqygcjgftmtatzrzcwcf), which the tests use to make and remove their rows in
--- one request instead of many. Run it whole, once, in the test project's SQL Editor, and again whenever it
--- changes. It refuses to run anywhere else, the real database included: these functions get past the
--- database's guards, which the real database must always keep.
+-- one request instead of many. Run it whole, once, in the test project's SQL Editor after the seven scripts in
+-- sql/, and again whenever it changes. It refuses to run anywhere else, the real database included: these
+-- functions get past the database's guards (staff are never deleted, the history is never changed), which the
+-- real database must always keep.
 --
 --   test_forget_staff(p_staff_ids, p_marker, p_remove_staff)
---     Removes every draft that involves staff the tests made (prepared, saved, asked to review, being edited,
---     or reviewed by them), applied ones too, with their history (applied_item). The database keeps an
---     applied draft for good (draft_guard), so without this each test run left its applied drafts behind.
---     With p_remove_staff it removes those staff too (staff_never_deleted keeps them otherwise).
---     The staff are named by id (p_staff_ids) or by the start of their name (p_marker); only staff whose
---     names start with ZZTEST, the tests' marker, are ever touched.
+--     Removes every extraction that names staff the tests made (prepared, saved or being edited by them) and
+--     every history row they wrote, and with p_remove_staff the staff rows too. The staff are named by id
+--     (p_staff_ids) or by the start of their name (p_marker); only staff whose names start with ZZTEST, the
+--     tests' marker, are ever touched. Returns counts.
 --
 --   test_make_tree(p_marker)
 --     Adds a registry, a lead investigator, a respondent type, a study, a questionnaire and a wave, named with
 --     the marker: what local_tree() makes. Returns the six rows as stored.
 --
 --   test_forget_tree(p_tree)
---     Removes what test_make_tree() made, given what it returned.
+--     Removes what test_make_tree() made, given what it returned, with everything a test pushed into it: the
+--     questionnaire's waves and placements go with it (on delete cascade), and the components the tree alone
+--     printed are forgotten afterwards (private.forget_components).
 --
---   test_remove_applied(p_draft_ids)
---     Removes the rows applied drafts added to the live tables, from each draft's list of them (applied_item):
---     the tables that point at others first. Only drafts prepared by the tests' own staff. Returns how many
---     rows went. The drafts and their lists stay; test_forget_staff() removes those.
+--   test_forget_marked(p_marker)
+--     Removes the vocabulary a push adds and the site never deletes, where a test named it with the marker:
+--     tags and answer options whose name starts with it (any case), components whose text does, and
+--     extractions whose summary does. A row something still points at stays (test-zz_leftovers.R then
+--     reports it). Returns counts.
 --
 -- Callable only with the secret key (service_role), which is what the tests use.
 
@@ -37,6 +39,8 @@ begin
 end
 $$;
 
+drop function if exists public.test_remove_applied(bigint[]);
+
 -- ------ test_forget_staff ------------------------------------------------------------------------
 create or replace function public.test_forget_staff(
   p_staff_ids    bigint[] default null,
@@ -49,9 +53,9 @@ security definer
 set search_path = public, pg_temp
 as $$
 declare
-  v_staff  bigint[];
-  v_drafts bigint[];
-  v_items  integer;
+  v_staff       bigint[];
+  v_extractions integer;
+  v_history     integer;
 begin
   if p_marker is not null and p_marker not like 'ZZTEST%' then
     raise exception 'Only the tests'' own staff are removed: their names start with ZZTEST.';
@@ -61,19 +65,15 @@ begin
   where name like 'ZZTEST%'
     and (staff_id = any(p_staff_ids) or (p_marker is not null and name like p_marker || '%'));
 
-  select coalesce(array_agg(d.draft_id), '{}') into v_drafts
-  from public.draft d
-  where d.prepared_by = any(v_staff) or d.saved_by = any(v_staff)
-     or d.requested_reviewer = any(v_staff) or d.editing_by = any(v_staff)
-     or exists (select 1 from public.draft_review_event e where e.draft_id = d.draft_id and e.staff_id = any(v_staff));
+  delete from public.extraction
+  where prepared_by = any(v_staff) or saved_by = any(v_staff) or editing_by = any(v_staff);
+  get diagnostics v_extractions = row_count;
 
-  -- A draft's details, reading and reviews go with it (on delete cascade). Its history doesn't, so it goes
-  -- first. The guard that keeps an applied draft is off only inside this transaction.
-  delete from public.applied_item where draft_id = any(v_drafts);
-  get diagnostics v_items = row_count;
-  alter table public.draft disable trigger draft_guard;
-  delete from public.draft where draft_id = any(v_drafts);
-  alter table public.draft enable trigger draft_guard;
+  -- the guard that keeps the history is off only inside this transaction
+  alter table public.history disable trigger history_is_kept;
+  delete from public.history where staff_id = any(v_staff);
+  get diagnostics v_history = row_count;
+  alter table public.history enable trigger history_is_kept;
 
   if p_remove_staff and cardinality(v_staff) > 0 then
     alter table public.staff disable trigger staff_never_deleted;
@@ -82,7 +82,7 @@ begin
   end if;
 
   return jsonb_build_object(
-    'staff', cardinality(v_staff), 'drafts', cardinality(v_drafts), 'applied_items', v_items,
+    'staff', cardinality(v_staff), 'extractions', v_extractions, 'history', v_history,
     'staff_removed', p_remove_staff and cardinality(v_staff) > 0
   );
 end;
@@ -136,87 +136,79 @@ language plpgsql
 security definer
 set search_path = public, pg_temp
 as $$
+declare
+  v_questionnaire bigint := (p_tree #>> '{questionnaire,questionnaire_id}')::bigint;
+  v_printed       bigint[];
 begin
   if coalesce(p_tree #>> '{registry,name}', '') not like 'ZZTEST%' then
     raise exception 'Only a tree the tests made is removed: its registry''s name starts with ZZTEST.';
   end if;
-  delete from public.wave where wave_id = (p_tree #>> '{wave,wave_id}')::bigint;
-  delete from public.questionnaire where questionnaire_id = (p_tree #>> '{questionnaire,questionnaire_id}')::bigint;
+  -- every wave of the questionnaire, the tree's own and any a test added; the placements, questions, variables,
+  -- response options and tags go with the questionnaire; the components only it printed are forgotten
+  v_printed := array(select component_id from public.placement where questionnaire_id = v_questionnaire);
+  delete from public.wave where questionnaire_id = v_questionnaire;
+  delete from public.questionnaire where questionnaire_id = v_questionnaire;
   delete from public.study where study_id = (p_tree #>> '{study,study_id}')::bigint;
   delete from public.respondent_type where respondent_type_id = (p_tree #>> '{respondent_type,respondent_type_id}')::bigint;
   delete from public.principal_investigator
     where principal_investigator_id = (p_tree #>> '{investigator,principal_investigator_id}')::bigint;
   delete from public.registry where registry_id = (p_tree #>> '{registry,registry_id}')::bigint;
+  perform private.forget_components(v_printed);
 end;
 $$;
 
--- ------ test_remove_applied ----------------------------------------------------------------------
-create or replace function public.test_remove_applied(p_draft_ids bigint[])
-returns integer
+-- ------ test_forget_marked -----------------------------------------------------------------------
+create or replace function public.test_forget_marked(p_marker text)
+returns jsonb
 language plpgsql
 security definer
 set search_path = public, pg_temp
 as $$
 declare
-  -- The tables an edit or a push can add to, children before the rows they point at. A variable's subtype row
-  -- and its choices (and their counts), and a component's question row, go with it (on delete cascade), and
-  -- the database wants a variable and its subtype removed in one statement, so those aren't removed here.
-  -- A table that isn't listed goes last.
-  v_order    text[] := array[
-    'variable', 'answer_option_set', 'option_set', 'answer_option',
-    'wave_question', 'questionnaire_question', 'question_category', 'question_scale',
-    'questionnaire_component', 'component',
-    'wave', 'questionnaire', 'study', 'registry', 'principal_investigator', 'respondent_type', 'subject',
-    'category', 'measurement_scale'
-  ];
-  v_cascaded text[] := array['open_ended', 'closed_ended', 'response_option', 'response_option_count', 'question'];
-  v_table    text;
-  v_where    text;
-  v_rows     integer;
-  v_removed  integer := 0;
+  v_tags        integer;
+  v_options     integer;
+  v_components  integer;
+  v_extractions integer;
 begin
-  if exists (
-    select 1 from public.draft d left join public.staff s on s.staff_id = d.prepared_by
-    where d.draft_id = any(p_draft_ids) and coalesce(s.name, '') not like 'ZZTEST%'
-  ) then
-    raise exception 'Only what the tests applied is removed: drafts prepared by staff whose names start with ZZTEST.';
+  if p_marker is null or p_marker not ilike 'ZZTEST%' then
+    raise exception 'Only the tests'' own rows are removed: they are named with a marker that starts with ZZTEST.';
   end if;
-  for v_table in
-    select t.entity_name
-    from (select distinct entity_name from public.applied_item
-          where draft_id = any(p_draft_ids) and action = 'Insert') t
-    where not t.entity_name = any(v_cascaded)
-    order by array_position(v_order, t.entity_name) nulls last, t.entity_name
-  loop
-    -- an edit's item names one row ({"column": value}); a push's line for a table lists every row it added ([...])
-    select string_agg('(' || k.clause || ')', ' or ') into v_where
-    from public.applied_item i
-    cross join lateral jsonb_array_elements(
-      case when jsonb_typeof(i.record_identifier::jsonb) = 'array' then i.record_identifier::jsonb
-           else jsonb_build_array(i.record_identifier::jsonb) end
-    ) as rk(row_key)
-    cross join lateral (
-      select string_agg(format('%I = %L', c.key, c.value), ' and ') as clause from jsonb_each_text(rk.row_key) c
-    ) k
-    where i.draft_id = any(p_draft_ids) and i.action = 'Insert' and i.entity_name = v_table;
-    if v_where is not null then
-      execute format('delete from public.%I where %s', v_table, v_where);
-      get diagnostics v_rows = row_count;
-      v_removed := v_removed + v_rows;
-    end if;
-  end loop;
-  return v_removed;
+
+  delete from public.extraction where summary ilike p_marker || '%';
+  get diagnostics v_extractions = row_count;
+
+  delete from public.tag t
+  where t.name ilike p_marker || '%'
+    and not exists (select 1 from public.placement_tag x where x.tag_id = t.tag_id)
+    and not exists (select 1 from public.variable_tag x where x.tag_id = t.tag_id)
+    and not exists (select 1 from public.response_option_tag x where x.tag_id = t.tag_id);
+  get diagnostics v_tags = row_count;
+
+  delete from public.answer_option a
+  where a.standardized_label ilike p_marker || '%'
+    and not exists (select 1 from public.response_option x where x.answer_option_id = a.answer_option_id);
+  get diagnostics v_options = row_count;
+
+  delete from public.component c
+  where c.text ilike p_marker || '%'
+    and not exists (select 1 from public.placement x where x.component_id = c.component_id)
+    and not exists (select 1 from public.question_scale x where x.component_id = c.component_id);
+  get diagnostics v_components = row_count;
+
+  return jsonb_build_object(
+    'extractions', v_extractions, 'tags', v_tags, 'answer_options', v_options, 'components', v_components
+  );
 end;
 $$;
 
 revoke all on function public.test_forget_staff(bigint[], text, boolean) from public, anon, authenticated;
 revoke all on function public.test_make_tree(text) from public, anon, authenticated;
 revoke all on function public.test_forget_tree(jsonb) from public, anon, authenticated;
+revoke all on function public.test_forget_marked(text) from public, anon, authenticated;
 grant execute on function public.test_forget_staff(bigint[], text, boolean) to service_role;
 grant execute on function public.test_make_tree(text) to service_role;
 grant execute on function public.test_forget_tree(jsonb) to service_role;
-revoke all on function public.test_remove_applied(bigint[]) from public, anon, authenticated;
-grant execute on function public.test_remove_applied(bigint[]) to service_role;
+grant execute on function public.test_forget_marked(text) to service_role;
 
 commit;
 

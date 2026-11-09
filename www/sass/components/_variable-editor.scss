@@ -87,10 +87,10 @@ $code-width: 4.25rem; // a choice's code: a few digits
     > .is-response, > .is-subject, > .is-time_frame, > .is-label, > .is-unit { order: 5; grid-column: 2 / -1; }
   }
   .variable-cards .choice-table { margin-left: 0; }
-  // a choice's Printed as and Skip to each take a line under its code and words, named
+  // a choice's tags each take a line under its code and words, named
   .choice-head { display: none; }
   .variable-cards .choice-table .choice-row:not(.choice-head) { // outranks the wide columns below
-    grid-template-columns: 1rem $code-width minmax(0, 1fr) 1.9rem 1.9rem;
+    grid-template-columns: 1rem $code-width minmax(0, 1fr) 1.9rem;
     > .choice-cell { grid-column: 2 / -1; order: 5; }
     > .choice-cell:empty { display: none; }
     > .choice-cell::before { content: attr(data-label); display: block; color: $vcu-gray; font-size: $font-size-xxs; font-weight: 500; }
@@ -105,9 +105,7 @@ $code-width: 4.25rem; // a choice's code: a few digits
   .variable-cell:empty { display: none; }
 }
 
-// The choices: one line each, in columns: code, response option, then how many respondents gave it and where it
-// skips to, once any choice has them (has-respondent_count, has-skip_instruction; a choice without one leaves its cell
-// empty); "+" adds them to one choice, and × takes them away.
+// The choices: one line each, in columns: code and response option; × takes a choice away.
 .choice-table {
   margin: 0.25rem 0 0.6rem 2.9rem;
   padding: 0.5rem 0.6rem;
@@ -117,30 +115,15 @@ $code-width: 4.25rem; // a choice's code: a few digits
 .choice-table-title { display: flex; flex-wrap: wrap; align-items: center; gap: 0.25rem 0.75rem; margin-bottom: 0.4rem; }
 .choice-list { display: flex; flex-direction: column; gap: 0.3rem; }
 
-// handle, code, response option, [respondents], [skip to], +, delete
+// handle, code, response option, delete
 .choice-row {
   display: grid;
-  grid-template-columns: 1rem $code-width minmax(8rem, 1fr) 1.9rem 1.9rem;
+  grid-template-columns: 1rem $code-width minmax(8rem, 1fr) 1.9rem;
   align-items: center;
   gap: 0.3rem;
   > * { min-width: 0; }
   .form-control { width: 100%; }
 }
-.choice-table.has-respondent_count .choice-row {
-  grid-template-columns: 1rem $code-width minmax(8rem, 1fr) minmax(6rem, 7.5rem) 1.9rem 1.9rem;
-}
-.choice-table.has-skip_instruction .choice-row { grid-template-columns: 1rem $code-width minmax(8rem, 1fr) minmax(10rem, 1.2fr) 1.9rem 1.9rem; }
-.choice-table.has-respondent_count.has-skip_instruction .choice-row {
-  grid-template-columns: 1rem $code-width minmax(8rem, 1fr) minmax(6rem, 7.5rem) minmax(10rem, 1.2fr) 1.9rem 1.9rem;
-}
-// a field and the × that takes it away
-.choice-optional {
-  display: flex;
-  align-items: center;
-  gap: 0.15rem;
-  .form-control { min-width: 0; }
-}
-
 // The names of the columns, over the first choice
 .choice-head {
   color: $vcu-gray;
@@ -148,18 +131,6 @@ $code-width: 4.25rem; // a choice's code: a few digits
   font-weight: 500;
 }
 
-// A write-in's skip, under its line: "If the answer is [None] skip to [Question 57]"
-.variable-skip {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 0.35rem;
-  padding: 0 0 0.5rem 1.4rem;
-  font-size: $font-size-sm;
-  > .form-control:not(.skip-target) { flex: 0 1 8rem; width: 8rem; }
-  > .skip-target { flex: 1 1 12rem; min-width: 0; }
-}
-.variable-skip-words { color: $vcu-gray; }
 .add-field .dropdown-toggle::after { display: none; }
 
 // A variable's subject, time frame or label, with its ×

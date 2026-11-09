@@ -6,21 +6,22 @@ cards_html <- function(output) paste(output$cards$html, collapse = "")
 variables_json_of <- function(...) as.character(jsonlite::toJSON(list(...), auto_unbox = TRUE))
 
 editor_options <- list(
-  subjects = c("Siblings", "Children"), answer_data_types = c("NUMBER", "TEXT", "DATE", "TIME"),
-  answer_options = c("Yes", "No")
+  subjects = c("Siblings", "Children"), time_frames = "in your lifetime", units = c("pounds", "years"),
+  answer_data_types = c("NUMBER", "TEXT", "DATE", "TIME"), answer_options = c("Yes", "No")
 )
 
 test_that("Make an edit's editor draws the variables it is given, and gives back what is changed, as JSON", {
   seen <- local_browser()
   shiny::testServer(variable_editor_server, {
     expect_null(session$returned$value()) # nothing until the form gives it the variables
-    session$returned$load(edit_variables_default(NULL), editor_options)
-    expect_equal(session$returned$value(), edit_variables_default(NULL))
+    session$returned$load(edit_variables_default(), editor_options)
+    expect_equal(session$returned$value(), edit_variables_default())
     html <- cards_html(output)
     expect_match(html, 'data-field="matr_id"')
     expect_match(html, 'data-action="pick_variable"') # + Variable, under them
     expect_match(html, '<option value="Siblings">') # who a variable can be about, offered as it is typed
     expect_match(html, '<option value="Yes">') # the answer choices
+    expect_match(html, '<option value="years">') # the units a write-in can be in
 
     session$setInputs(edit = list(table = "variables", id = "v1", field = "matr_id", value = "AH6", typed = TRUE))
     session$setInputs(action = list(action = "add_choice", id = "v1"))
@@ -43,23 +44,21 @@ test_that("Make an edit's editor draws the variables it is given, and gives back
   })
 })
 
-test_that("on Make an edit Skip to is the words printed for it, a write-in can skip too, and there's no Apply to All?", {
+test_that("on Make an edit a write-in has its answer type and unit, a choice its code and words, and there's no Apply to All?", {
   local_browser()
   shiny::testServer(variable_editor_server, {
     session$returned$load(variables_json_of(list(
-      variable_type = "open_ended", matr_id = "AH9", subject = "", label = "", answer_data_type = "NUMBER",
-      skip_condition = "None", skip_instruction = "Go to Question 57"
+      variable_type = "open_ended", matr_id = "AH9", subject = "", label = "", answer_data_type = "NUMBER", unit = "years"
     ), list(
       variable_type = "closed_ended", matr_id = "AH10", subject = "", label = "",
-      response_options = list(list(code_value = "1", answer_option = "yes", skip_instruction = "Go to 12"))
+      response_options = list(list(code_value = "1", answer_option = "yes"))
     )), editor_options) # v2's choices are open, as every variable's are until closed
     html <- cards_html(output)
-    # the write-in's skip: the answer, then the words printed for where it goes
-    expect_match(html, 'data-table="variables" data-id="v1" data-field="skip_condition"')
-    expect_match(html, 'value="go to question 57"[^>]*data-table="variables" data-id="v1" data-field="skip_instruction"')
-    # the choice's: the same, not a pick of a question to link to
-    expect_match(html, 'data-table="response_options" data-id="o1" data-field="skip_instruction"')
-    expect_false(grepl('data-field="skip_to_id"', html))
+    expect_match(html, 'data-table="variables" data-id="v1" data-field="answer_data_type"')
+    expect_match(html, 'value="years"[^>]*data-table="variables" data-id="v1" data-field="unit"')
+    expect_match(html, 'data-table="response_options" data-id="o1" data-field="code_value"')
+    expect_match(html, 'data-table="response_options" data-id="o1" data-field="answer_option"')
+    expect_false(grepl("skip|respondent_count", html)) # routing and counts aren't kept
     expect_false(grepl("choice-apply", html))
 
     # an optional field added shows, empty, with the cursor in it; taking it away hides it again

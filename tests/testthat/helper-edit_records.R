@@ -1,4 +1,4 @@
-# ------ Edit proposals for the tests ---------------------------------------------------------------------------
+# ------ Edits for the tests ---------------------------------------------------------------------------
 # The tables an edit of a row the test just made is built from, as edit_service_load() reads them, but in one
 # request: only the kind's own table is read. Nothing points at the test's own row yet, so the tables that would
 # (for a respondent type, its questionnaires and everything they hold) are empty here instead of read, and the
@@ -12,76 +12,44 @@ test_edit_snap <- function(entity) {
 
 # A table with no rows, its columns of the kinds table_model_get() gives them.
 empty_table <- function(table) {
-  kinds <- database_tables[[table]]$columns
-  as.data.frame(lapply(kinds, function(kind) switch(kind, id = , number = numeric(), flag = logical(), character())))
+  kinds <- table_read_columns(database_tables[[table]])
+  as.data.frame(lapply(kinds, function(kind) switch(kind, id = , number = numeric(), character())))
 }
 
-# A proposal as the page makes it before saving: staff `staff` delete the respondent type `respondent_type`.
-# A delete is the change a STAFF member can't apply on their own, so it is the one that waits for
-# approval. It has no id until edit_model_save() gives it one.
-# `snap` is the tables it is built from, if they have been read already.
-sample_edit <- function(staff, respondent_type, status = "Draft", now = Sys.time(), previous = NULL, snap = NULL) {
-  force(respondent_type) # the row has to exist before the tables are read
-  entity <- edit_entities$respondent_type
-  snap <- snap %||% test_edit_snap(entity)
-  key <- as.character(respondent_type$respondent_type_id)
-  built <- edit_service_build(entity, "delete", snap, edit_service_row(entity, snap, key))
-  form <- list(action = "delete", entity = "respondent_type", scope = "", target = key, values = list())
-  edit_service_record(staff, form, built, status, previous = previous, now = now)
-}
-
-# A proposal saved in the database for the test, as `staff` saved it, and removed when the test ends with the
-# other drafts of the test's staff (test_clear_drafts()). With no `respondent_type` it proposes to delete the
-# file's (shared_respondent_type()); a test that applies the delete gives one of its own.
-local_edit <- function(staff, respondent_type = NULL, status = "Draft", ..., env = parent.frame()) {
-  shared <- if (is.null(respondent_type)) shared_respondent_type(env)
-  respondent_type <- respondent_type %||% shared$row
-  edit_model_save(test_connection, sample_edit(staff, respondent_type, status, ..., snap = shared$snap), staff$staff_id)
-}
-
-# A respondent type made once for a test file, for the proposals that only propose to delete it, and the
-# tables a proposal about it is built from (test_edit_snap()), read once too. Removed when the file ends.
-# Returns: A list: `row` (the respondent type, as stored) and `snap` (`NULL` outside a test, to be read then).
-shared_respondent_type <- function(env = parent.frame()) {
-  if (!is_test_body(env)) {
-    return(list(row = local_respondent_type(env = env), snap = NULL))
+# Removes the rows an applied change added: each new row by the number the database gave it (`new_ids`, from
+# `edit_service_apply()`), the tables that point at others first. The change's history row goes with the test's
+# staff.
+test_remove_added <- function(new_ids) {
+  tables <- sub("^new:([a-z_]+):.*$", "\\1", names(new_ids))
+  for (table in intersect(edit_delete_order, tables)) {
+    for (id in unlist(new_ids[tables == table])) {
+      test_delete(table, stats::setNames(list(database_eq(id)), edit_table_key(table)[1]))
+    }
   }
-  file_shared(env, "respondent_type", function(file_env) {
-    row <- local_respondent_type(env = file_env)
-    list(row = row, snap = test_edit_snap(edit_entities$respondent_type))
-  })
+  invisible()
 }
 
-# An edit applied by `staff`, the way Make an edit does it: the form for kind `key` in mode `verb`, with
-# these values typed (by field id) and, for an update or a delete, the row `row_key` (one the test made: see
-# test_edit_snap()). Only an ADMIN can apply a delete without approval. Returns the history id; what the edit
-# added is removed when the test ends.
+# Removes them when the test ends.
+local_added_rows <- function(new_ids, env = parent.frame()) {
+  withr::defer(test_remove_added(new_ids), envir = env)
+  invisible(new_ids)
+}
+
+# An edit applied by `staff`, the way Make an edit does it: the form for kind `key` in mode `verb`, with these
+# values typed (by field id) and, for an update or a delete, the row `row_key` (one the test made: see
+# test_edit_snap()). Returns what `edit_service_apply()` gives; what the edit added is removed when the test ends.
 local_applied_edit <- function(staff, key, verb, row_key = NULL, ..., env = parent.frame()) {
   entity <- edit_entities[[key]]
   snap <- test_edit_snap(entity)
   row <- if (!is.null(row_key)) edit_service_row(entity, snap, as.character(row_key))
-  if (verb == "delete") {
-    built <- edit_service_build(entity, "delete", snap, row)
-    values <- list()
+  built <- if (verb == "delete") {
+    edit_service_build(entity, "delete", snap, row)
   } else {
     fields <- edit_service_fields(entity, snap, verb, row)
-    initial <- edit_service_initial(entity, fields, snap, verb, row)
-    values <- utils::modifyList(initial, list(...))
-    built <- edit_service_build(entity, verb, snap, row, fields = fields, values = values)
+    values <- utils::modifyList(edit_service_initial(entity, fields, snap, verb, row), list(...))
+    edit_service_build(entity, verb, snap, row, fields = fields, values = values)
   }
-  form <- list(action = verb, entity = key, scope = "", target = as.character(row_key %||% ""), values = values)
-  saved <- edit_service_save(test_connection, edit_service_record(staff, form, built, "Draft"), staff)
-  history_id <- edit_service_apply(test_connection, saved, staff)
-  local_applied(history_id, env = env)
-  history_id
-}
-
-# A STAFF member's delete that another staff member approved: it was a change request, and is now in the
-# history with its approver. Returns the history id.
-local_approved_delete <- function(staff, approver, respondent_type = local_respondent_type(env = env), env = parent.frame()) {
-  force(respondent_type)
-  request <- local_edit(staff, respondent_type, status = "Awaiting Review", env = env)
-  history_id <- change_request_service_approve(test_connection, request, approver)
-  local_applied(history_id, env = env)
-  history_id
+  applied <- edit_service_apply(test_connection, built, staff)
+  local_added_rows(applied$new_ids, env = env)
+  applied
 }

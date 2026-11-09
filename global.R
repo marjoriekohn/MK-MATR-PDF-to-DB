@@ -48,9 +48,9 @@ merriweather_link <- tags$link(
 
 # ------ The MATR database -----------------------------------------------------
 # Everything the site shows and saves is in the MATR database on Supabase: the
-# live tables (registries, studies, questionnaires, waves...) and the drafts and
-# edit proposals staff are still working on. The server talks to it through
-# Supabase REST API (R/model_database.R). `database` is made once here and
+# catalog (registries, studies, questionnaires, waves...), the extractions staff
+# are working on or have pushed, and the history of what they changed. The server
+# talks to it through Supabase REST API (R/model_database.R). `database` is made once here and
 # passed to the modules as `connection`. If the two variables below are missing
 # the site says so when it starts. MATR_DATABASE=test in .env uses the test
 # project instead of the live one (R/model_database.R); the navbar says so.

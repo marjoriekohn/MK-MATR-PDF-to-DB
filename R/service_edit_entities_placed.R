@@ -1,169 +1,93 @@
-# Make an edit's kinds in the group In one questionnaire only: where a questionnaire prints a block, and its
-# settings for a question. The kinds are listed together in edit_entities (service_edit_kinds.R).
+# Make an edit's kind in the group In one questionnaire only: a block as one questionnaire prints it. The kinds are
+# listed together in edit_entities (service_edit_kinds.R).
 
 # ------ Inside one questionnaire -------------------------------------------------------------------------
 questionnaire_scope <- list(table = "questionnaire", label = "In which questionnaire?")
 
 # A placement's card line: where it sits.
-edit_where_text <- function(snap, placed, rows) {
-  section <- edit_lookup(snap, "component", "component_id", edit_placement_component(snap, rows$parent_placement_id), "text")
+edit_where_text <- function(snap, rows) {
+  holder <- edit_component_text(snap, edit_placement_component(snap, rows$parent_placement_id))
   ifelse(
     is.na(rows$parent_placement_id), paste0("top level · position ", rows$display_order),
-    paste0("in ", ifelse(is.na(section), "an untitled section", section), " · position ", rows$display_order)
+    paste0("in ", holder, " · position ", rows$display_order)
   )
 }
 
-questionnaire_component_entity <- list(
-  label = "Questionnaire component", noun = "questionnaire component", plural = "questionnaire components", article = "a",
-  group = "In one questionnaire only", table = "questionnaire_component", scope = questionnaire_scope,
+placement_entity <- list(
+  label = "Block", noun = "block", plural = "blocks", article = "a",
+  group = "In one questionnaire only", table = "placement", scope = questionnaire_scope,
   about = paste0(
-    "A block as it's printed in one questionnaire: where it sits in the outline and its place among ",
-    "its neighbours. Changes here only affect that questionnaire."
+    "A block as it's printed in one questionnaire: where it sits in the outline, and for a question the question ",
+    "it depends on, the number it was given in each wave, and its variables with their MATR IDs and choices. ",
+    "Changes here only affect that questionnaire."
   ),
   update_about = "You're changing this questionnaire only. Other questionnaires that print the same block are not affected.",
   delete_about = paste0(
-    "This only removes the block from this place in the questionnaire. The component stays in the database while ",
-    "a questionnaire prints it somewhere or a measurement scale lists it; otherwise it goes too."
+    "This only removes the block from this place in the questionnaire, with everything inside it, its numbers in ",
+    "each wave and its variables with their choices. The wording stays in the database while another ",
+    "questionnaire prints it or a measurement scale lists it; otherwise it is forgotten."
   ),
-  delete_start = function(snap, row) edit_placement_start(snap, row),
-  reads = c("question", "component", "component_type", "wave", "wave_question", "variable", "question_category"),
+  reads = c(
+    "component", "wave", "wave_question", "variable", "variable_tag", "tag", "answer_option", "response_option",
+    "placement_tag", "question_scale"
+  ),
   initial = function(snap, row, scope) edit_placement_initial(snap, row, scope),
   build = function(mode, snap, row, scope, fields, values) edit_placement_items(mode, snap, row, scope, fields, values),
-  cards = function(snap, scope) {
-    if (!nzchar(scope %||% "")) {
-      return(edit_cards(character(), character()))
-    }
-    placed <- edit_service_outline(edit_service_placements(snap, as.numeric(scope)))
-    elsewhere <- edit_service_questionnaire_count(snap, placed$component_id) - 1
-    inside <- vapply(placed$placement_id, function(id) sum(placed$parent_placement_id %in% id), numeric(1))
-    edit_cards(
-      edit_key(placed, "placement_id"),
-      paste0(strrep("— ", placed$depth), edit_component_text(snap, placed$component_id)),
-      subtitle = edit_where_text(snap, placed, placed),
-      facts = Map(function(n_inside, n_other, type) {
-        c(
-          if (type == "Section") edit_count(n_inside, "item") |> paste("inside"),
-          if (n_other > 0) paste("also printed in", edit_count(n_other, "other questionnaire"))
-        )
-      }, inside, elsewhere, placed$type),
-      tag = placed$type
-    )
-  },
-  fields = function(snap, mode, row, scope) edit_placement_fields(snap, mode, row, scope)
-)
-
-questionnaire_question_entity <- list(
-  label = "Questionnaire question", noun = "questionnaire question", plural = "questionnaire questions", article = "a",
-  group = "In one questionnaire only", table = "questionnaire_question", scope = questionnaire_scope,
-  about = paste0(
-    "A question as it's printed in one questionnaire: whether it stands on its own, what it's ",
-    "conditional on, and the number it was given in each wave. Changes here only affect that ",
-    "questionnaire. A new question comes with its variables and their MATR IDs, typed here, so it is ",
-    "added whole."
-  ),
-  update_about = "You're changing this questionnaire only. Other questionnaires that ask the same question are not affected.",
-  delete_about = paste0(
-    "This only removes the question from this questionnaire: its place in the outline, its numbers ",
-    "in each wave, and its variables with their choices and MATR IDs. The question's wording ",
-    "stays in the database while another questionnaire asks it, a measurement scale lists it or a skip goes ",
-    "to it; otherwise it goes too."
-  ),
-  delete_start = function(snap, row) edit_placement_start(snap, row),
-  reads = c(
-    "question", "component", "component_type", "wave", "wave_question", "variable", "question_category",
-    # adding a question (service_edit_question_add.R): who and when variables can be about, and the answer choices
-    # (with the wordings merged into them) and sets of choices there are
-    "subject", "time_frame", "answer_option", "answer_option_alias", "option_set", "answer_option_set"
-  ),
-  initial = function(snap, row, scope) edit_question_initial(snap, row, scope),
-  build = function(mode, snap, row, scope, fields, values) {
-    if (mode == "add") {
-      edit_question_add_items_in(snap, scope, fields, values)
-    } else {
-      edit_question_items(mode, snap, row, scope, fields, values)
-    }
-  },
-  summary_add = function(snap, scope, fields, values) edit_question_add_summary(snap, scope, fields, values),
-  can = function(snap, mode) {
-    if (mode == "add" && !is.null(snap$component_type) && is.na(edit_type_id(snap, "Question"))) {
-      "The database has no component type called Question, so a question can't be added yet."
-    }
-  },
+  summary_add = function(snap, scope, fields, values) edit_placement_add_summary(snap, scope, fields, values),
   cards = function(snap, scope) {
     if (!nzchar(scope %||% "")) {
       return(edit_cards(character(), character()))
     }
     q <- as.numeric(scope)
     placed <- edit_service_outline(edit_service_placements(snap, q))
-    questions <- snap$questionnaire_question[snap$questionnaire_question$questionnaire_id == q, , drop = FALSE]
-    placed <- placed[placed$placement_id %in% questions$placement_id, , drop = FALSE]
-    questions <- questions[match(placed$placement_id, questions$placement_id), , drop = FALSE]
-    asked <- snap$wave_question[snap$wave_question$questionnaire_id == q, , drop = FALSE]
-    boxes <- snap$variable[snap$variable$questionnaire_id == q, , drop = FALSE]
     elsewhere <- edit_service_questionnaire_count(snap, placed$component_id) - 1
+    inside <- vapply(placed$placement_id, function(id) sum(placed$parent_placement_id %in% id), numeric(1))
+    boxes <- count_in(snap$variable$placement_id, placed$placement_id)
+    asked <- snap$wave_question[snap$wave_question$questionnaire_id == q, , drop = FALSE]
     edit_cards(
       edit_key(placed, "placement_id"),
-      edit_component_text(snap, placed$component_id),
-      subtitle = vapply(placed$placement_id, function(id) {
-        mine <- asked[asked$placement_id == id, , drop = FALSE]
-        if (nrow(mine) == 0) {
-          return("not asked in any wave")
+      paste0(strrep("— ", placed$depth), edit_component_text(snap, placed$component_id)),
+      subtitle = vapply(seq_len(nrow(placed)), function(i) {
+        mine <- asked[asked$placement_id == placed$placement_id[i], , drop = FALSE]
+        if (nrow(mine) > 0) {
+          paste0("asked as ", paste0(
+            "question ", edit_called_number(mine), " in ", edit_lookup(snap, "wave", "wave_id", mine$wave_id, "name"),
+            collapse = ", "
+          ))
+        } else if (placed$kind[i] %in% "Question") {
+          "not asked in any wave"
+        } else {
+          edit_where_text(snap, placed[i, , drop = FALSE])
         }
-        paste0("asked as ", paste0(
-          "question ", edit_called_number(mine), " in ", edit_lookup(snap, "wave", "wave_id", mine$wave_id, "name"),
-          collapse = ", "
-        ))
       }, character(1)),
-      facts = Map(function(id, n_other, self_contained, parent) {
+      facts = Map(function(kind, n_inside, n_boxes, n_other, depends_on) {
         c(
-          edit_count(sum(boxes$placement_id == id), "variable", "variables"),
-          if (isFALSE(self_contained)) paste0("follow-up to “", edit_component_text(snap, edit_placement_component(snap, parent)), "”"),
-          if (n_other > 0) paste("also asked in", edit_count(n_other, "other questionnaire"))
+          if (is_container(kind)) edit_count(n_inside, "block") |> paste("inside"),
+          if (kind %in% "Question") edit_count(n_boxes, "variable", "variables"),
+          if (!is.na(depends_on)) paste0("depends on “", edit_component_text(snap, edit_placement_component(snap, depends_on), 40), "”"),
+          if (n_other > 0) paste("also printed in", edit_count(n_other, "other questionnaire"))
         )
-      }, placed$placement_id, elsewhere, questions$self_contained, questions$parent_question_placement_id),
-      tag = "Question"
+      }, placed$kind, inside, boxes, elsewhere, placed$depends_on_placement_id),
+      tag = placed$kind
     )
   },
   fields = function(snap, mode, row, scope) {
-    if (mode == "add") edit_question_add_fields(snap, scope) else edit_question_fields(snap, row, scope)
+    if (mode == "add") edit_placement_add_fields(snap, scope) else edit_placement_update_fields(snap, row, scope)
   }
 )
 
-# What deleting a block from one questionnaire starts from: its placement, and
-# for a question its settings too (they are one block).
-edit_placement_start <- function(snap, row) {
-  key <- edit_key(row, "placement_id")
-  start <- list(questionnaire_component = key)
-  if (key %in% edit_key(snap$questionnaire_question, "placement_id")) {
-    start$questionnaire_question <- key
-  }
-  start
-}
-
-# The form for a block in one questionnaire: its words and kind (which, if changed, point this placement only at
-# the component with them), and where it sits.
-edit_placement_fields <- function(snap, mode, row, scope) {
-  q <- as.numeric(scope)
-  placed <- edit_service_placements(snap, q)
-  section <- edit_type_id(snap, "Section")
-  non_question <- snap$component_type[snap$component_type$name != "Question", , drop = FALSE]
-  updating <- mode == "update"
-  is_question <- updating && edit_is_question(snap, row$component_id)
-  kind <- if (updating) edit_lookup(snap, "component_type", "component_type_id", edit_lookup(snap, "component", "component_id", row$component_id, "component_type_id"), "name")
-  has_inside <- updating && any(placed$parent_placement_id %in% row$placement_id)
-  parent_choices <- edit_service_parent_choices(snap, placed, if (updating) row$placement_id)
-
-  where <- list(
+# The fields that say where a block sits: inside what, and in which position.
+edit_placement_where_fields <- function(snap, placed, row = NULL, kind_of = function(values) values$kind) {
+  updating <- !is.null(row)
+  list(
     edit_field("parent_placement_id", "Inside which section, grid or group?", "select",
-      choices = parent_choices, short = "section, grid or group it's in",
+      choices = edit_service_parent_choices(snap, placed, if (updating) row$placement_id), short = "section, grid or group it's in",
       hint = "Only sections, grids and groups can hold other blocks.",
       problem = function(value, values) {
-        # what each container can hold (BR53, can_hold())
-        type <- values$component_type_id %||%
-          if (updating) edit_lookup(snap, "component", "component_id", row$component_id, "component_type_id") else NA
-        kind <- edit_lookup(snap, "component_type", "component_type_id", as.numeric(type), "name")
-        into <- placed$type[match(as.numeric(value), placed$placement_id)]
-        if (has_text(value) && !is.na(kind) && !is.na(into) && !can_hold(into, kind)) {
+        # what each container can hold (placement_rules in the database, can_hold() here)
+        kind <- kind_of(values)
+        into <- placed$kind[match(as.numeric(value), placed$placement_id)]
+        if (has_text(value) && has_text(kind) && !is.na(into) && !can_hold(into, kind)) {
           if (identical(into, "Grid")) {
             "A grid holds only its questions, with their instructions and definitions. Pick somewhere else."
           } else {
@@ -182,121 +106,116 @@ edit_placement_fields <- function(snap, mode, row, scope) {
       },
       warn = function(value, values) {
         position <- edit_whole_number(value)
-        parent <- if (nzchar(values$parent_placement_id %||% "")) as.numeric(values$parent_placement_id) else NA_real_
+        parent <- if (has_text(values$parent_placement_id)) as.numeric(values$parent_placement_id) else NA_real_
         room <- edit_service_room(placed, parent) + if (updating && same_parent(row$parent_placement_id, parent)) 0 else 1
         if (!is.na(position) && position > room) sprintf("There are only %d places there, so it will go last (position %d).", room, room)
       }
     )
   )
-  if (updating) {
-    return(c(list(
-      edit_text_field(snap, mode, row),
-      edit_field(
-        "component_type_id", "Kind of block", "select",
-        required = TRUE, choices = edit_choices(snap, "component_type"),
-        locked = if (is_question) {
-          "A question stays a question. Its settings are under Questionnaire question."
-        } else if (has_inside) {
-          "A section or group with blocks inside can't change kind. Move them out first."
-        },
-        hint = if (!is_question && !has_inside) {
-          "Changing the kind, like changing the words, changes this place only: other places keep the old block."
-        }
-      )
-    ), where, if (isTRUE(is_container(kind))) list(edit_placement_condition_field(snap))))
-  }
-  candidates <- snap$component[!edit_is_question(snap, snap$component$component_id), , drop = FALSE]
-  choices <- stats::setNames(
-    key_text(candidates$component_id),
-    paste0(
-      "[", edit_lookup(snap, "component_type", "component_type_id", candidates$component_type_id, "name"), "] ",
-      edit_component_text(snap, candidates$component_id),
-      recycle0 = TRUE
-    )
-  )
-  c(list(
-    edit_field(
-      "source", "Which block?", "choice",
-      required = TRUE,
-      choices = c("One that's already in the database" = "existing", "A new one" = "new"),
-      default = if (nrow(candidates) > 0) "existing" else "new",
-      hint = "Placing an existing component keeps it shared with the questionnaires already printing it."
-    ),
-    edit_field("component_id", "The component", "select",
-      required = TRUE, show_when = list(field = "source", value = "existing"),
-      choices = c("Choose a component" = "", choices),
-      hint = "Questions are added as a questionnaire question (Add, then Questionnaire question), so they aren't listed. A block this questionnaire prints already can be printed again."
-    ),
-    edit_field("component_type_id", "Kind of block", "select",
-      required = TRUE, show_when = list(field = "source", value = "new"),
-      choices = edit_choices(snap, "component_type", non_question, blank = "Choose a kind")
-    ),
-    edit_text_field(snap, mode, NULL) |> utils::modifyList(list(show_when = list(field = "source", value = "new"))),
-    edit_placement_condition_field(snap)
-  ), where)
 }
 
-# Who answers everything in a section, grid or group, for one being placed: only those kinds have it (a question's
-# own condition is on Questionnaire question).
-edit_placement_condition_field <- function(snap) {
-  edit_field("condition", "Who answers everything in it",
-    normalize = normal_text, placeholder = "e.g. female",
-    hint = "For a section, grid or group only. Leave empty if everyone does.",
-    problem = function(value, values) {
-      type <- if (identical(values$source, "existing")) {
-        edit_lookup(snap, "component", "component_id", as.numeric(values$component_id %||% NA), "component_type_id")
-      } else {
-        as.numeric(values$component_type_id %||% NA)
-      }
-      kind <- edit_lookup(snap, "component_type", "component_type_id", type, "name")
-      if (has_text(value) && !is.na(kind) && !is_container(kind)) {
-        "Only a section, grid or group says who answers everything in it. Leave this empty."
-      }
+# The form for a block in one questionnaire: its words (which, if changed, point this placement at the component
+# with them), where it sits, and for a question what it depends on and its number in each wave that asks it.
+edit_placement_update_fields <- function(snap, row, scope) {
+  q <- as.numeric(scope)
+  placed <- edit_service_placements(snap, q)
+  kind <- edit_lookup(snap, "component", "component_id", row$component_id, "kind")
+  c(
+    list(
+      edit_field(
+        "kind", "Kind of block", "select",
+        required = TRUE, choices = stats::setNames(edit_component_kinds, edit_component_kinds),
+        locked = "A block's kind is fixed. To print another kind of block here, delete this one and add one."
+      ),
+      edit_text_field(snap, NULL, kind_of = function(values) kind) |>
+        utils::modifyList(list(hint = paste0(
+          "Changing the words changes this place only: it prints the block with the new words (the one the database ",
+          "has, or a new one), and other places keep the old one."
+        )))
+    ),
+    edit_placement_where_fields(snap, placed, row, kind_of = function(values) kind),
+    if (identical(kind, "Question")) {
+      c(
+        list(edit_field(
+          "depends_on_placement_id", "Which question does it depend on?", "select",
+          short = "question it depends on",
+          choices = c("None: it stands on its own" = "", edit_service_depends_choices(snap, q, row$placement_id)),
+          hint = "Only questions printed before this one are listed."
+        )),
+        edit_placement_number_fields(snap, edit_placed_rows(snap, row$placement_id)$wave_id, asked_field = FALSE)
+      )
     }
   )
 }
 
-# The form for a question in one questionnaire.
-edit_question_fields <- function(snap, row, scope) {
+# The form for adding a block to one questionnaire. The fields a question needs (what it depends on, the waves that
+# ask it and the number printed beside it in each, its variables) show once Question is picked as the kind.
+edit_placement_add_fields <- function(snap, scope) {
   q <- as.numeric(scope)
-  asked <- edit_placed_rows(snap, "wave_question", row$placement_id)
-  asked <- asked[order(asked$wave_id), , drop = FALSE]
-  numbers <- lapply(seq_len(nrow(asked)), function(i) {
-    wave <- asked$wave_id[i]
-    wave_name <- edit_lookup(snap, "wave", "wave_id", wave, "name")
+  placed <- edit_service_placements(snap, q)
+  waves <- snap$wave[snap$wave$questionnaire_id == q, , drop = FALSE]
+  waves <- waves[order(waves$wave_id), , drop = FALSE]
+  only_questions <- function(field) utils::modifyList(field, list(show_when = list(field = "kind", value = "Question")))
+  c(
+    list(
+      edit_field(
+        "kind", "Kind of block", "select",
+        required = TRUE, choices = c("Choose a kind" = "", stats::setNames(edit_component_kinds, edit_component_kinds)),
+        hint = "A question comes with its variables and the waves that ask it, typed below once Question is picked."
+      ),
+      edit_text_field(snap, NULL) |>
+        utils::modifyList(list(hint = "The block's words only, as printed, without its number. A block with exactly these words shares them."))
+    ),
+    edit_placement_where_fields(snap, placed),
+    list(
+      only_questions(edit_field(
+        "depends_on_placement_id", "Which question does it depend on?", "select",
+        short = "question it depends on",
+        choices = c("None: it stands on its own" = "", edit_service_depends_choices(snap, q)),
+        hint = "Pick one printed before where this one goes."
+      )),
+      only_questions(edit_field(
+        "asked_in", "Waves that ask it", "several",
+        required = TRUE, short = "waves that ask it",
+        choices = stats::setNames(key_text(waves$wave_id), waves$name),
+        hint = "A question is asked in at least one wave. Its place among the wave's questions is worked out from where it goes in the outline.",
+        problem = function(value, values) {
+          if (nrow(waves) == 0) "This questionnaire has no waves yet. Add one first (Add, then Wave): a question is asked in a wave."
+        }
+      ))
+    ),
+    lapply(edit_placement_number_fields(snap, waves$wave_id, asked_field = TRUE), only_questions),
+    list(only_questions(edit_field(
+      "variables", "Variables", "variables",
+      required = TRUE, default = edit_variables_default(),
+      options = edit_variables_options(snap),
+      hint = paste(
+        "One for each answer a respondent can record, in printed order, each with its MATR ID. A lone check",
+        "box has one choice: only choices printed on the form are choices."
+      ),
+      problem = edit_variables_problem(snap, q)
+    )))
+  )
+}
+
+# One field for each wave: the number printed beside the question there (which can be empty, or repeat from
+# section to section).
+# wave_ids: The waves.
+# asked_field: Whether the form also asks which waves ask it (an add): then the hint says an unpicked wave's
+#   number is ignored.
+edit_placement_number_fields <- function(snap, wave_ids, asked_field) {
+  wave_ids <- sort(wave_ids)
+  lapply(seq_along(wave_ids), function(i) {
+    wave_name <- edit_lookup(snap, "wave", "wave_id", wave_ids[i], "name")
     edit_field(
-      paste0("qn_", key_text(wave)), paste("Number printed in", wave_name),
+      paste0("qn_", key_text(wave_ids[i])), paste("Number printed in", wave_name),
       placeholder = "None printed", short = paste("number printed in", wave_name),
       hint = if (i == 1) {
         paste(
           "As printed, so it can have letters, and repeat from section to section: 1, 2a, 14. Leave it empty if",
-          "none is printed. Its place among the questions is worked out from the outline."
+          "none is printed.", if (asked_field) "Only the waves picked above count."
         )
       }
     )
   })
-  c(list(
-    edit_text_field(snap, "update", row, "Question wording", type_field = FALSE) |>
-      utils::modifyList(list(hint = paste0(
-        "Changing the wording changes this place only: it asks the question with the new words, and other places ",
-        "keep the old one."
-      ))),
-    edit_field(
-      "self_contained", "Can a researcher understand it on its own?", "choice",
-      choices = c("Yes" = "TRUE", "No, it follows up on another question" = "FALSE"),
-      short = "whether it stands on its own"
-    ),
-    edit_field(
-      "parent_question_placement_id", "Which question does it follow up on?", "select",
-      required = TRUE,
-      short = "the question it follows up on",
-      show_when = list(field = "self_contained", value = "FALSE"),
-      choices = c("Choose a question" = "", edit_service_parent_question_choices(snap, q, row$placement_id)),
-      hint = "Only questions printed before this one are listed."
-    ),
-    edit_field("condition", "Printed condition", normalize = normal_text,
-      placeholder = "e.g. If you answered Yes to the previous question",
-      hint = "Leave empty if the question is asked of everyone."
-    )
-  ), numbers)
 }

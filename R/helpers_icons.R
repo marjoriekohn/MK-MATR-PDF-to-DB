@@ -32,8 +32,6 @@ app_icons <- c(
   csv = "file-lines",
   choices = "list-ul",
   write_in = "keyboard",
-  skip_answer = "list-check",
-  skip_respondent = "user",
   choices_open = "caret-down",
   choices_closed = "caret-right",
   new = "certificate",
@@ -55,8 +53,8 @@ app_icons <- c(
   metadata = "database",
   make_edit = "pencil",
   next_step = "arrow-right",
-  change_requests = "clipboard-check",
   history = "clock-rotate-left",
+  ai_monitor = "chart-line",
   # the kinds of block, in Add Block
   section = "folder-open",
   question_group = "layer-group",

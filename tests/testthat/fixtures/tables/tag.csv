@@ -1,0 +1,15 @@
+tag_id,kind,name
+1,subject,Respondent
+2,subject,Respondent's Family
+3,subject,Respondent's Children
+4,subject,Respondent's Siblings
+5,subject,Twins (compared)
+11,time frame,in your lifetime
+12,time frame,in the past year
+13,time frame,in the past 12 months
+14,time frame,in the past 6 months
+15,time frame,in the past month
+16,time frame,in the past 30 days
+17,time frame,in the past week
+21,unit,years
+22,unit,cigarettes

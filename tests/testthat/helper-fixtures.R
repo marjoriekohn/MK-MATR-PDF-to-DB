@@ -5,12 +5,14 @@
 # that is about the database is tested against a real one (helper-00_realdb.R).
 #
 # The sample tables, in brief:
-#   AHP (questionnaire 1, waves 1-2): section A (component 1) holds an
-#     instruction, three questions (3, 4, 5) and section B (6) holds 7.
-#     Question 5 is a follow-up to question 4.
-#   KQ (2, one wave) and KQP (3, one wave) share section 10 and question 9.
-#   MQ (4, one wave) shares question 4 ("Do you now smoke cigarettes?") with AHP.
+#   AHP (questionnaire 1, waves 1-2): section A (component 1, placement 101) holds an instruction, three
+#     questions (3, 4, 5; placements 103-105) and section B (6, placement 106) holds 7 (107). Question 5 depends
+#     on question 4. Wave 1 was extracted from the PDF a1a1....
+#   KQ (2, one wave) and KQP (3, one wave) share section 10 and question 9 (a scale item).
+#   MQ (4, one wave) shares question 4 ("Do you now smoke cigarettes?") with AHP, and holds the one group (16,
+#     placement 416) with a question and a definition inside.
 #   Component 15 is printed nowhere.
+#   Tags: subjects 1-5, time frames 11-17, units 21-22; variables carry them (variable_tag).
 
 fixture_path <- function(...) test_path("fixtures", ...)
 
@@ -21,8 +23,8 @@ fixture_other_staff <- list(staff_id = 2L, name = "Alex Rivera", role = "STAFF")
 
 app_file <- function(...) test_path("..", "..", ...)
 
-# A table of the fixtures as the model reads it from the database: ids and numbers as numbers, flags as
-# logical, the rest as text, in the order the model asks for (see `table_model_get()`). One that isn't one
+# A table of the fixtures as the model reads it from the database: ids and numbers as numbers, the rest as text,
+# in the order the model asks for (see `table_model_get()`). One that isn't one
 # of the edit pages' tables is a plain read of the CSV.
 # The files don't change while the tests run, so each is read once and kept (R copies a value a test changes,
 # so a test can't change what the next one is given).
@@ -45,7 +47,6 @@ read_fixture_table <- function(table) {
     rows[[column]] <- switch(kinds[[column]],
       id = ,
       number = as.numeric(rows[[column]]),
-      flag = as.logical(rows[[column]]),
       as.character(rows[[column]])
     )
   }
@@ -74,10 +75,12 @@ test_catalog <- function() {
 
 # The pick lists, as lookup_service_get_all() returns them, made of the sample tables.
 test_lookups <- function() {
+  tags <- fixture_table("tag")
   list(
-    component_types = fixture_table("component_type")$name,
-    subjects = fixture_table("subject")$name,
-    time_frames = fixture_table("time_frame")$name,
+    component_types = edit_component_kinds,
+    subjects = tags$name[tags$kind == "subject"],
+    time_frames = tags$name[tags$kind == "time frame"],
+    units = tags$name[tags$kind == "unit"],
     answer_options = fixture_table("answer_option")$standardized_label,
     answer_data_types = c("NUMBER", "TEXT", "DATE", "TIME"),
     problems = character()

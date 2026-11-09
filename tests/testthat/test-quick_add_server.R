@@ -1,5 +1,6 @@
 # The pop-ups that add a respondent type, a study or an investigator from inside an extraction drop-down. They use the
-# Make an edit form for one row, apply it at once, and call back with the new row's key. The database is the real one.
+# Metadata page's form for one row, apply it at once, and call back with the new row's key. The database is the real
+# one.
 
 popup_args <- function(me, catalog = test_live_catalog()) {
   list(connection = test_connection, me = me, catalog = catalog)
@@ -21,7 +22,7 @@ test_that("opening a pop-up shows its form, and a table that can't be read is a 
     expect_length(seen$modals, 1)
     expect_match(seen$modals[[1]], "Add a respondent type")
     expect_match(seen$modals[[1]], "Cancel")
-    expect_error(open("category"), "can't be added from here") # only the kinds in edit_quick_kinds
+    expect_error(open("component"), "can't be added from here") # only the kinds in edit_quick_kinds
   })
   shiny::testServer(quick_add_server, args = list(connection = list(url = test_connection$url, key = "sb_secret_not_the_key"), me = me, catalog = fixed_catalog()), {
     expect_false(open("respondent_type"))
@@ -52,10 +53,8 @@ test_that("a respondent type typed into the pop-up is added at once, the pop-up 
     # the catalog was read again, so the drop-down can offer the new row
     expect_true(got %in% as.character(catalog$get()$respondent_types$respondent_type_id))
   })
-  entry <- history_model_get_all(test_connection)
-  entry <- Filter(function(record) identical(record$prepared_by, me$name), entry)[[1]]
-  expect_equal(entry$kind, "Add")
-  expect_false(entry$approval_required)
+  entries <- database_model_select(test_connection, "history", "action,entity", filters = list(staff_id = database_eq(me$staff_id), entity = database_eq("respondent_type")))
+  expect_equal(entries[[length(entries)]]$action, "Added")
 })
 
 test_that("the button waits for a form that is ready, and says 'Add it anyway' when what is typed looks like something there", {
@@ -165,10 +164,10 @@ test_that("the form's own 'add one first' button for a missing investigator open
 test_that("the pop-up draws only the form and its buttons", {
   html <- text_of(quick_add_dialog(edit_service_quick_entity("study"), shiny::NS("q"), back = FALSE))
   expect_match(html, "Add a study")
-  expect_match(html, "the extraction goes into it when its change request is approved")
+  expect_match(html, "the extraction goes into it when it is pushed")
   expect_match(html, "The investigator isn't in the list\\? Add an investigator")
   expect_match(text_of(quick_add_dialog(edit_service_quick_entity("questionnaire"), shiny::NS("q"))), "Add a respondent type")
-  expect_no_match(html, "Why are you adding it")
+  expect_no_match(html, "Why are you adding it|approv")
   expect_no_match(text_of(quick_add_dialog(edit_service_quick_entity("respondent_type"), shiny::NS("q"))), "Add an investigator")
   expect_match(text_of(quick_add_dialog(edit_service_quick_entity("study"), shiny::NS("q"), back = TRUE)), "Back")
 })

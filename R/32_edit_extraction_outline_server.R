@@ -1,9 +1,9 @@
 # The questionnaire outline of the Edit Extraction page.
 # Blocks as a list, with the picked block's details beside it (`block_detail()`): type a section's or a text
 # block's words in the list, or any block's in its details, change a block's kind, open and close sections and
-# groups (by clicking them), add skip logic to a question (the answer to an earlier question it
-# depends on, or who the respondent is), verify a block, add blocks (from a dialog of the kinds there are),
-# delete them, take a section or group away but keep what is inside, and drag any of them into a new order. A
+# groups (by clicking them), pick the earlier question a question depends on, verify a block, add blocks (from
+# a dialog of the kinds there are), delete them, take a section or group away but keep what is inside, and drag
+# any of them into a new order. A
 # question's variables and choices are the variable editor's (`variable_editor()`), as on Make an edit. Every
 # change goes through `state$change()`.
 # Drawing the whole list takes seconds for a long questionnaire, for the server and again for the
@@ -34,7 +34,6 @@ extraction_outline_server <- function(
     shown_version <- isolate(state$layout_version()) # the layout_version the tree on the page is up to date with
     suggestions <- state$suggestions %||% function() list()
     original <- state$original %||% function() NULL
-    logic_for <- reactiveVal(NULL) # the question Add Skip Logic is adding to
     detail_version <- reactiveVal(0L) # ticks when the details must be drawn again without the layout changing
 
     # Draws the details again for what changed in a question's variables without changing the draft, if it is
@@ -72,11 +71,6 @@ extraction_outline_server <- function(
              },
              check = toggle_checked(draft, event$id),
              edit_kind = state$change(draft_service_update(draft, "components", event$id, "component_type", event$type)),
-             add_skip_logic = {
-               logic_for(event$id)
-               showModal(skip_logic_choice_modal(ns))
-             },
-             remove_logic = remove_logic(draft, event$id, event$kind),
              ungroup = {
                inside <- draft_service_children(draft, "components", event$id)$id
                ungrouped <- state$change(draft_service_ungroup(draft, event$id))
@@ -91,8 +85,8 @@ extraction_outline_server <- function(
       )
     })
 
-    # Picking a section opens its first question (it opens itself when it holds none). A group opens itself:
-    # its details are where its skip is.
+    # Picking a section opens its first question (it opens itself when it holds none). A grid or group opens
+    # itself, so what it holds can be seen.
     select_block <- function(draft, id) {
       blocks <- draft$components
       if (blocks$component_type[match(id, blocks$id)] %in% "Section") {
@@ -101,79 +95,6 @@ extraction_outline_server <- function(
         if (!is.na(first)) id <- first
       }
       state$selected(id)
-    }
-
-    # ------ Skip logic -----------------------------------------------------------------
-    # Add Skip Logic asks which kind: shown only for some answers to an earlier question, or only to some
-    # respondents (a condition, e.g. "Twins only"). Saving the first makes that question its parent, with the
-    # answers as its condition; saving the second makes the words its condition, and an earlier question picked
-    # as its parent is taken away (one worked out from a skip stays, as the skip says).
-    observeEvent(input$logic_answer, {
-      id <- req(logic_for())
-      showModal(skip_logic_answer_modal(ns, state$draft(), id))
-    })
-
-    output$logic_answers <- renderUI({
-      id <- req(logic_for())
-      skip_logic_answer_choices(ns, state$draft(), id, input$logic_parent)
-    })
-
-    observeEvent(input$logic_answer_save, {
-      id <- req(logic_for())
-      parent <- input$logic_parent %||% ""
-      # its choices ticked, or for a question without choices the answer typed (Shiny keeps the other's last value)
-      has_choices <- nzchar(parent) && length(skip_logic_parent_answers(state$draft(), parent)) > 0
-      answers <- trimws(if (has_choices) input$logic_answer_picks else input$logic_answer_text)
-      answers <- answers[nzchar(answers)]
-      if (!nzchar(parent) || length(answers) == 0) {
-        showNotification("Pick the earlier question and the answer that shows this one.", type = "warning")
-        return()
-      }
-      draft <- state$draft()
-      changed <- state$change({
-        linked <- draft_service_update(draft, "components", id, "parent_question_id", parent)
-        draft_service_update(linked, "components", id, "condition", paste(answers, collapse = " or "))
-      })
-      if (changed) removeModal()
-    })
-
-    observeEvent(input$logic_condition, {
-      id <- req(logic_for())
-      block <- state$draft()$components[state$draft()$components$id == id, , drop = FALSE]
-      current <- if (nrow(block) == 1 && (is.na(block$parent_question_id) || isTRUE(block$parent_from_skip))) block$condition else NA
-      showModal(skip_logic_condition_modal(ns, current))
-    })
-
-    observeEvent(input$logic_condition_save, {
-      id <- req(logic_for())
-      words <- trimws(input$logic_condition_text %||% "")
-      if (!nzchar(words)) {
-        showNotification("Say who sees this question, e.g. Twins.", type = "warning")
-        return()
-      }
-      draft <- state$draft()
-      block <- draft$components[draft$components$id == id, , drop = FALSE]
-      changed <- state$change({
-        unlinked <- if (!is.na(block$parent_question_id) && !isTRUE(block$parent_from_skip)) {
-          draft_service_update(draft, "components", id, "parent_question_id", "")
-        } else {
-          draft
-        }
-        draft_service_update(unlinked, "components", id, "condition", words)
-      })
-      if (changed) removeModal()
-    })
-
-    # The delete button of a sentence of skip logic: the earlier question picked (and its answers), or the
-    # condition.
-    remove_logic <- function(draft, id, kind) {
-      state$change(
-        if (identical(kind, "answer")) {
-          draft_service_update(draft_service_update(draft, "components", id, "parent_question_id", ""), "components", id, "condition", "")
-        } else {
-          draft_service_update(draft, "components", id, "condition", "")
-        }
-      )
     }
 
     # A new block goes next to the selected one, and is selected so its words can be typed.

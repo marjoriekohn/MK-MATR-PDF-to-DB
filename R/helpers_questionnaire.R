@@ -2,11 +2,10 @@
 # A draft's questionnaire drawn as a table to read, with nothing to edit, the way a codebook lists it: one
 # row for each variable, with its MATR ID (Variable ID), the words of its question with the variable's label
 # and who it is about in square brackets (Question Text), and its codes and choices, or a write-in's kind of
-# answer (Variable Coding). Blocks that aren't questions (an instruction, a note) have a row each, in printed order,
-# and a group that skips has a last row saying where to.
+# answer (Variable Coding). Blocks that aren't questions (an instruction, a note) have a row each, in printed order.
 # The rows are grouped under the section (and group) they are printed in. It is a DataTables table
-# (the DT package): it can be searched, and downloaded as a CSV. A change request shows it before it is
-# submitted and while it waits for a reviewer to approve it.
+# (the DT package): it can be searched, and downloaded as a CSV. The Edit Extraction page's Preview shows it
+# before the extraction is pushed into the database.
 
 # A draft's questionnaire, laid out to read as a table.
 questionnaire_preview_ui <- function(draft) {
@@ -65,8 +64,7 @@ preview_file_name <- function(draft) {
 
 # The rows of the questionnaire's table, in printed order.
 # A question has a row for each of its variables (or one, saying it has none); any other block that isn't a
-# section or group has one row. A group that skips has a last row saying so (kind "Skip"). Each row names
-# the sections and groups it is in.
+# section or group has one row. Each row names the sections and groups it is in.
 # Returns: A data frame: `section` (e.g. "PART B. YOUR HABITS › Group 1", or "" at the top level),
 #   `kind`, `matr_id` (NA when there is none), `missing` ("no MATR ID", "no variables" or ""), `text`,
 #   `tags` ("[Lifetime] [Siblings]", or "") and `coding` (a list of lines: "1 = Yes", or the write-in's kind of
@@ -78,7 +76,6 @@ questionnaire_preview_rows <- function(draft) {
       section = section, kind = kind, matr_id = matr_id, missing = missing, text = text, tags = tags, coding = list(coding)
     )
   }
-  targets <- NULL # where groups skip to, worked out once there is one
   walk <- function(parent_id, path) {
     blocks <- draft_service_children(draft, "components", parent_id)
     groups <- 0L
@@ -86,12 +83,7 @@ questionnaire_preview_rows <- function(draft) {
       block <- blocks[i, , drop = FALSE]
       if (is_container(block$component_type)) {
         if (block$component_type == "Group") groups <- groups + 1L
-        inside <- c(path, preview_container_name(block, groups))
-        walk(block$id, inside)
-        if (block$component_type %in% skipping_types && (!is.na(block$skip_to_id) || !is.na(block$skip_condition))) {
-          targets <<- targets %||% skip_targets(draft)
-          add(paste(inside, collapse = " \u203a "), "Skip", text = group_skip_text(block, targets), tags = if (is.na(block$skip_instruction)) "" else paste0("(printed: ", block$skip_instruction, ")"))
-        }
+        walk(block$id, c(path, preview_container_name(block, groups)))
         next
       }
       section <- paste(path, collapse = " \u203a ")
@@ -180,17 +172,16 @@ preview_coding <- function(box, draft) {
   )
 }
 
-# ------ A change request, laid out to read --------------------------------------------------------
-# What an extraction's change request comes to: on Change Requests, its Basic Info (the registry, study,
-# questionnaire and wave it goes into, filled in there) and what it adds (a card for each kind of row that is
-# kept once, saying how many rows are new and how many are already in the database and are used again, with a
-# list of each row to open under them); and, on both pages, the questionnaire itself. The Edit Extraction page shows the
-# questionnaire before the request is submitted, and Change Requests the whole of it while it waits for
-# a reviewer.
+# ------ An extraction's push, laid out to read --------------------------------------------------------
+# What pushing an extraction into the database comes to, shown to whoever reviewed it before they push it
+# (there is no second approval): its Basic Info (the registry, study, questionnaire and wave it goes into),
+# what it adds (a card for each kind of row that is kept once, saying how many rows are new and how many are
+# already in the database and are used again, with a list of each row to open under them when the rows are
+# given), and the questionnaire itself.
 
-# What an extraction's change request comes to, laid out to read.
-# preview: A list: `what` (a list of cards, from `extraction_service_request_preview()`),
-#   `summary` (a sentence), `problem` (why it can't be added, or `NULL`) and `unchecked` (how many
+# What pushing an extraction comes to, laid out to read.
+# preview: A list: `what` (a list of cards, from the push's preview),
+#   `summary` (a sentence), `problem` (why it can't be pushed, or `NULL`) and `unchecked` (how many
 #   blocks haven't been marked as checked). Any can be left out.
 # draft: The questionnaire, or `NULL` if it couldn't be read.
 # pdf_url: The address of its PDF, or `NULL`.
@@ -198,7 +189,6 @@ preview_coding <- function(box, draft) {
 # table: Where the questionnaire's table goes, in place of drawing it here: a `uiOutput()` the page draws
 #   it in once the dialog is open (a DataTables table put in a dialog as it opens stays empty). `NULL` draws it.
 # questionnaire: Whether to show the questionnaire (its table, its PDF and how much of it is checked).
-#   Change Requests' Basic Info dialog leaves it to the request's Preview.
 extraction_request_ui <- function(preview, draft, pdf_url = NULL, basic_info = NULL, table = NULL, questionnaire = TRUE) {
   div(
     class = "request-preview",
@@ -206,7 +196,7 @@ extraction_request_ui <- function(preview, draft, pdf_url = NULL, basic_info = N
       div(class = "request-section", h3("Basic Info"), basic_info)
     },
     if (!is.null(preview$problem)) {
-      edit_callout("danger", title = "This can't be added as it is", preview$problem)
+      edit_callout("danger", title = "This can't be pushed as it is", preview$problem)
     },
     if (length(preview$what) > 0) {
       div(
@@ -234,7 +224,7 @@ extraction_request_ui <- function(preview, draft, pdf_url = NULL, basic_info = N
   )
 }
 
-# One card of a change request: a row that is there, or a NEW one, the way Make an edit shows a row.
+# One card of what a push adds: a row that is there, or a NEW one, the way Make an edit shows a row.
 # card: A list: `kind` (e.g. `"Study"`), `title`, `subtitle`, `facts` (short notes) and `is_new`.
 request_card_ui <- function(card) {
   div(
@@ -250,7 +240,8 @@ request_card_ui <- function(card) {
 # Each row the cards count, a list for each card to open, in the order of their words: which are added and which
 # are already in the database and pointed at again, and how often each is used. A group has no words, so it isn't
 # listed.
-# cards: The cards, from `extraction_service_what_cards()`; those with no `rows` are left out.
+# cards: The cards; those with no `rows` are left out (the push's preview comes back as counts only, so there
+#   may be none to list).
 # Returns: A UI element, or `NULL` if no card has rows.
 request_rows_ui <- function(cards) {
   cards <- Filter(function(card) NROW(card$rows) > 0, cards)
@@ -288,7 +279,7 @@ request_rows_ui <- function(cards) {
               tags$tr(
                 tags$td(if (nzchar(row$text)) shorten(row$text, 160) else span(class = "text-muted", "(no words)")),
                 if ("detail" %in% names(columns)) tags$td(shorten(row$detail, 120)),
-                tags$td(class = "is-status", if (row$is_new) row_badge("New", class = "is-add") else span(class = "text-muted", row$status)),
+                tags$td(class = "is-status", if (row$is_new) row_badge("New", class = "is-added") else span(class = "text-muted", row$status)),
                 if ("uses" %in% names(columns)) tags$td(class = "is-count", format(row$uses, big.mark = ","))
               )
             }))
@@ -299,10 +290,10 @@ request_rows_ui <- function(cards) {
   )
 }
 
-# The mark on a card for a row the request adds: a certificate with NEW on it.
+# The mark on a card for a row the push adds: a certificate with NEW on it.
 new_badge <- function() {
   span(
-    class = "new-badge", role = "img", `aria-label` = "New: this request adds it",
+    class = "new-badge", role = "img", `aria-label` = "New: the push adds it",
     app_icon("new", class = "fa-solid"),
     span(class = "new-badge-text", `aria-hidden` = "true", "NEW")
   )

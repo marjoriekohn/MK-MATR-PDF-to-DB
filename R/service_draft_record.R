@@ -1,9 +1,9 @@
 # ------ What the AI extracted, and how the reviewed copy differs from it ----------------
 # For an AI-Powered extraction the database keeps the questionnaire as the AI returned it
-# (ai_extracted_draft.ai_original, never changed afterwards) and how the reviewed copy differs from it
-# (ai_extracted_draft.review_edits), worked out again each time the reviewer saves. Later the
-# differences can be read to measure how often and where the AI needs correcting. A Manual extraction
-# has neither.
+# (extraction.ai_original, never changed afterwards) and how the reviewed copy differs from it
+# (extraction.review_edits), worked out again each time the reviewer saves. The AI Monitor reads the
+# differences to measure how often and where the AI needs correcting (service_monitor.R). A Manual
+# extraction has neither.
 #
 # The differences depend only on the two questionnaires, not on how the reviewer got from one to the
 # other: a value changed and changed back is no difference, a value changed three times is one, and
@@ -17,7 +17,7 @@
 #   field      for "edited": which field (and "position" for "moved")
 #   before     what the AI returned (nothing for "added")
 #   after      what the reviewed copy has (nothing for "deleted")
-# Who saved it, and when, are the draft's (draft.saved_by, draft.saved_at).
+# Who saved it, and when, are the extraction's (extraction.saved_by_id, extraction.saved_at).
 #
 # Only what the AI reads is compared. Not compared: what the site works out (each question's place
 # among the questions, display orders, the choices' codes), the reviewer's own bookkeeping (the
@@ -27,12 +27,9 @@
 
 # The fields that are compared, for each table of a draft.
 review_edit_fields <- list(
-  components = c(
-    "component_type", "text", "printed_number", "self_contained", "condition", "parent_question_id",
-    "skip_condition", "skip_when", "skip_instruction" # a group's skip
-  ),
-  variables = c("variable_type", "label", "subject", "time_frame", "answer_data_type", "unit", "skip_condition", "skip_instruction"),
-  response_options = c("answer_option", "skip_instruction")
+  components = c("component_type", "text", "printed_number", "parent_question_id"),
+  variables = c("variable_type", "label", "subject", "time_frame", "answer_data_type", "unit"),
+  response_options = "answer_option"
 )
 review_edit_items <- c(components = "block", variables = "variable", response_options = "choice")
 
@@ -159,7 +156,7 @@ review_blank <- function(value) {
   if (nzchar(value)) value
 }
 
-# A field's value as text, or NULL for none. A follow-up's parent is shown as the question's number.
+# A field's value as text, or NULL for none. The question a question depends on is shown as its number.
 review_edit_value <- function(draft, table, id, field) {
   value <- draft[[table]][[field]][match(id, draft[[table]]$id)]
   if (field == "parent_question_id") {
@@ -170,8 +167,8 @@ review_edit_value <- function(draft, table, id, field) {
 }
 
 # What a field's values (of rows `rows` of a table) are compared by: the values, trimmed, a blank as NA
-# (and the respondent's subject as NA), except a follow-up's parent, which is which question of the AI's
-# answer it is (its ref; "new" for one the reviewer added), so renumbering never counts.
+# (and the respondent's subject as NA), except the question a question depends on, which is which question of
+# the AI's answer it is (its ref; "new" for one the reviewer added), so renumbering never counts.
 review_edit_keys <- function(draft, table, rows, field) {
   value <- draft[[table]][[field]][rows]
   if (field == "parent_question_id") {

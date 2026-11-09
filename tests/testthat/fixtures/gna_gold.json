@@ -15,7 +15,6 @@
           "display_order": 2,
           "text": "would you call yourself a nervous person?",
           "printed_number": "1a",
-          "self_contained": true,
           "variables": [
             {
               "variable_type": "closed_ended",
@@ -38,7 +37,6 @@
           "display_order": 3,
           "text": "are you a worrier?",
           "printed_number": "1b",
-          "self_contained": true,
           "variables": [
             {
               "variable_type": "closed_ended",
@@ -61,7 +59,6 @@
           "display_order": 4,
           "text": "do you often feel \"fed-up\"?",
           "printed_number": "1c",
-          "self_contained": true,
           "variables": [
             {
               "variable_type": "closed_ended",
@@ -84,7 +81,6 @@
           "display_order": 5,
           "text": "do you worry too long after an embarrassing experience?",
           "printed_number": "1d",
-          "self_contained": true,
           "variables": [
             {
               "variable_type": "closed_ended",
@@ -107,7 +103,6 @@
           "display_order": 6,
           "text": "do you often worry about things you should not have done or said?",
           "printed_number": "1e",
-          "self_contained": true,
           "variables": [
             {
               "variable_type": "closed_ended",
@@ -130,7 +125,6 @@
           "display_order": 7,
           "text": "are your feelings easily hurt?",
           "printed_number": "1f",
-          "self_contained": true,
           "variables": [
             {
               "variable_type": "closed_ended",
@@ -153,7 +147,6 @@
           "display_order": 8,
           "text": "do you suffer from \"nerves\"?",
           "printed_number": "1g",
-          "self_contained": true,
           "variables": [
             {
               "variable_type": "closed_ended",
@@ -176,7 +169,6 @@
           "display_order": 9,
           "text": "would you call yourself tense or highly strung?",
           "printed_number": "1h",
-          "self_contained": true,
           "variables": [
             {
               "variable_type": "closed_ended",
@@ -199,7 +191,6 @@
           "display_order": 10,
           "text": "do you have many different hobbies?",
           "printed_number": "1i",
-          "self_contained": true,
           "variables": [
             {
               "variable_type": "closed_ended",
@@ -222,7 +213,6 @@
           "display_order": 11,
           "text": "do you suffer from sleeplessness?",
           "printed_number": "1j",
-          "self_contained": true,
           "variables": [
             {
               "variable_type": "closed_ended",
@@ -245,7 +235,6 @@
           "display_order": 12,
           "text": "do you like plenty of bustle and excitement around you?",
           "printed_number": "1k",
-          "self_contained": true,
           "variables": [
             {
               "variable_type": "closed_ended",
@@ -268,7 +257,6 @@
           "display_order": 13,
           "text": "are you easily hurt when people find fault with you or the work you do?",
           "printed_number": "1l",
-          "self_contained": true,
           "variables": [
             {
               "variable_type": "closed_ended",
@@ -291,7 +279,6 @@
           "display_order": 14,
           "text": "are you often troubled about feelings of guilt?",
           "printed_number": "1m",
-          "self_contained": true,
           "variables": [
             {
               "variable_type": "closed_ended",
@@ -314,7 +301,6 @@
           "display_order": 15,
           "text": "do you often feel life is very dull?",
           "printed_number": "1n",
-          "self_contained": true,
           "variables": [
             {
               "variable_type": "closed_ended",
@@ -337,7 +323,6 @@
           "display_order": 16,
           "text": "do other people think of you as being very lively?",
           "printed_number": "1o",
-          "self_contained": true,
           "variables": [
             {
               "variable_type": "closed_ended",
@@ -360,7 +345,6 @@
           "display_order": 17,
           "text": "do you enjoy meeting new people?",
           "printed_number": "1p",
-          "self_contained": true,
           "variables": [
             {
               "variable_type": "closed_ended",
@@ -383,7 +367,6 @@
           "display_order": 18,
           "text": "have you often felt listless and tired for no reason?",
           "printed_number": "1q",
-          "self_contained": true,
           "variables": [
             {
               "variable_type": "closed_ended",
@@ -406,7 +389,6 @@
           "display_order": 19,
           "text": "are you sometimes bubbling over with energy and sometimes very sluggish?",
           "printed_number": "1r",
-          "self_contained": true,
           "variables": [
             {
               "variable_type": "closed_ended",
@@ -429,7 +411,6 @@
           "display_order": 20,
           "text": "do you often take on more activities than you have time to do?",
           "printed_number": "1s",
-          "self_contained": true,
           "variables": [
             {
               "variable_type": "closed_ended",
@@ -452,7 +433,6 @@
           "display_order": 21,
           "text": "do you feel like going out a lot?",
           "printed_number": "1t",
-          "self_contained": true,
           "variables": [
             {
               "variable_type": "closed_ended",
@@ -475,7 +455,6 @@
           "display_order": 22,
           "text": "do you like mixing with people?",
           "printed_number": "1u",
-          "self_contained": true,
           "variables": [
             {
               "variable_type": "closed_ended",
@@ -498,7 +477,6 @@
           "display_order": 23,
           "text": "can you usually put some life into a rather dull party?",
           "printed_number": "1v",
-          "self_contained": true,
           "variables": [
             {
               "variable_type": "closed_ended",
@@ -521,7 +499,6 @@
           "display_order": 24,
           "text": "have you ever wished that you were dead?",
           "printed_number": "1w",
-          "self_contained": true,
           "variables": [
             {
               "variable_type": "closed_ended",
@@ -544,7 +521,6 @@
           "display_order": 25,
           "text": "do you worry about your health?",
           "printed_number": "1x",
-          "self_contained": true,
           "variables": [
             {
               "variable_type": "closed_ended",
@@ -567,7 +543,6 @@
           "display_order": 26,
           "text": "does your mood often go up and down?",
           "printed_number": "1y",
-          "self_contained": true,
           "variables": [
             {
               "variable_type": "closed_ended",
@@ -590,7 +565,6 @@
           "display_order": 27,
           "text": "do you ever feel \"just miserable\" for no reason?",
           "printed_number": "1z",
-          "self_contained": true,
           "variables": [
             {
               "variable_type": "closed_ended",
@@ -613,7 +587,6 @@
           "display_order": 28,
           "text": "are you an irritable person?",
           "printed_number": "1aa",
-          "self_contained": true,
           "variables": [
             {
               "variable_type": "closed_ended",
@@ -636,7 +609,6 @@
           "display_order": 29,
           "text": "do you worry a lot about your looks?",
           "printed_number": "1ab",
-          "self_contained": true,
           "variables": [
             {
               "variable_type": "closed_ended",
@@ -659,7 +631,6 @@
           "display_order": 30,
           "text": "are you rather lively?",
           "printed_number": "1ac",
-          "self_contained": true,
           "variables": [
             {
               "variable_type": "closed_ended",
@@ -682,7 +653,6 @@
           "display_order": 31,
           "text": "do you worry about awful things that might happen?",
           "printed_number": "1ad",
-          "self_contained": true,
           "variables": [
             {
               "variable_type": "closed_ended",
@@ -705,7 +675,6 @@
           "display_order": 32,
           "text": "are you touchy about some things?",
           "printed_number": "1ae",
-          "self_contained": true,
           "variables": [
             {
               "variable_type": "closed_ended",
@@ -728,7 +697,6 @@
           "display_order": 33,
           "text": "do you often feel lonely?",
           "printed_number": "1af",
-          "self_contained": true,
           "variables": [
             {
               "variable_type": "closed_ended",
@@ -751,7 +719,6 @@
           "display_order": 34,
           "text": "can you get a party going?",
           "printed_number": "1ag",
-          "self_contained": true,
           "variables": [
             {
               "variable_type": "closed_ended",
@@ -785,7 +752,6 @@
           "display_order": 2,
           "text": "what is the child's sex?",
           "printed_number": "3#3",
-          "self_contained": true,
           "variables": [
             {
               "variable_type": "closed_ended",
@@ -874,7 +840,6 @@
           "display_order": 3,
           "text": "what is the child's relationship to you?",
           "printed_number": "3#4",
-          "self_contained": true,
           "variables": [
             {
               "variable_type": "closed_ended",
@@ -983,7 +948,6 @@
           "display_order": 4,
           "text": "is the child currently living with you?",
           "printed_number": "3#5",
-          "self_contained": true,
           "variables": [
             {
               "variable_type": "closed_ended",
@@ -1074,7 +1038,6 @@
       "display_order": 3,
       "text": "do you have more than five children?",
       "printed_number": "4",
-      "self_contained": true,
       "variables": [
         {
           "variable_type": "closed_ended",
@@ -1103,7 +1066,6 @@
           "display_order": 2,
           "text": "what is the sibling's sex?",
           "printed_number": "5",
-          "self_contained": true,
           "variables": [
             {
               "variable_type": "closed_ended",
@@ -1194,7 +1156,6 @@
       "display_order": 5,
       "text": "do you have more than five brothers and sisters?",
       "printed_number": "6",
-      "self_contained": true,
       "variables": [
         {
           "variable_type": "closed_ended",
@@ -1214,7 +1175,6 @@
       "display_order": 6,
       "text": "have you smoked cigarettes at any time in your life?",
       "printed_number": "7",
-      "self_contained": true,
       "variables": [
         {
           "variable_type": "closed_ended",
@@ -1223,18 +1183,15 @@
           "response_options": [
             {
               "display_order": 1,
-              "answer_option": "i have never smoked a cigarette",
-              "skip_instruction": "go to question 10"
+              "answer_option": "i have never smoked a cigarette"
             },
             {
               "display_order": 2,
-              "answer_option": "i have smoked fewer than 50 cigarettes (2 1/2 packs) altogether in my life",
-              "skip_instruction": "go to question 10"
+              "answer_option": "i have smoked fewer than 50 cigarettes (2 1/2 packs) altogether in my life"
             },
             {
               "display_order": 3,
-              "answer_option": "i have smoked 50 or more cigarettes in my entire life",
-              "skip_instruction": "go to question 8"
+              "answer_option": "i have smoked 50 or more cigarettes in my entire life"
             }
           ]
         }
@@ -1250,7 +1207,6 @@
           "display_order": 1,
           "text": "how soon after you woke up did you smoke your first cigarette?",
           "printed_number": "8a",
-          "self_contained": true,
           "parent_question": "7",
           "variables": [
             {
@@ -1274,7 +1230,6 @@
           "display_order": 2,
           "text": "how often did you make sure that you had cigarettes to smoke?",
           "printed_number": "8b",
-          "self_contained": true,
           "parent_question": "7",
           "variables": [
             {
@@ -1306,7 +1261,6 @@
           "display_order": 3,
           "text": "was it difficult not to smoke in places where smoking was not allowed, such as at work, in a movie theater, or at church?",
           "printed_number": "8c",
-          "self_contained": true,
           "parent_question": "7",
           "variables": [
             {
@@ -1338,7 +1292,6 @@
           "display_order": 4,
           "text": "if you could not smoke a cigarette for several hours, how strong would your craving be?",
           "printed_number": "8d",
-          "self_contained": true,
           "parent_question": "7",
           "variables": [
             {
@@ -1381,7 +1334,6 @@
           "display_order": 2,
           "text": "how many cigarettes would you typically smoke per day when smoking most heavily?",
           "printed_number": "9",
-          "self_contained": true,
           "parent_question": "7",
           "variables": [
             {
@@ -1399,7 +1351,6 @@
       "display_order": 9,
       "text": "have you ever had an alcoholic drink, that is beer, wine, or liquor (vodka, whiskey, brandy, etc.)?",
       "printed_number": "10",
-      "self_contained": true,
       "variables": [
         {
           "variable_type": "closed_ended",
@@ -1407,18 +1358,15 @@
           "response_options": [
             {
               "display_order": 1,
-              "answer_option": "i have never had an alcoholic drink",
-              "skip_instruction": "go to question 13"
+              "answer_option": "i have never had an alcoholic drink"
             },
             {
               "display_order": 2,
-              "answer_option": "i have had fewer than 10 alcoholic drinks altogether in my life",
-              "skip_instruction": "go to question 13"
+              "answer_option": "i have had fewer than 10 alcoholic drinks altogether in my life"
             },
             {
               "display_order": 3,
-              "answer_option": "i have had at least 10 alcoholic drinks altogether in my life",
-              "skip_instruction": "go to question 11"
+              "answer_option": "i have had at least 10 alcoholic drinks altogether in my life"
             }
           ]
         }
@@ -1434,7 +1382,6 @@
           "display_order": 1,
           "text": "how often did you have an alcoholic drink?",
           "printed_number": "11a",
-          "self_contained": true,
           "parent_question": "10",
           "variables": [
             {
@@ -1466,7 +1413,6 @@
           "display_order": 2,
           "text": "how many alcoholic drinks did you have on a typical day when you were drinking?",
           "printed_number": "11b",
-          "self_contained": true,
           "parent_question": "10",
           "variables": [
             {
@@ -1489,7 +1435,6 @@
           "display_order": 1,
           "text": "did you have six or more drinks on one occasion?",
           "printed_number": "12a",
-          "self_contained": true,
           "parent_question": "10",
           "variables": [
             {
@@ -1521,7 +1466,6 @@
           "display_order": 2,
           "text": "did you find that you were unable to stop drinking once you started?",
           "printed_number": "12b",
-          "self_contained": true,
           "parent_question": "10",
           "variables": [
             {
@@ -1553,7 +1497,6 @@
           "display_order": 3,
           "text": "did you fail to do what was normally expected of you because of drinking?",
           "printed_number": "12c",
-          "self_contained": true,
           "parent_question": "10",
           "variables": [
             {
@@ -1585,7 +1528,6 @@
           "display_order": 4,
           "text": "did you have a drink first thing in the morning to get yourself going?",
           "printed_number": "12d",
-          "self_contained": true,
           "parent_question": "10",
           "variables": [
             {
@@ -1617,7 +1559,6 @@
           "display_order": 5,
           "text": "did you feel guilty after drinking?",
           "printed_number": "12e",
-          "self_contained": true,
           "parent_question": "10",
           "variables": [
             {
@@ -1649,7 +1590,6 @@
           "display_order": 6,
           "text": "were you unable to remember what happened because you had been drinking?",
           "printed_number": "12f",
-          "self_contained": true,
           "parent_question": "10",
           "variables": [
             {
@@ -1681,7 +1621,6 @@
           "display_order": 7,
           "text": "were you or someone else injured as the result of your drinking?",
           "printed_number": "12g",
-          "self_contained": true,
           "parent_question": "10",
           "variables": [
             {
@@ -1713,7 +1652,6 @@
           "display_order": 8,
           "text": "was a relative, friend, or a doctor or other health worker concerned about your drinking or did they suggest that you cut down?",
           "printed_number": "12h",
-          "self_contained": true,
           "parent_question": "10",
           "variables": [
             {
@@ -1747,7 +1685,6 @@
       "display_order": 12,
       "text": "looking back over your entire life, have you ever had a time when you were feeling depressed, down, or sad most of the time for at least two weeks?",
       "printed_number": "13",
-      "self_contained": true,
       "variables": [
         {
           "variable_type": "closed_ended",
@@ -1756,18 +1693,15 @@
           "response_options": [
             {
               "display_order": 1,
-              "answer_option": "no [never]",
-              "skip_instruction": "go to question 15"
+              "answer_option": "no [never]"
             },
             {
               "display_order": 2,
-              "answer_option": "yes [only after the death of a loved one]",
-              "skip_instruction": "go to question 14"
+              "answer_option": "yes [only after the death of a loved one]"
             },
             {
               "display_order": 3,
-              "answer_option": "yes [not only after the death of a loved one]",
-              "skip_instruction": "go to question 14"
+              "answer_option": "yes [not only after the death of a loved one]"
             }
           ]
         }
@@ -1783,7 +1717,6 @@
           "display_order": 1,
           "text": "did you lose interest in things you normally do?",
           "printed_number": "14a",
-          "self_contained": false,
           "parent_question": "13",
           "variables": [
             {
@@ -1811,7 +1744,6 @@
           "display_order": 2,
           "text": "did your appetite decrease, or did you lose weight?",
           "printed_number": "14b",
-          "self_contained": false,
           "parent_question": "13",
           "variables": [
             {
@@ -1839,7 +1771,6 @@
           "display_order": 3,
           "text": "were you unable to enjoy things you normally would enjoy?",
           "printed_number": "14c",
-          "self_contained": false,
           "parent_question": "13",
           "variables": [
             {
@@ -1867,7 +1798,6 @@
           "display_order": 4,
           "text": "did your appetite increase or did you gain weight?",
           "printed_number": "14d",
-          "self_contained": false,
           "parent_question": "13",
           "variables": [
             {
@@ -1895,7 +1825,6 @@
           "display_order": 5,
           "text": "were you either fidgety and restless or slowed down most of the time?",
           "printed_number": "14e",
-          "self_contained": false,
           "parent_question": "13",
           "variables": [
             {
@@ -1923,7 +1852,6 @@
           "display_order": 6,
           "text": "did you feel tired or fatigued most of the time?",
           "printed_number": "14f",
-          "self_contained": false,
           "parent_question": "13",
           "variables": [
             {
@@ -1951,7 +1879,6 @@
           "display_order": 7,
           "text": "did you have trouble sleeping?",
           "printed_number": "14g",
-          "self_contained": false,
           "parent_question": "13",
           "variables": [
             {
@@ -1979,7 +1906,6 @@
           "display_order": 8,
           "text": "did you sleep much more than usual?",
           "printed_number": "14h",
-          "self_contained": false,
           "parent_question": "13",
           "variables": [
             {
@@ -2007,7 +1933,6 @@
           "display_order": 9,
           "text": "did you have trouble thinking or concentrating?",
           "printed_number": "14i",
-          "self_contained": false,
           "parent_question": "13",
           "variables": [
             {
@@ -2035,7 +1960,6 @@
           "display_order": 10,
           "text": "did you feel worthless or guilty?",
           "printed_number": "14j",
-          "self_contained": false,
           "parent_question": "13",
           "variables": [
             {
@@ -2063,7 +1987,6 @@
           "display_order": 11,
           "text": "did you think a lot about death or about harming yourself?",
           "printed_number": "14k",
-          "self_contained": false,
           "parent_question": "13",
           "variables": [
             {
@@ -2102,7 +2025,6 @@
           "display_order": 2,
           "text": "hay fever or other allergy symptoms",
           "printed_number": "15a",
-          "self_contained": true,
           "variables": [
             {
               "variable_type": "closed_ended",
@@ -2152,7 +2074,6 @@
           "display_order": 3,
           "text": "severe headaches or migraines",
           "printed_number": "15b",
-          "self_contained": true,
           "variables": [
             {
               "variable_type": "closed_ended",
@@ -2202,7 +2123,6 @@
           "display_order": 4,
           "text": "frequent flu or severe cold",
           "printed_number": "15c",
-          "self_contained": true,
           "variables": [
             {
               "variable_type": "closed_ended",
@@ -2252,7 +2172,6 @@
           "display_order": 5,
           "text": "serious sleep problems or insomnia",
           "printed_number": "15d",
-          "self_contained": true,
           "variables": [
             {
               "variable_type": "closed_ended",
@@ -2302,7 +2221,6 @@
           "display_order": 6,
           "text": "constant or chronic pain",
           "printed_number": "15e",
-          "self_contained": true,
           "variables": [
             {
               "variable_type": "closed_ended",
@@ -2352,7 +2270,6 @@
           "display_order": 7,
           "text": "high blood pressure",
           "printed_number": "15f",
-          "self_contained": true,
           "variables": [
             {
               "variable_type": "closed_ended",
@@ -2402,7 +2319,6 @@
           "display_order": 8,
           "text": "asthma",
           "printed_number": "15g",
-          "self_contained": true,
           "variables": [
             {
               "variable_type": "closed_ended",
@@ -2452,7 +2368,6 @@
           "display_order": 9,
           "text": "arthritis (any type)",
           "printed_number": "15h",
-          "self_contained": true,
           "variables": [
             {
               "variable_type": "closed_ended",
@@ -2502,7 +2417,6 @@
           "display_order": 10,
           "text": "parkinson's disease",
           "printed_number": "15i",
-          "self_contained": true,
           "variables": [
             {
               "variable_type": "closed_ended",
@@ -2552,7 +2466,6 @@
           "display_order": 11,
           "text": "epilepsy, a seizure, or convulsion",
           "printed_number": "15j",
-          "self_contained": true,
           "variables": [
             {
               "variable_type": "closed_ended",
@@ -2602,7 +2515,6 @@
           "display_order": 12,
           "text": "anxiety or extreme nervousness",
           "printed_number": "15k",
-          "self_contained": true,
           "variables": [
             {
               "variable_type": "closed_ended",
@@ -2652,7 +2564,6 @@
           "display_order": 13,
           "text": "depression or manic-depression",
           "printed_number": "15l",
-          "self_contained": true,
           "variables": [
             {
               "variable_type": "closed_ended",
@@ -2702,7 +2613,6 @@
           "display_order": 14,
           "text": "psychosis or schizophrenia",
           "printed_number": "15m",
-          "self_contained": true,
           "variables": [
             {
               "variable_type": "closed_ended",
@@ -2752,7 +2662,6 @@
           "display_order": 15,
           "text": "dementia or alzheimer's disease",
           "printed_number": "15n",
-          "self_contained": true,
           "variables": [
             {
               "variable_type": "closed_ended",
@@ -2802,7 +2711,6 @@
           "display_order": 16,
           "text": "stroke",
           "printed_number": "15o",
-          "self_contained": true,
           "variables": [
             {
               "variable_type": "closed_ended",
@@ -2852,7 +2760,6 @@
           "display_order": 17,
           "text": "angina (chest pain) or ischemia",
           "printed_number": "15p",
-          "self_contained": true,
           "variables": [
             {
               "variable_type": "closed_ended",
@@ -2902,7 +2809,6 @@
           "display_order": 18,
           "text": "any blood clots",
           "printed_number": "15q",
-          "self_contained": true,
           "variables": [
             {
               "variable_type": "closed_ended",
@@ -2952,7 +2858,6 @@
           "display_order": 19,
           "text": "hardening or narrowing of the arteries (heart or leg)",
           "printed_number": "15r",
-          "self_contained": true,
           "variables": [
             {
               "variable_type": "closed_ended",
@@ -3002,7 +2907,6 @@
           "display_order": 20,
           "text": "irregular heart beat or heart attack",
           "printed_number": "15s",
-          "self_contained": true,
           "variables": [
             {
               "variable_type": "closed_ended",
@@ -3052,7 +2956,6 @@
           "display_order": 21,
           "text": "congestive heart failure",
           "printed_number": "15t",
-          "self_contained": true,
           "variables": [
             {
               "variable_type": "closed_ended",
@@ -3102,7 +3005,6 @@
           "display_order": 22,
           "text": "acne that needs constant treatment or care",
           "printed_number": "15u",
-          "self_contained": true,
           "variables": [
             {
               "variable_type": "closed_ended",
@@ -3152,7 +3054,6 @@
           "display_order": 23,
           "text": "red, itchy, or dry skin patches or rashes",
           "printed_number": "15v",
-          "self_contained": true,
           "variables": [
             {
               "variable_type": "closed_ended",
@@ -3202,7 +3103,6 @@
           "display_order": 24,
           "text": "hepatitis (any type)",
           "printed_number": "15w",
-          "self_contained": true,
           "variables": [
             {
               "variable_type": "closed_ended",
@@ -3252,7 +3152,6 @@
           "display_order": 25,
           "text": "cold sores",
           "printed_number": "15x",
-          "self_contained": true,
           "variables": [
             {
               "variable_type": "closed_ended",
@@ -3302,7 +3201,6 @@
           "display_order": 26,
           "text": "repeated bacterial or fungal infection",
           "printed_number": "15y",
-          "self_contained": true,
           "variables": [
             {
               "variable_type": "closed_ended",
@@ -3352,7 +3250,6 @@
           "display_order": 27,
           "text": "stomach ulcers, gastritis, or frequent indigestion",
           "printed_number": "15z",
-          "self_contained": true,
           "variables": [
             {
               "variable_type": "closed_ended",
@@ -3402,7 +3299,6 @@
           "display_order": 28,
           "text": "irritable or inflammatory bowel",
           "printed_number": "15aa",
-          "self_contained": true,
           "variables": [
             {
               "variable_type": "closed_ended",
@@ -3452,7 +3348,6 @@
           "display_order": 29,
           "text": "enlarged prostate",
           "printed_number": "15ab",
-          "self_contained": true,
           "variables": [
             {
               "variable_type": "closed_ended",
@@ -3502,7 +3397,6 @@
           "display_order": 30,
           "text": "sudden urge to urinate or unexpected urination",
           "printed_number": "15ac",
-          "self_contained": true,
           "variables": [
             {
               "variable_type": "closed_ended",
@@ -3552,7 +3446,6 @@
           "display_order": 31,
           "text": "diabetes",
           "printed_number": "15ad",
-          "self_contained": true,
           "variables": [
             {
               "variable_type": "closed_ended",
@@ -3602,7 +3495,6 @@
           "display_order": 32,
           "text": "excessive hair loss or balding",
           "printed_number": "15ae",
-          "self_contained": true,
           "variables": [
             {
               "variable_type": "closed_ended",
@@ -3652,7 +3544,6 @@
           "display_order": 33,
           "text": "greater than 40 pounds over weight",
           "printed_number": "15af",
-          "self_contained": true,
           "variables": [
             {
               "variable_type": "closed_ended",
@@ -3702,7 +3593,6 @@
           "display_order": 34,
           "text": "male erectile disorder",
           "printed_number": "15ag",
-          "self_contained": true,
           "variables": [
             {
               "variable_type": "closed_ended",
@@ -3752,7 +3642,6 @@
           "display_order": 35,
           "text": "multiple sclerosis (ms)",
           "printed_number": "15ah",
-          "self_contained": true,
           "variables": [
             {
               "variable_type": "closed_ended",
@@ -3802,7 +3691,6 @@
           "display_order": 36,
           "text": "brittle bones or osteoporosis",
           "printed_number": "15ai",
-          "self_contained": true,
           "variables": [
             {
               "variable_type": "closed_ended",
@@ -3852,7 +3740,6 @@
           "display_order": 37,
           "text": "heavy smoking",
           "printed_number": "15aj",
-          "self_contained": true,
           "variables": [
             {
               "variable_type": "closed_ended",
@@ -3902,7 +3789,6 @@
           "display_order": 38,
           "text": "alcohol problems or alcoholism",
           "printed_number": "15ak",
-          "self_contained": true,
           "variables": [
             {
               "variable_type": "closed_ended",
@@ -3952,7 +3838,6 @@
           "display_order": 39,
           "text": "painful or irregular menstrual periods",
           "printed_number": "15al",
-          "self_contained": true,
           "variables": [
             {
               "variable_type": "closed_ended",
@@ -4002,7 +3887,6 @@
           "display_order": 40,
           "text": "cysts of the ovaries",
           "printed_number": "15am",
-          "self_contained": true,
           "variables": [
             {
               "variable_type": "closed_ended",
@@ -4052,7 +3936,6 @@
           "display_order": 41,
           "text": "any type of cancer or benign tumor",
           "printed_number": "15an",
-          "self_contained": true,
           "variables": [
             {
               "variable_type": "closed_ended",
@@ -4102,7 +3985,6 @@
           "display_order": 42,
           "text": "adverse drug reaction",
           "printed_number": "15ao",
-          "self_contained": true,
           "variables": [
             {
               "variable_type": "closed_ended",
@@ -4154,7 +4036,6 @@
       "display_order": 15,
       "text": "please write in the box below any serious medical or health problem you have had that is not listed on this page.",
       "printed_number": "16",
-      "self_contained": true,
       "variables": [
         {
           "variable_type": "open_ended",
@@ -4168,7 +4049,6 @@
       "display_order": 16,
       "text": "have you ever taken any medications regularly, including over-the-counter medications?",
       "printed_number": "17",
-      "self_contained": true,
       "variables": [
         {
           "variable_type": "closed_ended",
@@ -4199,8 +4079,6 @@
           "component_type": "Question",
           "display_order": 2,
           "text": "if yes, write medications below.",
-          "self_contained": false,
-          "condition": "if yes",
           "parent_question": "17",
           "variables": [
             {

@@ -39,12 +39,10 @@ draft_schema_version <- 2L
 #            question's words are the rest ("In the past 4 weeks, how often" + "have you felt calm and peaceful?").
 #            It holds only its questions, with their instructions and definitions.
 #   Group    blocks that belong together with no words of their own: an instruction or definition with the
-#            questions it is about, or questions that route together. Each question in it is whole on its own.
-# A group or a grid can skip on the answers to the questions in it ("If you answered No to items 22a-d, go to
-# Question 28"). A component is a wording kept once, so every group (having none) is the one Group component, placed
-# wherever a questionnaire groups blocks; a group's place, order and skip are its placement's.
+#            questions it is about, or questions that belong together. Each question in it is whole on its own.
+# A component is a wording kept once, so every group (having none) is the one Group component, placed wherever a
+# questionnaire groups blocks; a group's place and order are its placement's.
 container_types <- c("Section", "Grid", "Group")
-skipping_types <- c("Grid", "Group")
 
 # What each kind of container can't hold: a section is never inside a group or a grid, and a grid holds only its
 # questions and what explains them.
@@ -107,7 +105,7 @@ straight_quotes <- function(text) {
   gsub("[\u201c\u201d]", '"', text)
 }
 
-# A questionnaire's words as the database keeps them (a block's words, a variable's label, a condition, routing):
+# A questionnaire's words as the database keeps them (a block's words, a variable's label):
 # lower case, so the same words are written one way however the form capitalised them ("NEVER", "Section A:
 # Your Health"), and without a figure in brackets that only repeats the number word before it ("more than five
 # (5) children" is "more than five children"). Names the database lists (subjects), printed numbers and MATR IDs
@@ -192,21 +190,6 @@ answer_qualified <- function(text) {
   sub("^(.+) \\[\\1\\]$", "\\1", text, perl = TRUE)
 }
 
-# What stands for who a variable is about, in an answer choice ("describes [subject] very well") or a question
-# stem ("Has [subject] ever repeated a grade?"), so the questions about Twin A and Twin B share them. It is
-# filled in with the variable's subject where the words are shown (service_normalize.R).
-subject_placeholder <- "[subject]"
-
-# What stands for when a question asks about, in a question stem ("on how many occasions have you smoked
-# cigarettes [time frame]?"), so the questions about a lifetime, the past 12 months and the past 30 days share it. It
-# is filled in with the variable's time frame where the words are shown (service_normalize.R).
-time_frame_placeholder <- "[time frame]"
-
-# What stands for the one thing questions that are otherwise worded the same ask about, in a question stem ("when you
-# were growing up, how often were you encouraged to use [item] by your twin?" for tobacco, alcohol and cannabis), so
-# they share it. Every form's stem says [item], so the same question about other things links across forms too.
-item_placeholder <- "[item]"
-
 # A time frame in words, as the forms print it: "in your lifetime", "during the last 12 months", "over the past
 # year", "within the past thirty days". In a question's words it starts with "in", "during", "over", "within" or
 # "for" (so "on the last day you smoked" isn't one); a field that holds only a time frame can leave that out ("past
@@ -286,46 +269,41 @@ new_row_defaults <- list(
   components = data.frame(
     id = NA_character_, parent_id = NA_character_, display_order = Inf,
     component_type = NA_character_, text = NA_character_,
-    question_number = NA_character_, printed_number = NA_character_, self_contained = NA,
-    condition = NA_character_, parent_question_id = NA_character_, checked = FALSE, ref = NA_character_,
-    parent_from_skip = FALSE, page = NA_integer_,
-    skip_condition = NA_character_, skip_when = NA_character_, skip_instruction = NA_character_, skip_to_id = NA_character_,
-    stem = NA_character_
+    question_number = NA_character_, printed_number = NA_character_,
+    parent_question_id = NA_character_, checked = FALSE, ref = NA_character_, page = NA_integer_
   ),
   variables = data.frame(
     id = NA_character_, component_id = NA_character_, display_order = Inf,
     variable_type = "closed_ended", label = NA_character_, subject = NA_character_, time_frame = NA_character_,
-    answer_data_type = NA_character_, unit = NA_character_, matr_id = NA_character_, ref = NA_character_,
-    skip_condition = NA_character_, skip_instruction = NA_character_, skip_to_id = NA_character_
+    answer_data_type = NA_character_, unit = NA_character_, matr_id = NA_character_, ref = NA_character_
   ),
   response_options = data.frame(
     id = NA_character_, variable_id = NA_character_, display_order = Inf,
-    answer_option = NA_character_, code_value = NA_character_, respondent_count = NA_integer_,
-    skip_instruction = NA_character_, ref = NA_character_,
-    skip_to_id = NA_character_
+    answer_option = NA_character_, code_value = NA_character_, ref = NA_character_
   )
 )
 
-# Open a draft's questionnaire for review.
-# It opens where staff left it (their saved copy) or, if they haven't saved one,
-# fresh from the reading job.
-# id: The extraction draft's id.
+# Open an extraction's questionnaire for review.
+# It opens where staff left it (their saved copy, `extraction.questionnaire`) or, if they haven't saved one,
+# fresh from the reading job (`extraction.ai_original`).
+# id: The extraction's id.
 # Returns: A draft (see `draft_service_from_json()`). An error if reading hasn't finished.
 draft_service_load <- function(connection, id) {
-  json <- draft_model_get(connection, id)
+  json <- extraction_model_questionnaire(connection, id)
+  json <- json$questionnaire %||% json$original
   if (is.null(json)) stop("This draft hasn't been read yet.", call. = FALSE)
   draft_service_from_json(json)
 }
 
-# Save staff's reviewed copy of a draft.
-# id: The extraction draft's id.
+# Save staff's reviewed copy of an extraction's questionnaire.
+# id: The extraction's id.
 # review_edits: How this copy differs from what the AI returned (see
 #   `draft_service_review_edits()`), which replaces what was kept, or `NULL` to leave it as it is.
 # expected_revision: The revision the person was looking at, or `NULL` not to check.
-# Returns: The draft's revision after the save, invisibly. An error with a sentence if someone saved
+# Returns: The extraction's revision after the save, invisibly. An error with a sentence if someone saved
 #   it after `expected_revision`.
 draft_service_save <- function(connection, id, draft, staff_id, review_edits = NULL, expected_revision = NULL) {
-  draft_model_save_reviewed(connection, id, draft_service_to_json(draft), staff_id, review_edits, expected_revision)
+  extraction_model_save_questionnaire(connection, id, draft_service_to_json(draft), staff_id, review_edits, expected_revision)
 }
 
 # A draft with nothing in it.
@@ -358,8 +336,8 @@ draft_service_percent_checked <- function(counts) {
 # Rows get ids when a draft is loaded (c1, v1, o1...); ids aren't saved, but `ref` is (see the top of
 # this file). Positions are numbered 1, 2, 3... within each parent, the questions by their place among
 # the questions, and choices without a code are coded. A variable about the respondent has a blank
-# subject, however the JSON says it. Skip instructions are linked to where they send respondents, and the
-# questions they skip past follow their question (service_draft_skips.R).
+# subject, however the JSON says it. Fields the JSON no longer has (skips, conditions, stems, respondent
+# counts, from older drafts) are left behind.
 # json: The questionnaire as nested lists: `questionnaire` and `components`, and `schema_version`
 #   for a reviewed copy (without it, it is what the reading job returned).
 # Returns: A draft: `list(questionnaire, components, variables, response_options)`.
@@ -385,22 +363,10 @@ draft_service_from_json <- function(json) {
       text = pluck(blocks, "text"),
       question_number = rep(NA_character_, length(blocks)),
       printed_number = pluck(blocks, "printed_number"),
-      self_contained = pluck(blocks, "self_contained", NA),
-      condition = pluck(blocks, "condition"),
       parent_question_id = find_parent_questions(parent_by, pluck(blocks, "parent_question"), block_ids),
       checked = pluck(blocks, "checked", FALSE),
       ref = refs(blocks, block_ids),
-      parent_from_skip = pluck(blocks, "parent_from_skip", FALSE),
-      page = pluck(blocks, "page", NA_integer_),
-      # a group's skip, on the answers to the questions in it: the answer, whether every question or any has
-      # to get it, the words printed for it, and where it sends respondents (service_draft_skips.R)
-      skip_condition = pluck(blocks, "skip_condition"),
-      skip_when = pluck(blocks, "skip_when"),
-      skip_instruction = pluck(blocks, "skip_instruction"),
-      skip_to_id = skip_ids(blocks),
-      # a question's stem, which it shares with the questions that differ from it only in who they ask about
-      # ("Has [subject] ever repeated a grade?"); staff link them on the Edit Extraction page (service_normalize.R)
-      stem = pluck(blocks, "stem")
+      page = pluck(blocks, "page", NA_integer_)
     ),
     variables = data.frame(
       id = ids_for("v", seq_along(boxes)),
@@ -413,11 +379,7 @@ draft_service_from_json <- function(json) {
       answer_data_type = pluck(boxes, "answer_data_type"),
       matr_id = pluck(boxes, "matr_id"),
       ref = refs(boxes, ids_for("v", seq_along(boxes))),
-      # a write-in's skip: the answer that skips, the words printed for it, and where it sends respondents
-      unit = normal_unit(pluck(boxes, "unit")),
-      skip_condition = pluck(boxes, "skip_condition"),
-      skip_instruction = pluck(boxes, "skip_instruction"),
-      skip_to_id = skip_ids(boxes)
+      unit = normal_unit(pluck(boxes, "unit"))
     ),
     response_options = data.frame(
       id = ids_for("o", seq_along(choices)),
@@ -425,19 +387,12 @@ draft_service_from_json <- function(json) {
       display_order = as.numeric(seq_along(choices)),
       answer_option = normal_answer(pluck(choices, "answer_option")),
       code_value = pluck(choices, "code_value"), # text: a code can be a letter (a, b, c)
-      respondent_count = pluck(choices, "respondent_count", NA_integer_),
-      skip_instruction = pluck(choices, "skip_instruction"),
-      ref = refs(choices, ids_for("o", seq_along(choices))),
-      # a reviewed copy names where a choice skips to by the block's place in printed order, which is its id
-      skip_to_id = skip_ids(choices)
+      ref = refs(choices, ids_for("o", seq_along(choices)))
     )
   )
   # Rows were numbered in printed order; make that 1, 2, 3... within each parent.
   for (table in names(parent_columns)) draft <- renumber(draft, table)
-  draft <- draft_service_renumber_questions(default_codes(draft))
-  # what the AI returned names where a choice skips to only in words, which are linked now
-  if (!reviewed) draft <- draft_service_link_skips(draft)
-  draft_service_skip_parents(draft)
+  draft_service_renumber_questions(default_codes(draft))
 }
 
 # Every block in the order a respondent meets it.
@@ -474,21 +429,13 @@ pluck <- function(rows, field, missing = NA_character_) {
   )
 }
 
-# Where rows of a reviewed copy skip to: a block by its place in printed order (its id), or the end of the
-# questionnaire (`skip_to_end`).
-skip_ids <- function(rows) {
-  ids <- ids_for("c", pluck(rows, "skip_to", NA_integer_))
-  ids[pluck(rows, "skip_to_end", FALSE)] <- skip_to_end_id
-  ids
-}
-
 ids_for <- function(prefix, positions) {
   ids <- paste0(prefix, positions, recycle0 = TRUE) # no positions, no ids
   ids[is.na(positions)] <- NA
   ids
 }
 
-# The JSON names the question a follow-up hangs off by its number (printed, in the AI's answer, which
+# The JSON names the question a question depends on by its number (printed, in the AI's answer, which
 # can repeat from section to section; its place, in a reviewed copy). The draft keeps that question's
 # id instead, so renumbering never breaks the link. A number means the nearest question before it with
 # that number, or failing that the first one after it (which the checks then point out).
@@ -508,12 +455,10 @@ same_number <- function(numbers, number) {
 # ------ Tables to JSON ---------------------------------------------------------
 # The reviewed copy: the same shape the pipeline returns, plus `schema_version`, and what review adds:
 # `question_number` (its place) and `checked` on each block, `matr_id` on each variable, `code_value` on
-# each choice, `ref` on each row the AI returned, where a choice, write-in or group skips to (`skip_to`: the
-# block's place in printed order, or `skip_to_end`) and whether a question's parent was worked out from a skip. A question names its parent
-# by the parent's place among the questions.
+# each choice and `ref` on each row the AI returned. A question names the question it depends on
+# (`parent_question`) by that question's place among the questions.
 # Fields with nothing in them are left out, as in tests/testthat/fixtures/gna_gold.json.
 draft_service_to_json <- function(draft) {
-  attr(draft, "printed") <- draft_service_printed_order(draft)
   list(
     schema_version = draft_schema_version,
     questionnaire = draft$questionnaire,
@@ -530,23 +475,12 @@ blocks_json <- function(draft, parent_id) {
       page = block$page
     )
     if (is_container(block$component_type)) {
-      json$condition <- block$condition # who answers everything in it
       json$children <- blocks_json(draft, block$id)
-    }
-    if (block$component_type %in% skipping_types) {
-      json$skip_condition <- block$skip_condition
-      json$skip_when <- block$skip_when
-      json$skip_instruction <- block$skip_instruction
-      json <- c(json, skip_json(block$skip_to_id, attr(draft, "printed")))
     }
     if (block$component_type == "Question") {
       json$question_number <- block$question_number
       json$printed_number <- block$printed_number
-      json$self_contained <- block$self_contained
-      json$condition <- block$condition
       json$parent_question <- question_number_of(draft, block$parent_question_id)
-      json$stem <- block$stem
-      if (isTRUE(block$parent_from_skip)) json$parent_from_skip <- TRUE
       json$variables <- boxes_json(draft, block$id)
     }
     json$checked <- block$checked
@@ -570,9 +504,6 @@ boxes_json <- function(draft, component_id) {
     } else {
       json$answer_data_type <- box$answer_data_type
       json$unit <- box$unit
-      json$skip_condition <- box$skip_condition
-      json$skip_instruction <- box$skip_instruction
-      json <- c(json, skip_json(box$skip_to_id, attr(draft, "printed")))
     }
     json$ref <- box$ref
     without_blanks(json)
@@ -585,18 +516,9 @@ choices_json <- function(draft, variable_id) {
       display_order = as.integer(choice$display_order),
       answer_option = choice$answer_option,
       code_value = choice$code_value,
-      respondent_count = choice$respondent_count,
-      skip_instruction = choice$skip_instruction,
-      skip_to = skip_json(choice$skip_to_id, attr(draft, "printed"))$skip_to,
-      skip_to_end = skip_json(choice$skip_to_id, attr(draft, "printed"))$skip_to_end,
       ref = choice$ref
     ))
   })
-}
-
-# Where a row skips to, in the reviewed copy: `skip_to` (a block's place in printed order) or `skip_to_end`.
-skip_json <- function(skip_to_id, printed) {
-  if (identical(skip_to_id, skip_to_end_id)) list(skip_to = NA, skip_to_end = TRUE) else list(skip_to = match(skip_to_id, printed), skip_to_end = NA)
 }
 
 # A JSON object without its empty fields.
@@ -651,7 +573,7 @@ draft_service_next_id <- function(draft, table, n = 1) {
   paste0(id_prefixes[[table]], max(c(0L, used)) + seq_len(n), recycle0 = TRUE)
 }
 
-# A question's place among the questions (1, 2, 3...), which links a follow-up to its parent in the JSON.
+# A question's place among the questions (1, 2, 3...), which links a question to the one it depends on in the JSON.
 # id: Component ids.
 # Returns: Their question numbers, `NA` for a block with none.
 question_number_of <- function(draft, id) {

@@ -44,19 +44,19 @@ test_that("values are compared exactly: punctuation and spaces inside count; cap
   # one never filled
   expect_equal(edits_of(draft_service_update(original(), "components", q1a, "text", "Would you call yourself a nervous person?")), list())
   expect_equal(edits_of(draft_service_update(original(), "components", q1a, "text", " would you call yourself a nervous person? ")), list())
-  expect_equal(edits_of(draft_service_update(original(), "components", q1a, "condition", "")), list())
 })
 
 test_that("a field that was empty or is emptied has no before or no after", {
-  q1a <- q(original(), "1a")
-  with_condition <- draft_service_update(original(), "components", q1a, "condition", "If you smoke")
-  added <- edits_of(with_condition)
-  expect_equal(added[[1]]$field, "condition")
+  variable <- original()$variables$id[original()$variables$component_id == q(original(), "1a")][1]
+  expect_true(is.na(original()$variables$label[original()$variables$id == variable]))
+  with_label <- draft_service_update(original(), "variables", variable, "label", "Nervous")
+  added <- edits_of(with_label)
+  expect_equal(added[[1]]$field, "label")
   expect_null(added[[1]]$before)
-  expect_equal(added[[1]]$after, "if you smoke")
+  expect_equal(added[[1]]$after, "nervous")
 
   # emptied again, it is as the AI returned it
-  expect_equal(edits_of(draft_service_update(with_condition, "components", q1a, "condition", "")), list())
+  expect_equal(edits_of(draft_service_update(with_label, "variables", variable, "label", "")), list())
 })
 
 test_that("variables and choices are named by where they are, and by their row of the AI's answer", {
@@ -148,13 +148,13 @@ test_that("a variable about the respondent is the same, written as a blank, Resp
   expect_null(edit$before)
 })
 
-test_that("a follow-up's parent is compared by which question it is, and shown by its number", {
+test_that("the question a question depends on is compared by which question it is, and shown by its number", {
   q8a <- q(original(), "8a")
   after <- draft_service_update(original(), "components", q8a, "parent_question_id", q(original(), "9"))
   edit <- edits_of(after)[[1]]
   expect_equal(c(edit$field, edit$before, edit$after), c("parent_question_id", "7", "9"))
 
-  # correcting the parent's printed number changes the parent's number, not which question the follow-up follows
+  # correcting that question's printed number changes its number, not which question 8a depends on
   renumbered <- draft_service_update(original(), "components", q(original(), "7"), "printed_number", "7x")
   expect_equal(changes(edits_of(renumbered)), "edited")
   expect_equal(edits_of(renumbered)[[1]]$field, "printed_number")
@@ -167,6 +167,14 @@ test_that("the questionnaire's printed name and abbreviation are compared", {
   reviewed$questionnaire$abbreviation <- "GNA-2"
   edit <- draft_service_review_edits(printed, reviewed)[[1]]
   expect_equal(c(edit$item, edit$field, edit$before, edit$after), c("questionnaire", "abbreviation", "GNA", "GNA-2"))
+})
+
+test_that("only what the AI reads is compared: the fields of each table are the ones it returns", {
+  expect_equal(review_edit_fields$components, c("component_type", "text", "printed_number", "parent_question_id"))
+  expect_equal(review_edit_fields$variables, c("variable_type", "label", "subject", "time_frame", "answer_data_type", "unit"))
+  expect_equal(review_edit_fields$response_options, "answer_option")
+  # every compared field is one the draft has (nothing left from skips, conditions or respondent counts)
+  for (table in names(review_edit_fields)) expect_true(all(review_edit_fields[[table]] %in% names(original()[[table]])), info = table)
 })
 
 test_that("the blocks changed from what the AI read: a field, a variable or choice added, changed or taken out, a block added", {

@@ -42,7 +42,7 @@ test_that("a new block goes after the selected one, or inside a selected section
 
   at_the_end <- draft_service_add_block(draft, "Question", id)
   expect_equal(tail(draft_service_printed_order(at_the_end), 1), id)
-  expect_true(at_the_end$components$self_contained[at_the_end$components$id == id])
+  expect_true(is.na(at_the_end$components$parent_question_id[at_the_end$components$id == id])) # it stands on its own
 })
 
 # The page compares drafts to tell staff whether they have unsaved changes.
@@ -67,7 +67,7 @@ test_that("deleting a section takes its blocks, variables and choices with it, a
   expect_equal(draft_service_children(deleted, "components", NA)$display_order, 1:16)
 })
 
-test_that("questions that followed a deleted question lose the link", {
+test_that("questions that depended on a deleted question lose the link", {
   draft <- gold_draft()
   q7 <- block_numbered(draft, "7")$id
   deleted <- suppressMessages(draft_service_delete(draft, "components", q7))
@@ -100,23 +100,22 @@ test_that("what staff type is stored as the column's type, blanks as NA", {
   )
   # a code is text, so it can be a letter
   expect_identical(draft_service_update(draft, "response_options", "o1", "code_value", " b ")$response_options$code_value[1], "b")
-  expect_false(draft_service_update(draft, "components", "c3", "self_contained", "FALSE")$components$self_contained[3])
-  expect_true(is.na(draft_service_update(draft, "components", "c3", "condition", "  ")$components$condition[3]))
+  expect_true(is.na(draft_service_update(draft, "components", "c3", "printed_number", "  ")$components$printed_number[3]))
+  expect_false(draft_service_update(draft, "components", "c3", "checked", "FALSE")$components$checked[3])
   # words are kept in lower case, however they are typed
   expect_identical(draft_service_update(draft, "components", "c3", "text", "Are You a WORRIER?")$components$text[3], "are you a worrier?")
-  expect_identical(draft_service_update(draft, "components", "c3", "condition", "If Yes")$components$condition[3], "if yes")
   expect_identical(draft_service_update(draft, "variables", "v1", "label", "Child A")$variables$label[1], "child a")
-  expect_identical(draft_service_update(draft, "variables", "v1", "skip_condition", "None")$variables$skip_condition[1], "none")
-  expect_identical(
-    draft_service_update(draft, "response_options", "o1", "skip_instruction", "Go to Question 9")$response_options$skip_instruction[1],
-    "go to question 9"
-  )
   expect_identical(draft_service_update(draft, "variables", "v1", "matr_id", "Q1A")$variables$matr_id[1], "Q1A") # not words
   expect_identical(
     draft_service_update(draft, "variables", "v1", "time_frame", "Over the past twelve months")$variables$time_frame[1],
     "in the past 12 months"
   )
   expect_error(draft_service_update(draft, "components", "c3", "id", "c9"), "can't be changed")
+  # the fields that went with skips, conditions and respondent counts can't be typed into
+  for (gone in c("self_contained", "condition", "skip_instruction", "stem")) {
+    expect_error(draft_service_update(draft, "components", "c3", gone, "x"), "can't be changed", info = gone)
+  }
+  expect_error(draft_service_update(draft, "response_options", "o1", "respondent_count", "3"), "can't be changed")
 })
 
 test_that("a block's kind decides what it can hold", {
@@ -150,14 +149,12 @@ test_that("every choice is printed: there is no field to say one isn't, and a lo
   expect_error(draft_service_update(draft, "response_options", "o1", "printed", "FALSE"), "can't be changed")
   expect_false("printed_label" %in% names(draft$response_options)) # a choice is its standard wording only
   draft <- draft_service_update(draft, "response_options", "o1", "answer_option", " Yes, OFTEN? ")
-  draft <- draft_service_update(draft, "response_options", "o1", "skip_instruction", "Go to Q5")
   choice <- draft$response_options[draft$response_options$id == "o1", ]
   expect_equal(choice$answer_option, "yes [often]") # kept as the database keeps it
-  expect_equal(choice$skip_instruction, "go to q5")
 
   # a draft saved with a choice that wasn't printed (a lone check box's "No") opens without it
   json <- list(components = list(list(
-    component_type = "Question", text = "All of my life", question_number = "3", self_contained = TRUE,
+    component_type = "Question", text = "All of my life", question_number = "3",
     variables = list(list(variable_type = "closed_ended", response_options = list(
       list(answer_option = "Yes", printed = TRUE), list(answer_option = "No", printed = FALSE)
     )))
@@ -288,14 +285,14 @@ test_that("a new variable copying a write-in has no choices to copy", {
 })
 
 # ------ The edges of the rules above ----------------------------------------------------------
-test_that("a block can't be given no kind, and an instruction made a question can stand on its own", {
+test_that("a block can't be given no kind, and an instruction made a question stands on its own", {
   draft <- gold_draft()
   expect_error(draft_service_update(draft, "components", "c3", "component_type", ""), "Pick a kind of block.")
 
   changed <- draft_service_update(draft, "components", "c2", "component_type", "Question")
   block <- component(changed, "c2")
   expect_equal(block$component_type, "Question")
-  expect_true(block$self_contained) # a question is standalone until it follows another
+  expect_true(is.na(block$parent_question_id)) # until staff pick the question it depends on
 })
 
 test_that("a box is either choices or a write-in, and picking what it already is changes nothing", {
@@ -325,9 +322,7 @@ test_that("changing a checked block's words takes the check off that block, and 
 
 test_that("each field of a block, when changed, takes its check off", {
   before <- checked_gold()
-  edits <- list(
-    list("printed_number", "9z"), list("self_contained", "FALSE"), list("condition", "If yes to 1a"), list("parent_question_id", "c4")
-  )
+  edits <- list(list("printed_number", "9z"), list("parent_question_id", "c4"))
   for (edit in edits) {
     after <- draft_service_uncheck_edited(before, suppressMessages(draft_service_update(before, "components", "c5", edit[[1]], edit[[2]])))
     expect_false("c5" %in% checked_blocks(after), info = edit[[1]])
@@ -397,10 +392,9 @@ test_that("a block moved into another section loses its check, but one moved amo
   expect_equal(checked_blocks(draft_service_uncheck_edited(before, elsewhere)), c("c1", "c2", "c4", "c5"))
 })
 
-test_that("deleting a question takes the check off the follow-ups that lose it", {
+test_that("deleting a question takes the check off the questions that depended on it", {
   draft <- with_checked(gold_draft(), c("c3", "c4", "c5"))
   q1b <- block_numbered(draft, "1b")$id
-  draft <- suppressMessages(draft_service_update(draft, "components", q1b, "self_contained", "FALSE"))
   draft <- suppressMessages(draft_service_update(draft, "components", q1b, "parent_question_id", "c3"))
   draft <- with_checked(draft, c("c3", "c4", "c5"))
   after <- draft_service_uncheck_edited(draft, suppressMessages(draft_service_delete(draft, "components", "c3")))
@@ -475,18 +469,16 @@ test_that("a question worded like a recorded one gets its variables' MATR IDs, b
 })
 
 test_that("a recorded questionnaire's MATR IDs are listed with their question's words, ready to fill a draft", {
-  # as push_model_existing() reads it: a variable is its question's placement's
-  existing <- list(
-    placements = data.frame(placement_id = c(10, 12), component_id = c(100, 102)),
-    components = data.frame(component_id = c(100, 102), component_type_id = c(1, 2), text = c("Part A", "Do you smoke?")),
-    variables = data.frame(variable_key = c(900, 901), placement_id = c(12, 12), matr_id = c("SM1", "SM2"), display_order = c(2, 1))
+  # as extraction_service_recorded() reads them: placements with their component embedded, and the variables
+  placements <- list(
+    list(placement_id = 10, component = list(kind = "Section", text = "part a")),
+    list(placement_id = 12, component = list(kind = "Question", text = "do you smoke?"))
   )
-  printed <- extraction_service_printed(existing)
-  expect_equal(printed$matr_ids, data.frame(text = c("Do you smoke?", "Do you smoke?"), matr_id = c("SM1", "SM2"), display_order = c(2, 1)))
-  expect_equal(nrow(printed$texts), 0) # no kinds of block given, so no words to offer
-  types <- data.frame(component_type_id = 1:2, name = c("Section", "Question"))
-  expect_equal(extraction_service_printed(existing, types)$texts$component_type, c("Section", "Question"))
-  expect_equal(nrow(extraction_service_printed(NULL)$matr_ids), 0)
+  variables <- data.frame(variable_key = c(900, 901), placement_id = c(12, 12), matr_id = c("SM1", "SM2"), display_order = c(2, 1))
+  printed <- extraction_service_printed(placements, variables)
+  expect_equal(printed$matr_ids, data.frame(text = c("do you smoke?", "do you smoke?"), matr_id = c("SM1", "SM2"), display_order = c(2, 1)))
+  expect_equal(printed$texts, data.frame(component_type = c("Section", "Question"), text = c("part a", "do you smoke?")))
+  expect_equal(nrow(extraction_service_printed(list(), variables)$matr_ids), 0)
 })
 
 # ------ Words offered as a block's words are typed ------------------------------------------------------
@@ -574,7 +566,7 @@ test_that("a group has no words: one with words can't become a group, and a grou
   expect_error(draft_service_update(draft, "components", group, "component_type", "Question"), "Move the blocks out")
 })
 
-test_that("the question a question follows is picked from its list or typed as a number: the nearest one before it", {
+test_that("the question a question depends on is picked from its list or typed as a number: the nearest one before it", {
   draft <- gold_draft()
   q8a <- block_numbered(draft, "8a")$id
   q7 <- block_numbered(draft, "7")$id
@@ -655,8 +647,8 @@ test_that("a question's variables share their choices when they all offer the sa
   expect_equal(draft_service_shared_choices(draft, block_numbered(draft, "1a")$id), character()) # one variable shares nothing
 
   first <- draft_service_children(draft, "response_options", shared[1])$id
-  changed <- draft_service_update_shared(draft, shared, first[2], "skip_instruction", "Go to 4")
-  expect_equal(unique(changed$response_options$skip_instruction[changed$response_options$variable_id %in% shared & changed$response_options$display_order == 2]), "go to 4")
+  changed <- draft_service_update_shared(draft, shared, first[2], "code_value", "9")
+  expect_equal(unique(changed$response_options$code_value[changed$response_options$variable_id %in% shared & changed$response_options$display_order == 2]), "9")
   expect_equal(draft_service_shared_choices(changed, q), shared) # still the same as each other
 
   added <- draft_service_add_choice_shared(draft, shared)

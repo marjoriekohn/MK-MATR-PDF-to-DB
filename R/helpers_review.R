@@ -125,9 +125,9 @@ field_problem_attributes <- function(problems, table, id, field) {
 # problems: The checks' problems, from `draft_service_check()`, to outline it if it is at fault.
 # Returns: A UI element; its changes are reported through `data-field`.
 field_text <- function(table, row, field, placeholder = NULL, list = NULL,
-                       type = "text", label = NULL, problems = NULL) {
+                       type = "text", label = NULL, problems = NULL, class = NULL) {
   tags$input(
-    type = type, class = c("form-control form-control-sm", field_problem_class(problems, table, row$id, field)),
+    type = type, class = c("form-control form-control-sm", class, field_problem_class(problems, table, row$id, field)),
     value = blank_if_na(row[[field]]), placeholder = placeholder, list = list, `aria-label` = label,
     !!!field_problem_attributes(problems, table, row$id, field),
     !!!field_attributes(table, row, field)

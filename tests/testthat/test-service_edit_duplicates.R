@@ -27,7 +27,6 @@ test_that("a respondent type is the same when its age range is, and only when an
   expect_length(found_for("respondent_type", respondent_type__minimum_age = "5", respondent_type__maximum_age = "16"), 0) # not the same range
   # no age at all: two such types are told apart by their names, so nothing is flagged
   expect_length(found_for("respondent_type", respondent_type__name = "Adult"), 0)
-  # the oldest age on its own counts too
   expect_length(found_for("respondent_type", respondent_type__maximum_age = "17"), 0)
 })
 
@@ -58,23 +57,23 @@ test_that("a study is the same only within its registry, a questionnaire only wi
   expect_length(found_for("questionnaire", questionnaire__name = first$name, questionnaire__study_id = as.character(other_study)), 0)
 })
 
-test_that("a block or a question with exactly these words is flagged", {
-  components <- fixture_table("component")
-  words <- components$text[!is.na(components$text)][1]
-  found <- found_for("component", component__text = words)
-  expect_equal(found[[1]]$why, "A block with exactly these words")
-  question_ids <- fixture_table("question")$component_id
-  question_words <- components$text[components$component_id %in% question_ids][1]
-  expect_equal(found_for("question", question__text = question_words)[[1]]$why, "A question with exactly these words")
-  # a block's words that are only used by a section aren't a duplicate question
-  expect_length(found_for("question", question__text = "Words nobody uses"), 0)
+test_that("a component of a kind with exactly these words is flagged, and a tag of a kind with this name", {
+  found <- found_for("component", component__kind = "Question", component__text = "Do you now smoke cigarettes?")
+  expect_equal(found[[1]]$why, "A block of this kind with exactly these words")
+  expect_equal(found[[1]]$cards$title, "do you now smoke cigarettes?")
+  expect_length(found_for("component", component__kind = "Note", component__text = "Do you now smoke cigarettes?"), 0)
+  expect_length(found_for("component", component__kind = "Question", component__text = "Words nobody uses"), 0)
+  found <- found_for("tag", tag__kind = "time frame", tag__name = "during the last 12 months")
+  expect_equal(found[[1]]$why, "A tag of this kind with this name")
+  expect_equal(found[[1]]$cards$title, "in the past 12 months")
+  expect_length(found_for("tag", tag__kind = "unit", tag__name = "in the past 12 months"), 0)
+  found <- found_for("answer_option", answer_option__standardized_label = "Yes?")
+  expect_equal(found[[1]]$cards$title, "yes")
 })
 
-test_that("a kind with no rule has nothing to say, and a study is checked by its own fields", {
+test_that("a kind with no rule has nothing to say", {
   expect_length(found_for("wave", wave__name = "Wave 1"), 0) # a wave's name is checked by its own field
-  form <- form_for("study", "add", study__name = "Adult Health Study", study__registry_id = "1")
-  found <- edit_service_duplicates(form$entity, form$snap, form$fields, form$values)
-  expect_true("A study with this name" %in% vapply(found, function(match) match$why, character(1)))
+  expect_length(found_for("placement", scope = "1", placement__kind = "Section", placement__text = "mood"), 0) # a block shares the words
 })
 
 test_that("what is there is shown the way a card shows it, in the warning", {

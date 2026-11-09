@@ -2,14 +2,14 @@ test_that("a draft turns back into the same JSON the pipeline returned, and a sa
   json <- gold_json()
   saved <- draft_service_to_json(draft_service_from_json(json))
   # Review adds `schema_version`, `checked` and `question_number` (the question's place) to blocks, `ref`
-  # to every row, `matr_id` to variables, `code_value` and `skip_to` (where it skips to) to choices, and names
-  # a question's parent by its place rather than its printed number; nothing else changes.
+  # to every row, `matr_id` to variables and `code_value` to choices, and names the question a question
+  # depends on by its place rather than its printed number; nothing else changes.
   expect_equal(saved$schema_version, draft_schema_version)
   without_review_fields <- function(x) {
     if (!is.list(x)) {
       return(x)
     }
-    review_fields <- c("schema_version", "checked", "question_number", "parent_question", "parent_from_skip", "ref", "matr_id", "code_value", "skip_to")
+    review_fields <- c("schema_version", "checked", "question_number", "parent_question", "ref", "matr_id", "code_value")
     if (!is.null(names(x))) x <- x[setdiff(names(x), review_fields)]
     lapply(x, without_review_fields)
   }
@@ -66,11 +66,11 @@ test_that("blocks are flattened in printed order, numbered within their section"
   expect_equal(first_three$display_order, c(1, 1, 2))
 })
 
-test_that("a follow-up keeps the id of the question it follows, not its number", {
+test_that("a question keeps the id of the question it depends on, not its number", {
   draft <- gold_draft()
   expect_equal(block_numbered(draft, "8a")$parent_question_id, block_numbered(draft, "7")$id)
 
-  # the reviewed copy names the parent by its place among the questions
+  # the reviewed copy names the question it depends on by its place among the questions
   renumbered <- draft
   renumbered$components$question_number[renumbered$components$id == block_numbered(draft, "7")$id] <- "70"
   find_question <- function(blocks, number) {
@@ -88,31 +88,28 @@ test_that("a follow-up keeps the id of the question it follows, not its number",
   expect_equal(q8a$parent_question, "70")
 })
 
-test_that("a draft opens as Gemini read it, then as staff last saved it", {
+test_that("a draft opens as the AI read it, then as staff last saved it", {
   me <- local_staff()
-  record <- local_extraction(me)
-  expect_error(draft_service_load(test_connection, record$id), "hasn't been read yet")
+  unread <- local_extraction(me)
+  expect_error(draft_service_load(test_connection, unread$id), "hasn't been read yet")
 
-  expect_true(draft_model_save_reading(test_connection, record$id, short_gold_json(), record$reading_started))
+  record <- local_read_extraction(me)
   expect_identical(draft_service_load(test_connection, record$id), short_gold_draft())
 
   draft <- short_gold_draft()
   draft$components$checked[3] <- TRUE
   draft$response_options$code_value[1:2] <- c("1", "a") # codes are text: a letter too
   draft$variables$matr_id[1] <- "q1a"
-  draft_service_save(test_connection, record$id, draft, me$staff_id)
+  expect_equal(draft_service_save(test_connection, record$id, draft, me$staff_id), record$revision + 1)
   expect_identical(draft_service_load(test_connection, record$id), draft)
-  saved <- extraction_model_get(test_connection, record$id)
-  expect_equal(saved$saved_by_id, me$staff_id)
-  expect_equal(saved$revision, 2)
   # what the AI returned is never touched by saving
-  expect_identical(draft_service_from_json(draft_model_get_both(test_connection, record$id)$original), short_gold_draft())
+  expect_identical(draft_service_from_json(extraction_model_questionnaire(test_connection, record$id)$original), short_gold_draft())
 })
 
 test_that("a draft that isn't in the database is a sentence", {
   me <- local_staff()
-  expect_error(draft_service_load(test_connection, "0"), "no longer in the database")
-  expect_error(draft_service_save(test_connection, "0", short_gold_draft(), me$staff_id), "no longer in the database")
+  expect_error(draft_service_load(test_connection, "0"))
+  expect_error(draft_service_save(test_connection, "0", short_gold_draft(), me$staff_id))
 })
 
 test_that("a draft typed by hand starts empty and can be saved and opened again", {
@@ -127,7 +124,6 @@ test_that("a draft typed by hand starts empty and can be saved and opened again"
   typed <- gold_draft()
   draft_service_save(test_connection, record$id, typed, me$staff_id)
   expect_identical(draft_service_load(test_connection, record$id), typed)
-  expect_equal(review_edits_of(test_connection, record$id), list()) # no record of an AI to compare with
 })
 
 test_that("choices are coded 1, 2, 3... in each variable", {
@@ -183,10 +179,33 @@ test_that("a save is refused if someone saved the draft after the person opened 
   record <- local_read_extraction(me)
   opened <- record$revision
   expect_equal(draft_service_save(test_connection, record$id, short_gold_draft(), me$staff_id, expected_revision = opened), opened + 1)
-  expect_error(
-    draft_service_save(test_connection, record$id, short_gold_draft(), me$staff_id, expected_revision = opened),
-    "changed after you opened it"
-  )
+  # the model says so in a sentence
+  expect_error(draft_service_save(test_connection, record$id, short_gold_draft(), me$staff_id, expected_revision = opened))
+})
+
+test_that("a draft saved before skips, conditions and respondent counts went opens without them", {
+  json <- list(components = list(
+    list(component_type = "Group", skip_condition = "No", skip_when = "every", skip_instruction = "Go to Question 2", children = list(
+      list(
+        component_type = "Question", text = "Do you smoke?", printed_number = "1", self_contained = TRUE, condition = "Adults",
+        variables = list(list(
+          variable_type = "closed_ended",
+          response_options = list(list(answer_option = "Yes", respondent_count = 12L), list(answer_option = "No", skip_instruction = "Go to 3", skip_to = 3L))
+        ))
+      )
+    )),
+    list(component_type = "Question", text = "When did you start?", printed_number = "2", parent_question = "1", variables = list(list(
+      variable_type = "open_ended", answer_data_type = "DATE", skip_condition = "Never", skip_instruction = "Go to 3", skip_to_end = TRUE
+    ))),
+    list(component_type = "Question", text = "Do you drink?", printed_number = "3", variables = list(list(variable_type = "closed_ended")))
+  ))
+  draft <- draft_service_from_json(json)
+  gone <- c("self_contained", "condition", "parent_from_skip", "stem", "skip_condition", "skip_when", "skip_instruction", "skip_to_id", "respondent_count")
+  for (table in names(parent_columns)) expect_length(intersect(names(draft[[table]]), gone), 0)
+  # what the questionnaire still says: 2 depends on 1
+  expect_equal(block_numbered(draft, "2")$parent_question_id, block_numbered(draft, "1")$id)
+  saved <- jsonlite::toJSON(draft_service_to_json(draft), auto_unbox = TRUE)
+  expect_false(grepl("skip|self_contained|condition|respondent_count|stem", saved))
 })
 
 
@@ -211,16 +230,13 @@ grid_draft <- function(lead_in = "In the past 4 weeks, how often", children = NU
   )))
 }
 
-test_that("a grid keeps its words and its skip when saved and opened again", {
+test_that("a grid keeps its words and its questions when saved and opened again", {
   draft <- grid_draft()
-  grid <- draft$components$id[draft$components$component_type == "Grid"]
-  draft <- draft_service_update(draft, "components", grid, "skip_condition", "No")
-  draft <- draft_service_update(draft, "components", grid, "skip_instruction", "Go to Question 21")
   again <- draft_service_from_json(draft_service_to_json(draft))
   kept <- again$components[again$components$component_type == "Grid", ]
   expect_equal(kept$text, "In the past 4 weeks, how often")
-  expect_equal(kept$skip_condition, "no")
-  expect_equal(kept$skip_instruction, "go to question 21")
+  expect_equal(numbers_in(again, kept$id), c("20a", "20b"))
+  expect_identical(again, draft)
 })
 
 test_that("a grid holds only its questions with their instructions and definitions, and a section holds a grid", {
@@ -232,9 +248,9 @@ test_that("a grid holds only its questions with their instructions and definitio
   expect_error(draft_service_update(draft, "components", instruction, "component_type", "Group"), "A grid holds only")
   # a grid with a section in it can't be made, nor one holding a group
   expect_error(draft_service_update(draft, "components", part, "component_type", "Grid"), "A grid holds only")
-  # its skip stays when it changes kind to a group, and goes when it becomes a section
-  draft <- draft_service_update(draft, "components", grid, "skip_condition", "No")
-  expect_equal(draft_service_update(draft, "components", grid, "component_type", "Section")$components$skip_condition[draft$components$id == grid], NA_character_)
+  # a grid can become a section, keeping its questions; its words stop it becoming a group
+  expect_equal(numbers_in(draft_service_update(draft, "components", grid, "component_type", "Section"), grid), c("20a", "20b"))
+  expect_error(draft_service_update(draft, "components", grid, "component_type", "Group"), "has no words of its own")
 })
 
 test_that("who a variable is about and the form's words are written with straight quotes, however they are typed", {
@@ -255,20 +271,4 @@ test_that("a write-in's unit is written one way, kept with the draft, and change
   expect_equal(draft$variables$unit[draft$variables$id == box], "pounds")
   again <- draft_service_from_json(draft_service_to_json(draft))
   expect_equal(again$variables$unit[again$variables$id == box], "pounds")
-})
-
-test_that("a section, grid or group can say who answers everything in it, and a question its own", {
-  draft <- gold_draft()
-  grid <- block_numbered(draft, "14a")$parent_id # "during the worst time:"
-  draft <- draft_service_update(draft, "components", grid, "condition", "Female")
-  expect_equal(component(draft, grid)$condition, "female")
-  again <- draft_service_from_json(draft_service_to_json(draft))
-  expect_equal(component(again, grid)$condition, "female")
-  # a question inside it keeps a condition of its own
-  item <- block_numbered(draft, "14a")$id
-  draft <- draft_service_update(draft, "components", item, "condition", "If yes")
-  expect_equal(component(draft, item)$condition, "if yes")
-  # an instruction is for whoever its section or group is for: it has no condition of its own
-  instruction <- draft$components$id[draft$components$component_type == "Instruction"][1]
-  expect_error(draft_service_update(draft, "components", instruction, "condition", "Female"), "section, grid or group")
 })

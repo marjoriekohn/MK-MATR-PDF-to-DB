@@ -1,8 +1,7 @@
 # The Home page's server.
-# Counts, for the banner, this person's work in progress, the change requests waiting for them and the changes
-# added so far, read again each time the page is shown; their extraction drafts are the ones the site shares,
-# which `server.R` reads again as the page opens. The banner's buttons and the cards under "What you can do
-# here" open the pages they name.
+# Counts, for the banner: this person's extraction drafts in progress and the changes added so far, read again
+# each time the page is shown. The drafts are the ones the site shares, which `server.R` reads again as the page
+# opens. The banner's buttons and the cards under "What you can do here" open the pages they name.
 # extractions: The extraction drafts as `server.R` shares them: `all()` is a reactive list of records.
 # active: A reactive that says whether this page is the one on screen, or `NULL`. Coming
 #   back to the page reads its counts again, since the other pages change them.
@@ -15,30 +14,18 @@ home_server <- function(id, connection, me, show_page, extractions, active = NUL
       observeEvent(active(), if (isTRUE(active())) refreshed(refreshed() + 1L), ignoreInit = TRUE)
     }
 
+    work <- reactive(home_service_my_work(extractions$all(), me))
     # A read that fails leaves its count a dash, not the whole page.
-    read <- function(what, fn) {
-      tryCatch(fn(connection), error = function(problem) {
-        showNotification(paste0("Couldn't read the ", what, ": ", conditionMessage(problem)), type = "error", id = "database_problem")
-        NULL
-      })
-    }
-
-    edits <- reactive({
-      refreshed()
-      read("saved edits", edit_service_get_all)
-    })
-    work <- reactive(home_service_my_work(extractions$all(), edits() %||% list(), me))
-    waiting <- reactive({
-      refreshed()
-      read("change requests", function(connection) home_service_waiting_for_me(connection, me))
-    })
     changes <- reactive({
       refreshed()
-      read("Edit History", home_service_changes_added)
+      tryCatch(home_service_changes_added(connection), error = function(problem) {
+        showNotification(paste0("Couldn't read the Edit History: ", conditionMessage(problem)), type = "error", id = "database_problem")
+        NULL
+      })
     })
 
     # ------ OUTPUT ------------------------------------------------------------
-    output$stats <- renderUI(home_stats(work(), waiting(), changes()))
+    output$stats <- renderUI(home_stats(work(), changes()))
 
     # ------ UI ----------------------------------------------------------------
     # The banner's buttons, then the cards under "What you can do here"
@@ -47,6 +34,7 @@ home_server <- function(id, connection, me, show_page, extractions, active = NUL
     observeEvent(input$go_extraction, show_page("extraction"))
     observeEvent(input$go_drafts, show_page("drafts"))
     observeEvent(input$go_metadata, show_page("make_edit"))
-    observeEvent(input$go_requests, show_page("change_requests"))
+    observeEvent(input$go_history, show_page("edit_history"))
+    observeEvent(input$go_monitor, show_page("ai_monitor"))
   })
 }

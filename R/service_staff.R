@@ -2,7 +2,7 @@
 # Staff sign in to their Supabase Auth account (model_auth.R) with its password or with an
 # emailed link; the email of that account has to be the email of an active row in the staff
 # table, which says who they are for the site and their role. The rest of the site gets `me`, list(staff_id, name, role,
-# email).
+# email). Anyone active may do everything the site does: push, apply, empty and delete.
 #
 # While developing, STAFF_EMAIL (in .env) signs the site in as that staff member without a
 # link. It only works where the site is opened on this computer (site_is_local()), so a site that serves real use
@@ -134,14 +134,4 @@ staff_service_change_password <- function(auth, tokens, password, again) {
 staff_service_sign_out <- function(auth, tokens) {
   if (!is.null(tokens$access_token)) try(auth_model_sign_out(auth, tokens$access_token), silent = TRUE)
   invisible()
-}
-
-# The staff a request can be sent to for review.
-# Active staff other than the person asking.
-# Returns: A named character vector for a drop-down: the names are shown, the values are the
-#   staff ids; empty if there is no one else.
-staff_service_reviewers <- function(connection, me) {
-  staff <- staff_model_active(connection)
-  staff <- staff[staff$staff_id != me$staff_id, , drop = FALSE]
-  stats::setNames(as.character(staff$staff_id), staff$name)
 }

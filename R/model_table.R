@@ -1,5 +1,5 @@
-# ------ The live tables, read whole ------------------------------------------------
-# The edit pages need to see what a change reaches, so they read whole tables
+# ------ The catalog's tables, read whole ------------------------------------------------
+# The Metadata page needs to see what a change reaches, so it reads whole tables
 # rather than the few columns the extraction pages pick. Each table is listed
 # here with its columns and what kind of value each holds, and the columns
 # that identify a row (`key`). `connection` is the MATR database
@@ -11,13 +11,11 @@
 #   text    words; question numbers and MATR IDs are text too, since they can
 #           hold letters (2a, AH25LF)
 #   date    a day, as YYYY-MM-DD
-#   flag    TRUE or FALSE
 #
-# `derived` lists values the database works out when a row is read (an option set's name, from its
-# choices): they are read like columns, but never written.
+# `derived` lists values the database works out when a row is read (a question's normal_text): they are
+# read like columns, but never written.
 #
-# docs/sql/1_setup.sql builds the tables, and docs/database_tables.md lists
-# their columns as the live database describes them.
+# sql/1_tables.sql builds the tables, and docs/database_design.md says why they look the way they do.
 
 database_tables <- list(
   registry = list(
@@ -53,41 +51,34 @@ database_tables <- list(
       name = "text", abbreviation = "text", participant_count = "number", description = "text"
     )
   ),
+  # A wave keeps the files it was extracted from, so Re-extract can read them again (pushed with the extraction;
+  # not typed on a form).
   wave = list(
     key = "wave_id", order_by = "wave_id",
     columns = c(
       wave_id = "id", questionnaire_id = "id", name = "text",
-      respondent_count = "number", administered_date = "date"
+      respondent_count = "number", administered_date = "date",
+      pdf_sha256 = "text", pdf_name = "text", supplement_name = "text", supplement_sha256 = "text", supplement_text = "text"
     )
   ),
-  component_type = list(
-    key = "component_type_id", order_by = "component_type_id",
-    columns = c(component_type_id = "id", name = "text", description = "text")
+  # The PDFs uploaded to the site, once each by their SHA-256: Make an edit lists them (and only shows them;
+  # nothing about a PDF can change).
+  pdf_file = list(
+    key = "pdf_sha256", order_by = "pdf_sha256",
+    columns = c(pdf_sha256 = "text", pdf_pages = "number", pdf_bytes = "number")
   ),
+  # One wording, kept once however many questionnaires print it. normal_text is worked out by the database for a
+  # Question (private.normal_question()).
   component = list(
     key = "component_id", order_by = "component_id",
-    columns = c(component_id = "id", component_type_id = "id", text = "text")
+    columns = c(component_id = "id", kind = "text", text = "text"),
+    derived = c(normal_text = "text")
   ),
-  questionnaire_component = list(
+  placement = list(
     key = "placement_id", order_by = c("questionnaire_id", "placement_id"),
     columns = c(
       placement_id = "id", questionnaire_id = "id", component_id = "id", parent_placement_id = "id",
-      display_order = "number", condition = "text", skip_to_placement_id = "id"
-    )
-  ),
-  question = list(
-    key = "component_id", order_by = "component_id",
-    columns = c(component_id = "id", question_stem_id = "id")
-  ),
-  question_stem = list(
-    key = "question_stem_id", order_by = "text",
-    columns = c(question_stem_id = "id", text = "text")
-  ),
-  questionnaire_question = list(
-    key = "placement_id", order_by = c("questionnaire_id", "placement_id"),
-    columns = c(
-      placement_id = "id", questionnaire_id = "id", component_id = "id", parent_question_placement_id = "id",
-      self_contained = "flag", condition = "text"
+      display_order = "number", depends_on_placement_id = "id"
     )
   ),
   wave_question = list(
@@ -98,38 +89,37 @@ database_tables <- list(
       question_number = "text", printed_number = "text"
     )
   ),
-  category = list(
-    key = "mesh_id", order_by = "term",
-    columns = c(mesh_id = "text", term = "text")
-  ),
-  question_category = list(
-    key = c("component_id", "mesh_id"), order_by = c("component_id", "mesh_id"),
-    columns = c(component_id = "id", mesh_id = "text")
+  variable = list(
+    key = "variable_key", order_by = "variable_key",
+    columns = c(
+      variable_key = "id", questionnaire_id = "id", placement_id = "id",
+      matr_id = "text", display_order = "number", label = "text",
+      variable_type = "text", answer_data_type = "text"
+    )
   ),
   answer_option = list(
     key = "answer_option_id", order_by = "standardized_label",
     columns = c(answer_option_id = "id", standardized_label = "text")
   ),
-  answer_option_alias = list(
-    key = "alias", order_by = "alias",
-    columns = c(alias = "text", answer_option_id = "id")
+  response_option = list(
+    key = c("variable_key", "answer_option_id"), order_by = c("variable_key", "answer_option_id"),
+    columns = c(variable_key = "id", answer_option_id = "id", display_order = "number", code_value = "text")
   ),
-  subject = list(
-    key = "subject_id", order_by = "name",
-    columns = c(subject_id = "id", name = "text")
+  tag = list(
+    key = "tag_id", order_by = c("kind", "name"),
+    columns = c(tag_id = "id", kind = "text", name = "text")
   ),
-  time_frame = list(
-    key = "time_frame_id", order_by = "name",
-    columns = c(time_frame_id = "id", name = "text")
+  placement_tag = list(
+    key = c("placement_id", "tag_id"), order_by = c("placement_id", "tag_id"),
+    columns = c(placement_id = "id", tag_id = "id")
   ),
-  option_set = list(
-    key = "option_set_id", order_by = "name",
-    columns = c(option_set_id = "id"),
-    derived = c(name = "text") # its choices in their order (public.name(option_set))
+  variable_tag = list(
+    key = c("variable_key", "tag_id"), order_by = c("variable_key", "tag_id"),
+    columns = c(variable_key = "id", tag_id = "id")
   ),
-  answer_option_set = list(
-    key = c("option_set_id", "answer_option_id"), order_by = c("option_set_id", "display_order"),
-    columns = c(option_set_id = "id", answer_option_id = "id", display_order = "number")
+  response_option_tag = list(
+    key = c("variable_key", "answer_option_id", "tag_id"), order_by = c("variable_key", "answer_option_id", "tag_id"),
+    columns = c(variable_key = "id", answer_option_id = "id", tag_id = "id")
   ),
   measurement_scale = list(
     key = "scale_id", order_by = "name",
@@ -140,82 +130,29 @@ database_tables <- list(
   ),
   question_scale = list(
     key = c("scale_id", "component_id"), order_by = c("scale_id", "component_id"),
-    columns = c(
-      scale_id = "id", component_id = "id", expected_option_set_id = "id",
-      item_number = "text"
-    )
-  ),
-  variable = list(
-    key = "variable_key", order_by = "variable_key",
-    columns = c(
-      variable_key = "id", questionnaire_id = "id", placement_id = "id",
-      matr_id = "text", display_order = "number", label = "text",
-      subject_id = "id", time_frame_id = "id"
-    )
-  ),
-  open_ended = list(
-    key = "variable_key", order_by = "variable_key",
-    columns = c(variable_key = "id", answer_data_type = "text", unit = "text", skip_to_placement_id = "id")
-  ),
-  closed_ended = list(
-    key = "variable_key", order_by = "variable_key",
-    columns = c(variable_key = "id", option_set_id = "id")
-  ),
-  response_option = list(
-    key = c("variable_key", "answer_option_id"), order_by = c("variable_key", "answer_option_id"),
-    columns = c(
-      variable_key = "id", answer_option_id = "id", display_order = "number",
-      code_value = "text",
-      skip_instruction = "text", skip_to_placement_id = "id", skip_to_end = "flag"
-    )
-  ),
-  response_option_count = list(
-    key = c("wave_id", "variable_key", "answer_option_id"), order_by = c("wave_id", "variable_key", "answer_option_id"),
-    columns = c(wave_id = "id", variable_key = "id", answer_option_id = "id", respondent_count = "number")
-  ),
-  # The PDFs extractions were read from, and the extractions that name them: Make an edit lists the PDFs (and
-  # only shows them; nothing about a PDF can change). Only the columns that say which draft is which.
-  pdf_file = list(
-    key = "pdf_sha256", order_by = "pdf_sha256",
-    columns = c(pdf_sha256 = "text", pdf_pages = "number", pdf_bytes = "number")
-  ),
-  # ... and the waves extracted from them, which keep their PDFs' names after the drafts are gone
-  wave_file = list(
-    key = "wave_id", order_by = "wave_id",
-    columns = c(
-      wave_id = "id", pdf_sha256 = "text", pdf_name = "text", supplement_sha256 = "text", supplement_name = "text"
-    )
-  ),
-  extracted_draft = list(
-    key = "draft_id", order_by = "draft_id",
-    columns = c(draft_id = "id", method = "text", pdf_name = "text", pdf_sha256 = "text")
-  ),
-  draft = list(
-    key = "draft_id", order_by = "draft_id",
-    columns = c(draft_id = "id", kind = "text", status = "text")
+    columns = c(scale_id = "id", component_id = "id", item_number = "text")
   )
 )
 
 # What is read of a table: its columns, then what the database works out.
 table_read_columns <- function(spec) c(spec$columns, spec$derived)
 
-# Read a whole table as the edit pages see it.
+# Read a whole table as the Metadata page sees it.
 # Every row of `table`, with every column listed in `database_tables`, as the kinds
-# described above (ids and numbers as numbers, flags as logical, the rest as text).
+# described above (ids and numbers as numbers, the rest as text).
 # table: One of `names(database_tables)`.
-# filters: Only the rows that match, as for `database_model_get()`; the pages read whole tables.
+# filters: Only the rows that match, as for `database_model_get()`; the page reads whole tables.
 # Returns: A data frame; an empty table comes back with its columns and no rows. An
-#   error if the pages don't know the table.
+#   error if the page doesn't know the table.
 table_model_get <- function(connection, table, filters = list()) {
   spec <- database_tables[[table]]
-  if (is.null(spec)) stop("The edit pages don't know a table called ", table, ".", call. = FALSE)
+  if (is.null(spec)) stop("The Metadata page doesn't know a table called ", table, ".", call. = FALSE)
   kinds <- table_read_columns(spec)
   rows <- database_model_get(connection, table, names(kinds), order_by = spec$order_by, filters = filters)
   for (column in names(kinds)) {
     rows[[column]] <- switch(kinds[[column]],
       id = ,
       number = as.numeric(rows[[column]]),
-      flag = as.logical(rows[[column]]),
       as.character(rows[[column]])
     )
   }

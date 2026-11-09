@@ -1,104 +1,81 @@
-# The Edit History model: the applied changes (drafts with the status Applied) and the fields each
-# changed (applied_item). The edits are made by applying them, as Make an edit does, so the history is
-# what the database wrote.
+# The Edit History model: the history table, which the database writes as staff change the catalog. The rows
+# are made here as the database's functions make them (a test of those is tests/database/), so what is tested
+# is reading them back.
 
-test_that("an applied edit is in the history, with the people behind it and the times", {
-  admin <- local_staff("ADMIN")
-  type <- local_respondent_type()
-  new_name <- test_name("Renamed")
-  id <- local_applied_edit(admin, "respondent_type", "update", type$respondent_type_id, respondent_type__name = new_name)
+test_that("a change is in the history with who made it, when, and what it was", {
+  me <- local_staff()
+  summary <- paste("Changed the name of the respondent type", test_name("Parents"))
+  saved <- local_history(me, "Updated", summary, entity = "respondent_type", record_id = "123")
 
-  record <- history_model_get_all(test_connection)[[as.character(id)]]
-  expect_equal(record$id, as.character(id))
-  expect_equal(record$kind, "Update")
-  expect_equal(record$status, "Applied")
-  expect_equal(record$summary, paste0("Changed the name of the respondent type “", type$name, "”"))
-  expect_equal(record$prepared_by, admin$name)
-  expect_true(is.na(record$approved_by)) # it needed no approval
-  expect_false(record$approval_required)
-  expect_lt(abs(as.numeric(difftime(Sys.time(), parse_time(record$applied), units = "mins"))), 5)
-  expect_match(record$prepared, "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9:]{8}Z$")
-  expect_null(record$approved)
-  expect_equal(record$source, "Edit")
-  expect_equal(id, edit_model_get(test_connection, id)$id) # the record is the draft itself
+  record <- history_model_get_all(test_connection)[[as.character(saved$history_id)]]
+  expect_equal(record$id, as.character(saved$history_id))
+  expect_equal(record$action, "Updated")
+  expect_equal(record$entity, "respondent_type")
+  expect_equal(record$record_id, "123")
+  expect_equal(record$summary, summary)
+  expect_equal(record$staff, me$name)
+  expect_lt(abs(as.numeric(difftime(Sys.time(), parse_time(record$occurred), units = "mins"))), 5)
+  expect_null(record$details) # the list leaves the details out; history_model_get() reads them
 })
 
-test_that("an edit someone approved says who, and that it needed approval", {
+test_that("the newest come first, the newest few can be read alone, and the count is of every change", {
   me <- local_staff()
-  approver <- local_staff()
-  id <- local_approved_delete(me, approver)
-  record <- history_model_get_all(test_connection)[[as.character(id)]]
-  expect_equal(record$kind, "Delete")
-  expect_equal(record$prepared_by, me$name)
-  expect_equal(record$approved_by, approver$name)
-  expect_true(record$approval_required)
-  expect_match(record$approved, "^[0-9]{4}-")
-})
-
-test_that("a draft that isn't applied yet isn't in the history, the count is of applied ones, and an added row is listed", {
-  me <- local_staff()
-  waiting <- local_edit(me, status = "Awaiting Review")
   before <- history_model_count(test_connection)
-  expect_false(waiting$id %in% names(history_model_get_all(test_connection)))
-  admin <- local_staff("ADMIN")
-  name <- test_name("Counted")
-  id <- local_applied_edit(admin, "respondent_type", "add", respondent_type__name = name)
-  expect_equal(history_model_count(test_connection), before + 1L)
-  # an added row is listed with the number the database gave it
-  items <- history_model_get_items(test_connection, as.character(id))
-  expect_equal(unique(items$action), "Insert")
-  expect_true(all(is.na(items$old_value)))
-  expect_equal(items$new_value[items$attribute_name == "name"], name)
-  expect_match(items$record_identifier[1], '^\\{"respondent_type_id":[0-9]+\\}$')
-  # the newest are read alone, newest first
+  first <- local_history(me, "Added", paste("Added", test_name("First")))
+  second <- local_history(me, "Deleted", paste("Deleted", test_name("Second")))
+  expect_gte(history_model_count(test_connection), before + 2L) # other runs of the tests add rows meanwhile
+  all <- history_model_get_all(test_connection)
+  expect_lt(match(as.character(second$history_id), names(all)), match(as.character(first$history_id), names(all)))
   newest <- history_model_get_all(test_connection, most = 2)
-  expect_length(newest, min(2, before + 1L))
-  expect_equal(names(newest), utils::head(names(history_model_get_all(test_connection)), 2))
-  expect_true(as.character(id) %in% names(history_model_get_all(test_connection)))
+  expect_length(newest, 2)
+  expect_equal(names(newest), utils::head(names(all), 2))
 })
 
-test_that("an edit from before it had a sentence has empty words where it has none", {
-  # the history keeps old edits as they were; a row with no summary reads as empty text
-  record <- history_model_record(list(draft_id = 1, kind = "Edit", status = "Applied", edit = list(edit_kind = "Update")))
-  expect_equal(record$summary, "")
-  expect_null(record$note) # no reason is kept
-  expect_equal(record$kind, "Update")
-  expect_false(record$approval_required) # nobody approved it, so none was needed
-  expect_true(is.na(record$approved_by))
-  expect_null(record$applied)
-
-  # an extraction that was pushed is an Add, whether its kind comes back as one row or a list of one
-  approval <- list(event = "Approved", occurred_at = "2026-10-02T10:00:00+00:00", person = list(name = "Alex"))
-  pushed <- history_model_record(list(draft_id = 2, kind = "Extraction", status = "Applied", edit = list(), reviews = list(approval)))
-  expect_equal(pushed$kind, "Add")
-  expect_equal(pushed$source, "Extraction")
-  expect_equal(pushed$approved_by, "Alex")
-  expect_true(pushed$approval_required)
-  as_list <- history_model_record(list(draft_id = 3, kind = "Edit", status = "Applied", edit = list(list(edit_kind = "Delete"))))
-  expect_equal(as_list$kind, "Delete")
-})
-
-test_that("the fields an edit changed come back in the order they were applied", {
-  admin <- local_staff("ADMIN")
-  type <- local_respondent_type(minimum_age = 18, maximum_age = 99)
-  id <- local_applied_edit(
-    admin, "respondent_type", "update", type$respondent_type_id,
-    respondent_type__name = test_name("Changed"), respondent_type__maximum_age = "64"
+test_that("one change comes with its details: an edit's items as a table, in the order they were applied", {
+  me <- local_staff()
+  items <- list(
+    list(item_number = 1, entity_name = "respondent_type", record_identifier = '{"respondent_type_id":5}', action = "Update", attribute_name = "name", old_value = "Parents", new_value = "Guardians"),
+    list(item_number = 2, entity_name = "respondent_type", record_identifier = '{"respondent_type_id":5}', action = "Update", attribute_name = "maximum_age", old_value = "99", new_value = NULL)
   )
-  items <- history_model_get_items(test_connection, as.character(id))
-  expect_named(items, edit_item_columns)
-  expect_equal(items$item_number, seq_len(nrow(items)))
-  expect_setequal(items$attribute_name, c("name", "maximum_age"))
-  expect_equal(items$old_value[items$attribute_name == "maximum_age"], "99")
-  expect_equal(items$new_value[items$attribute_name == "maximum_age"], "64")
-  expect_equal(unique(items$record_identifier), sprintf('{"respondent_type_id":%d}', type$respondent_type_id))
-  expect_equal(unique(items$action), "Update")
+  saved <- local_history(me, "Updated", details = items)
+  record <- history_model_get(test_connection, as.character(saved$history_id))
+  expect_equal(record$id, as.character(saved$history_id))
+  expect_length(record$details, 2)
+  table <- history_model_get_items(test_connection, as.character(saved$history_id))
+  expect_named(table, history_item_columns)
+  expect_equal(table$item_number, 1:2)
+  expect_equal(table$attribute_name, c("name", "maximum_age"))
+  expect_equal(table$old_value, c("Parents", "99"))
+  expect_equal(table$new_value, c("Guardians", NA))
+  expect_equal(unique(table$record_identifier), '{"respondent_type_id":5}')
 })
 
-test_that("an edit with no items is an empty table, and only digits ask for an edit", {
-  expect_equal(nrow(history_model_get_items(test_connection, "0")), 0)
-  expect_error(history_model_get_items(test_connection, "1 or 1=1"), "no edit with that number")
-  expect_error(history_model_get_items(test_connection, NULL), "no edit with that number")
+test_that("a push's details are counts, which make no items table", {
+  me <- local_staff()
+  counts <- list(questions = 12, variable_new = 30, component_reused = 2, extraction_id = 99, wave_id = 7)
+  saved <- local_history(me, "Pushed", "Pushed the extraction of Kid Questionnaire, Wave 1: 12 questions, 30 new variables.", entity = "wave", record_id = "7", details = counts)
+  record <- history_model_get(test_connection, as.character(saved$history_id))
+  expect_equal(record$action, "Pushed")
+  expect_equal(record$details$questions, 12)
+  expect_equal(record$details$variable_new, 30)
+  expect_equal(nrow(history_model_get_items(test_connection, as.character(saved$history_id))), 0)
+})
+
+test_that("details that aren't items are an empty table with the items' columns", {
+  for (details in list(NULL, list(questions = 3), list())) {
+    table <- history_model_items(details)
+    expect_equal(nrow(table), 0)
+    expect_named(table, history_item_columns)
+  }
+  table <- history_model_items(list(list(item_number = "1", entity_name = "wave", action = "Insert")))
+  expect_equal(table$item_number, 1L)
+  expect_true(is.na(table$old_value))
+})
+
+test_that("only digits ask for a change, and one that isn't there says so", {
+  expect_error(history_model_get(test_connection, "1 or 1=1"), "no change with that number")
+  expect_error(history_model_get(test_connection, NULL), "no change with that number")
+  expect_error(history_model_get(test_connection, "0"), "no longer in the history")
 })
 
 test_that("a database that can't be reached gives a sentence", {

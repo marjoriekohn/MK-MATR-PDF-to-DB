@@ -2,8 +2,8 @@
 # Staff choose the questionnaire PDF (and, if they have one, the file of Variable Names and Coding), and
 # reading starts when they click Begin Extraction. From then on the files are the draft's and can't be
 # changed. Reading happens in the background, so staff can leave and find the draft under Extraction Drafts; once it
-# has finished, the whole extraction opens on the Edit Extraction page to review and edit before its
-# change request is submitted.
+# has finished, the whole extraction opens on the Edit Extraction page to review and edit before it is
+# pushed.
 # Returns: The mode's UI.
 extraction_ai_ui <- function(id) {
   ns <- NS(id)
@@ -123,7 +123,7 @@ reading_card <- function(record, ns) {
         p(
           class = "reading-note",
           "You can leave this page. The draft will be waiting under ",
-          actionLink(ns("to_continue"), "Extraction Drafts"), " until its change request is submitted."
+          actionLink(ns("to_continue"), "Extraction Drafts"), " until it is pushed."
         ),
         # once it is read, the draft is discarded from Extraction Drafts instead
         div(actionButton(ns("cancel"), "Cancel extraction", class = "btn-outline-dark"))

@@ -2,227 +2,76 @@
 # From the project folder:
 #   Rscript tests/database/clean_test_rows.R
 #
-# Every test names the rows it makes with a marker ("ZZTEST0712ab ...").
-# This script removes marked rows and their dependencies.
-# It only works on the test project or a local database.
+# Every test names the rows it makes with a marker ("ZZTEST0712ab ..."), and removes them when it ends; a run
+# that crashed first leaves them. This removes every marked row, in three requests to the test project's own
+# functions (tests/database/test_functions.sql) and one per marked tree: the tests' staff with their extractions
+# and history, the tests' trees (registry to wave) with everything pushed into them, and the vocabulary a push
+# adds (tags, answer options, components) and extractions named with the marker. It only works on the test
+# project or a local database.
 
-# --- Progress logging -------------------------------------------------------
-
-log_info <- function(message) {
-  cat(sprintf("[%s] %s\n", format(Sys.time(), "%H:%M:%S"), message))
+log_info <- function(...) {
+  cat(sprintf("[%s] %s\n", format(Sys.time(), "%H:%M:%S"), paste0(...)))
   flush.console()
 }
 
-log_step <- function(number, total, message) {
-  log_info(sprintf("[%d/%d] %s", number, total, message))
-}
-
-removed <- function(what, n) {
-  log_info(sprintf("  Removed %d %s", n, what))
-}
-
-ids_of <- function(table, key, column) {
-  log_info(sprintf("  Searching %s for ZZTEST rows...", table))
-  ids <- database_model_get(
-    connection, table, key,
-    order_by = key,
-    filters = like(column)
-  )[[key]]
-  log_info(sprintf("  Found %d matching rows", length(ids)))
-  ids
-}
-
-like <- function(column) {
-  stats::setNames(list("ilike.ZZTEST*"), column)
-}
-
-start_time <- Sys.time()
-total_steps <- 7L
-
-log_info("Starting test database cleanup")
-
-# --- Step 1: Load environment -----------------------------------------------
-
-log_step(1, total_steps, "Loading environment and R dependencies")
-
-if (file.exists(".env")) {
-  readRenviron(".env")
-  log_info("  Loaded .env")
-} else {
-  log_info("  No .env file found")
-}
-
+# ------ Loading -----------------------------------------------------------------------------------------------
+if (file.exists(".env")) readRenviron(".env")
 suppressMessages({
   library(shiny)
   library(testthat)
 })
-
-log_info("  R packages loaded")
-
-paths <- sort(list.files("R", "\\.[Rr]$", full.names = TRUE))
-log_info(sprintf("  Loading %d project R files...", length(paths)))
-
-for (path in paths) {
-  sys.source(path, envir = globalenv())
-}
-
-log_info("  Project R files loaded")
-
+for (path in sort(list.files("R", "\\.[Rr]$", full.names = TRUE))) sys.source(path, envir = globalenv())
 source("tests/testthat/helper-00_realdb.R")
-log_info("  Database test helpers loaded")
-
-# --- Step 2: Connect to test database ---------------------------------------
-
-log_step(2, total_steps, "Connecting to test database")
-
 connection <- test_database()
-log_info("  Test database connection established and validated")
+log_info("Test database: ", connection$url)
 
-# --- Step 3: Remove staff ---------------------------------------------------
-
-log_step(3, total_steps, "Removing the tests' staff, with their drafts (applied ones too) and history")
-
-# one request, to the test project's own function (tests/database/test_functions.sql)
+# ------ The tests' staff, with their extractions and history -----------------------------------------------------
 forgot <- test_forget_staff(marker = "ZZTEST", remove_staff = TRUE)
-removed("staff members", forgot$staff %||% 0L)
-removed("drafts", forgot$drafts %||% 0L)
-removed("rows of history (applied_item)", forgot$applied_items %||% 0L)
+log_info(sprintf("Removed %d staff members, %d extractions and %d rows of history", forgot$staff, forgot$extractions, forgot$history))
 
-# --- Step 4: Remove questionnaires -----------------------------------------
-
-log_step(4, total_steps, "Cleaning up questionnaires and dependencies")
-
-questionnaires <- ids_of(
-  "questionnaire", "questionnaire_id", "name"
-)
-
-for (i in seq_along(questionnaires)) {
-  id <- questionnaires[[i]]
-
-  log_info(sprintf(
-    "  Processing questionnaire %d/%d...",
-    i, length(questionnaires)
-  ))
-
-  by_q <- list(questionnaire_id = database_eq(id))
-
-  for (table in c(
-    "variable",
-    "wave_question",
-    "questionnaire_question",
-    "questionnaire_component",
-    "wave"
-  )) {
-    log_info(sprintf("    Deleting related %s rows...", table))
-    test_delete(table, by_q)
-  }
+# ------ The tests' trees, with what was pushed into them ------------------------------------------------------------
+# test_forget_tree() takes what test_make_tree() returned: the rows, found again here by their marked names. A
+# questionnaire's placements, questions and variables go with it; the components only it printed go afterwards.
+marked <- function(table, columns) {
+  database_model_select(connection, table, columns, filters = list(name = "ilike.ZZTEST*"))
 }
-
-log_info("  Deleting questionnaire records...")
-test_delete_in("questionnaire", "questionnaire_id", questionnaires)
-
-removed(
-  "questionnaires (with their waves, blocks and variables)",
-  length(questionnaires)
-)
-
-# --- Step 5: Remove answer option sets --------------------------------------
-
-log_step(5, total_steps, "Cleaning up answer option sets")
-
-options <- ids_of(
-  "answer_option", "answer_option_id", "standardized_label"
-)
-
-sets <- ids_of("option_set", "option_set_id", "name")
-
-log_info("  Deleting answer-option associations...")
-test_delete_in("answer_option_set", "answer_option_id", options)
-
-log_info("  Deleting option-set associations...")
-test_delete_in("answer_option_set", "option_set_id", sets)
-
-log_info("  Deleting option sets...")
-test_delete_in("option_set", "option_set_id", sets)
-
-removed("sets of choices", length(sets))
-
-# --- Step 6: Remove remaining marked rows ----------------------------------
-
-log_step(6, total_steps, "Cleaning up remaining marked records")
-
-specs <- list(
-  c("study", "study_id", "name"),
-  c("registry", "registry_id", "name"),
-  c("principal_investigator", "principal_investigator_id", "name"),
-  c("respondent_type", "respondent_type_id", "name"),
-  c("subject", "subject_id", "name"),
-  c("category", "mesh_id", "term"),
-  c("answer_option", "answer_option_id", "standardized_label"),
-  c("measurement_scale", "scale_id", "name")
-)
-
-for (i in seq_along(specs)) {
-  spec <- specs[[i]]
-
-  log_info(sprintf(
-    "  Processing table %d/%d: %s",
-    i, length(specs), spec[1]
-  ))
-
-  ids <- ids_of(spec[1], spec[2], spec[3])
-
-  if (length(ids) > 0) {
-    log_info(sprintf("  Deleting %d rows...", length(ids)))
+registries <- marked("registry", "registry_id,name")
+log_info(sprintf("Found %d marked registries", length(registries)))
+for (registry in registries) {
+  studies <- database_model_select(connection, "study", "study_id,principal_investigator_id", filters = list(registry_id = database_eq(registry$registry_id)))
+  for (study in studies) {
+    questionnaires <- database_model_select(connection, "questionnaire", "questionnaire_id,respondent_type_id", filters = list(study_id = database_eq(study$study_id)))
+    for (questionnaire in questionnaires) {
+      database_model_call(connection, "test_forget_tree", list(p_tree = list(
+        registry = registry,
+        study = list(study_id = study$study_id),
+        questionnaire = list(questionnaire_id = questionnaire$questionnaire_id),
+        # the respondent type and investigator go only if nothing else uses them: those a test made alone
+        respondent_type = list(respondent_type_id = if (length(questionnaires) == 1) questionnaire$respondent_type_id),
+        investigator = list(principal_investigator_id = if (length(studies) == 1) study$principal_investigator_id)
+      )))
+    }
+    if (length(questionnaires) == 0) test_delete("study", list(study_id = database_eq(study$study_id)))
   }
-
+  if (length(studies) == 0) test_delete("registry", list(registry_id = database_eq(registry$registry_id)))
+}
+# marked rows a test made on their own, outside a tree, where nothing points at them any more
+for (spec in list(
+  c("wave", "wave_id"), c("questionnaire", "questionnaire_id"), c("study", "study_id"), c("registry", "registry_id"),
+  c("principal_investigator", "principal_investigator_id"), c("respondent_type", "respondent_type_id"),
+  c("measurement_scale", "scale_id")
+)) {
+  rows <- marked(spec[1], spec[2])
+  ids <- vapply(rows, function(row) as.numeric(row[[spec[2]]]), numeric(1))
+  if (spec[1] == "measurement_scale") test_delete_in("question_scale", "scale_id", ids)
   test_delete_in(spec[1], spec[2], ids)
-  removed(paste0("rows of ", spec[1]), length(ids))
+  if (length(ids) > 0) log_info(sprintf("Removed %d rows of %s", length(ids), spec[1]))
 }
 
-# --- Step 7: Remove components ----------------------------------------------
-
-log_step(7, total_steps, "Cleaning up components and dependencies")
-
-components <- ids_of("component", "component_id", "text")
-# the places questionnaires print them
-placements <- push_model_by_ids(connection, "questionnaire_component", "placement_id", "component_id", components)$placement_id
-
-# What points at a component's placements, then at the component, before what they point at. Its question row goes
-# with it (on delete cascade): the database removes a Question's two rows together or not at all.
-component_tables <- list(
-  c("wave_question", "placement_id"),
-  c("variable", "placement_id"),
-  c("question_category", "component_id"),
-  c("question_scale", "component_id"),
-  c("questionnaire_question", "placement_id"),
-  c("questionnaire_component", "placement_id")
-)
-
-for (i in seq_along(component_tables)) {
-  table <- component_tables[[i]][1]
-  column <- component_tables[[i]][2]
-
-  log_info(sprintf(
-    "  Cleaning dependency %d/%d: %s",
-    i, length(component_tables), table
-  ))
-
-  test_delete_in(table, column, if (column == "placement_id") placements else components)
-}
-
-log_info("  Deleting component records...")
-test_delete_in("component", "component_id", components)
-
-removed("components", length(components))
-
-# --- Complete ---------------------------------------------------------------
-
-elapsed <- as.numeric(
-  difftime(Sys.time(), start_time, units = "secs")
-)
-
-log_info("--------------------------------------------------")
-log_info("Test database cleanup completed successfully")
-log_info(sprintf("Total execution time: %.2f seconds", elapsed))
-log_info("--------------------------------------------------")
+# ------ The vocabulary pushes added, and marked extractions ---------------------------------------------------------
+gone <- test_forget_marked("ZZTEST")
+log_info(sprintf(
+  "Removed %d tags, %d answer options, %d components and %d extractions named with the marker",
+  gone$tags, gone$answer_options, gone$components, gone$extractions
+))
+log_info("Done. test-zz_leftovers.R says whether anything is still there.")

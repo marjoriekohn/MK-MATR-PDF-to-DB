@@ -1,29 +1,18 @@
 # A row's details, the form for adding or changing one, or the review before deleting one: what Make an
 # edit's details panel shows.
 # The details (`verb` "view") are the row's fields as text, with where it is used. Nothing is saved here: the
-# page saves proposals. The form is drawn once for each kind and row. What it says about what you have typed
+# page applies the change. The form is drawn once for each kind and row. What it says about what you have typed
 # (the notes under fields, what changed, what it reaches) is drawn apart from it, so typing never redraws the
-# fields. A form is marked
-# with a number (`form_token`) the browser sends back once it has drawn it, and what was
-# typed counts only once the number matches, so the fields of the form before are never
-# read as the new form's.
-# entity,verb,snapshot,row,scope,resume: Reactives from the page: the kind, the verb ("view",
-#   "add", "update" or "delete"), the tables, the row picked, the questionnaire, and a saved draft being
-#   opened again.
-# Returns: A list of reactives: `active`, `stuck` (a delete something stands in the way
-#   of), `ready` (it can be sent), `blockers` (what is left to do), `built` (the items and
-#   summary), `form` (as it would be opened again), `jump` (a request to go to another
-#   kind), `token` (which form is on screen), and `fields` and `values` (the form's fields and
-#   what is typed in them).
-edit_change_server <- function(
-  id,
-  entity,
-  verb,
-  snapshot,
-  row,
-  scope,
-  resume
-) {
+# fields. A form is marked with a number (`form_token`) the browser sends back once it has drawn it, and what was
+# typed counts only once the number matches, so the fields of the form before are never read as the new form's.
+# entity,verb,snapshot,row,scope: Reactives from the page: the kind, the verb ("view", "add", "update" or
+#   "delete"), the tables, the row picked and the questionnaire.
+# prefill: A reactive of what to start the form with, by field id (what a pop-up had typed before it opened another),
+#   or `NULL`; it is used once, when the form is drawn.
+# Returns: A list of reactives: `active`, `stuck` (a delete something stands in the way of), `ready` (it can be
+#   applied), `blockers` (what is left to do), `built` (the items and summary), `jump` (a request to go to another
+#   kind), `token` (which form is on screen), and `fields` and `values` (the form's fields and what is typed in them).
+edit_change_server <- function(id, entity, verb, snapshot, row, scope, prefill = reactive(NULL)) {
   moduleServer(id, function(input, output, session) {
     ns <- session$ns
     note_slots <- 60 # more than any form has fields
@@ -111,7 +100,7 @@ edit_change_server <- function(
       edit_service_build(ctx$entity, ctx$mode, ctx$snap, ctx$row, ctx$scope, fields(), values())
     })
 
-    # What's left to do before it can be sent, in the order to do it.
+    # What's left to do before it can be applied, in the order to do it.
     blockers <- reactive({
       # (while a form is being redrawn, what's typed can't be read yet)
       tryCatch(what_is_left(), shiny.silent.error = function(problem) "One moment…")
@@ -134,7 +123,7 @@ edit_change_server <- function(
         confirmed = list(read = input$confirm_read, word = input$confirm_word, shared = input$confirm_shared)
       )
     }
-    # A delete that something stands in the way of can't be sent at all, so there's nothing to say about why.
+    # A delete that something stands in the way of can't be applied at all, so there's nothing to say about why.
     stuck <- reactive(tryCatch(
       active() && context()$mode == "delete" && length(plan()$blocked) > 0,
       shiny.silent.error = function(problem) FALSE
@@ -142,20 +131,10 @@ edit_change_server <- function(
 
     ready <- reactive(tryCatch(active() && length(blockers()) == 0, shiny.silent.error = function(problem) FALSE))
 
-    # The form as it would be opened again, for a saved draft.
-    form <- reactive({
-      ctx <- context()
-      list(
-        action = ctx$mode, entity = ctx$entity$key, scope = ctx$scope %||% "",
-        target = if (is.null(ctx$row)) "" else edit_key(ctx$row, edit_table_key(ctx$entity$table)),
-        values = if (ctx$mode == "delete") list() else values()
-      )
-    })
-
     observeEvent(input$action, {
       event <- input$action
       if (identical(event$action, "jump")) {
-        # an item to open (a question as it is in one questionnaire) says which: its questionnaire and key
+        # an item to open (a block as it is in one questionnaire) says which: its questionnaire and key
         jump(list(kind = event$kind, verb = event$verb %||% "add", scope = event$scope, key = event$key, at = Sys.time()))
       }
     })
@@ -195,21 +174,19 @@ edit_change_server <- function(
     form_ui <- function(ctx) {
       all_fields <- fields()
       start <- initial()
-      start <- resume_values(start, ctx)
+      # what a pop-up had typed before it opened another is put back, once
+      typed <- isolate(prefill())
+      if (!is.null(typed)) {
+        kept <- intersect(names(typed), names(start))
+        start[kept] <- lapply(typed[kept], as.character)
+      }
       generation(isolate(generation()) + 1L)
       for (field in Filter(function(field) field$type == "variables", all_fields)) variables$load(start[[field$id]], field$options)
-
-      rows <- Map(function(field, i) {
-        heading <- if (!is.null(field$part_title) && (i == 1 || all_fields[[i - 1]]$part_index != field$part_index)) {
-          edit_part_heading(field$part_title, ctx$entity$parts[[field$part_index]]$why)
-        }
-        tagList(heading, edit_field_ui(ns, field, start[[field$id]], ns(paste0("note_", i))))
-      }, all_fields, seq_along(all_fields))
 
       tagList(
         edit_empty_choices_ui(all_fields),
         div(class = "edit-token", textInput(ns("form_token"), NULL, value = isolate(generation()))),
-        rows,
+        Map(function(field, i) edit_field_ui(ns, field, start[[field$id]], ns(paste0("note_", i))), all_fields, seq_along(all_fields)),
         if (ctx$mode == "update") uiOutput(ns("changes")),
         if (ctx$mode == "update" && isolate(usage()$shared) >= 2) {
           checkboxInput(ns("confirm_shared"), sprintf(
@@ -219,28 +196,6 @@ edit_change_server <- function(
         # an add reaches nothing yet; what it is is said in the info block at the top
         if (ctx$mode != "add") uiOutput(ns("impact"), class = "edit-usage")
       )
-    }
-
-    # A draft being opened again puts back what was typed in it, once, if it's
-    # the same form.
-    resume_values <- function(start, ctx) {
-      saved <- isolate(resume())
-      if (is.null(saved)) {
-        return(start)
-      }
-      same <- identical(saved$form$entity, ctx$entity$key) && identical(saved$form$action, ctx$mode) &&
-        identical(as.character(saved$form$scope %||% ""), as.character(ctx$scope %||% "")) &&
-        identical(
-          as.character(saved$form$target %||% ""),
-          if (is.null(ctx$row)) "" else edit_key(ctx$row, edit_table_key(ctx$entity$table))
-        )
-      if (!same) {
-        return(start)
-      }
-      kept <- intersect(names(saved$form$values), names(start))
-      start[kept] <- lapply(saved$form$values[kept], as.character)
-      isolate(resume(NULL))
-      start
     }
 
     output$changes <- renderUI(edit_changes_ui(changes()))
@@ -253,8 +208,7 @@ edit_change_server <- function(
 
     update_aside <- function(ctx) {
       use <- usage()
-      local <- !is.null(ctx$entity$scope)
-      words_changed <- local && any(c("text", "component_type_id") %in% changes()$name)
+      words_changed <- ctx$entity$table == "placement" && "text" %in% changes()$name
       tagList(
         if (use$shared >= 2) {
           edit_callout(
@@ -272,14 +226,13 @@ edit_change_server <- function(
             "warning",
             title = "New words change this place only",
             p(paste0(
-              "The words and the kind of block belong to the component, which every place that prints them shares. ",
-              "So this place prints the component with your words (the one the database has, or a new one), and ",
-              "stops printing the old one."
+              "The words belong to the component, which every place that prints them shares. So this place prints ",
+              "the component with your words (the one the database has, or a new one), and stops printing the old one."
             )),
             p(if (elsewhere > 0) {
               paste0("The old one stays, for the ", edit_count(elsewhere, "other place"), " that still print it.")
             } else {
-              "Nothing else prints the old one, so it goes."
+              "Nothing else prints the old one, so the database forgets it."
             })
           )
         },
@@ -308,7 +261,7 @@ edit_change_server <- function(
 
     # ------ RETURN ------------------------------------------------------------
     list(
-      active = active, stuck = stuck, ready = ready, blockers = blockers, built = built, form = form,
+      active = active, stuck = stuck, ready = ready, blockers = blockers, built = built,
       jump = jump, token = generation, fields = fields, values = values
     )
   })

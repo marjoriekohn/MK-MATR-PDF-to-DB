@@ -141,12 +141,12 @@ test_that("Save writes the draft to the database (numbers included), and a save 
     expect_identical(stored, draft())
     expect_equal(component(stored, "c3")$text, "do you worry a lot?")
     expect_equal(component(stored, "c3")$question_number, component(numbered_gold(), "c3")$question_number)
-    expect_equal(notice_texts(seen), "Saved. Nothing is added to the MATR metadata database until its change request is approved.")
+    expect_equal(notice_texts(seen), "Saved. Nothing is added to the MATR metadata database until you push it.")
     session$flushReact()
     expect_true(last_update(seen, "save")$disabled)
 
     change_draft(reworded(draft(), "Once more"))
-    test_delete_draft(first$id) # the draft has gone from the database
+    test_delete_extraction(first$id) # the draft has gone from the database
     session$setInputs(save = 2)
     expect_true(has_unsaved_changes())
     expect_match(notice_texts(seen), "Couldn't save: .*no longer in the database", all = FALSE)
@@ -219,7 +219,7 @@ test_that("a save that fails when opening another draft keeps the first one open
     open(first)
     change_draft(reworded(draft()))
     open(second)
-    test_delete_draft(first$id) # the first has gone
+    test_delete_extraction(first$id) # the first has gone
     session$setInputs(save_and_open = 1)
     expect_equal(record_id(), first$id)
     expect_true(has_unsaved_changes())
@@ -268,10 +268,98 @@ test_that("a pick list the database couldn't give is a warning when the page sta
   seen <- local_browser()
   page <- edit_page(me)
   # after edit_page(), so this stub wins over the file's shared lookups
-  local_stub("lookup_model_get_subjects", function(connection) stop("The subject table is missing.", call. = FALSE))
+  local_stub("lookup_model_get_tags", function(connection) stop("The tag table is missing.", call. = FALSE))
   shiny::testServer(edit_extraction_server, args = page, {
-    expect_match(notice_texts(seen), "The list of subjects couldn't be read")
+    expect_match(notice_texts(seen), "The list of subjects, time frames and units couldn't be read")
     expect_equal(seen$notifications[[1]]$type, "warning")
+  })
+})
+
+# ------ Previewing and pushing ------------------------------------------------------------------------
+test_that("Preview and push saves what is unsaved, and lists what is in the way: blocks to fix, blank Basic Info, a wave that asks questions", {
+  me <- local_staff()
+  admin <- local_staff("ADMIN")
+  tree <- local_tree()
+  seen <- local_browser()
+  pushed <- local_pushed_questionnaire(admin, tree) # so the tree's wave asks questions already
+  first <- read_draft(me, tree)
+  shiny::testServer(edit_extraction_server, args = push_page(me, seen, catalog = test_live_catalog()), {
+    errors <- collect_errors(session)
+    open(first)
+    change_draft(reworded(draft()))
+    session$setInputs(request = 1)
+    expect_false(has_unsaved_changes()) # saved first
+    expect_equal(component(draft_service_load(test_connection, first$id), "c3")$text, "do you worry a lot?")
+    expect_match(seen$modals[[length(seen$modals)]], "Push to the database")
+    expect_match(seen$modals[[length(seen$modals)]], "Basic Info")
+    expect_equal(last_update(seen, "wave_id")$selected, as.character(tree$wave$wave_id)) # the form is filled from the draft
+    # the form's drop-downs are blank until the browser fills them: the Basic Info is in the way, and the blocks to fix
+    session$elapse(600)
+    blockers <- text_of(output$push_blockers)
+    expect_match(blockers, "Before it can be pushed")
+    expect_match(blockers, "Fix the .* blocks marked to fix")
+    expect_match(blockers, "Fill in the registry, study, questionnaire and wave under Basic Info")
+    expect_match(text_of(output$push_blocker), "^Fix the .* blocks marked to fix")
+    expect_true(last_update(seen, "push")$disabled)
+    expect_null(dry_run())
+
+    # the MATR IDs filled in, and the tree's wave picked, which asks questions since the push into it
+    fill_all_matr_ids(draft, change_draft)
+    pick_basic_info(session, picked_basic_info(tree))
+    blockers <- text_of(output$push_blockers)
+    expect_no_match(blockers, "marked to fix|under Basic Info")
+    expect_match(blockers, paste(tree$wave$name, "already asks 2 questions. Empty the wave first (Metadata page)"), fixed = TRUE)
+    expect_true(last_update(seen, "push")$disabled)
+    expect_null(dry_run())
+
+    session$setInputs(push_cancel = 1)
+    expect_false(push_open())
+    expect_equal(record_id(), first$id)
+    expect_equal(extraction_model_get(test_connection, first$id)$status, "Draft")
+    expect_length(errors(), 0)
+  })
+})
+
+test_that("with nothing in the way the dialog shows what the push adds, and Push adds it, says so and goes to Extraction Drafts", {
+  me <- local_staff()
+  tree <- local_tree()
+  seen <- local_browser()
+  typed <- do.call(local_manual_extraction, c(list(me), picked_basic_info(tree), list(env = environment())))
+  draft_service_save(test_connection, typed$id, test_questionnaire_draft(), me$staff_id)
+  typed <- extraction_model_get(test_connection, typed$id)
+  shiny::testServer(edit_extraction_server, args = push_page(me, seen, catalog = test_live_catalog()), {
+    errors <- collect_errors(session)
+    open(typed)
+    reworded_question <- draft()$components$id[draft()$components$printed_number %in% "1"]
+    change_draft(draft_service_update(draft(), "components", reworded_question, "text", paste(test_marker, "Do you smoke now?")))
+    session$setInputs(request = 1)
+    expect_false(has_unsaved_changes())
+    pick_basic_info(session, picked_basic_info(tree))
+    expect_equal(text_of(output$push_blockers), "")
+    # the dry run: what the push would add, without adding it
+    expect_false(inherits(dry_run(), "error"))
+    expect_equal(dry_run()$questions, 2)
+    what <- text_of(output$push_what)
+    expect_match(what, "What it adds")
+    expect_match(what, "Adds 4 new blocks, 2 questions asked in the wave, 2 new variables")
+    expect_match(seen$modals[[length(seen$modals)]], "4 blocks haven't been marked as checked yet")
+    expect_length(questionnaire_service_wave_question_counts(test_connection, tree$questionnaire$questionnaire_id), 0)
+    expect_false(last_update(seen, "push")$disabled)
+    expect_equal(extraction_model_get(test_connection, typed$id)$status, "Draft")
+
+    session$setInputs(push = 1)
+    after <- extraction_model_get(test_connection, typed$id)
+    expect_equal(after$status, "Pushed")
+    expect_null(after$editing) # let go
+    expect_equal(questionnaire_service_wave_question_counts(test_connection, tree$questionnaire$questionnaire_id)[[as.character(tree$wave$wave_id)]], 2L)
+    printed <- extraction_service_recorded(test_connection, list(info = picked_basic_info(tree)))$texts$text
+    expect_true(tolower(paste(test_marker, "Do you smoke now?")) %in% tolower(printed)) # as reworded on the page, saved before the push
+    expect_match(notice_texts(seen), "^Pushed\\. Adds 4 new blocks", all = FALSE)
+    expect_equal(seen$pages, "drafts")
+    expect_null(record_id())
+    expect_false(push_open())
+    expect_gte(seen$closed, 1)
+    expect_length(errors(), 0)
   })
 })
 

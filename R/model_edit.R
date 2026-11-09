@@ -1,105 +1,64 @@
-# ------ Edit proposals -------------------------------------------------------------
-# One record per change staff make on the Make an edit page, saying who, what it comes
-# to in a sentence, how to open it again on the form, and the items to apply. Each is a
-# DRAFT row of kind "Edit" with an EDIT_DRAFT row (model_draft_row.R). Applying it (at once for
-# an add or an update, after one approval for a STAFF member's delete) makes it Applied, with
-# its APPLIED_ITEM rows. `status` is Draft until it's sent for
-# review, then Awaiting Review; Sent Back if a reviewer returned it; Withdrawn if the
-# preparer discards it; Applied once it is in the MATR metadata database.
-#
-# A record's fields and where they are kept (draft / edit_draft):
-#   id, status, summary                            draft
-#   prepared_by (name), prepared_by_id, started    draft (created_at)
-#   saved, saved_by (name), saved_by_id, revision  draft
-#   submitted                                      draft_review_event (the latest Submitted)
-#   submitted_exact (seconds, with their fractions)  the same, to order requests sent in the same second
-#   requested_reviewer = list(id, name)            draft (requested_reviewer)
-#   sent_back = list(by, by_id, date, note)        draft_review_event (the latest Sent Back), only while Sent Back
-#   edit_kind ("Add", "Update" or "Delete")        edit_draft
-#   form, reach, items                             edit_draft
-#
-# Items are read back as a data frame (item_number, entity_name,
-# record_identifier, action, attribute_name, old_value, new_value), empty
-# values as NA.
-
-edit_draft_kind <- "Edit"
+# ------ Applying a change ----------------------------------------------------------------
+# A change made on Make an edit is a list of items, one per field of one row (service_edit.R), applied by the
+# database's apply_change() in one transaction and written to HISTORY as one row (sql/4_functions.sql).
+# Emptying a wave, questionnaire, study or registry is the database's empty_*() functions: the thing stays, what
+# it holds goes, and the history gets a row.
 
 edit_item_columns <- c(
   "item_number", "entity_name", "record_identifier", "action",
   "attribute_name", "old_value", "new_value"
 )
 
-# What a proposal's record reads of edit_draft.
-edit_detail_columns <- c("edit_kind", "form", "reach", "items")
-
-# Every edit proposal still being prepared or waiting for approval (not applied or withdrawn).
-# Returns: A list of proposal records, newest saved first, named by id; see the top of this
-#   file for what a record holds.
-edit_model_get_all <- function(connection, status = NULL) {
-  draft_row_model_records(connection, edit_draft_kind, edit_draft_table, edit_detail_columns, edit_model_record, status)
-}
-
-# One edit proposal.
-# id: The proposal's id.
-# Returns: The record, as in `edit_model_get_all()`. An error if there is none.
-edit_model_get <- function(connection, id) {
-  draft_row_model_one(
-    connection, id, edit_draft_kind, edit_draft_table, edit_detail_columns, edit_model_record,
-    "That edit is no longer in the database."
-  )
-}
-
-# Save an edit proposal.
-# Added if it has no id yet; otherwise the row it names is changed, as the person saving it.
-# The database numbers a new one and raises the revision of a changed one.
-# record: A proposal record, as in `edit_model_get_all()`; `id` is `NULL` for a new one.
-#   `expected_revision`, if it has one, is the revision the person was looking at: the save is
-#   refused if someone else has saved since.
-# new_revision: `FALSE` for a change that isn't to the content (withdrawing).
-# Returns: The record as saved, with its id. An error with the database's sentence if it refused.
-#   A record saved with the status Awaiting Review is submitted: the database records when, and by whom.
-edit_model_save <- function(connection, record, staff_id = record$prepared_by_id, new_revision = TRUE) {
-  parent <- list(status = record$status, summary = record$summary)
-  parent["requested_reviewer"] <- list(record$requested_reviewer$id)
-  detail <- list(
-    edit_kind = record$edit_kind %||% edit_model_kind(record$form),
-    form = record$form,
-    items = if (is.null(record$items)) list() else record$items
-  )
-  detail["reach"] <- list(record$reach)
-  if (is.null(record$id)) {
-    parent$created_at <- record$started
-    id <- draft_row_model_create(connection, edit_draft_kind, record$prepared_by_id, parent, detail)
-  } else {
-    id <- record$id
-    draft_row_model_save(connection, id, staff_id, parent, detail, record$expected_revision, new_revision)
-  }
-  edit_model_get(connection, id)
-}
-
-# "Add", "Update" or "Delete", from the sentence the form was made from.
-edit_model_kind <- function(form) {
-  action <- form$action %||% ""
-  paste0(toupper(substr(action, 1, 1)), substring(action, 2))
-}
-
-edit_model_record <- function(parent, detail) {
-  # The form and items are read back the way staff's page made them: values by
-  # name, items as a data frame.
-  content <- jsonlite::fromJSON(
-    jsonlite::toJSON(
-      list(form = detail$form, reach = detail$reach, items = detail$items),
-      auto_unbox = TRUE, null = "null"
-    ),
-    simplifyVector = TRUE
-  )
-  items <- content$items
-  if (is.data.frame(items) && all(edit_item_columns %in% names(items))) items <- items[edit_item_columns]
-  c(draft_row_record(parent), list(
-    kind = edit_draft_kind,
-    edit_kind = detail$edit_kind,
-    form = content$form,
-    reach = content$reach,
-    items = items
+# Apply a change now.
+# items: A data frame of items, numbered, in the order to apply them (`edit_number_items()`). A row an edit adds
+#   is named `new:<table>:<n>`; the database swaps in the number it gives it.
+# summary: The change in a sentence, for the history.
+# me: Who makes it: `list(staff_id, name, role)`.
+# Returns: A list: `history_id` (the change's row in the history) and `new_ids` (the number the database gave
+#   each new row, by its token). An error with the database's own sentence if it refused (a row changed since the
+#   form was opened, a rule of the database).
+edit_model_apply <- function(connection, items, summary, me) {
+  result <- database_model_call(connection, "apply_change", list(
+    p_staff_id = me$staff_id, p_items = items[edit_item_columns], p_summary = summary
   ))
+  list(history_id = as.character(result$history_id), new_ids = lapply(result$new_ids %||% list(), as.numeric))
+}
+
+# The things that can be emptied, and the table each one's contents are counted from (`edit_model_contents()`).
+edit_emptiable <- c("registry", "study", "questionnaire", "wave")
+
+# Empty a wave, questionnaire, study or registry: it stays, its contents go.
+# what: One of `edit_emptiable`.
+# id: The row's id.
+# Returns: What was removed, as counts: `questions_removed`, `placements_removed`, `variables_removed`.
+edit_model_empty <- function(connection, what, id, me) {
+  if (!what %in% edit_emptiable) stop("Only a registry, study, questionnaire or wave can be emptied.", call. = FALSE)
+  arguments <- stats::setNames(list(as.numeric(id), me$staff_id), c(paste0("p_", what, "_id"), "p_staff_id"))
+  lapply(database_model_call(connection, paste0("empty_", what), arguments), as.numeric)
+}
+
+# What emptying would remove, counted from the database: the questions a wave asks, or the blocks and variables
+# of a questionnaire (or of every questionnaire of a study or registry).
+# Returns: A list: `questions` (wave_question rows), `placements` and `variables`; a wave counts only its questions.
+edit_model_contents <- function(connection, what, id) {
+  if (what == "wave") {
+    return(list(questions = database_model_count(connection, "wave_question", list(wave_id = database_eq(id)))))
+  }
+  questionnaires <- switch(what,
+    questionnaire = as.numeric(id),
+    study = database_model_get(connection, "questionnaire", "questionnaire_id", filters = list(study_id = database_eq(id)))$questionnaire_id,
+    registry = {
+      studies <- database_model_get(connection, "study", "study_id", filters = list(registry_id = database_eq(id)))$study_id
+      if (length(studies) == 0) numeric() else database_model_get(connection, "questionnaire", "questionnaire_id", filters = list(study_id = database_in(studies)))$questionnaire_id
+    }
+  )
+  if (length(questionnaires) == 0) {
+    return(list(questions = 0L, placements = 0L, variables = 0L))
+  }
+  within <- list(questionnaire_id = database_in(questionnaires))
+  list(
+    questions = database_model_count(connection, "wave_question", within),
+    placements = database_model_count(connection, "placement", within),
+    variables = database_model_count(connection, "variable", within)
+  )
 }

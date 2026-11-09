@@ -1,7 +1,7 @@
 # The Manual mode of the Extraction page: the server.
 # Staff optionally add the PDF, and start: the draft is made with an empty questionnaire and opens on
 # the Edit Extraction page, with every field there to fill in. Where it goes in the database (its Basic
-# Info) is filled in later, on Change Requests, once its change request is submitted. Nothing here adds to the MATR metadata database itself.
+# Info) is filled in there, when the extraction is pushed. Nothing here adds to the MATR metadata database itself.
 extraction_manual_server <- function(
   id,
   extractions,

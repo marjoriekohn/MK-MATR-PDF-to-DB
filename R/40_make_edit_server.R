@@ -4,18 +4,19 @@
 # code one piece at a time, so nothing changes them while something else is reading them; they aren't made to be
 # shared between threads or sessions, and shouldn't be.
 
-# The Make an edit page's server.
+# The Metadata page's server (the module is called make_edit).
 # The list on the left has a section for each kind of thing (40_make_edit_ui.R); a section's items are read from
 # the database the first time it is opened. Picking an item shows it in the details (`edit_change_server()`,
 # "view"), with Edit and Delete; Edit, Delete and + Add show the form or what a delete reaches there, with Save.
-# This page keeps drafts and makes the change: Save as draft, then either apply it at once (an add or an update,
-# or anything an ADMIN does) or send it to Change Requests for one other staff member to approve (a STAFF
-# member's delete); see `service_change_request.R`. A draft is saved in the database (`model_edit.R`). A request
-# that was sent back, or is waiting for approval, can be opened here again: saving it makes a new revision.
-# active: A reactive that says whether this page is the one on screen, or `NULL`. Opening the page reads
-#   the saved drafts again, since a reviewer can send one back, and the lists, since other staff change them.
-# Returns: A list with `open`, a function taking a saved edit's record that opens it on the form.
-make_edit_server <- function(id, connection, me, show_page, active = NULL) {
+# Every change is applied at once, by the database's apply_change() (`edit_service_apply()`), and written to the
+# Edit History. A registry, study, questionnaire or wave has Empty too: it stays, its contents go
+# (`edit_service_empty()`). A wave extracted from a PDF has Re-extract: it is emptied and a new extraction of it
+# is started from its PDF (`extraction_service_reextract_wave()`), shown with `open_reading`.
+# active: A reactive that says whether this page is the one on screen, or `NULL`. Opening the page reads the lists
+#   again, since other staff change them.
+# open_reading: A function taking an extraction being read that shows how reading it is going (New Extraction's),
+#   or `NULL` to go to New Extraction.
+make_edit_server <- function(id, connection, me, show_page, active = NULL, open_reading = NULL) {
   moduleServer(id, function(input, output, session) {
     ns <- session$ns
 
@@ -26,10 +27,7 @@ make_edit_server <- function(id, connection, me, show_page, active = NULL) {
     verb <- reactiveVal("") # what the details show: "" (nothing), "view", "add", "update", "delete" or "done"
     entity <- reactive(if (kind() %in% names(edit_entities)) edit_entities[[kind()]])
 
-    resume <- reactiveVal(NULL) # a saved draft being opened again
-    draft <- reactiveVal(NULL) # the saved draft this form is, to save over
-    done <- reactiveVal(NULL) # what was just done: list(applied, record, history_id)
-    saved_count <- reactiveVal(0L) # ticks when the saved drafts should be read again (one was saved, or the page was opened)
+    done <- reactiveVal(NULL) # what was just done: list(verb, summary, history_id, new_ids)
     duplicates <- reactiveVal(NULL) # the existing rows an add looks like, while staff decide
     leaving_to <- reactiveVal(NULL) # what was picked while a form was open, while staff decide whether to leave it
     hint <- reactiveVal(NULL) # what the details say while nothing is picked
@@ -80,36 +78,16 @@ make_edit_server <- function(id, connection, me, show_page, active = NULL) {
       edit_service_row(entity(), snapshot(), picked())
     })
 
-    # Whether what is on the form needs another staff member's approval before it is applied.
-    needs_approval <- reactive({
-      req(verb() %in% c("add", "update", "delete"))
-      change_request_service_needs_approval(me, edit_draft_kind, edit_service_kind_of(verb()))
-    })
-    reviewers <- reactive(tryCatch(staff_service_reviewers(connection, me), error = function(problem) character()))
-    # A request being edited again is saved as a new version of itself, not sent anew.
-    editing_request <- reactive(identical(draft()$status, "Awaiting Review"))
-
-    # Read when the page is opened (a reviewer can send one back) and when this session saved or discarded one;
-    # the database isn't asked over and over. If it can't be reached the last proposals read stay on screen, with
-    # a message, and the next read tries again. The tables aren't read again while a form or a delete is open:
-    # that would draw it again as it started, losing what was typed. They are once it is saved or closed.
+    # Opening the page reads the lists again, since other staff change them. Not while a form or a delete is open:
+    # that would draw it again as it started, losing what was typed. They are once it is applied or closed.
     if (!is.null(active)) {
       observeEvent(active(),
         {
-          if (isTRUE(active())) {
-            saved_count(saved_count() + 1L)
-            if (!verb() %in% c("add", "update", "delete")) read_again()
-          }
+          if (isTRUE(active()) && !verb() %in% c("add", "update", "delete")) read_again()
         },
         ignoreInit = TRUE
       )
     }
-    # the proposals last read, for when they can't be read again: this session's own (it is made inside the module)
-    read_proposals <- last_good_read(function() edit_service_get_all(connection))
-    proposals <- reactive({
-      saved_count()
-      read_proposals()
-    })
 
     # What stops a verb for the kind, if anything ("You can't delete a registry yet: …").
     cant <- function(mode) {
@@ -121,13 +99,13 @@ make_edit_server <- function(id, connection, me, show_page, active = NULL) {
     }
 
     # ------ MODULES -----------------------------------------------------------
-    change <- edit_change_server("change", entity, verb, snapshot, row, scope, resume)
+    change <- edit_change_server("change", entity, verb, snapshot, row, scope)
 
     # ------ The list ------------------------------------------------------------
     # A section's items: drawn while it is open, and again when the tables are read again. Only what is open is drawn,
     # so only the kinds staff look at are read from the database. Whether a section is open is kept for each section
     # (the page script opens and closes it at once, and says so), so opening one doesn't draw the others again: a
-    # section inside one (a questionnaire's, under Questions) would be drawn closed.
+    # section inside one (a questionnaire's, under Blocks) would be drawn closed.
     open_sections <- new.env()
     section_open <- function(id) {
       if (!exists(id, envir = open_sections, inherits = FALSE)) assign(id, reactiveVal(FALSE), envir = open_sections)
@@ -192,14 +170,14 @@ make_edit_server <- function(id, connection, me, show_page, active = NULL) {
           card <- cards[i, , drop = FALSE]
           make_edit_item(key, card, card$scope, identical(card$scope, chosen$scope) && identical(card$key, chosen$key))
         }),
-        if (!isTRUE(entity$view_only)) make_edit_add_button(entity$add_as %||% key, q)
+        if (!isTRUE(entity$view_only)) make_edit_add_button(key, q)
       )
     }
 
     # Asks before what was typed is thrown away: leaving the edit for another item, or cancelling it.
     unsaved_dialog <- function(title, confirm_id, confirm_label) {
       confirm_dialog(
-        title, "What you've typed isn't saved. Save it as a draft first if you want to come back to it.",
+        title, "What you've typed isn't saved.",
         confirm_id = ns(confirm_id), confirm_label = confirm_label, keep_label = "Keep editing", easy_close = TRUE
       )
     }
@@ -207,7 +185,6 @@ make_edit_server <- function(id, connection, me, show_page, active = NULL) {
     # ------ Picking ------------------------------------------------------------------
     observeEvent(input$action, {
       event <- input$action
-      record <- proposals()[[event$id %||% ""]]
       switch(event$action,
         toggle = {
           is_open <- section_open(event$id)
@@ -219,18 +196,16 @@ make_edit_server <- function(id, connection, me, show_page, active = NULL) {
         add = go_to(list(kind = event$kind, scope = event$scope %||% "", key = NULL, verb = "add")),
         edit = verb("update"),
         delete = verb("delete"),
+        empty = ask_empty(),
+        reextract_wave = if (identical(kind(), "wave")) showModal(reextract_wave_dialog(ns, edit_label(snapshot(), "wave", row()))),
         back = after_done(),
-        retry = {
-          read_again()
-        },
-        continue = if (!is.null(record)) open_draft(record),
-        discard = if (!is.null(record)) confirm_discard(record)
+        retry = read_again()
       )
     })
 
     # Opening a section shows its first item in the details, while they show nothing or an item: not over a form or
-    # what was just done. Not when they already show one of its items, or when it only holds sections (Scale Items
-    # holds a section for each measurement scale).
+    # what was just done. Not when they already show one of its items, or when it only holds sections (Blocks holds a
+    # section for each questionnaire).
     pick_first <- function(section) {
       if (!verb() %in% c("", "view")) {
         return()
@@ -274,8 +249,6 @@ make_edit_server <- function(id, connection, me, show_page, active = NULL) {
     })
 
     show_item <- function(where) {
-      draft(NULL)
-      resume(NULL)
       done(NULL)
       hint(NULL)
       kind(where$kind)
@@ -284,8 +257,8 @@ make_edit_server <- function(id, connection, me, show_page, active = NULL) {
       verb(where$verb)
     }
 
-    # A form can ask to go to another kind: to add the registry it needs, or to open a question or block as it is in
-    # one questionnaire (a card under a shared question has a button for each).
+    # A form can ask to go to another kind: to add the registry it needs, or to open a block as it is in one
+    # questionnaire (a card under a shared component has a button for each).
     observeEvent(change$jump(), {
       jump <- change$jump()
       if (identical(jump$verb, "add")) {
@@ -349,30 +322,17 @@ make_edit_server <- function(id, connection, me, show_page, active = NULL) {
           } else if (!is.null(blocked)) {
             edit_callout("warning", title = paste("You can't", mode, paste(entity()$article, entity()$noun), "yet"), p(blocked))
           } else {
-            tagList(
-              edit_info_block(entity(), mode, approval = needs_approval(), editing_request = editing_request()),
-              sent_back_note()
-            )
+            edit_info_block(entity(), mode)
           },
           if (is.null(blocked)) edit_change_ui(ns("change")),
-          if (mode != "view" && is.null(blocked)) {
-            tagList(
-              uiOutput(ns("conflicts")),
-              if (needs_approval() && !editing_request() && length(reviewers()) > 0) {
-                div(
-                  class = "edit-reviewer",
-                  reviewer_select(ns("reviewer"), reviewers(), selected = draft()$requested_reviewer$id %||% "")
-                )
-              },
-              uiOutput(ns("footer_note"), class = "edit-footer-note")
-            )
-          }
+          if (mode != "view" && is.null(blocked)) uiOutput(ns("footer_note"), class = "edit-footer-note")
         ),
         div(class = "detail-actions", detail_buttons(mode, blocked))
       )
     }
 
-    # + Add of a kind listed together (Questions) asks which questionnaire first; the form comes once one is picked.
+    # + Add of a kind listed by questionnaire (Blocks) or by scale (Scale Items) asks which first; the form comes once
+    # one is picked.
     scope_picker_ui <- function(key) {
       table <- entity()$scope$table
       div(
@@ -405,9 +365,9 @@ make_edit_server <- function(id, connection, me, show_page, active = NULL) {
       )
     }
 
-    # View: Edit and Delete (each off, saying why, when the kind can't be changed that way), or for a PDF, which is
-    # only shown, Open PDF. A form: Cancel, Save as draft and Save. A delete: Cancel and Delete, or only Back when
-    # something stands in its way.
+    # View: Edit and Delete (each off, saying why, when the kind can't be changed that way), Empty for what can be
+    # emptied, Re-extract for a wave, or for a PDF, which is only shown, Open PDF. A form: Cancel and Save. A delete:
+    # Cancel and Delete, or only Back when something stands in its way.
     detail_buttons <- function(mode, blocked) {
       if (mode == "view" && isTRUE(entity()$view_only)) {
         return(if (kind() == "pdf_file") pdf_open_button(pdf_url(row())))
@@ -420,20 +380,26 @@ make_edit_server <- function(id, connection, me, show_page, active = NULL) {
             icon_label("edit", "Edit"), "edit",
             class = "btn btn-outline-dark", disabled = !is.null(no_update), title = no_update
           ),
+          if (entity()$table %in% edit_emptiable) {
+            review_button(
+              icon_label("delete", "Empty"), "empty",
+              class = "btn btn-outline-dark", title = paste("Remove everything in this", entity()$noun, "and keep the", entity()$noun, "itself")
+            )
+          },
           review_button(
             icon_label("delete", "Delete"), "delete",
             class = "btn btn-delete", disabled = !is.null(no_delete), title = no_delete
-          )
+          ),
+          if (kind() == "wave") wave_reextract_button(row())
         ))
       }
       stuck <- !is.null(blocked) || change$stuck()
       tagList(
         actionButton(ns("cancel"), if (stuck) "Back" else "Cancel", class = "btn-outline-dark"),
-        if (!stuck && mode != "delete" && !editing_request()) actionButton(ns("save_draft"), "Save as draft", class = "btn-outline-dark"),
         if (!stuck) {
           actionButton(
-            ns("submit"), primary_label(),
-            class = if (mode == "delete" && !needs_approval()) "btn-delete" else "btn-primary", disabled = !change$ready()
+            ns("submit"), switch(mode, add = "Add it", update = "Save", delete = "Delete it"),
+            class = if (mode == "delete") "btn-delete" else "btn-primary", disabled = !change$ready()
           )
         }
       )
@@ -450,129 +416,15 @@ make_edit_server <- function(id, connection, me, show_page, active = NULL) {
       pdf_address(session, ns(paste0("pdf-", pdf$pdf_sha256)), list(path = path, name = name, sha256 = pdf$pdf_sha256))
     }
 
-    sent_back_note <- function() {
-      sent_back <- draft()$sent_back
-      if (identical(draft()$status, "Sent Back") && !is.null(sent_back)) {
-        edit_callout(
-          "warning",
-          title = paste0(sent_back$by, " sent this back"), p(sent_back$note), p("Change what they ask, then send it again.")
-        )
-      }
-    }
-
-    # ------ Saved drafts ------------------------------------------------------
-    mine <- reactive(edit_service_open(proposals(), prepared_by_id = me$staff_id, status = c("Draft", "Sent Back")))
-
-    output$drafts <- renderUI({
-      records <- mine()
-      if (length(records) == 0) {
-        return(NULL)
-      }
-      tags$details(
-        class = "edit-drafts",
-        open = if (any(vapply(records, function(record) identical(record$status, "Sent Back"), logical(1)))) NA,
-        tags$summary(sprintf("Your saved edits (%d)", length(records))),
-        lapply(records, function(record) {
-          div(
-            class = "edit-draft",
-            div(
-              p(strong(record$summary), if (identical(record$status, "Sent Back")) row_badge("Sent back", class = "is-warning")),
-              if (!is.null(record$sent_back)) {
-                p(class = "edit-draft-meta", strong(paste0(record$sent_back$by, ": ")), paste0("“", record$sent_back$note, "”"))
-              },
-              p(class = "edit-draft-meta", paste("Saved", time_ago(parse_time(record$saved))))
-            ),
-            div(
-              review_button("Discard", "discard", `data-id` = record$id, class = "btn btn-link"),
-              review_button("Continue", "continue", `data-id` = record$id, class = "btn btn-sm btn-primary")
-            )
-          )
-        })
-      )
-    })
-
-    # Opens a saved draft in the details, as it was saved: its kind, questionnaire, item and what was typed.
-    open_draft <- function(record) {
-      target <- as.character(record$form$target %||% "")
-      where <- list(
-        kind = record$form$entity, scope = as.character(record$form$scope %||% ""),
-        key = if (nzchar(target)) target, verb = record$form$action
-      )
-      if (!is.null(where$key)) {
-        snap <- tables_of(where$kind)
-        if (inherits(snap, "error") || is.null(edit_service_row(edit_entities[[where$kind]], snap, where$key))) {
-          showNotification(
-            "What this draft changes has been changed or removed since you saved it, so it can't be opened.",
-            type = "warning"
-          )
-          return()
-        }
-      }
-      show_item(where)
-      resume(record)
-      draft(record)
-    }
-
-    confirm_discard <- function(record) {
-      showModal(confirm_dialog(
-        "Discard this saved edit?",
-        p(strong(record$summary)),
-        p("It's set aside and won't be listed here again. Nothing has been added to the MATR metadata database."),
-        confirm_id = ns("confirm_discard"), confirm_label = "Discard", easy_close = TRUE
-      ))
-      discarding(record$id)
-    }
-    discarding <- reactiveVal(NULL)
-
-    observeEvent(input$confirm_discard, {
-      removeModal()
-      try_showing({
-        edit_service_withdraw(connection, discarding(), me)
-        showNotification("Saved edit discarded.", type = "message")
-      }, "Couldn't discard it")
-      saved_count(saved_count() + 1L)
-    })
-
     # ------ The details' buttons ---------------------------------------------
-    # The main button follows the rule (service_change_request.R): an add or an update, or anything an ADMIN
-    # does, is applied at once; a STAFF member's delete is sent for approval. A request being edited again is
-    # saved as a new version, which nobody has approved yet.
-    primary_label <- function() {
-      if (editing_request()) {
-        return("Save the new version")
-      }
-      if (needs_approval()) {
-        return("Send for approval")
-      }
-      switch(verb(), add = "Add it", update = "Save", delete = "Delete it", "Apply")
-    }
-
     observe({
       req(verb() %in% c("add", "update", "delete"))
       updateActionButton(session, "submit", disabled = !change$ready())
     })
 
-    # What is left to do before it can be sent. What sending does is in the info block at the top.
+    # What is left to do before it can be applied.
     output$footer_note <- renderUI({
       if (!change$ready()) change$blockers()[1]
-    })
-
-    # Other open edits that change the same record: staff should talk first.
-    output$conflicts <- renderUI({
-      items <- tryCatch(change$built()$items, shiny.silent.error = function(problem) NULL)
-      clashes <- edit_service_conflicts(proposals(), items, except = draft()$id)
-      if (length(clashes) == 0) {
-        return(NULL)
-      }
-      edit_callout(
-        "warning",
-        title = "Another open edit already changes this",
-        lapply(clashes, function(record) {
-          who <- if (draft_row_service_is_mine(record, me)) "You have" else paste(record$prepared_by, "has")
-          p(strong(who), paste0(" an open edit that changes the same thing: “", record$summary, "”."))
-        }),
-        p("Check it first, and talk to whoever made it, so the two don't undo each other.")
-      )
     })
 
     # Cancel: a form with something typed in it asks first; it goes back to the item (or to nothing, for an add).
@@ -590,36 +442,14 @@ make_edit_server <- function(id, connection, me, show_page, active = NULL) {
     })
 
     back_to_item <- function() {
-      draft(NULL)
-      resume(NULL)
       verb(if (is.null(picked())) "" else "view")
     }
 
-    # ------ Saving ------------------------------------------------------------
-    # A form with things still to fix can be saved as a draft: it's saved as typed, without its items.
-    build_record <- function(status) {
-      built <- tryCatch(change$built(), shiny.silent.error = function(problem) NULL) %||%
-        edit_service_unfinished(verb(), entity())
-      edit_service_record(me, change$form(), built, status, previous = draft(), reviewer = input$reviewer)
-    }
-
-    observeEvent(input$save_draft, {
-      saved <- try_showing({
-        saved <- edit_service_save(connection, build_record("Draft"), me)
-        saved_count(saved_count() + 1L)
-        saved
-      }, "Couldn't save")
-      if (is.null(saved)) {
-        return()
-      }
-      draft(saved)
-      showNotification("Saved as a draft. You can pick it up again from the top of this page.", type = "message")
-    })
-
+    # ------ Applying ------------------------------------------------------------
     # The main button. An add is checked for something like it first.
     observeEvent(input$submit, {
       req(change$ready())
-      if (identical(verb(), "add") && !editing_request()) {
+      if (identical(verb(), "add")) {
         found <- tryCatch(
           edit_service_duplicates(entity(), snapshot(), change$fields(), change$values()),
           shiny.silent.error = function(problem) list()
@@ -639,31 +469,15 @@ make_edit_server <- function(id, connection, me, show_page, active = NULL) {
       proceed()
     })
 
-    # Saves, then does what the rule says: applies it, sends it for approval, or saves a new version. The lists are
-    # read again, and the details say what happened.
+    # Applies the change. The lists are read again, and the details say what happened.
     proceed <- function() {
-      outcome <- try_showing(
-        if (editing_request() || needs_approval()) {
-          # a request being changed is saved as a new version; any other waits for approval
-          saved <- edit_service_save(connection, build_record("Awaiting Review"), me)
-          list(applied = FALSE, record = saved, resaved = editing_request())
-        } else {
-          saved <- edit_service_save(connection, build_record("Draft"), me)
-          draft(saved) # if the database refuses it, what was typed is still a saved edit
-          saved_count(saved_count() + 1L)
-          list(applied = TRUE, record = saved, history_id = edit_service_apply(connection, saved, me))
-        },
-        if (needs_approval()) "Couldn't send it" else "Couldn't apply it"
-      )
-      if (is.null(outcome)) {
+      built <- change$built()
+      applied <- try_showing(edit_service_apply(connection, built, me), "Couldn't apply it")
+      if (is.null(applied)) {
         return()
       }
-      outcome$verb <- verb()
-      saved_count(saved_count() + 1L)
-      draft(NULL)
-      resume(NULL)
-      if (isTRUE(outcome$applied)) read_again()
-      done(outcome)
+      read_again()
+      done(list(verb = verb(), summary = built$summary, history_id = applied$history_id, new_ids = applied$new_ids))
       verb("done")
     }
 
@@ -673,34 +487,14 @@ make_edit_server <- function(id, connection, me, show_page, active = NULL) {
         class = "block-detail edit-detail",
         div(
           class = "detail-content edit-sent",
-          h2(
-            span(class = "edit-sent-mark", app_icon("done")),
-            if (isTRUE(outcome$applied)) "Done" else if (isTRUE(outcome$resaved)) "Saved" else "Sent for approval"
-          ),
-          p(strong(outcome$record$summary)),
-          p(
-            if (isTRUE(outcome$applied) && identical(outcome$verb, "delete")) {
-              "Successfully deleted from the database."
-            } else if (isTRUE(outcome$applied)) {
-              "Successfully saved to the database."
-            } else if (isTRUE(outcome$resaved)) {
-              "This is a new version of the request. It is waiting on Change Requests, where one other staff member has to approve it."
-            } else {
-              paste(
-                "It is waiting on Change Requests, where one other staff member has to approve it.",
-                "Nothing has changed in the MATR metadata database yet."
-              )
-            }
-          )
+          h2(span(class = "edit-sent-mark", app_icon("done")), "Done"),
+          p(strong(outcome$summary)),
+          p(if (identical(outcome$verb, "delete")) "Successfully deleted from the database." else "Successfully saved to the database.")
         ),
         div(
           class = "detail-actions",
           review_button("Back", "back", class = "btn btn-outline-dark"),
-          if (isTRUE(outcome$applied)) {
-            actionButton(ns("to_history"), "See the Edit History", class = "btn-primary")
-          } else {
-            actionButton(ns("to_change_requests"), "Go to Change Requests", class = "btn-primary")
-          }
+          actionButton(ns("to_history"), "See the Edit History", class = "btn-primary")
         )
       )
     }
@@ -714,10 +508,58 @@ make_edit_server <- function(id, connection, me, show_page, active = NULL) {
       verb(if (changed_still_there) "view" else "")
     }
 
+    # ------ Emptying ---------------------------------------------------------------------------
+    # Empty on a registry, study, questionnaire or wave: what it holds goes, it stays. The dialog says what would go,
+    # counted from the database as it is now.
+    ask_empty <- function() {
+      req(entity()$table %in% edit_emptiable)
+      preview <- try_showing(edit_service_empty_preview(connection, kind(), picked()), "Couldn't count what it holds")
+      if (is.null(preview)) {
+        return()
+      }
+      showModal(edit_empty_dialog(ns, entity(), edit_label(snapshot(), entity()$table, row()), preview))
+    }
+
+    observeEvent(input$confirm_empty, {
+      removeModal()
+      req(identical(verb(), "view"), entity()$table %in% edit_emptiable)
+      removed <- try_showing(edit_service_empty(connection, kind(), picked(), me), "Couldn't empty it")
+      if (is.null(removed)) {
+        return()
+      }
+      read_again()
+      showNotification(paste("Emptied.", removed, "It is in the Edit History."), type = "message")
+    })
+
+    # ------ Re-extract a wave ---------------------------------------------------------------
+    # The wave in the details is emptied and a new extraction of it started, from the PDF it was extracted from, into
+    # the same questionnaire; its reading is shown on New Extraction.
+    observeEvent(input$confirm_reextract_wave, {
+      removeModal()
+      req(identical(kind(), "wave"))
+      wave <- row()
+      snap <- snapshot()
+      study_id <- snap$questionnaire$study_id[match(wave$questionnaire_id, snap$questionnaire$questionnaire_id)]
+      id_text <- function(value) if (length(value) == 1 && !is.na(value)) key_text(value) else ""
+      place <- list(
+        registry_id = id_text(snap$study$registry_id[match(study_id, snap$study$study_id)]),
+        study_id = id_text(study_id), questionnaire_id = id_text(wave$questionnaire_id), wave_id = id_text(wave$wave_id)
+      )
+      record <- try_showing(
+        extraction_service_reextract_wave(connection, key_text(wave$wave_id), place, me),
+        "Couldn't start the extraction"
+      )
+      if (is.null(record)) {
+        return()
+      }
+      read_again()
+      showNotification("The wave is emptied and its PDF is being read again.", type = "message")
+      if (is.function(open_reading)) open_reading(record) else show_page("extraction")
+    })
+
     observeEvent(input$to_history, show_page("edit_history"))
-    observeEvent(input$to_change_requests, show_page("change_requests"))
 
     # ------ RETURN ------------------------------------------------------------
-    list(open = open_draft)
+    invisible(NULL)
   })
 }

@@ -29,3 +29,20 @@ fill_all_matr_ids <- function(draft, change_draft) {
   filled$variables$matr_id <- sprintf("m%03d", seq_len(nrow(filled$variables)))
   change_draft(filled, keep_checked = TRUE)
 }
+
+# The page's arguments for a test of the push dialog, with where it records the pages it shows (`seen$pages`).
+push_page <- function(me, seen, ..., env = parent.frame()) {
+  c(edit_page(me, ..., env = env), list(show_page = function(page) seen$pages <- c(seen$pages, page)))
+}
+
+# Picks where the draft goes in the push dialog's Basic Info form, as staff would from its drop-downs, and lets
+# the picks settle (the page waits half a second after the last pick before it asks the database). Called inside
+# testServer().
+# info: The picks, as `picked_basic_info()` gives them.
+pick_basic_info <- function(session, info) {
+  session$setInputs(
+    `info-registry_id` = info$registry_id, `info-study_id` = info$study_id,
+    `info-questionnaire_id` = info$questionnaire_id, `info-wave_id` = info$wave_id
+  )
+  session$elapse(600)
+}

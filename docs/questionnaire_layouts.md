@@ -97,8 +97,8 @@ table of whole questions under a direction (GNA Q1) is a Group. The forms have m
 - a time frame for the next N questions: "PLEASE NOTE THAT THE NEXT SIX QUESTIONS CONCERN THE PAST 12 MONTHS" (Pink p10);
 - a direction for a range: "For questions 50 through 55, please check Yes or No as appropriate." (Pink p9).
 
-A question with its follow-up no longer needs a Group: `parent_question` + `condition` already link them (Pink p1
-Q5/6, AHP p1 Q14, VAQ3 Repro p3 Q9's chain of six). That removes the most common reason Groups are made.
+A question with its follow-up no longer needs a Group: `parent_question` already links them (Pink p1 Q5/6, AHP p1
+Q14, VAQ3 Repro p3 Q9's chain of six). That removes the most common reason Groups are made.
 
 ### No new types for these (each is a column or a rule, not a kind of block)
 
@@ -184,11 +184,11 @@ branches AAATS Parent p86), comparisons of two answers ("If same age as first us
 … IS BOX 3 OR GREATER …" AAATS Twin p78), sections by sex or twin status ("For Females Only (Males continue with
 Question 56.)" AHP p6; "FOR TWINS (IF YOU ARE NOT A TWIN GO TO QUESTION 65.)" VAQ3 Health p15).
 
-**Proposal:** keep one skip per choice or write-in (what the database has) and put anything more as **words in the
-condition of the question reached** (`condition` already exists). The database is a guide, not an engine that runs
-the form. **Decided (D-5):** a Section, Grid or Group has a `condition` too (`questionnaire_component.condition`), for
-"For Females Only" and "COMPLETE THIS SECTION IF …", instead of copying it onto every question inside; a question in
-it keeps its own condition ("if yes") as well.
+**Decided (D-5, revised 2026-11-08):** the database is a guide, not an engine that runs the form, so it keeps one
+thing about routing: which earlier question a question depends on (`parent_question` in the extraction,
+`placement.depends_on_placement_id` in the database). Skip conditions, skip instructions and skip targets are not
+kept, and neither is a `condition` column: "For Females Only" and "COMPLETE THIS SECTION IF …" are printed text,
+kept as an Instruction block where they are printed.
 
 ## 9. Proposed fixture pages (one per kind, for tests and for checking prompt changes)
 
@@ -215,6 +215,6 @@ it keeps its own condition ("if yes") as well.
 2. **Group** only for instruction / definition scope and shared routing; follow-ups via `parent_question` alone. Done.
 3. **`recorded_by`** (respondent / interviewer) on questions instead of a Checkpoint type.
 4. D-1 elided items written whole; D-2 person fill-ins as `[subject]`. Done.
-5. D-5 `condition` on Sections, Grids and Groups. Done.
+5. D-5 routing kept as one dependency per question; no `condition` column, no skip fields. Done (section 8).
 6. Choice fixes: "?" (bug), "between X and Y", restated units, abbreviations.
 7. D-3 general stem slot ([item], found by Normalize); D-4 subject for comparisons ("Twins (compared)"). Done.

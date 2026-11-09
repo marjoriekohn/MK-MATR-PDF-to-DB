@@ -1,8 +1,8 @@
 # The New Extraction page: two ways to start an extraction of a questionnaire.
 #  Manual          type the questionnaire in yourself, on a blank Edit Extraction page
 #  AI-Powered      upload a PDF and an AI reads it, in the background
-# Both end on the same Edit Extraction page, with the same kind of draft. A draft whose change request isn't
-# submitted yet is picked up again on the Extraction Drafts page (`extraction_drafts_page_ui()`).
+# Both end on the same Edit Extraction page, with the same kind of draft. A draft that isn't pushed yet is
+# picked up again on the Extraction Drafts page (`extraction_drafts_page_ui()`).
 extraction_ui <- function(id) {
   ns <- NS(id)
   div(

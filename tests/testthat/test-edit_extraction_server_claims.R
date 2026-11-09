@@ -49,7 +49,7 @@ test_that("Continue shows the PDF that was uploaded with the draft, even on a se
   local_pdf_cache()
   typed <- extraction_service_create_manual(test_connection, me, upload = fake_upload("typed.pdf"))
   withr::defer(test_delete_pdf(typed$pdf$sha256)) # after the draft, which points at it
-  withr::defer(test_delete_draft(typed$id))
+  withr::defer(test_delete_extraction(typed$id))
   unlink(typed$pdf$path) # as a hosted site that restarted, or a session on another of its servers
   # a test's stand-in session can't serve files (it has no registerDataObj), so the address is made up
   local_stub("pdf_address", function(session, name, data) paste0("session/pdf/", data$sha256))
@@ -229,7 +229,7 @@ test_that("Save is refused if someone saved the draft after the page opened it, 
   shiny::testServer(edit_extraction_server, args = claim_page(me, seen), {
     open(first)
     change_draft(reworded(draft()))
-    # a save that didn't go through this page (Change Requests' Basic Info, say)
+    # a save that didn't go through this page (another session's, say)
     draft_service_save(test_connection, first$id, reworded(numbered_gold(), "theirs"), colleague$staff_id)
 
     session$setInputs(save = 1)
@@ -317,7 +317,7 @@ test_that("Re-extract reads the PDF again in place of the questionnaire, lets th
     expect_false(has_unsaved_changes())
     expect_equal(shown$id, first$id)
     expect_equal(shown$extraction_status, "queued")
-    expect_null(draft_model_get_both(test_connection, first$id)$questionnaire)
+    expect_null(extraction_model_questionnaire(test_connection, first$id)$questionnaire)
   })
 })
 

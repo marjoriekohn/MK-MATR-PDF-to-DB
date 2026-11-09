@@ -1,6 +1,6 @@
-wave_id,questionnaire_id,name,administered_date,respondent_count
-1,1,Wave 1,2019-05-01,1450
-2,1,Wave 2,2022-04-15,1210
-3,2,Wave 1,2021-09-01,640
-4,3,Wave 1,2021-09-01,598
-5,4,Wave 1,2021-09-01,610
+wave_id,questionnaire_id,name,respondent_count,administered_date,pdf_sha256,pdf_name,supplement_name,supplement_sha256,supplement_text
+1,1,Wave 1,1450,2019-05-01,a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1,AHP_Redacted.pdf,,,
+2,1,Wave 2,1210,2022-04-15,,,,,
+3,2,Wave 1,640,2021-09-01,,,,,
+4,3,Wave 1,598,2021-09-01,,,,,
+5,4,Wave 1,610,2021-09-01,,,,,

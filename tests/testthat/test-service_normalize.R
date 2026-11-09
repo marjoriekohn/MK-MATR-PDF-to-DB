@@ -1,25 +1,5 @@
-# Wording things one way before an extraction is added: answer choices written as the database writes them, and
-# questions that differ only in who they ask about, linked (service_normalize.R).
-
-# A questionnaire asked about each twin in turn: in Twin A's part, a question naming Twin A, one whose choices name
-# Twin A, and one worded the same in both parts; then the same in Twin B's part, and a question comparing them.
-twins_draft <- function() {
-  closed <- function(...) list(variable_type = "closed_ended", response_options = lapply(c(...), function(words) list(answer_option = words)))
-  question <- function(text, number, ...) list(component_type = "Question", text = text, printed_number = number, variables = list(closed(...)))
-  part <- function(twin, numbers) {
-    list(component_type = "Section", text = paste("About", twin), children = list(
-      question(paste("Has", twin, "ever repeated a grade?"), numbers[1], "Yes", "No"),
-      question(paste0("How well does this describe ", twin, "?"), numbers[2], paste("Describes", twin, "very well"), paste("Doesn't describe", twin, "at all")),
-      question("My child smiles often.", numbers[3], "Often", "Never")
-    ))
-  }
-  draft_service_from_json(list(questionnaire = list(), components = list(
-    part("Twin A", c("13a", "14", "20d")),
-    part("Twin B", c("29a", "30", "36d")),
-    question("Who is taller, Twin A or Twin B?", "37", "Twin A", "Twin B")
-  )))
-}
-twins <- c("Respondent's Children", "Twin A", "Twin B")
+# Wording answer choices one way before an extraction is pushed: as the database writes them, and like the choices
+# it has (service_normalize.R); and the time frames the draft writes one way (service_draft.R).
 
 test_that("ranges, dashes and abbreviations in answer choices are written one way", {
   expect_equal(normal_answer(c("1 to 2", "1 - 2", "1–2", "1-2")), rep("1-2", 4))
@@ -124,13 +104,13 @@ choices_draft <- function(...) {
   )))
 }
 
-test_that("choices that could use a wording the database has, or one merged into it, are suggested", {
+test_that("choices that could use a wording the database has are suggested", {
   draft <- choices_draft(c("Yes most of the time", "Not ever", "Never"))
-  aliases <- data.frame(alias = "not ever", label = "never")
-  suggested <- normalize_service_choice_suggestions(draft, c("yes, most of the time", "never"), aliases)
-  expect_equal(suggested$from, c("not ever", "yes most of the time"))
-  expect_equal(suggested$to, c("never", "yes, most of the time"))
-  expect_equal(suggested$why, c("merged", "alike"))
+  suggested <- normalize_service_choice_suggestions(draft, c("yes, most of the time", "never"))
+  expect_equal(suggested$from, "yes most of the time") # "not ever" looks like nothing the database has
+  expect_equal(suggested$to, "yes, most of the time")
+  expect_equal(suggested$why, "alike")
+  expect_true(suggested$in_database)
   expect_equal(nrow(normalize_service_choice_suggestions(choices_draft(c("Yes", "No")), c("yes", "no"))), 0)
 })
 
@@ -149,59 +129,7 @@ test_that("using another wording changes it everywhere, unless a variable would 
   expect_error(normalize_service_use_choice(draft, "yes most of the time", "no"), "offers both")
 })
 
-test_that("questions that differ only in who they ask about, or are worded the same in parts about different people, are found", {
-  groups <- normalize_service_question_groups(twins_draft(), twins)
-  expect_equal(vapply(groups, function(group) group$stem, ""), c(
-    "Has [subject] ever repeated a grade?", "How well does this describe [subject]?", "My child smiles often."
-  ))
-  expect_true(all(vapply(groups, function(group) identical(group$subjects, c("Twin A", "Twin B")), TRUE)))
-  expect_false(any(vapply(groups, function(group) group$linked, TRUE)))
-  # a question naming both twins compares them: it is no one's
-  expect_false(any(vapply(groups, function(group) "c9" %in% group$ids, TRUE)))
-  # without subjects to find, there is nothing; and a one-letter subject isn't looked for in every "a"
-  expect_length(normalize_service_question_groups(twins_draft(), character()), 0)
-  expect_length(normalize_service_question_groups(twins_draft(), "A"), 0)
-})
-
-test_that("linking gives questions their stem and subjects, and choices that name the twin [subject], so they share a set", {
-  draft <- twins_draft()
-  for (group in normalize_service_question_groups(draft, twins)) draft <- normalize_service_link(draft, group, twins)
-  questions <- draft$components[draft$components$component_type == "Question", ]
-  expect_equal(questions$stem, c(
-    "Has [subject] ever repeated a grade?", "How well does this describe [subject]?", "My child smiles often.",
-    "Has [subject] ever repeated a grade?", "How well does this describe [subject]?", "My child smiles often.", NA
-  ))
-  expect_equal(draft$variables$subject, c(rep("Twin A", 3), rep("Twin B", 3), NA))
-  described <- function(id) draft$response_options$answer_option[draft$response_options$variable_id == id]
-  expect_equal(described("v2"), c("describes [subject] very well", "doesn't describe [subject] at all"))
-  expect_equal(described("v5"), described("v2"))
-  expect_equal(described("v7"), c("twin a", "twin b")) # comparing them, so left as printed
-  expect_true(all(vapply(normalize_service_question_groups(draft, twins), function(group) group$linked, TRUE)))
-
-  # the stem is kept with the draft, and unlinking takes it off (who they are about stays)
-  again <- draft_service_from_json(draft_service_to_json(draft))
-  expect_equal(again$components$stem, draft$components$stem)
-  unlinked <- normalize_service_unlink(draft, c("c2", "c6"))
-  expect_true(all(is.na(unlinked$components$stem[unlinked$components$id %in% c("c2", "c6")])))
-  expect_equal(unlinked$variables$subject, draft$variables$subject)
-})
-
-# ------ Questions about different times -------------------------------------------------------------------------
-# The same question asked about three times, as AAATS H.3-H.5 asks it, and one asked about each twin over a year.
-times_draft <- function() {
-  question <- function(text, number) {
-    list(component_type = "Question", text = text, printed_number = number,
-         variables = list(list(variable_type = "open_ended", answer_data_type = "NUMBER")))
-  }
-  draft_service_from_json(list(questionnaire = list(), components = list(
-    question("on how many occasions have you smoked cigarettes in your lifetime?", "H.3"),
-    question("on how many occasions have you smoked cigarettes during the last 12 months?", "H.4"),
-    question("on how many occasions have you smoked cigarettes in the past 30 days?", "H.5"),
-    question("over the past year, how would you say your relationship with twin a has been?", "8"),
-    question("over the past year, how would you say your relationship with twin b has been?", "9")
-  )))
-}
-
+# ------ Time frames ------------------------------------------------------------------------------
 test_that("a time frame is written one way however it is printed", {
   expect_equal(
     normal_time_frame(c(
@@ -215,124 +143,4 @@ test_that("a time frame is written one way however it is printed", {
   )
   expect_equal(normal_time_frame("Since your last birthday"), "since your last birthday") # one it doesn't know: as typed
   expect_true(is.na(normal_time_frame(" ")))
-})
-
-test_that("questions that differ only in when they ask about are found, and so are those about different people", {
-  groups <- normalize_service_question_groups(times_draft(), twins)
-  expect_equal(vapply(groups, function(group) group$stem, ""), c(
-    "on how many occasions have you smoked cigarettes [time frame]?",
-    "[time frame], how would you say your relationship with [subject] has been?"
-  ))
-  expect_equal(groups[[1]]$time_frames, c("in your lifetime", "in the past 12 months", "in the past 30 days"))
-  expect_true(all(is.na(groups[[1]]$subjects))) # all about the respondent
-  expect_equal(groups[[2]]$subjects, c("Twin A", "Twin B"))
-  expect_equal(groups[[2]]$time_frames, c("in the past year", "in the past year"))
-  # asked twice about the same time, they aren't different questions
-  twice <- times_draft()
-  twice$components$text[2] <- "on how many occasions have you smoked cigarettes in your life?"
-  expect_equal(vapply(normalize_service_question_groups(twice, twins), function(group) length(group$ids), 1), 2)
-})
-
-test_that("linking gives each variable its time frame, and a subject only to questions about different people", {
-  draft <- times_draft()
-  draft$variables$subject[1:3] <- "Respondent's Siblings"
-  for (group in normalize_service_question_groups(draft, twins)) draft <- normalize_service_link(draft, group, twins)
-  expect_equal(draft$variables$time_frame, c(
-    "in your lifetime", "in the past 12 months", "in the past 30 days", "in the past year", "in the past year"
-  ))
-  expect_equal(draft$variables$subject, c(rep("Respondent's Siblings", 3), "Twin A", "Twin B"))
-  expect_true(all(vapply(normalize_service_question_groups(draft, twins), function(group) group$linked, TRUE)))
-  # the time frame is kept with the draft
-  again <- draft_service_from_json(draft_service_to_json(draft))
-  expect_equal(again$variables$time_frame, draft$variables$time_frame)
-})
-
-# ------ Questions about different people, by pronoun or reworded ------------------------------------------------
-# Pink p1 Q5/6: "how old is she?" after a daughter, "how old is he?" after a son.
-pronoun_draft <- function(subjects = c(NA, NA)) {
-  question <- function(text, number, subject) {
-    list(component_type = "Question", text = text, printed_number = number,
-         variables = list(list(variable_type = "open_ended", answer_data_type = "NUMBER", subject = subject)))
-  }
-  draft_service_from_json(list(questionnaire = list(), components = list(
-    question("how old is she?", "5", subjects[1]),
-    question("how old is he?", "6", subjects[2]),
-    question("does he or she live with you?", "7", NA)
-  )))
-}
-
-test_that("questions that differ only by pronoun are found, about who their variables are about", {
-  groups <- normalize_service_question_groups(pronoun_draft(c("Respondent's Daughter", "Respondent's Son")), twins)
-  expect_length(groups, 1)
-  expect_equal(groups[[1]]$stem, "how old is [subject]?")
-  expect_equal(groups[[1]]$subjects, c("Respondent's Daughter", "Respondent's Son"))
-  # with no one named, they are linked by their stem alone, and their variables keep who they are about
-  plain <- pronoun_draft()
-  groups <- normalize_service_question_groups(plain, twins)
-  expect_equal(groups[[1]]$ids, plain$components$id[1:2])
-  linked <- normalize_service_link(plain, groups[[1]], twins)
-  expect_equal(linked$components$stem[1:2], rep("how old is [subject]?", 2))
-  expect_true(all(is.na(linked$variables$subject)))
-})
-
-test_that("questions reworded for another person are linked by hand, with the stem staff type", {
-  draft <- draft_service_from_json(list(questionnaire = list(), components = list(
-    list(component_type = "Question", text = "what is your date of birth?", printed_number = "B.1"),
-    list(component_type = "Question", text = "what is the date of birth of the other biological parent?", printed_number = "B.12")
-  )))
-  linked <- normalize_service_link_by_hand(draft, c("B.1", "B.12"), "What is the date of birth of [subject]?")
-  expect_equal(linked$components$stem, rep("what is the date of birth of [subject]?", 2))
-  # the dialog lists them as linked, so they can be unlinked
-  groups <- normalize_service_question_groups(linked, twins)
-  expect_equal(groups[[1]]$ids, linked$components$id)
-  expect_true(groups[[1]]$linked)
-  expect_error(normalize_service_link_by_hand(draft, "B.1", "x [subject]"), "two or more")
-  expect_error(normalize_service_link_by_hand(draft, c("B.1", "Q9"), "x [subject]"), "Q9")
-  expect_error(normalize_service_link_by_hand(draft, c("B.1", "B.12"), " "), "stem")
-})
-
-# ------ Questions about different things ----------------------------------------------------------------------
-# TSA's co-twin questions about tobacco, alcohol and cannabis, and two short questions that only look alike.
-things_draft <- function() {
-  question <- function(text, number) list(component_type = "Question", text = text, printed_number = number)
-  draft_service_from_json(list(questionnaire = list(), components = list(
-    question("when you were growing up, how often were you encouraged to use tobacco by your twin?", "C1"),
-    question("when you were growing up, how often were you encouraged to use alcohol by your twin?", "E1"),
-    question("when you were growing up, how often were you encouraged to use marijuana or hashish by your twin?", "G1"),
-    question("do you often feel lonely?", "1"),
-    question("do you often feel tired?", "2")
-  )))
-}
-
-test_that("questions that differ only in one thing are found, with [item] for it; short ones that only look alike aren't", {
-  groups <- normalize_service_question_groups(things_draft(), twins)
-  expect_length(groups, 1)
-  expect_equal(groups[[1]]$stem, "when you were growing up, how often were you encouraged to use [item] by your twin?")
-  expect_equal(groups[[1]]$items, c("tobacco", "alcohol", "marijuana or hashish"))
-  expect_true(all(is.na(groups[[1]]$subjects)))
-  linked <- normalize_service_link(things_draft(), groups[[1]], twins)
-  expect_equal(linked$components$stem[1:3], rep(groups[[1]]$stem, 3))
-  expect_true(normalize_service_question_groups(linked, twins)[[1]]$linked)
-  # the thing is who they ask about when their variables say so: GNA 4 and 6
-  gold <- gold_draft()
-  people <- Filter(function(group) block_numbered(gold, "4")$id %in% group$ids, normalize_service_question_groups(gold, twins))[[1]]
-  expect_equal(people$stem, "do you have more than five [subject]?")
-  expect_equal(people$subjects, c("Respondent's Children", "Respondent's Siblings"))
-  # a grid's items differ by design: they aren't linked
-  grid <- list(component_type = "Grid", text = "when you were growing up, how often were you encouraged by your twin to use", children = list(
-    list(component_type = "Question", text = "tobacco at a party with friends?", printed_number = "a"),
-    list(component_type = "Question", text = "alcohol at a party with friends?", printed_number = "b")
-  ))
-  expect_length(normalize_service_question_groups(draft_service_from_json(list(components = list(grid))), twins), 0)
-})
-
-test_that("the Normalize dialog says what each linked question is about, and links others by hand", {
-  draft <- things_draft()
-  no_choices <- data.frame(from = character(), uses = integer(), to = character(), why = character(), in_database = logical())
-  html <- htmltools::renderTags(normalize_ui(shiny::NS("x"), no_choices, normalize_service_question_groups(draft, twins), draft))$html
-  expect_match(html, "Questions about different people, times or things", fixed = TRUE)
-  expect_match(html, "(marijuana or hashish)", fixed = TRUE)
-  expect_match(html, 'id="x-link_numbers"')
-  expect_match(html, 'id="x-link_stem"')
-  expect_match(html, 'id="x-link_by_hand"')
 })

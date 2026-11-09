@@ -1,19 +1,16 @@
 # ------ Making an edit ----------------------------------------------------------------------
-# What the Make an edit page does, apart from drawing it: reads what it needs
-# from the live tables, lists the rows staff can pick, checks what they type,
-# works out what a change reaches, and writes the change as a proposal.
+# What the Make an edit page does, apart from drawing it: reads what it needs from the catalog's tables, lists
+# the rows staff can pick, checks what they type, works out what a change reaches, and applies the change.
 #
-# A proposal is a list of items, one per field changed (R/model_edit.R), in the
-# shape of the database's WRITE_HISTORY_ITEM rows:
+# A change is a list of items, one per field changed, in the shape the database's apply_change() takes
+# (sql/4_functions.sql):
 #   Update  one per field that differs, with its old and new value
 #   Insert  one per field of each new row
-#   Delete  one per field of the row and of every row that goes with it
-# Items are numbered in the order they must be applied: what's new before
-# what points at it, and what points at a row before the row.
+#   Delete  one per field of the row deleted (what goes with it, the database takes along itself)
+# Items are numbered in the order they must be applied: what's new before what points at it.
 #
-# A row an edit adds has no ID yet. Its items name it `new:<table>:<n>`
-# (new:study:1), and so does anything pointing at it; the apply step swaps in
-# the IDs the database gives.
+# A row an edit adds has no ID yet. Its items name it `new:<table>:<n>` (new:study:1), and so does anything
+# pointing at it; the database swaps in the IDs it gives and hands them back.
 
 # ------ Items -----------------------------------------------------------------------------------
 # One field of one row, as text: empty is NA, TRUE is "true".
@@ -30,7 +27,7 @@ item_text <- function(value) {
   as.character(value)
 }
 
-# One item of a proposal: one change to one field of one row.
+# One item of a change: one change to one field of one row.
 # entity_name: The table.
 # record_identifier: The row, from `edit_identifier()`.
 # action: `"Insert"`, `"Update"` or `"Delete"`.
@@ -76,16 +73,15 @@ edit_number_items <- function(items) {
 }
 
 # ------ Reading --------------------------------------------------------------------------------------
-# Every table the kind needs: its rows, what they point at and what points at
-# them, so a card can count and a delete can say what goes.
+# Every table the kind needs: its rows, what they point at and what points at them, so a card can count and a
+# delete can say what goes.
 edit_service_tables <- function(entity) {
-  parts <- entity$parts %||% list(list(entity = entity$key))
-  part_tables <- vapply(parts, function(part) edit_entities[[part$entity]]$table, character(1))
-  parents <- unique(c(unlist(lapply(part_tables, function(table) {
-    vapply(Filter(function(relation) relation$child == table, edit_relations), function(relation) relation$parent, character(1))
-  })), entity$scope$table))
+  parents <- unique(c(
+    vapply(Filter(function(relation) relation$child == entity$table, edit_relations), function(relation) relation$parent, character(1)),
+    entity$scope$table
+  ))
   unique(c(
-    edit_tables_to_read(c(part_tables, entity$scope$table)), parents,
+    edit_tables_to_read(c(entity$table, entity$scope$table)), parents,
     unlist(edit_label_needs[parents]), unlist(edit_choice_needs[parents]), entity$reads,
     "questionnaire" # where a row appears is grouped by questionnaire
   ))
@@ -154,28 +150,16 @@ edit_service_row <- function(entity, snap, key) {
 
 # ------ The form ---------------------------------------------------------------------------------------------
 # The fields of an add or update form.
-# Each has an `id` (kind__field) that is also its input's name. An add that needs more
-# rows (a study, with its first questionnaire and wave) has the fields of all of them,
-# `part` saying which.
+# Each has an `id` (kind__field) that is also its input's name.
 # Returns: A list of fields, each a list with `id`, `name`, `label`, `type` and more.
 edit_service_fields <- function(entity, snap, mode, row = NULL, scope = NULL) {
-  parts <- if (mode == "add" && !is.null(entity$parts)) entity$parts else list(list(entity = entity$key))
-  fields <- list()
-  for (i in seq_along(parts)) {
-    part <- parts[[i]]
-    specs <- edit_entities[[part$entity]]$fields(snap, mode, if (i == 1) row, scope)
-    if (!is.null(part$link)) specs <- Filter(function(spec) spec$name != part$link, specs)
-    specs <- lapply(specs, function(spec) {
-      spec$part <- part$entity
-      spec$part_index <- i
-      spec$part_title <- if (length(parts) > 1) part$title
-      spec$id <- paste0(part$entity, "__", spec$name)
-      if (mode != "update") spec$locked <- NULL
-      spec
-    })
-    fields <- c(fields, specs)
-  }
-  fields
+  specs <- entity$fields(snap, mode, row, scope)
+  lapply(specs, function(spec) {
+    spec$part <- entity$key
+    spec$id <- paste0(entity$key, "__", spec$name)
+    if (mode != "update") spec$locked <- NULL
+    spec
+  })
 }
 
 # What each field starts with.
@@ -257,10 +241,9 @@ edit_service_visible <- function(field, values) {
   identical(values[[paste0(field$part, "__", field$show_when$field)]] %||% "", field$show_when$value)
 }
 
-# The values of one part of the form, by field name, for a field's own checks.
-edit_part_values <- function(fields, values, part) {
-  mine <- Filter(function(field) field$part == part, fields)
-  stats::setNames(lapply(mine, function(field) values[[field$id]] %||% ""), vapply(mine, function(field) field$name, character(1)))
+# The values of the form, by field name, for a field's own checks.
+edit_part_values <- function(fields, values) {
+  stats::setNames(lapply(fields, function(field) values[[field$id]] %||% ""), vapply(fields, function(field) field$name, character(1)))
 }
 
 # Every field that's shown and can be changed: not hidden, not locked.
@@ -271,9 +254,9 @@ edit_service_active <- function(fields, values) {
 # ------ The details ------------------------------------------------------------------------------------------------
 # What a row's details list: its fields as text, each on a line of its own.
 # A field that only matters while another has a value is left out when it doesn't, and so is the one field of a kind
-# that has only one, which is the details' title already (a subject's name). A kind with `details` lists what it
-# belongs to as well (a questionnaire's study), and picks and orders its own fields: `details(snap, row, own)` takes
-# these lines and gives the ones to show.
+# that has only one, which is the details' title already (an answer choice's words). A kind with `details` lists
+# what it belongs to as well (a questionnaire's study), and picks and orders its own fields: `details(snap, row,
+# own)` takes these lines and gives the ones to show.
 # row: The row.
 # fields: The form's fields, from `edit_service_fields()` (as an update).
 # values: What each starts with, from `edit_service_initial()`.
@@ -317,7 +300,7 @@ edit_details_pick <- function(lines, names) {
 
 # ------ Checking what's typed -----------------------------------------------------------------------------------
 # Check what staff typed.
-# A problem stops the edit being sent; a warning only says.
+# A problem stops the edit being applied; a warning only says.
 # Returns: A list: `missing` (required fields left empty, as their labels), `problems` and
 #   `warnings` (a sentence for each field, by id, that has one), and `missing_ids` (the ids of the
 #   required fields left empty, so the form can outline them in red).
@@ -325,9 +308,9 @@ edit_service_check <- function(fields, values) {
   missing <- list()
   problems <- list()
   warnings <- list()
+  part_values <- edit_part_values(fields, values)
   for (field in edit_service_active(fields, values)) {
     value <- values[[field$id]] %||% ""
-    part_values <- edit_part_values(fields, values, field$part)
     blank <- !has_text(value)
     if (blank && field$required) missing[[length(missing) + 1]] <- field
     problem <- if (!blank) edit_type_problem(field, value)
@@ -337,20 +320,9 @@ edit_service_check <- function(fields, values) {
     if (!is.null(warning)) warnings[[field$id]] <- warning
   }
   list(
-    missing = edit_missing_labels(missing), problems = problems, warnings = warnings,
+    missing = vapply(missing, function(field) tolower_words(field$label), character(1)), problems = problems, warnings = warnings,
     missing_ids = vapply(missing, function(field) field$id, character(1))
   )
-}
-
-# The labels of the fields left empty. Where two have the same label (a study's
-# name and its questionnaire's), each says what it belongs to.
-edit_missing_labels <- function(fields) {
-  labels <- vapply(fields, function(field) tolower_words(field$label), character(1))
-  twice <- labels %in% labels[duplicated(labels)]
-  labels[twice] <- vapply(fields[twice], function(field) {
-    paste(edit_entities[[field$part]]$noun, tolower_first(field$label))
-  }, character(1))
-  labels
 }
 
 edit_type_problem <- function(field, value) {
@@ -360,10 +332,7 @@ edit_type_problem <- function(field, value) {
       if (is.na(number)) {
         "Type a whole number, e.g. 1,200."
       } else if (!is.null(field$min) && number < field$min) {
-        sprintf(
-          "Type %s or more.",
-          field$min
-        )
+        sprintf("Type %s or more.", field$min)
       }
     },
     date = edit_date_problem(value),
@@ -392,8 +361,6 @@ edit_date_problem <- function(text) {
 # Returns: A data frame with `id`, `name`, `label`, `short`, `type`, `old` and `new` (as
 #   shown) and `old_value` and `new_value` (as saved); no rows if nothing changed.
 edit_service_changes <- function(fields, initial, values) {
-  # A field that's no longer shown (a follow-up's parent, once the question
-  # stands on its own) counts as emptied.
   unlocked <- Filter(function(field) is.null(field$locked), fields)
   rows <- lapply(unlocked, function(field) {
     was <- edit_service_normalize(field, initial[[field$id]])
@@ -508,10 +475,10 @@ edit_service_word_diff <- function(old, new) {
 # fields: The form's fields, from `edit_service_fields()`. Not for a delete.
 # values: What is in the form: a named list of strings by field id. Not for a delete.
 # plan: For a delete, the plan if it is already worked out.
-# Returns: A list: `items` (numbered, in the order to apply them) and `summary` (one
-#   sentence for the proposal); a delete also has its `plan`. An error with a sentence if an add or an
-#   update would change something while its form still has a field to fill in or fix: the page only builds
-#   a checked form, but a caller that builds one itself (`edit_service_quick_add()`) is checked here too.
+# Returns: A list: `items` (numbered, in the order to apply them) and `summary` (one sentence for the history); a
+#   delete also has its `plan`. An error with a sentence if an add or an update would change something while its
+#   form still has a field to fill in or fix: the page only builds a checked form, but a caller that builds one
+#   itself (`edit_service_quick_add()`) is checked here too.
 edit_service_build <- function(entity, mode, snap, row = NULL, scope = NULL, fields = NULL, values = NULL, plan = NULL) {
   if (mode == "delete") {
     plan <- plan %||% edit_service_delete_plan(entity, snap, row)
@@ -529,9 +496,7 @@ edit_service_build <- function(entity, mode, snap, row = NULL, scope = NULL, fie
   }
   # an update that changes nothing writes nothing, whatever its form holds
   if (NROW(items) > 0) edit_refuse_unchecked(edit_service_check(fields, values))
-  summary <- if (mode != "add" && !is.null(entity$summary_update)) {
-    entity$summary_update(snap, row, fields, values)
-  } else if (mode != "add") {
+  summary <- if (mode != "add") {
     edit_summary_update(entity, snap, row, fields, values)
   } else if (!is.null(entity$summary_add)) {
     entity$summary_add(snap, scope, fields, values)
@@ -551,28 +516,16 @@ edit_refuse_unchecked <- function(found) {
 }
 
 # ------ * Add ------------------------------------------------------------------------------------------------------------
-# One Insert item per field filled in, for each part in turn; a part's link
-# holds the new row before it.
+# One Insert item per field filled in, on a row named `new:<table>:1`.
 edit_add_items <- function(entity, snap, fields, values) {
-  parts <- entity$parts %||% list(list(entity = entity$key))
-  made <- character()
-  items <- list()
-  for (i in seq_along(parts)) {
-    part <- parts[[i]]
-    table <- edit_entities[[part$entity]]$table
-    token <- sprintf("new:%s:%d", table, sum(vapply(parts[seq_len(i)], function(p) edit_entities[[p$entity]]$table == table, logical(1))))
-    key <- edit_table_key(table)
-    identifier <- edit_identifier(stats::setNames(list(token), key[1]))
-    if (!is.null(part$link)) {
-      items[[length(items) + 1]] <- edit_item(table, identifier, "Insert", part$link, NA, made[i - 1])
-    }
-    for (field in Filter(function(field) field$part == part$entity, edit_service_active(fields, values))) {
-      value <- edit_service_normalize(field, values[[field$id]])
-      if (!is.na(value)) items[[length(items) + 1]] <- edit_item(table, identifier, "Insert", field$name, NA, value)
-    }
-    made[i] <- token
-  }
-  do.call(rbind, items)
+  table <- entity$table
+  identifier <- edit_identifier(stats::setNames(list(sprintf("new:%s:1", table)), edit_table_key(table)[1]))
+  items <- lapply(edit_service_active(fields, values), function(field) {
+    value <- edit_service_normalize(field, values[[field$id]])
+    if (!is.na(value)) edit_item(table, identifier, "Insert", field$name, NA, value)
+  })
+  items <- Filter(Negate(is.null), items)
+  if (length(items) == 0) NULL else do.call(rbind, items)
 }
 
 # ------ * Update ----------------------------------------------------------------------------------------------------------
@@ -589,26 +542,17 @@ edit_update_items <- function(entity, snap, row, fields, values) {
 
 # ------ * Delete ------------------------------------------------------------------------------------------------------------
 # What a delete comes to.
-# What it reaches, what stops it, and the items. The kind says where it starts (a
-# question's placement and its settings are one thing).
+# What it reaches, what stops it, and the items.
 # row: The row being deleted.
-# Returns: A list: `cascade`, `reach`, `blocked` (empty when it can go ahead), `items`,
-#   `far_reaching` (whether anything beyond the row itself is affected) and `deleted` (the row picked:
-#   `table`, `row`, its key as JSON, and `name`, see `edit_deleted_name()`), which is all the Edit History keeps
-#   of a delete once it is applied.
+# Returns: A list: `cascade`, `reach`, `blocked` (empty when it can go ahead), `items`, `far_reaching` (whether
+#   anything beyond the row itself is affected) and `deleted` (the row picked: `table`, `row`, its key as JSON, and
+#   `name`, see `edit_deleted_name()`).
 edit_service_delete_plan <- function(entity, snap, row) {
-  start <- if (!is.null(entity$delete_start)) {
-    entity$delete_start(snap, row)
-  } else {
-    stats::setNames(list(edit_key(row, edit_table_key(entity$table))), entity$table)
-  }
-  cascade <- edit_service_cascade(snap, start)
-  blocked <- c(if (!is.null(entity$extra_blockers)) entity$extra_blockers(snap, row), cascade$blocked)
+  cascade <- edit_service_cascade(snap, stats::setNames(list(edit_key(row, edit_table_key(entity$table))), entity$table))
   reach <- edit_service_reach(snap, cascade)
   list(
-    cascade = cascade, reach = reach, blocked = blocked,
+    cascade = cascade, reach = reach, blocked = cascade$blocked,
     items = edit_delete_items(snap, cascade),
-    # whether anything beyond the row itself is affected
     far_reaching = reach$total > 0 || length(reach$changed) > 0,
     deleted = list(table = entity$table, row = edit_row_identifier(entity$table, row), name = edit_deleted_name(snap, entity$table, row))
   )
@@ -624,9 +568,9 @@ edit_deleted_name <- function(snap, table, row) {
   edit_label(snap, table, row)
 }
 
-# Every field of every row that goes, children before parents, and first any
-# reference to a row that's going (a study's contact) emptied. A wave that asks
-# fewer questions numbers the rest again (edit_wave_numbers()).
+# The items of a delete: first any reference to the row that stays emptied (a study's contact), then the waves that
+# lose questions numbering the rest again (edit_wave_numbers()), then every field of the row deleted. What points
+# at the row and goes with it, the database deletes itself (sql/2_references.sql), so it isn't written.
 edit_delete_items <- function(snap, cascade) {
   items <- list()
   for (clear in cascade$cleared) {
@@ -636,8 +580,9 @@ edit_delete_items <- function(snap, cascade) {
       }
     }
   }
-  for (table in intersect(edit_delete_order, names(cascade$removed))) {
-    rows <- edit_children_first(edit_rows(snap, table, cascade$removed[[table]]), table)
+  items <- c(items, list(edit_renumber_after_delete(snap, cascade)))
+  for (table in intersect(edit_delete_order, names(cascade$start))) {
+    rows <- edit_rows(snap, table, cascade$start[[table]])
     others <- setdiff(names(database_tables[[table]]$columns), database_tables[[table]]$key)
     for (i in seq_len(nrow(rows))) {
       row <- rows[i, , drop = FALSE]
@@ -650,7 +595,6 @@ edit_delete_items <- function(snap, cascade) {
       }
     }
   }
-  items <- c(items, list(edit_renumber_after_delete(snap, cascade)))
   items <- Filter(Negate(is.null), items)
   if (length(items) == 0) NULL else do.call(rbind, items)
 }
@@ -664,6 +608,8 @@ edit_renumber_after_delete <- function(snap, cascade) {
   asked <- snap$wave_question
   is_gone <- edit_key(asked, edit_table_key("wave_question")) %in% gone
   touched <- unique(asked[is_gone, c("questionnaire_id", "wave_id"), drop = FALSE])
+  # a wave that goes itself takes its numbers with it
+  touched <- touched[!key_text(touched$wave_id) %in% cascade$removed$wave, , drop = FALSE]
   items <- lapply(seq_len(nrow(touched)), function(i) {
     q <- touched$questionnaire_id[i]
     wave <- touched$wave_id[i]
@@ -675,40 +621,12 @@ edit_renumber_after_delete <- function(snap, cascade) {
   if (length(items) > 0) do.call(rbind, items)
 }
 
-# Rows that hold others (a section's contents, a question's follow-ups) are
-# deleted after what's inside them.
-edit_children_first <- function(rows, table) {
-  parent_column <- c(questionnaire_component = "parent_placement_id", questionnaire_question = "parent_question_placement_id")[table]
-  if (is.na(parent_column) || nrow(rows) < 2) {
-    return(rows)
-  }
-  depth <- edit_chain_depth(rows$placement_id, rows[[parent_column]], rows$questionnaire_id)
-  rows[order(-depth), , drop = FALSE]
-}
-
-# How many parents each row has above it, in its own questionnaire.
-edit_chain_depth <- function(ids, parents, questionnaires) {
-  depth <- numeric(length(ids))
-  for (i in seq_along(ids)) {
-    p <- parents[i]
-    while (!is.na(p)) {
-      depth[i] <- depth[i] + 1
-      next_row <- which(ids == p & questionnaires == questionnaires[i])
-      if (length(next_row) != 1) break
-      p <- parents[next_row]
-    }
-  }
-  depth
-}
-
-# ------ Sentences for the proposal ----------------------------------------------------------------------------------------------
-# The first thing typed that names the row, e.g. its name or wording (or, for an option set, its choices).
+# ------ Sentences for the history ----------------------------------------------------------------------------------------------
+# The first thing typed that names the row, e.g. its name or wording.
 edit_new_title <- function(fields, values) {
-  first_part <- Filter(function(field) field$part_index == 1 && field$type %in% c("text", "textarea", "several"), edit_service_active(fields, values))
-  for (field in first_part) {
+  for (field in Filter(function(field) field$type %in% c("text", "textarea"), edit_service_active(fields, values))) {
     value <- trimws(values[[field$id]] %||% "")
     if (nzchar(value)) {
-      if (field$type == "several") value <- edit_display_value(field, value)
       return(shorten(value, 60))
     }
   }
@@ -723,9 +641,7 @@ edit_summary_update <- function(entity, snap, row, fields, values) {
   initial <- edit_service_initial(entity, fields, snap, "update", row)
   changes <- edit_service_changes(fields, initial, values)
   title <- shorten(edit_label(snap, entity$table, row), 80) # a summary is a line in a list
-  paste0(
-    "Changed the ", word_list(unique(changes$short)), " of the ", entity$noun, " “", title, "”"
-  )
+  paste0("Changed the ", word_list(unique(changes$short)), " of the ", entity$noun, " “", title, "”")
 }
 
 edit_summary_delete <- function(entity, snap, row, plan) {
@@ -739,8 +655,7 @@ edit_summary_delete <- function(entity, snap, row, plan) {
 
 # ------ Where a row is used ------------------------------------------------------------------------------------------------------
 # What changing a row reaches.
-# For a component or question, every questionnaire that prints it; for anything else, the
-# rows that point at it.
+# For a component, every place a questionnaire prints it; for anything else, the rows that point at it.
 # row: The row being changed.
 # A kind with `usage_rows(snap, row, table, rows)` says how it lists the rows of `table` that point at it: a list of
 # `rows` (the ones to list, in order), `labels` and, if it likes, `text`; or `NULL` for the usual way, by name.
@@ -757,7 +672,7 @@ edit_service_usage <- function(entity, snap, row) {
   key <- edit_key(row, edit_table_key(entity$table))
   pointing <- lapply(Filter(function(relation) relation$parent == entity$table, edit_relations), function(relation) {
     hits <- edit_referencing(snap, relation, key)
-    if (length(hits) == 0 || relation$child %in% edit_hidden_tables) {
+    if (length(hits) == 0) {
       return(NULL)
     }
     rows <- edit_rows(snap, relation$child, hits)
@@ -796,6 +711,8 @@ edit_usage_groups <- function(snap, table, rows, labels) {
     rows$questionnaire_id
   } else if ("variable_key" %in% names(rows) && !is.null(snap$variable)) {
     edit_lookup(snap, "variable", "variable_key", rows$variable_key, "questionnaire_id")
+  } else if ("placement_id" %in% names(rows) && !is.null(snap$placement)) {
+    edit_lookup(snap, "placement", "placement_id", rows$placement_id, "questionnaire_id")
   }
   if (is.null(ids) || is.null(snap$questionnaire)) {
     return(NULL)
@@ -810,29 +727,29 @@ edit_usage_groups <- function(snap, table, rows, labels) {
 }
 
 # What each variable records, its unit, when and who it is about, as the questionnaire's preview shows them:
-# "[Smokes now] [hours] [in the past 30 days] [Respondent]", each part when it has one.
+# "[Smokes now] [hours] [in the past 30 days] [Respondent]", each part when it has one. A variable's tags say
+# the last three (variable_tag).
 # variables: Rows of `variable`.
 # Returns: One string per variable; `""` for one with neither.
 edit_variable_tags <- function(snap, variables) {
-  about <- if (is.null(snap$subject)) rep(NA_character_, nrow(variables)) else edit_lookup(snap, "subject", "subject_id", variables$subject_id, "name")
-  when <- if (is.null(snap$time_frame) || is.null(variables$time_frame_id)) {
-    rep(NA_character_, nrow(variables))
-  } else {
-    edit_lookup(snap, "time_frame", "time_frame_id", variables$time_frame_id, "name")
-  }
-  # a write-in's unit is on its open_ended row
-  unit <- if (is.null(snap$open_ended$unit)) {
-    rep(NA_character_, nrow(variables))
-  } else {
-    snap$open_ended$unit[match(variables$variable_key, snap$open_ended$variable_key)]
+  tag_of <- function(key, kind) {
+    if (is.null(snap$variable_tag) || is.null(snap$tag)) {
+      return(NA_character_)
+    }
+    tags <- snap$tag[match(snap$variable_tag$tag_id[snap$variable_tag$variable_key %in% key], snap$tag$tag_id), , drop = FALSE]
+    names <- tags$name[tags$kind %in% kind]
+    if (length(names) == 0) NA_character_ else paste(sort(names), collapse = ", ")
   }
   vapply(seq_len(nrow(variables)), function(i) {
-    preview_variable_tags(list(label = variables$label[i], unit = unit[i], time_frame = when[i], subject = about[i]))
+    key <- variables$variable_key[i]
+    preview_variable_tags(list(
+      label = variables$label[i], unit = tag_of(key, "unit"), time_frame = tag_of(key, "time frame"), subject = tag_of(key, "subject")
+    ))
   }, character(1))
 }
 
 # ------ What's left to do ------------------------------------------------------------------------------------------------------------
-# What's left to do before a change can be sent.
+# What's left to do before a change can be applied.
 # In the order to do it; nothing when it can go.
 # found: `edit_service_check()`'s `missing` and `problems`.
 # n_changes: How many fields an update changes.
@@ -861,164 +778,66 @@ edit_service_blockers <- function(mode, found = NULL, n_changes = 0, shared = 0,
   out
 }
 
-# What a form that still has things to fix is saved as.
-# A draft as typed, with no items.
-# verb: `"add"`, `"update"` or `"delete"`.
-# Returns: A list with `summary` and `items` (`NULL`), like `edit_service_build()`.
-edit_service_unfinished <- function(verb, entity) {
-  list(summary = paste0("Unfinished: ", verb, " ", entity$article, " ", entity$noun), items = NULL)
+# ------ Applying ------------------------------------------------------------------------------------------------------------------
+# Apply a change now. Every change is applied at once, by whoever makes it, and written to the Edit History.
+# built: The result of `edit_service_build()`.
+# me: Who applies it: `list(staff_id, name, role)`.
+# Returns: A list: `history_id` (its row in the Edit History) and `new_ids` (the number the database gave each new
+#   row, by its `new:<table>:<n>` token). An error with the database's own sentence if it refused, e.g. because the
+#   row changed since the form was opened.
+edit_service_apply <- function(connection, built, me) {
+  if (NROW(built$items) == 0) stop("There is nothing in this change to apply.", call. = FALSE)
+  edit_model_apply(connection, built$items, built$summary, me)
 }
 
-# ------ Proposals ------------------------------------------------------------------------------------------------------------------
-# A proposal is open until it is applied, withdrawn or discarded. It is a draft of kind Edit
-# (model_edit.R): Draft while being prepared, Awaiting Review once sent for approval, Sent Back if a
-# reviewer returned it. An add or an update is applied at once; a STAFF member's delete is sent for
-# approval (service_change_request.R).
-edit_open_statuses <- c("Draft", "Sent Back", "Awaiting Review")
-
-# A proposal as it is saved.
-# me: Who is preparing it: `list(staff_id, name, role)`.
-# form: How to open it again on the form: `action`, `entity`, `scope`, `target`, `values`.
-# built: The result of `edit_service_build()`, or `edit_service_unfinished()`.
-# status: `"Draft"`, or `"Awaiting Review"` to send it for approval. A proposal that was
-#   sent back, or is waiting for review, keeps that status when it is only saved again.
-# previous: The record being saved again, if any; it keeps its id, preparer and start time.
-# reviewer: The staff id of the person asked to review it, or `NULL` for no one in particular.
-# Returns: A record; see `edit_model_get_all()`. `id` is `NULL` until it is first saved.
-edit_service_record <- function(me, form, built, status, previous = NULL, reviewer = NULL, now = Sys.time()) {
-  # A saved change keeps the status it has, unless it is being sent for review.
-  if (status == "Draft" && !is.null(previous$status) && previous$status %in% c("Sent Back", "Awaiting Review")) {
-    status <- previous$status
+# ------ Emptying ----------------------------------------------------------------------------------------------------------------------
+# What emptying a registry, study, questionnaire or wave would remove, in a sentence for its confirm dialog.
+# what: One of `edit_emptiable`.
+# id: The row's id.
+# Returns: A sentence, e.g. `"It asks 12 questions."` or `"Its questionnaires hold 40 blocks and 31 variables, asked as 60 questions in their waves."`.
+edit_service_empty_preview <- function(connection, what, id) {
+  counts <- edit_model_contents(connection, what, id)
+  if (what == "wave") {
+    return(if (counts$questions == 0) "It asks no questions, so there is nothing to remove." else paste0("It asks ", edit_count(counts$questions, "question"), "."))
   }
-  list(
-    id = previous$id, # NULL until saved for the first time: the database numbers it
-    kind = "Edit",
-    edit_kind = edit_model_kind(form),
-    status = status,
-    prepared_by = previous$prepared_by %||% me$name,
-    prepared_by_id = previous$prepared_by_id %||% me$staff_id,
-    started = previous$started %||% format_time(now),
-    saved = format_time(now),
-    expected_revision = previous$revision,
-    summary = built$summary,
-    requested_reviewer = if (!is.null(reviewer) && nzchar(as.character(reviewer))) {
-      list(id = as.numeric(reviewer))
-    } else if (status == "Awaiting Review") {
-      NULL
-    } else {
-      previous$requested_reviewer
-    },
-    form = form,
-    reach = if (!is.null(built$plan)) {
-      list(
-        rows_removed = built$plan$reach$total,
-        rows_emptied = sum(vapply(built$plan$reach$changed, function(change) change$n, numeric(1))),
-        # the row picked: once the delete is applied, it is all applied_item keeps of it (apply_draft_items())
-        deleted = built$plan$deleted
-      )
-    },
-    items = built$items
+  if (counts$placements == 0 && counts$questions == 0) {
+    return("Nothing is printed or asked in it, so there is nothing to remove.")
+  }
+  paste0(
+    if (what == "questionnaire") "It holds " else "Its questionnaires hold ",
+    edit_count(counts$placements, "block"), " and ", edit_count(counts$variables, "variable"),
+    ", asked as ", edit_count(counts$questions, "question"), " in ", if (what == "questionnaire") "its" else "their", " waves."
   )
 }
 
-# Other open proposals that change a row this one does.
-# Staff should talk before both are applied.
-# records: The saved proposals.
-# items: This proposal's items.
-# except: The id of this proposal, so it doesn't clash with itself.
-# Returns: The records that overlap.
-edit_service_conflicts <- function(records, items, except = NULL) {
-  if (is.null(items) || nrow(items) == 0) {
-    return(list())
-  }
-  # a row an edit adds is named new:<table>:1 in every edit, so it is no other edit's row
-  rows_of <- function(items) {
-    named <- unique(paste(items$entity_name, items$record_identifier))
-    named[!grepl('"new:[a-z_]+:[0-9]+"', named)]
-  }
-  mine <- rows_of(items)
-  Filter(function(record) {
-    open <- record$status %in% edit_open_statuses && !identical(record$id, except)
-    if (!open || NROW(record$items) == 0) {
-      return(FALSE)
-    }
-    any(rows_of(record$items) %in% mine)
-  }, records)
-}
-
-# The saved proposals still open.
-# records: The saved proposals.
-# status: The statuses that count as open.
-edit_service_open <- function(records, prepared_by_id = NULL, status = edit_open_statuses) {
-  draft_row_service_open(records, status, prepared_by_id)
-}
-
-# The saved proposals, newest first.
-# Returns: A list of records named by id; see `edit_model_get_all()`.
-edit_service_get_all <- function(connection) {
-  edit_model_get_all(connection)
-}
-
-# Save a proposal, new or changed. One saved with the status `"Awaiting Review"` is sent for approval: it
-# waits in Change Requests until one other staff member approves it, which applies it.
-# record: A proposal record from `edit_service_record()`.
-# me: Who saves it: `list(staff_id, name, role)`.
-# Returns: The record as saved; a new one now has its id. An error with a sentence if the
-#   database refused, e.g. because someone saved a newer version since this one was opened.
-edit_service_save <- function(connection, record, me) {
-  edit_model_save(connection, record, me$staff_id)
-}
-
-# Apply a saved proposal now.
-# For a change that needs no approval (an add or an update, or anything an ADMIN does). Save it first
-# (`edit_service_save()`), so if the database refuses it (a row changed since the form was opened,
-# a rule of the database) the person's work is still there as a saved edit.
-# record: A saved proposal record (it has an `id`).
-# me: Who applies it: `list(staff_id, name, role)`; it has to be the person who prepared it.
-# Returns: The id of its row in the Edit History. An error with the database's own sentence if it
-#   refused.
-edit_service_apply <- function(connection, record, me) {
-  if (change_request_service_needs_approval(me, edit_draft_kind, record$edit_kind)) {
-    stop("This needs approval from another staff member before it is applied.", call. = FALSE)
-  }
-  change_request_model_apply(connection, record$id, me$staff_id)
-}
-
-# What staff chose to do, as the history writes it.
-# verb: `"add"`, `"update"` or `"delete"`.
-# Returns: `"Add"`, `"Update"` or `"Delete"`.
-edit_service_kind_of <- function(verb) edit_model_kind(list(action = verb))
-
-# Discard a proposal.
-# The record is kept, as Withdrawn, so it stays in the history.
-# id: The proposal's id.
-# me: Who discards it: `list(staff_id, name, role)`.
-edit_service_withdraw <- function(connection, id, me) {
-  change_request_model_withdraw(connection, id, me$staff_id)
+# Empty a registry, study, questionnaire or wave now: it stays, its contents go, and the history gets a row.
+# Returns: A sentence saying what was removed, from the counts the database gives back.
+edit_service_empty <- function(connection, what, id, me) {
+  gone <- edit_model_empty(connection, what, id, me)
+  paste0(
+    "Removed ", edit_count(gone$questions_removed, "question"), ", ", edit_count(gone$placements_removed, "block"),
+    " and ", edit_count(gone$variables_removed, "variable"), "."
+  )
 }
 
 # ------ Something like it is there already ---------------------------------------------------------------
 # The rows an add looks like.
-# When someone adds something that is already there, the form says so before it saves, and shows what
-# is there; it is a warning, not a block. Each kind says what counts as the same (`duplicates` in its
-# `service_edit_entities_*.R` file): its name for most, a respondent type's age range, and so on. Capitals and
-# extra spaces don't count.
-# Returns: A list with one entry for each way it looks like something there: `entity` (the kind of what
-#   is there), `why` (a sentence) and `cards` (a data frame of the rows, as the cards show them; see
-#   `edit_cards()`). Empty if it looks like nothing.
+# When someone adds something that is already there, the form says so before it saves, and shows what is there; it
+# is a warning, not a block. Each kind says what counts as the same (`duplicates` in its `service_edit_entities_*.R`
+# file): its name for most, a respondent type's age range, and so on. Capitals and extra spaces don't count.
+# Returns: A list with one entry for each way it looks like something there: `entity` (the kind of what is there),
+#   `why` (a sentence) and `cards` (a data frame of the rows, as the cards show them; see `edit_cards()`). Empty
+#   if it looks like nothing.
 edit_service_duplicates <- function(entity, snap, fields, values) {
-  parts <- entity$parts %||% list(list(entity = entity$key))
+  if (is.null(entity$duplicates)) {
+    return(list())
+  }
+  typed <- edit_part_values(fields, values)
   found <- list()
-  for (part in parts) {
-    kind <- edit_entities[[part$entity]]
-    if (is.null(kind$duplicates)) next
-    typed <- edit_part_values(fields, values, part$entity)
-    for (match in kind$duplicates(snap, typed)) {
-      rows <- match$rows
-      cards <- kind$cards(snap, NULL)
-      cards <- cards[cards$key %in% edit_key(rows, edit_table_key(kind$table)), , drop = FALSE]
-      if (nrow(cards) > 0) found[[length(found) + 1]] <- list(entity = kind, why = match$why, cards = cards)
-    }
+  for (match in entity$duplicates(snap, typed)) {
+    cards <- entity$cards(snap, NULL)
+    cards <- cards[cards$key %in% edit_key(match$rows, edit_table_key(entity$table)), , drop = FALSE]
+    if (nrow(cards) > 0) found[[length(found) + 1]] <- list(entity = entity, why = match$why, cards = cards)
   }
   found
 }

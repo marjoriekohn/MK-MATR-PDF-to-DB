@@ -225,27 +225,6 @@
   .form-check-input:checked { background-color: $vcu-red; border-color: $vcu-red; }
 }
 
-// ------ Saved edits ------------------------------------------------------------------------------------------
-.edit-drafts {
-  margin-bottom: 1rem;
-  padding: 0.75rem 1rem;
-  border: 1px solid $line;
-  border-radius: $border-radius;
-  summary { cursor: pointer; font-weight: 500; }
-}
-.edit-draft {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 0.5rem 1rem;
-  padding: 0.6rem 0;
-  border-top: 1px solid $line;
-  &:first-of-type { margin-top: 0.75rem; }
-  > div:first-child { flex: 1 1 18rem; min-width: 0; }
-  p { margin: 0; }
-}
-.edit-draft-meta { color: $vcu-gray; font-size: $font-size-sm; }
-
 // ------ After sending -------------------------------------------------------------------------------------------
 .edit-sent h2 { display: flex; align-items: center; margin-bottom: 0.75rem; }
 .edit-sent-mark {
@@ -296,5 +275,4 @@
 .detail-title { flex: 1 1 14rem; margin: 0.15rem 0 0; font-size: $title-font-size; overflow-wrap: anywhere; }
 .edit-detail .detail-head > .row-badge { margin-top: 0.3rem; }
 .edit-usage { margin-top: 1.5rem; }
-.edit-reviewer { margin-top: 1.25rem; }
 .edit-footer-note { margin-top: 1rem; color: $vcu-gray; font-size: $font-size-sm; &:empty { display: none; } }

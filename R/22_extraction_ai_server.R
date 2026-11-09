@@ -3,7 +3,7 @@
 # watch it being read, in the background. The draft starts then, with both files, which can't be changed
 # after: to read other files, cancel the extraction and begin again. Once reading has finished
 # the draft opens on the Edit Extraction page. Where it goes in the database (its Basic Info) is filled in
-# later, on Change Requests, once its change request is submitted. Drafts are kept in the database but nothing here adds to the MATR
+# there, when the extraction is pushed. Drafts are kept in the database but nothing here adds to the MATR
 # metadata database itself.
 # switch_mode: A function taking a mode of the Extraction page (`"manual"` or `"ai"`), or `"drafts"`
 #   for the Extraction Drafts page, and showing it.

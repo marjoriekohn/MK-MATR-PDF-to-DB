@@ -5,24 +5,13 @@
 
 # The fields staff can change by typing or picking. A value keeps its column's type.
 editable_fields <- list(
-  components = c(
-    "component_type", "text", "printed_number", "self_contained",
-    "condition", "parent_question_id", "checked",
-    "skip_condition", "skip_when", "skip_instruction", "skip_to_id" # a group's skip
-  ),
-  variables = c(
-    "variable_type", "label", "subject", "time_frame", "answer_data_type", "unit", "matr_id", "skip_condition", "skip_instruction",
-    "skip_to_id"
-  ),
-  response_options = c("answer_option", "code_value", "respondent_count", "skip_instruction", "skip_to_id")
+  components = c("component_type", "text", "printed_number", "parent_question_id", "checked"),
+  variables = c("variable_type", "label", "subject", "time_frame", "answer_data_type", "unit", "matr_id"),
+  response_options = c("answer_option", "code_value")
 )
 
 # The fields that hold the form's words, kept in lower case (normal_text()).
-word_fields <- list(
-  components = c("text", "condition", "skip_condition", "skip_instruction"),
-  variables = c("label", "skip_condition", "skip_instruction"),
-  response_options = "skip_instruction"
-)
+word_fields <- list(components = "text", variables = "label", response_options = character())
 
 # Change one field of one row.
 # What staff type is stored as the column's type, blanks as `NA`. A block's kind decides
@@ -35,27 +24,12 @@ draft_service_update <- function(draft, table, id, field, value) {
   row <- which(draft[[table]]$id == id)
   if (length(row) != 1) stop("That's no longer in the draft.")
   value <- as_field_value(value, typeof(draft[[table]][[field]]))
-  if (table == "components" && field == "condition") {
-    kind <- draft$components$component_type[row]
-    if (!identical(kind, "Question") && !is_container(kind)) {
-      stop("Only a question, or a section, grid or group (for everything in it), says who answers it.")
-    }
-  }
   if (field %in% word_fields[[table]]) value <- normal_text(value)
   switch(field,
     component_type = set_component_type(draft, row, value),
     variable_type = set_variable_type(draft, row, value),
     matr_id = set_matr_id(draft, row, value),
     parent_question_id = set_parent_question(draft, row, value),
-    skip_to_id = set_skip_to(draft, row, value, table),
-    skip_instruction = {
-      # printed words naming a question are linked to it, unless the choice (or write-in) is linked already
-      draft[[table]]$skip_instruction[row] <- value
-      if (is.na(draft[[table]]$skip_to_id[row])) {
-        draft[[table]]$skip_to_id[row] <- draft_service_skip_target(draft, draft[[table]]$id[row], table = table)
-      }
-      draft
-    },
     subject = {
       draft$variables$subject[row] <- blank_respondent(value)
       draft
@@ -109,16 +83,10 @@ set_component_type <- function(draft, row, type) {
     stop("A group has no words of its own. Move these words into an Instruction first, then make it a group.")
   }
   draft$components$component_type[row] <- type
-  # only a group or a grid skips on the answers to the questions in it
-  if (!type %in% skipping_types) draft$components[row, c("skip_condition", "skip_when", "skip_instruction", "skip_to_id")] <- NA
   if (type == "Question") {
-    if (is.na(block$self_contained)) draft$components$self_contained[row] <- TRUE
     return(draft)
   }
   draft$components[row, c("question_number", "printed_number", "parent_question_id")] <- NA
-  # a section, grid or group can be for some respondents (its condition), but not for a question's answer
-  if (!is_container(type) || identical(block$component_type, "Question")) draft$components$condition[row] <- NA
-  draft$components$self_contained[row] <- NA
   n_boxes <- sum(draft$variables$component_id == block$id)
   if (n_boxes > 0) {
     message(sprintf(
@@ -130,12 +98,11 @@ set_component_type <- function(draft, row, type) {
   unlink_followers(drop_orphans(draft), block$id)
 }
 
-# The question a question follows, as picked from its list ("7 · Have you smoked…") or typed: by its
+# The question a question depends on, as picked from its list ("7 · Have you smoked…") or typed: by its
 # number (printed, or its place where none is printed), the nearest question before it with that number,
 # or failing that the first one after it (which the checks point out). A block's id is taken as it is.
 set_parent_question <- function(draft, row, value) {
   blocks <- draft$components
-  draft$components$parent_from_skip[row] <- FALSE # staff's pick, which a skip never replaces
   if (is.na(value) || value %in% blocks$id) {
     draft$components$parent_question_id[row] <- value
     return(draft)
@@ -147,7 +114,7 @@ set_parent_question <- function(draft, row, value) {
   numbers <- draft_service_question_number(blocks[match(questions, blocks$id), , drop = FALSE])
   same <- questions[same_number(numbers, number)]
   if (length(same) == 0) {
-    stop(sprintf("No question is numbered %s. Pick the question it follows from the list.", number))
+    stop(sprintf("No question is numbered %s. Pick the question it depends on from the list.", number))
   }
   earlier <- same[match(same, printed) < match(blocks$id[row], printed)]
   draft$components$parent_question_id[row] <- if (length(earlier) > 0) earlier[length(earlier)] else same[1]
@@ -168,7 +135,6 @@ set_variable_type <- function(draft, row, type) {
   }
   draft$variables$answer_data_type[row] <- NA
   draft$variables$unit[row] <- NA # a choice has no unit
-  draft$variables[row, c("skip_condition", "skip_instruction", "skip_to_id")] <- NA # a choice skips, not the variable
   add_blank_choices(draft, box$id, 1)
 }
 
@@ -319,7 +285,6 @@ draft_service_add_block <- function(draft, component_type, id, near_id = NULL) {
     parent_id = if (goes_inside) near$id else if (has_near) near$parent_id else NA_character_,
     display_order = if (has_near && !goes_inside) near$display_order + 0.5 else Inf,
     component_type = component_type,
-    self_contained = if (component_type == "Question") TRUE else NA,
     page = if (has_near) near$page else NA_integer_ # printed beside it, most likely
   ))
 }
@@ -398,7 +363,6 @@ draft_service_ungroup <- function(draft, id) {
   blocks$parent_id[at] <- blocks$parent_id[row]
   blocks$display_order[at] <- blocks$display_order[row] + seq_along(at) / (length(at) + 1)
   draft$components <- blocks[-row, , drop = FALSE]
-  draft <- unlink_skips(draft, id)
   message(sprintf(
     "Took away the %s and kept the %s inside it. Undo puts it back.",
     tolower(blocks$component_type[row]), plural(length(at), "block")
@@ -412,7 +376,7 @@ draft_service_ungroup <- function(draft, id) {
 # of every one of the variables.
 
 # The variables of a question that offer the same choices.
-# The same answers in the same order, with the same codes, printed words and skip instructions and links.
+# The same answers in the same order, with the same codes.
 # component_id: The question's id.
 # Returns: The ids of its variables with choices, when there are two or more and they all offer the same
 #   choices; otherwise none.
@@ -426,7 +390,7 @@ draft_service_shared_choices <- function(draft, component_id) {
   lists <- vapply(ids, function(id) {
     mine <- choices[choices$variable_id %in% id, , drop = FALSE]
     mine <- mine[order(mine$display_order), , drop = FALSE]
-    paste(mine$answer_option, mine$code_value, mine$skip_instruction, mine$skip_to_id, sep = "\r", collapse = "\n")
+    paste(mine$answer_option, mine$code_value, sep = "\r", collapse = "\n")
   }, character(1))
   if (length(unique(lists)) == 1 && nzchar(lists[1])) ids else character()
 }
@@ -477,13 +441,13 @@ draft_service_reorder_shared <- function(draft, variable_ids, ids) {
 
 # Delete a block, variable or choice.
 # A section takes everything inside it, a question its variables, and a variable its
-# choices. Questions that followed a deleted question lose the link. Says nothing: what went is gone from
-# the page at once, and Undo brings it back.
+# choices. Questions that depended on a deleted question lose the link. Says nothing: what went is gone
+# from the page at once, and Undo brings it back.
 # id: The row's id.
 draft_service_delete <- function(draft, table, id) {
   if (table == "components") id <- c(id, draft_service_printed_order(draft, id))
   draft[[table]] <- draft[[table]][!draft[[table]]$id %in% id, ]
-  unlink_skips(unlink_followers(drop_orphans(renumber(draft, table)), id), id)
+  unlink_followers(drop_orphans(renumber(draft, table)), id)
 }
 
 # ------ Codes ------------------------------------------------------------------
@@ -681,8 +645,8 @@ drop_orphans <- function(draft) {
   draft
 }
 
-# Questions that followed a question that's gone (or is no longer a question)
-# lose the link. The checks ask for a new one where it's needed.
+# Questions that depended on a question that's gone (or is no longer a question)
+# lose the link.
 unlink_followers <- function(draft, ids) {
   followers <- draft$components$parent_question_id %in% ids
   draft$components$parent_question_id[followers] <- NA

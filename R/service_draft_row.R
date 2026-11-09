@@ -1,9 +1,9 @@
-# ------ Drafts staff are still working on ------------------------------------------
-# What extraction drafts and edit proposals have in common: both are drafts
-# (model_draft_row.R) with a status and the staff member who prepared them.
+# ------ Whose draft, and who is working on it ----------------------------------------
+# What the pages that list or open extraction drafts share: whose a draft is, and the claim one person
+# at a time holds on it while they work on it on the Edit Extraction page.
 
-# The records still open.
-# records: A list of extraction or edit records.
+# The records still open, of those whose status is one of `statuses`.
+# records: A list of extraction records.
 # statuses: The statuses that count as open.
 draft_row_service_open <- function(records, statuses, prepared_by_id = NULL) {
   Filter(function(record) {
@@ -15,20 +15,20 @@ draft_row_service_open <- function(records, statuses, prepared_by_id = NULL) {
 # Whether a draft is this person's: they started it.
 # Staff ids are compared as numbers, however they were read (a whole number from one reply, a
 # double from another), so a draft is never someone else's only because of how its id was stored.
-# record: An extraction or edit record.
+# record: An extraction record.
 draft_row_service_is_mine <- function(record, me) {
   same_staff(record$prepared_by_id, me$staff_id)
 }
 
 # Who started a draft, by name.
-# record: An extraction or edit record.
+# record: An extraction record.
 # Returns: Their name, or "Someone no longer listed" when the staff table has no name for them.
 draft_row_service_preparer <- function(record) {
   staff_name(record$prepared_by)
 }
 
 # ------ One person at a time -----------------------------------------------------
-# Whoever has a draft open on the Edit Extraction page has claimed it (draft_row_model_claim()), so
+# Whoever has a draft open on the Edit Extraction page has claimed it (extraction_model_claim()), so
 # nobody else can change it there and overwrite their work. Their page renews the claim every
 # `draft_claim_renew_seconds` while they are there, and lets it go when they leave the page, close
 # it, or have done nothing for `draft_claim_idle_seconds`. A claim not renewed for
@@ -61,11 +61,11 @@ draft_row_service_lapsed <- function(at, now = Sys.time()) {
 # Claim a draft for this person to work on, or renew their claim.
 # me: Who is claiming it: `list(staff_id, name)`.
 # take_over: Whether to take it from whoever has it.
-# Returns: As `draft_row_model_claim()`: `claimed`, who has it (`by_id`, `by`, `at`) and `revision`.
-#   An error with a sentence if the draft is gone or finished with.
+# Returns: As `extraction_model_claim()`: `claimed`, who has it (`by_id`, `by`, `at`) and `revision`.
+#   An error with a sentence if the draft is gone or pushed.
 draft_row_service_claim <- function(connection, id, me, take_over = FALSE) {
-  claim <- draft_row_model_claim(connection, id, me$staff_id, take_over, draft_claim_stale_seconds)
-  claim$by <- staff_name(claim$by)
+  claim <- extraction_model_claim(connection, id, me$staff_id, take_over, draft_claim_stale_seconds)
+  if (!is.null(claim$by_id)) claim$by <- staff_name(claim$by)
   claim
 }
 
@@ -73,7 +73,7 @@ draft_row_service_claim <- function(connection, id, me, take_over = FALSE) {
 # me: Who is letting it go: `list(staff_id, name)`.
 # Returns: Whether they had it.
 draft_row_service_release <- function(connection, id, me) {
-  draft_row_model_release(connection, id, me$staff_id)
+  extraction_model_release(connection, id, me$staff_id)
 }
 
 # A staff member's name as it is shown, or "Someone no longer listed" when the staff table has none.

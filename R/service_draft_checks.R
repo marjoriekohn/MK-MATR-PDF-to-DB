@@ -13,7 +13,6 @@
 draft_service_check <- function(draft, lookups, matr_ids = TRUE) {
   problems <- rbind(
     block_problems(draft, lookups),
-    group_skip_problems(draft),
     question_problems(draft),
     variable_problems(draft, matr_ids)
   )
@@ -51,9 +50,9 @@ block_problems <- function(draft, lookups) {
     ),
     text_problem(
       is.na(blocks$text) & blocks$component_type == "Section",
-      "Add the section's printed heading. Blocks with no printed heading go in a Group instead." # BR42
+      "Add the section's printed heading. Blocks with no printed heading go in a Group instead."
     ),
-    text_problem(is.na(blocks$text) & !is_container(blocks$component_type), "Add the printed words."), # BR42
+    text_problem(is.na(blocks$text) & !is_container(blocks$component_type), "Add the printed words."),
     text_problem(
       !is.na(blocks$text) & is_group,
       "A group has no words of its own. Put them in an Instruction inside it."
@@ -64,38 +63,14 @@ block_problems <- function(draft, lookups) {
     ),
     problems_where(
       blocks$id, !can_hold(parent_type, blocks$component_type),
-      vapply(parent_type, cant_hold_message, character(1)) # BR53
-    )
-  )
-}
-
-# A group's skip (service_draft_skips.R), as a write-in's is checked: printed words that name a question or
-# section have to be linked to it, the link has to point past the group, and it says which answer skips.
-group_skip_problems <- function(draft) {
-  blocks <- draft$components
-  groups <- blocks[blocks$component_type %in% skipping_types, , drop = FALSE]
-  printed <- draft_service_printed_order(draft)
-  words <- groups$skip_instruction
-  names_a_place <- !is.na(words) & (!is.na(skip_number(words)) | !is.na(skip_section(words)))
-  skip_field <- function(condition, message, field) {
-    problems_where(groups$id, condition, message, table = "components", rows = groups$id, field = field)
-  }
-  rbind(
-    skip_field(names_a_place & is.na(groups$skip_to_id), "Pick where the group skips to.", "skip_to_id"),
-    skip_field(
-      match(groups$skip_to_id, printed) <= skip_from_place(draft, groups$id, printed),
-      "The group skips back to something printed before it ends. Pick where it skips to.", "skip_to_id"
-    ),
-    skip_field(!is.na(groups$skip_to_id) & is.na(groups$skip_condition), "Say which answer makes the group skip.", "skip_condition"),
-    skip_field(
-      !is.na(groups$skip_condition) & is.na(groups$skip_to_id) & !names_a_place,
-      "Pick where the group skips to, or take its answer away.", "skip_to_id"
+      vapply(parent_type, cant_hold_message, character(1))
     )
   )
 }
 
 # A question's number is worked out from its place, and the number printed beside it can repeat (each
-# section can start again at 1) or be missing, so neither is checked.
+# section can start again at 1) or be missing, so neither is checked. The question it depends on, if any,
+# has to be a question printed before it.
 question_problems <- function(draft) {
   blocks <- draft$components
   questions <- blocks[blocks$component_type == "Question", ]
@@ -104,21 +79,15 @@ question_problems <- function(draft) {
   parent_type <- blocks$component_type[match(questions$parent_question_id, blocks$id)]
   parent_is_earlier_question <- parent_type %in% "Question" &
     match(questions$parent_question_id, printed) < match(questions$id, printed)
-  parent_field <- function(condition, message) {
-    problems_where(questions$id, condition, message, table = "components", rows = questions$id, field = "parent_question_id")
-  }
   rbind(
     problems_where(
       questions$id, !questions$id %in% draft$variables$component_id,
-      "Add at least one variable." # BR87
+      "Add at least one variable."
     ),
-    parent_field(
-      questions$self_contained %in% FALSE & !has_parent,
-      "Pick the question it follows, since it can't be understood on its own." # BR64
-    ),
-    parent_field(
-      has_parent & !parent_is_earlier_question,
-      "Pick the question it follows again. It has to be a question printed before it." # BR62, BR63
+    problems_where(
+      questions$id, has_parent & !parent_is_earlier_question,
+      "Pick the question it depends on again. It has to be a question printed before it.",
+      table = "components", rows = questions$id, field = "parent_question_id"
     )
   )
 }
@@ -145,15 +114,6 @@ variable_problems <- function(draft, matr_ids = TRUE) {
       table = "response_options", rows = choices$id, field = field
     )
   }
-  # where each choice skips to: a skip instruction that names a question or section has to be linked to it,
-  # and a link has to point forward
-  printed <- draft_service_printed_order(draft)
-  source_place <- match(boxes$component_id[match(choices$variable_id, boxes$id)], printed)
-  skips <- choices$skip_instruction
-  names_a_place <- !is.na(skips) & (!is.na(skip_number(skips)) | !is.na(skip_section(skips)))
-  said <- sprintf("choice “%s”", ifelse(is.na(choices$answer_option), "(blank)", choices$answer_option))
-  # a write-in's skip, the same way, and it says which answer skips
-  box_place <- match(boxes$component_id, printed)
   # A question with several variables is a grid or battery: each row is labelled with its own words, so it can be
   # found and told apart, but for a lone check box, whose one choice says what it records, and a write-in whose unit
   # does (feet and inches). Two rows can share words only when they are about different people ("Age" of Twin A
@@ -168,20 +128,8 @@ variable_problems <- function(draft, matr_ids = TRUE) {
     !named, NA,
     paste(tolower(label), tolower(unit), tolower(blank_respondent(boxes$subject)), tolower(time_frame), sep = "\r")
   )
-  box_names_a_place <- !is.na(boxes$skip_instruction) & (!is.na(skip_number(boxes$skip_instruction)) | !is.na(skip_section(boxes$skip_instruction)))
   rbind(
-    box_problem(!is_choice_box & box_names_a_place & is.na(boxes$skip_to_id), "pick where it skips to.", "skip_to_id"),
-    box_problem(
-      !is_choice_box & match(boxes$skip_to_id, printed) <= box_place,
-      "it skips back to something printed before it. Pick where it skips to.", "skip_to_id"
-    ),
-    box_problem(!is_choice_box & !is.na(boxes$skip_to_id) & is.na(boxes$skip_condition), "say which answer skips.", "skip_condition"),
-    choice_problem(names_a_place & is.na(choices$skip_to_id), paste0("pick where ", said, " skips to."), "skip_to_id"),
-    choice_problem(
-      !is.na(choices$skip_to_id) & match(choices$skip_to_id, printed) <= source_place,
-      paste0(said, " skips back to something printed before it. Pick where it skips to."), "skip_to_id"
-    ),
-    box_problem(is_choice_box & n_choices < 1, "add its choices."), # BR99: a lone check box has one
+    box_problem(is_choice_box & n_choices < 1, "add its choices."), # a lone check box has one
     box_problem(
       in_grid & !named & !(is_choice_box & n_choices == 1),
       "label it with its row's words, so it can be told apart from the question's other variables.", "label"
@@ -191,15 +139,15 @@ variable_problems <- function(draft, matr_ids = TRUE) {
     choice_problem(duplicated_within(choices$answer_option, choices$variable_id), "list each choice once.", "answer_option"),
     choice_problem(
       duplicated_within(choices$code_value, choices$variable_id),
-      "give each choice its own code.", "code_value" # BR103
+      "give each choice its own code.", "code_value"
     ),
-    choice_problem(!is.na(choices$respondent_count) & choices$respondent_count < 0, "a count of respondents can't be below 0.", "respondent_count"),
-    box_problem(!is_choice_box & is.na(boxes$answer_data_type), "pick the kind of answer it takes.", "answer_data_type"), # BR95
-    # The subject isn't checked: blank is the respondent, and a new subject is added when the extraction is applied
-    if (matr_ids) box_problem(is.na(boxes$matr_id), "fill in its MATR ID.", "matr_id"), # every variable needs one before it is sent
+    box_problem(!is_choice_box & is.na(boxes$answer_data_type), "pick the kind of answer it takes.", "answer_data_type"),
+    # The subject, time frame and unit aren't checked: blank is the respondent, and a new tag is added when the
+    # extraction is pushed
+    if (matr_ids) box_problem(is.na(boxes$matr_id), "fill in its MATR ID.", "matr_id"), # every variable needs one before it is pushed
     box_problem(
       duplicated_within(boxes$matr_id, "questionnaire"),
-      "give it a MATR ID no other variable has.", "matr_id" # BR93
+      "give it a MATR ID no other variable has.", "matr_id"
     )
   )
 }

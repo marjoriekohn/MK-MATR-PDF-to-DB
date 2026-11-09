@@ -33,7 +33,7 @@ study_model_get_tree <- function(connection) {
   )
   select <- sprintf(
     # a study names two investigators (who leads it, and who to contact), so its foreign key says which
-    # (docs/sql/1_setup.sql names it; the column alone is no hint, as the investigator's own is called the same)
+    # (sql/2_references.sql names it; the column alone is no hint, as the investigator's own is called the same)
     "%s,investigator:principal_investigator!study_principal_investigator_id_fkey(name),questionnaire(%s,wave(%s))",
     paste(columns$studies, collapse = ","), paste(columns$questionnaires, collapse = ","), paste(columns$waves, collapse = ",")
   )

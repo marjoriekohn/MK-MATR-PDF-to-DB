@@ -1,156 +1,109 @@
 cascade_of <- function(snap, ...) edit_service_cascade(snap, list(...))
 
 test_that("rows are identified by their key columns", {
-  snap <- test_snapshot(c("questionnaire_component", "wave_question"))
+  snap <- test_snapshot(c("placement", "wave_question"))
   expect_equal(edit_key(snap$wave_question[1:2, ], c("wave_id", "placement_id")), c("1|103", "1|104"))
-  expect_equal(edit_key(snap$questionnaire_component[0, ], "component_id"), character())
+  expect_equal(edit_key(snap$placement[0, ], "component_id"), character())
   expect_equal(edit_key(data.frame(id = c(100000, 3)), "id"), c("100000", "3"))
 })
 
-test_that("a question that nothing else leans on takes only what's attached to it", {
-  snap <- test_snapshot()
-  cascade <- cascade_of(snap, component = "3")
+test_that("the links follow the database's foreign keys: what cascades, what is cleared, what blocks", {
+  of <- function(child, parent) Filter(function(r) r$child == child && r$parent == parent, edit_relations)
+  expect_equal(of("wave", "questionnaire")[[1]]$on_delete, "remove")
+  expect_equal(of("placement", "questionnaire")[[1]]$on_delete, "remove")
+  expect_setequal(vapply(of("placement", "placement"), function(r) r$on_delete, character(1)), c("remove", "clear"))
+  expect_equal(of("wave_question", "wave")[[1]]$on_delete, "remove")
+  expect_equal(of("variable", "placement")[[1]]$on_delete, "remove")
+  expect_equal(of("response_option", "variable")[[1]]$on_delete, "remove")
+  expect_equal(of("variable_tag", "variable")[[1]]$on_delete, "remove")
+  expect_equal(of("study", "registry")[[1]]$on_delete, "block")
+  expect_equal(of("questionnaire", "study")[[1]]$on_delete, "block")
+  expect_equal(of("placement", "component")[[1]]$on_delete, "block")
+  expect_equal(of("response_option", "answer_option")[[1]]$on_delete, "block")
+  expect_equal(of("variable_tag", "tag")[[1]]$on_delete, "block")
+  expect_equal(of("question_scale", "measurement_scale")[[1]]$on_delete, "block")
+  expect_setequal(vapply(of("study", "principal_investigator"), function(r) r$on_delete, character(1)), c("block", "clear"))
+  # every link names real tables and columns
+  for (relation in edit_relations) {
+    expect_true(all(names(relation$by) %in% names(database_tables[[relation$child]]$columns)), info = paste(relation$child, relation$parent))
+    expect_true(all(unname(relation$by) %in% names(database_tables[[relation$parent]]$columns)), info = paste(relation$child, relation$parent))
+  }
+  expect_setequal(edit_delete_order, names(database_tables))
+})
 
-  expect_equal(cascade$removed$component, "3")
-  expect_equal(cascade$removed$question, "3")
-  expect_equal(cascade$removed$questionnaire_component, "103")
-  expect_equal(cascade$removed$questionnaire_question, "103")
-  expect_equal(sort(cascade$removed$wave_question), c("1|103", "2|103"))
-  expect_equal(cascade$removed$variable, "1")
-  expect_equal(cascade$removed$open_ended, "1")
-  expect_length(cascade$cleared, 0)
+test_that("a question deleted from a questionnaire takes its numbers, variables, choices and tags, and frees what depended on it", {
+  snap <- test_snapshot()
+  cascade <- cascade_of(snap, placement = "104")
+  expect_equal(sort(cascade$removed$wave_question), c("1|104", "2|104"))
+  expect_equal(cascade$removed$variable, "2")
+  expect_equal(sort(cascade$removed$response_option), c("2|1", "2|2"))
+  expect_equal(cascade$removed$variable_tag, "2|1")
+  expect_equal(cascade$cleared[[1]]$table, "placement")
+  expect_equal(cascade$cleared[[1]]$keys, "105")
+  expect_equal(cascade$cleared[[1]]$columns, "depends_on_placement_id")
   expect_length(cascade$blocked, 0)
+  # MQ prints the component too, so it isn't forgotten
+  expect_length(cascade$forgotten, 0)
 })
 
-test_that("a shared question is removed from every questionnaire that prints it", {
+test_that("what's inside a section goes with it, and a question that goes too needn't be cleared", {
   snap <- test_snapshot()
-  cascade <- cascade_of(snap, component = "9")
-
-  expect_equal(sort(cascade$removed$questionnaire_component), c("209", "309"))
-  expect_equal(sort(cascade$removed$variable), c("5", "6"))
-  expect_equal(length(cascade$removed$response_option), 8)
-  expect_equal(cascade$removed$question_scale, "1|9")
-  expect_equal(cascade$removed$question_category, "9|D003863")
+  cascade <- cascade_of(snap, placement = "101")
+  expect_equal(sort(cascade$removed$placement), c("101", "102", "103", "104", "105"))
+  expect_equal(length(cascade$removed$wave_question), 6)
+  expect_equal(sort(cascade$removed$variable), c("1", "2", "3"))
+  expect_length(cascade$cleared, 0) # 105 depended on 104, but goes too
+  # the components only AHP prints are forgotten by the database; question 4 stays for MQ
+  expect_equal(sort(cascade$forgotten), c("1", "2", "3", "5"))
 })
 
-test_that("a question with a follow-up can't go until the follow-up does", {
-  snap <- test_snapshot()
-  cascade <- cascade_of(snap, component = "4")
-
-  expect_length(cascade$blocked, 1)
-  expect_match(cascade$blocked[[1]]$text, "1 question in a questionnaire is in the way")
-  expect_equal(cascade$blocked[[1]]$labels, "AHP · how many cigarettes do you smoke on a typical day?")
-  expect_match(cascade$blocked[[1]]$fix, "Delete the follow-ups first")
-})
-
-test_that("a follow-up that's going too isn't in the way", {
-  snap <- test_snapshot()
-  section_a <- cascade_of(snap, questionnaire_component = "101")
-
-  expect_length(section_a$blocked, 0)
-  expect_equal(sort(section_a$removed$questionnaire_component), sort(c("101", "102", "103", "104", "105")))
-  expect_equal(sort(section_a$removed$questionnaire_question), c("103", "104", "105"))
-})
-
-test_that("a question's placement and its settings go as one", {
-  snap <- test_snapshot()
-  cascade <- cascade_of(snap, questionnaire_component = "105", questionnaire_question = "105")
-
-  expect_equal(cascade$removed$questionnaire_component, "105")
-  expect_equal(cascade$removed$questionnaire_question, "105")
-  expect_equal(sort(cascade$removed$wave_question), c("1|105", "2|105"))
-  expect_equal(cascade$removed$variable, "3")
-  expect_length(cascade$blocked, 0)
-  # no other questionnaire prints it, so the component goes too, with its MeSH tag
-  expect_equal(cascade$removed$component, "5")
-  expect_equal(cascade$removed$question, "5")
-  expect_equal(cascade$removed$question_category, "5|D012907")
-})
-
-test_that("deleting a questionnaire takes its waves, blocks and variables, and the components only it prints", {
+test_that("deleting a questionnaire takes its waves, blocks, numbers, variables and tags, and the components only it prints are forgotten", {
   snap <- test_snapshot()
   cascade <- cascade_of(snap, questionnaire = "2")
-
   expect_equal(cascade$removed$wave, "3")
-  expect_equal(sort(cascade$removed$questionnaire_component), c("208", "209", "210"))
+  expect_equal(sort(cascade$removed$placement), c("208", "209", "210"))
   expect_equal(cascade$removed$variable, "5")
-  # KQP prints the section Mood (10) and question 9 too
-  expect_equal(cascade$removed$component, "8")
-  expect_null(cascade$removed[["question"]])
+  expect_equal(cascade$removed$placement_tag, "209|17")
   expect_length(cascade$blocked, 0)
+  # KQP prints the section Mood (10) and question 9 too
+  expect_equal(cascade$forgotten, "8")
 })
 
-test_that("a component no questionnaire prints any more stays while a scale lists it or a skip goes to it", {
+test_that("a component no questionnaire prints any more stays while a scale lists it", {
   only_kq <- function(snap) {
     # KQ alone prints question 9 (a scale item) and the section Mood
-    snap$questionnaire_component <- snap$questionnaire_component[snap$questionnaire_component$questionnaire_id != 3, ]
+    snap$placement <- snap$placement[snap$placement$questionnaire_id != 3, ]
     snap
   }
   snap <- test_snapshot(change = only_kq)
-  cascade <- cascade_of(snap, questionnaire = "2")
-  expect_equal(sort(cascade$removed$component), c("10", "8"))
-
-  # without the scale, question 9 goes too
+  expect_equal(sort(cascade_of(snap, questionnaire = "2")$forgotten), c("10", "8"))
   unscaled <- test_snapshot(change = function(snap) {
     snap <- only_kq(snap)
     snap$question_scale <- snap$question_scale[0, ]
     snap
   })
-  expect_equal(sort(cascade_of(unscaled, questionnaire = "2")$removed$component), c("10", "8", "9"))
+  expect_equal(sort(cascade_of(unscaled, questionnaire = "2")$forgotten), c("10", "8", "9"))
 })
 
-test_that("a write-in that skips to a place that goes no longer skips there", {
-  snap <- test_snapshot(change = function(snap) {
-    snap$open_ended$skip_to_placement_id[snap$open_ended$variable_key == 1] <- 107
-    snap
-  })
-  cascade <- cascade_of(snap, questionnaire_component = "107", questionnaire_question = "107")
-  cleared <- Filter(function(clear) clear$table == "open_ended", cascade$cleared)
-  expect_equal(cleared[[1]]$keys, "1")
-  expect_equal(cleared[[1]]$columns, "skip_to_placement_id")
-})
-
-test_that("a stem goes with the last question that has it", {
-  snap <- test_snapshot(change = function(snap) {
-    snap$question_stem <- data.frame(question_stem_id = 70, text = "How often in the past week did [subject] feel sad?")
-    snap$question$question_stem_id[snap$question$component_id %in% c(7, 9)] <- 70
-    snap
-  })
-  expect_null(cascade_of(snap, component = "9")$removed$question_stem)
-  expect_equal(cascade_of(snap, component = c("7", "9"))$removed$question_stem, "70")
-})
-
-test_that("a wave takes the questions that were asked in nothing else", {
+test_that("a wave takes only its numbers: the questions stay in the questionnaire", {
   snap <- test_snapshot()
-  first_wave <- cascade_of(snap, wave = "1")
-  expect_equal(length(first_wave$removed$wave_question), 4)
-  expect_null(first_wave$removed$questionnaire_question)
-  expect_length(first_wave$blocked, 0)
-
-  # question 9 of KQ was asked only in Wave 1 of KQ, so it goes from KQ
-  only_wave <- cascade_of(snap, wave = "3")
-  expect_equal(only_wave$removed$questionnaire_question, "209")
-  expect_equal(only_wave$removed$questionnaire_component, "209")
-  expect_equal(only_wave$removed$variable, "5")
-  expect_null(only_wave$removed$component) # KQP prints it too
+  cascade <- cascade_of(snap, wave = "3")
+  expect_equal(cascade$removed$wave_question, "3|209")
+  expect_null(cascade$removed$placement)
+  expect_null(cascade$removed$variable)
+  expect_length(cascade$forgotten, 0)
 })
 
-test_that("a question no wave asks stays while a follow-up that stays names it", {
-  # in AHP, question 5 follows question 4; here Wave 2 asks only the follow-up
-  snap <- test_snapshot(change = function(snap) {
-    snap$wave_question <- snap$wave_question[!(snap$wave_question$wave_id == 2 & snap$wave_question$placement_id == 104), ]
-    snap
-  })
-  cascade <- cascade_of(snap, wave = "1")
-  expect_false("104" %in% cascade$removed$questionnaire_question)
-  expect_length(cascade$blocked, 0)
-
-  # and goes once the follow-up goes too
-  both <- test_snapshot(change = function(snap) {
-    snap$wave_question <- snap$wave_question[!(snap$wave_question$wave_id == 2 & snap$wave_question$placement_id %in% c(104, 105)), ]
-    snap
-  })
-  expect_true(all(c("104", "105") %in% cascade_of(both, wave = "1")$removed$questionnaire_question))
+test_that("a registry with studies, a study with questionnaires and a scale with items can't be deleted", {
+  snap <- test_snapshot()
+  registry <- cascade_of(snap, registry = "1")
+  expect_match(registry$blocked[[1]]$text, "^2 studies are in the way")
+  expect_match(registry$blocked[[1]]$fix, "Empty the registry")
+  study <- cascade_of(snap, study = "2")
+  expect_match(study$blocked[[1]]$text, "^3 questionnaires are in the way")
+  expect_length(cascade_of(snap, study = "3")$blocked, 0) # nothing in it
+  scale <- cascade_of(snap, measurement_scale = "1")
+  expect_match(scale$blocked[[1]]$text, "^1 scale item is in the way")
 })
 
 test_that("an investigator who leads a study can't be deleted, one who is only a contact can", {
@@ -158,7 +111,6 @@ test_that("an investigator who leads a study can't be deleted, one who is only a
   lead <- cascade_of(snap, principal_investigator = "1")
   expect_match(lead$blocked[[1]]$text, "1 study is in the way")
   expect_equal(lead$blocked[[1]]$labels, "Adult Health Study")
-
   contact <- cascade_of(snap, principal_investigator = "4")
   expect_length(contact$blocked, 0)
   expect_equal(contact$cleared[[1]]$table, "study")
@@ -166,75 +118,35 @@ test_that("an investigator who leads a study can't be deleted, one who is only a
   expect_equal(contact$cleared[[1]]$keys, "1")
 })
 
-test_that("a respondent type in use can't be deleted", {
+test_that("a respondent type in use, a component printed somewhere, a choice offered and a tag carried can't be deleted", {
   snap <- test_snapshot()
-  cascade <- cascade_of(snap, respondent_type = "3")
-  expect_match(cascade$blocked[[1]]$text, "2 questionnaires are in the way")
+  expect_match(cascade_of(snap, respondent_type = "3")$blocked[[1]]$text, "2 questionnaires are in the way")
   expect_length(cascade_of(snap, respondent_type = "99")$blocked, 0)
-})
-
-test_that("a study's last questionnaire and a questionnaire's last wave can be deleted", {
-  snap <- test_snapshot(change = function(snap) {
-    snap$questionnaire <- snap$questionnaire[snap$questionnaire$questionnaire_id != 3 & snap$questionnaire$questionnaire_id != 4, ]
-    snap
-  })
-  only <- cascade_of(snap, questionnaire = "2")
-  expect_length(only$blocked, 0)
-  expect_equal(only$removed$questionnaire, "2")
-  expect_null(only$removed$study) # the study stays, with no questionnaires until one is added
-
-  last_wave <- cascade_of(snap, wave = "3") # questionnaire 2's only wave
-  expect_length(last_wave$blocked, 0)
-  expect_null(last_wave$removed$questionnaire) # the questionnaire stays, with no waves until one is added
-  expect_equal(last_wave$removed$questionnaire_question, "209") # questions asked in no other wave go (BR69)
-
-  whole <- cascade_of(snap, study = "2")
-  expect_length(whole$blocked, 0)
-  expect_equal(whole$removed$questionnaire, "2")
-})
-
-test_that("a registry takes everything inside it, and nothing outside", {
-  snap <- test_snapshot()
-  cascade <- cascade_of(snap, registry = "1")
-
-  expect_equal(sort(cascade$removed$study), c("1", "2"))
-  expect_equal(sort(cascade$removed$questionnaire), c("1", "2", "3", "4"))
-  expect_equal(length(cascade$removed$variable), 9)
-  expect_length(cascade$blocked, 0)
-  expect_null(cascade$removed$principal_investigator)
-  expect_null(cascade$removed$respondent_type)
-})
-
-test_that("a category goes from every question it tags, without deleting them", {
-  snap <- test_snapshot()
-  cascade <- cascade_of(snap, category = "D012907")
-  expect_equal(length(cascade$removed$question_category), 3)
-  expect_null(cascade$removed[["question"]])
-})
-
-test_that("an answer choice that variables offer can't be deleted", {
-  snap <- test_snapshot()
-  expect_match(cascade_of(snap, answer_option = "1")$blocked[[1]]$text, "response options for variables are in the way|in the way")
+  printed <- cascade_of(snap, component = "4")
+  expect_match(printed$blocked[[1]]$text, "^2 blocks in questionnaires are in the way")
+  expect_length(cascade_of(snap, component = "15")$blocked, 0)
+  expect_match(cascade_of(snap, answer_option = "1")$blocked[[1]]$text, "^3 response options for variables are in the way")
   expect_length(cascade_of(snap, answer_option = "39")$blocked, 0)
+  tag <- cascade_of(snap, tag = "17")
+  expect_equal(vapply(tag$blocked, function(b) b$table, character(1)), c("placement_tag", "variable_tag"))
+  expect_match(tag$blocked[[1]]$text, "Questions carry this tag")
+  expect_length(cascade_of(snap, tag = "2")$blocked, 0)
 })
 
-test_that("the reach says how many of each kind go, and hides the detail rows", {
+test_that("the reach says how many of each kind go, the components the database forgets, and how it falls on each questionnaire", {
   snap <- test_snapshot()
-  reach <- edit_service_reach(snap, cascade_of(snap, component = "9"))
+  reach <- edit_service_reach(snap, cascade_of(snap, questionnaire = "2"))
   texts <- vapply(reach$lines, function(line) line$text, character(1))
-
   expect_equal(texts, c(
-    "2 components in questionnaires", "2 questions in questionnaires", "2 questions in waves",
-    "2 variables", "8 response options for variables", "1 MeSH tag on a question",
-    "1 measurement scale membership"
+    "1 wave", "3 blocks in questionnaires", "1 question in a wave", "1 variable", "4 response options for variables",
+    "1 tag on a question", "2 tags on variables", "1 component no questionnaire prints any more (forgotten by the database)"
   ))
-  expect_equal(reach$total, 18)
-  # how it falls on each questionnaire
-  expect_equal(vapply(reach$by_questionnaire, function(q) q$questionnaire, character(1)), c("KQ", "KQP"))
-  expect_equal(
-    reach$by_questionnaire[[1]]$lines,
-    c("1 component in a questionnaire", "1 question in a questionnaire", "1 question in a wave", "1 variable")
-  )
+  expect_equal(reach$total, 14)
+  expect_equal(reach$lines[[8]]$examples, "the next questions are about your mood.")
+  expect_length(reach$by_questionnaire, 0) # the questionnaire itself goes: no breakdown
+  section <- edit_service_reach(snap, cascade_of(snap, placement = "101"))
+  expect_equal(vapply(section$by_questionnaire, function(q) q$questionnaire, character(1)), "AHP")
+  expect_equal(section$by_questionnaire[[1]]$lines, c("5 blocks in questionnaires", "6 questions in waves", "3 variables")) # the section itself among them
 })
 
 test_that("the starting rows aren't counted among what goes with them", {
@@ -248,6 +160,9 @@ test_that("what's emptied rather than removed is listed apart", {
   snap <- test_snapshot()
   reach <- edit_service_reach(snap, cascade_of(snap, principal_investigator = "4"))
   expect_equal(reach$changed[[1]]$text, "1 study will lose their contact investigator")
+  reach <- edit_service_reach(snap, cascade_of(snap, placement = "104"))
+  expect_equal(reach$changed[[1]]$text, "1 block in a questionnaire will lose their question they depend on")
+  expect_equal(reach$changed[[1]]$examples, "AHP · how many cigarettes do you smoke on a typical day?")
 })
 
 test_that("rows are named in staff's words", {
@@ -255,29 +170,30 @@ test_that("rows are named in staff's words", {
   expect_equal(edit_label(snap, "wave", snap$wave[2, ]), "AHP Wave 2")
   expect_equal(edit_label(snap, "questionnaire", snap$questionnaire[1, ]), "Adult Health and Personality (AHP)")
   expect_equal(edit_label(snap, "component", snap$component[snap$component$component_id == 1, ]), "a. about you")
-  untitled <- snap$component[1, ]
-  snap$component$text[1] <- NA
-  expect_equal(edit_label(snap, "component", snap$component[1, ]), "(untitled section)")
+  expect_equal(edit_label(snap, "component", snap$component[snap$component$component_id == 16, ]), "(group)")
+  untitled <- snap
+  untitled$component$text[1] <- NA
+  expect_equal(edit_label(untitled, "component", untitled$component[1, ]), "(untitled section)")
   expect_equal(edit_label(snap, "variable", snap$variable[1, ]), "AH01DB · date of birth")
+  expect_equal(edit_label(snap, "placement", snap$placement[snap$placement$placement_id == 104, ]), "AHP · do you now smoke cigarettes?")
+  expect_equal(edit_label(snap, "wave_question", snap$wave_question[3, ]), "AHP Wave 1 · question 2a · how many cigarettes do you smoke on a typical day?")
+  expect_equal(edit_label(snap, "response_option", snap$response_option[1, ]), "AH02SM · yes (code 1)")
+  expect_equal(edit_label(snap, "tag", snap$tag[snap$tag$tag_id == 17, ]), "in the past week")
+  expect_equal(edit_label(snap, "variable_tag", snap$variable_tag[snap$variable_tag$tag_id == 22, ]), "cigarettes (unit) on AH02CG")
+  expect_equal(edit_label(snap, "placement_tag", snap$placement_tag[1, ]), "in the past week (time frame) on “how often in the past week did you feel sad?”")
+  expect_equal(edit_label(snap, "question_scale", snap$question_scale[1, ]), "Short Mood Scale item 1 · how often in the past week did you feel sad?")
+  expect_equal(edit_label(snap, "pdf_file", snap$pdf_file), c("AHP_Redacted.pdf", "PDF b2b2b2b2b2b2"))
   expect_equal(edit_label(snap, "wave", snap$wave[0, ]), character())
 })
 
-test_that("the tables to read for a delete include the ones its names come from, and the parents that need what goes", {
-  # a wave's questions asked in no other wave go with it, and so do their variables
+test_that("the tables to read for a delete include the ones its names come from, and what keeps a component", {
+  expect_true(all(c("wave", "wave_question", "questionnaire", "placement", "component") %in% edit_tables_to_read("wave")))
   expect_true(all(c(
-    "wave",
-    "wave_question",
-    "questionnaire_question",
-    "questionnaire_component",
-    "variable",
-    "response_option",
-    "questionnaire",
-    "component",
-    "component_type"
-  ) %in% edit_tables_to_read("wave")))
-  # a registry reaches everything below it, and the components only it prints, so what keeps one of those too
-  expect_true(all(c("study", "questionnaire", "wave_question", "variable", "response_option") %in% edit_tables_to_read("registry")))
-  expect_true(all(c("component", "question_scale", "open_ended") %in% edit_tables_to_read("registry")))
+    "wave", "placement", "wave_question", "variable", "response_option", "variable_tag", "placement_tag", "response_option_tag",
+    "component", "question_scale", "tag", "answer_option"
+  ) %in% edit_tables_to_read("questionnaire")))
+  expect_false("study" %in% edit_tables_to_read("questionnaire")) # nothing above a questionnaire goes with it
+  expect_true(all(c("study", "principal_investigator") %in% edit_tables_to_read("principal_investigator")))
 })
 
 test_that("a delete reaches the same rows whether the whole database was read or only the tables its kind reads", {
@@ -293,6 +209,7 @@ test_that("a delete reaches the same rows whether the whole database was read or
         label <- paste(entity$key, key)
         expect_equal(part$cascade$removed, full$cascade$removed, info = label)
         expect_equal(part$cascade$cleared, full$cascade$cleared, info = label)
+        expect_equal(part$cascade$forgotten, full$cascade$forgotten, info = label)
         expect_equal(vapply(part$blocked, function(b) b$text, ""), vapply(full$blocked, function(b) b$text, ""), info = label)
         expect_equal(part$items, full$items, info = label)
       }

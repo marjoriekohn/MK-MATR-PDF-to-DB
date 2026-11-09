@@ -8,8 +8,7 @@ as_gemini_wrote_it <- function(json) {
     lapply(blocks, function(block) {
       list(
         component_type = block$component_type, text = block$text,
-        printed_number = block$printed_number, self_contained = block$self_contained,
-        condition = block$condition, parent_question = block$parent_question,
+        printed_number = block$printed_number, parent_question = block$parent_question,
         variables = lapply(block$variables, function(box) {
           list(
             variable_type = box$variable_type, label = box$label, subject = box$subject, time_frame = box$time_frame,
@@ -31,12 +30,12 @@ as_gemini_wrote_it <- function(json) {
 question <- function(number, boxes = list(yes_no_box())) {
   list(
     component_type = "Question", text = paste("Question", number), printed_number = number,
-    self_contained = TRUE, condition = NULL, parent_question = NULL, variables = boxes, children = list()
+    parent_question = NULL, variables = boxes, children = list()
   )
 }
 
 yes_no_box <- function() {
-  choice <- function(answer) list(answer_option = answer, printed = TRUE, skip_instruction = NULL)
+  choice <- function(answer) list(answer_option = answer, printed = TRUE)
   list(
     variable_type = "closed_ended", label = NULL, subject = NULL, answer_data_type = NULL,
     response_options = list(choice("Yes"), choice("No"))
@@ -104,8 +103,8 @@ test_that("tidying numbers each list, cleans the text and keeps only each block'
     question("12 b.", boxes = list(list(
       variable_type = "closed_ended", label = NULL, subject = "Self", answer_data_type = NULL,
       response_options = list(
-        list(answer_option = "Male", printed = TRUE, printed_label = "M", skip_instruction = NULL), # an old field: dropped
-        list(answer_option = "FEMALE.", printed = TRUE, skip_instruction = NULL)
+        list(answer_option = "Male", printed = TRUE, printed_label = "M"), # an old field: dropped
+        list(answer_option = "FEMALE.", printed = TRUE)
       )
     )))
   ))
@@ -127,6 +126,7 @@ test_that("tidying numbers each list, cleans the text and keeps only each block'
 })
 
 test_that("a reading's words are kept in lower case, without a figure that repeats the number word before it", {
+  # an older reading's skips and conditions come along too: they are left behind
   asked <- question("4", boxes = list(list(
     variable_type = "open_ended", label = "Age Started", unit = "Yrs.", subject = "Respondent's Siblings",
     time_frame = "During the LAST 12 months", answer_data_type = "NUMBER", skip_condition = "None",
@@ -134,6 +134,7 @@ test_that("a reading's words are kept in lower case, without a figure that repea
   )))
   asked$text <- "Do you have more than FIVE (5) brothers and sisters?"
   asked$condition <- "Twins"
+  asked$self_contained <- TRUE
   grid <- list(
     component_type = "Grid", text = "During the WORST time:", skip_condition = "No", skip_when = "every",
     skip_instruction = "Go to Question 15", children = list(asked)
@@ -147,14 +148,16 @@ test_that("a reading's words are kept in lower case, without a figure that repea
   asked <- grid$children[[1]]
   box <- asked$variables[[1]]
   expect_equal(section$text, "section b: your health")
-  expect_equal(c(grid$text, grid$skip_condition, grid$skip_instruction), c("during the worst time:", "no", "go to question 15"))
-  expect_equal(c(asked$text, asked$condition), c("do you have more than five brothers and sisters?", "twins"))
-  expect_equal(c(box$label, box$skip_condition, box$skip_instruction), c("age started", "none", "go to question 9"))
+  expect_equal(grid$text, "during the worst time:")
+  expect_equal(asked$text, "do you have more than five brothers and sisters?")
+  expect_equal(box$label, "age started")
   expect_equal(box$unit, "years") # its own field, abbreviation written out
   # names the database lists, numbers and the questionnaire's own name aren't the form's words
   expect_equal(box$subject, "Respondent's Siblings")
   expect_equal(box$time_frame, "in the past 12 months") # written one way (normal_time_frame())
   expect_equal(tidied$questionnaire, list(name = "General Nutrition Assessment", abbreviation = "GNA"))
+  old_fields <- c("skip_condition", "skip_when", "skip_instruction", "condition", "self_contained")
+  expect_false(any(old_fields %in% c(names(grid), names(asked), names(box))))
   # a figure that isn't the number word's stays
   expect_equal(normal_text("Ages 5 (5-9) and Seven (8)"), "ages 5 (5-9) and seven (8)")
 })
@@ -167,14 +170,6 @@ test_that("a write-in's unit is kept, written one way; a box with choices has no
   boxes <- tidied$components[[1]]$variables
   expect_equal(boxes[[1]]$unit, "years")
   expect_null(boxes[[2]]$unit)
-})
-
-test_that("a section, grid or group keeps who answers everything in it; other blocks have no condition", {
-  heading <- section_of(list(component_type = "Instruction", text = "Answer these.", condition = "Female"), question("1"), text = "Women")
-  heading$condition <- "Female"
-  tidied <- reading_service_tidy(list(components = list(heading)))
-  expect_equal(tidied$components[[1]]$condition, "female")
-  expect_null(tidied$components[[1]]$children[[1]]$condition)
 })
 
 test_that("a choice the reading says isn't printed is left out: a lone check box has the one choice", {
@@ -210,7 +205,7 @@ test_that("the prompt lists what the lookup tables hold", {
   expect_match(instructions, '"Respondent\'s Siblings"', fixed = TRUE)
   expect_match(instructions, '"in the past 30 days"', fixed = TRUE)
   expect_match(instructions, '"Twins (compared)"', fixed = TRUE)
-  expect_match(instructions, "  - Not Difficult At All", fixed = TRUE)
+  expect_match(instructions, "  - not difficult at all", fixed = TRUE)
 })
 
 test_that("the prompt's example is a draft with no problems", {
@@ -509,7 +504,7 @@ test_that("the job saves what Gemini read and marks the draft ready", {
   expect_equal(saved$extraction_status, "ready")
   expect_equal(saved$prompt_version, "abc123")
   expect_equal(saved$model, "gemini-3.8-flash")
-  expect_identical(draft_service_from_json(draft_model_get_both(test_connection, record$id)$original), short_gold_draft())
+  expect_identical(draft_service_from_json(extraction_model_questionnaire(test_connection, record$id)$original), short_gold_draft())
   expect_equal(nrow(extraction_service_load_draft(test_connection, saved)$components), nrow(short_gold_draft()$components))
 })
 
@@ -527,7 +522,7 @@ test_that("the job reads the file of MATR IDs and codes once the questionnaire i
   }
   reading_service_run(test_connection, record$id, record$reading_started, read = read, assign = assign)
   expect_equal(given, list(name = "codes.csv", text = "AH01\nAH02"))
-  original <- draft_service_from_json(draft_model_get_both(test_connection, record$id)$original)
+  original <- draft_service_from_json(extraction_model_questionnaire(test_connection, record$id)$original)
   expect_equal(original$variables$matr_id[1], "AH01")
 
   again <- extraction_service_create(test_connection, fake_upload(), me, supplement = fake_csv_upload("AH01", "codes.csv"))
@@ -548,13 +543,13 @@ test_that("Re-extract reads a draft's PDF again, putting aside the questionnaire
   reading_service_run(test_connection, record$id, record$reading_started, read = read)
   checked <- draft_service_update(short_gold_draft(), "components", "c3", "checked", TRUE)
   revision <- draft_service_save(test_connection, record$id, checked, me$staff_id)
-  expect_false(is.null(draft_model_get_both(test_connection, record$id)$questionnaire))
+  expect_false(is.null(extraction_model_questionnaire(test_connection, record$id)$questionnaire))
   # not over a save someone else made since it was opened
   expect_error(extraction_service_reextract(test_connection, record$id, me, expected_revision = revision - 1L))
 
   again <- extraction_service_reextract(test_connection, record$id, me, expected_revision = revision)
   expect_equal(again$extraction_status, "queued")
-  expect_null(draft_model_get_both(test_connection, record$id)$questionnaire)
+  expect_null(extraction_model_questionnaire(test_connection, record$id)$questionnaire)
   # once read again, it opens as the new reading, nothing marked as checked
   reading_service_run(test_connection, record$id, again$reading_started, read = read)
   expect_false(any(extraction_service_load_draft(test_connection, again)$components$checked))
@@ -578,9 +573,11 @@ test_that("the job reads the pick lists from the database for Gemini", {
     given <<- lookups
     list(json = short_gold_json(), model = "m", prompt_version = "p")
   }
-  subject <- local_row("subject", list(name = test_name("Subject")), "subject_id")
+  subject <- local_row("tag", list(kind = "subject", name = test_name("Subject")), "tag_id")
+  unit <- local_row("tag", list(kind = "unit", name = test_name("unit")), "tag_id")
   reading_service_run(test_connection, record$id, record$reading_started, read = read)
   expect_true(subject$name %in% given$subjects)
+  expect_true(unit$name %in% given$units)
   expect_true("Section" %in% given$component_types)
 })
 
@@ -641,7 +638,7 @@ test_that("a job whose reading was restarted saves nothing", {
 
   saved <- extraction_model_get(test_connection, record$id)
   expect_equal(saved$extraction_status, "queued")
-  expect_null(draft_model_get_both(test_connection, record$id)$original)
+  expect_null(extraction_model_questionnaire(test_connection, record$id)$original)
 })
 
 test_that("a reading whose job has died is marked failed", {
@@ -653,15 +650,17 @@ test_that("a reading whose job has died is marked failed", {
     extraction_status = "sent", reading_pid = 999999L, # no such process
     reading_claimed_at = format_time(Sys.time())
   ))
-  withdrawn <- extraction_service_create(test_connection, fake_upload(), colleague, now = Sys.time() - 60)
-  extraction_service_discard(test_connection, withdrawn$id, colleague)
+  # a draft discarded meanwhile has left the list, so there is no reading of it to watch
+  discarded <- extraction_service_create(test_connection, fake_upload(), colleague, now = Sys.time() - 60)
+  extraction_service_discard(test_connection, discarded$id, colleague)
 
   still_reading <- reading_service_watch(my_drafts(me, colleague), test_connection)
   expect_true(still_reading)
   saved <- extraction_service_get_all(test_connection)
   expect_equal(saved[[record$id]]$extraction_status, "failed")
   expect_equal(saved[[record$id]]$error, "Reading stopped before it finished.")
-  expect_error(extraction_model_get(test_connection, withdrawn$id), "no longer in the database") # discarded drafts are gone
+  expect_false(discarded$id %in% names(saved))
+  expect_error(extraction_model_get(test_connection, discarded$id), "no longer in the database") # a discarded draft is deleted
 })
 
 test_that("a draft another copy of the site has claimed isn't started again", {

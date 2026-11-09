@@ -8,5 +8,3 @@
 .modal-body { padding: 1.25rem 1.5rem; }
 .modal-footer { padding: 0.9rem 1.5rem; border-top-color: $line-light; background: $surface; }
 .modal-backdrop.show { opacity: 0.4; }
-// A change request's buttons, in a part of their own so the page can draw them again (change_request_parts())
-.change-request-footer, .change-request-footer-buttons { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 0.5rem; }

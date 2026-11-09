@@ -1,6 +1,7 @@
 # ------ Staff ---------------------------------------------------------------------
-# Who may use the site: the STAFF table of the MATR database (`connection`, as
-# in model_database.R). Each is a STAFF or an ADMIN (`role`).
+# Who may use the site: the staff table of the MATR database (`connection`, as in model_database.R).
+# Each is a STAFF or an ADMIN (`role`, kept for the site's own use: nothing needs an ADMIN). Staff
+# are never deleted, only marked inactive (the history names them).
 
 staff_columns <- c("staff_id", "name", "email", "active", "role")
 
@@ -17,13 +18,4 @@ staff_model_find_by_email <- function(connection, email) {
   # ilike also reads "_" as any one character, so keep only the exact match.
   rows <- rows[tolower(rows$email) == tolower(email), , drop = FALSE]
   if (nrow(rows) == 1) as.list(rows)
-}
-
-# The staff who are still active.
-# Returns: A data frame with `staff_id`, `name` and `role`, by name; no rows if there are none.
-staff_model_active <- function(connection) {
-  database_model_get(
-    connection, "staff", c("staff_id", "name", "role"),
-    order_by = "name", filters = list(active = "is.true")
-  )
 }

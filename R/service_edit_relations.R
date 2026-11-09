@@ -1,24 +1,17 @@
 # ------ What a change reaches ---------------------------------------------------------
-# The live tables point at each other: a wave at its questionnaire, a
-# questionnaire's placement of a component at both. Before anyone deletes
-# something, the edit pages work out what else would go with it, from the list
-# of these links below and the rows in `snap` (a list of whole tables, named
-# after them; table_model_get()).
+# The catalog's tables point at each other: a wave at its questionnaire, a placement at its component and its
+# questionnaire. Before anyone deletes something, the Metadata page works out what else would go with it, from
+# the list of these links below and the rows in `snap` (a list of whole tables, named after them;
+# table_model_get()).
 #
-# Each link says what happens to the rows that point at a row being deleted:
-#   remove  they go with it (a questionnaire's waves)
-#   clear   they stay, and what points at it is emptied (a study's contact)
-#   block   they're in the way: the delete can't go ahead until they're dealt
-#           with (a study's lead investigator, which never changes)
-# A link can also say its parent can't be without these rows (`needs_child =
-# "remove_parent"`): the parent is deleted too, as a question asked in no wave
-# can't exist, and a component no questionnaire prints is owned by nothing. Such
-# a parent stays while rows in `kept_by` still name it (a measurement scale
-# listing the component). A study can be left with no questionnaires, and a
-# questionnaire with no waves, until more are added.
-#
-# The database does the same (docs/sql/1_setup.sql, section 2 and "What nothing
-# owns"), so a delete made any other way leaves the same rows behind.
+# Each link says what happens to the rows that point at a row being deleted, exactly as the database's foreign
+# keys have it (sql/2_references.sql), so the preview shows what the database will do:
+#   remove  they go with it (a questionnaire's waves and placements, a placement's variables)
+#   clear   they stay, and what points at it is emptied (a study's contact, a question's dependency)
+#   block   they're in the way: the database refuses the delete until they're dealt with (a component some
+#           questionnaire prints, a tag or answer choice in use, a registry with studies)
+# A component no placement names any more is forgotten by the database itself when a change ends
+# (private.forget_components()), unless a measurement scale names it; the preview says so.
 #
 # A row's identity is its key columns joined with "|" (edit_key()).
 
@@ -27,36 +20,34 @@
 # parent: The table it points at.
 # by: The child's columns, named, each holding the parent's column of that name's value.
 # on_delete: What happens to the child's rows when the parent's go: `"remove"`, `"block"` or `"clear"`.
-# needs_child: `"remove_parent"` if a parent left with none of these rows goes too; `NULL` otherwise.
 # why,fix: For a block: why the child's rows are in the way, and what to do.
 # clears: For a clear: what is emptied, e.g. `"contact investigator"`.
-# kept_by: With `needs_child`: the tables whose rows, while they stay, keep a parent left with none of these
-#   rows; each names its columns as `by` does.
 # Returns: A list.
-relation <- function(child, parent, by, on_delete, needs_child = NULL, why = NULL, fix = NULL, clears = NULL,
-                     kept_by = list()) {
-  list(
-    child = child, parent = parent,
-    by = by, # the child's columns, named, each holding the parent's column of that name's value
-    on_delete = on_delete, needs_child = needs_child, kept_by = kept_by,
-    why = why, fix = fix, # a block: why the rows are in the way, and what to do
-    clears = clears # a clear: what's emptied, e.g. "contact investigator"
-  )
+relation <- function(child, parent, by, on_delete, why = NULL, fix = NULL, clears = NULL) {
+  list(child = child, parent = parent, by = by, on_delete = on_delete, why = why, fix = fix, clears = clears)
 }
 
 edit_relations <- list(
-  relation("study", "registry", c(registry_id = "registry_id"), "remove"),
+  relation(
+    "study", "registry", c(registry_id = "registry_id"), "block",
+    why = "A registry that still holds studies can't be deleted.",
+    fix = "Empty the registry (its contents go, the registry and its studies stay), or delete its studies first."
+  ),
   relation(
     "study", "principal_investigator", c(principal_investigator_id = "principal_investigator_id"), "block",
-    why = "A study's lead investigator can't be changed once it's recorded, so the studies they lead have to go first.",
-    fix = "Delete those studies first, or keep this investigator."
+    why = "These studies name this investigator as their lead.",
+    fix = "Change those studies to another lead investigator first (Update, then Study), or keep this investigator."
   ),
   relation(
     "study", "principal_investigator", c(contact_principal_investigator_id = "principal_investigator_id"),
     "clear",
     clears = "contact investigator"
   ),
-  relation("questionnaire", "study", c(study_id = "study_id"), "remove"),
+  relation(
+    "questionnaire", "study", c(study_id = "study_id"), "block",
+    why = "A study that still holds questionnaires can't be deleted.",
+    fix = "Empty the study (its contents go, the study and its questionnaires stay), or delete its questionnaires first."
+  ),
   relation(
     "questionnaire", "respondent_type", c(respondent_type_id = "respondent_type_id"), "block",
     why = "Every questionnaire has a respondent type, so a respondent type can't go while questionnaires use it.",
@@ -64,107 +55,64 @@ edit_relations <- list(
   ),
   relation("wave", "questionnaire", c(questionnaire_id = "questionnaire_id"), "remove"),
   relation(
-    "component", "component_type", c(component_type_id = "component_type_id"), "block",
-    why = "Every component has a kind, so a component type can't go while components use it.",
-    fix = "Delete those components first."
+    "wave", "pdf_file", c(pdf_sha256 = "pdf_sha256"), "block",
+    why = "These waves were extracted from it.", fix = "Keep it: it is the record of what they were read from."
   ),
-  relation("questionnaire_component", "questionnaire", c(questionnaire_id = "questionnaire_id"), "remove"),
-  # A component no questionnaire prints any more goes too, unless a measurement scale lists it.
-  relation("questionnaire_component", "component", c(component_id = "component_id"), "remove",
-    needs_child = "remove_parent",
-    kept_by = list(question_scale = c(component_id = "component_id"))
-  ),
-  # What's inside a section goes with it.
-  relation("questionnaire_component", "questionnaire_component", c(parent_placement_id = "placement_id"), "remove"),
-  # A question's settings and its placement are one block: neither outlives the other.
-  relation("questionnaire_component", "questionnaire_question", c(placement_id = "placement_id"), "remove"),
-  relation("question", "component", c(component_id = "component_id"), "remove"),
-  # questions that shared a stem that goes no longer share it; their own words stay. A stem no question has goes.
-  relation("question", "question_stem", c(question_stem_id = "question_stem_id"), "clear",
-    clears = "question stem", needs_child = "remove_parent"
-  ),
-  relation("questionnaire_question", "question", c(component_id = "component_id"), "remove"),
-  relation("questionnaire_question", "questionnaire_component", c(placement_id = "placement_id"), "remove"),
   relation(
-    "questionnaire_question", "questionnaire_question", c(parent_question_placement_id = "placement_id"), "block",
-    why = "These follow-up questions need the question above them as their parent.",
-    fix = paste0(
-      "Delete the follow-ups first, or make them stand on their own (Update, then Questionnaire ",
-      "question, then answer Yes to \"Can a researcher understand it on its own?\")."
-    )
+    "wave", "pdf_file", c(supplement_sha256 = "pdf_sha256"), "block",
+    why = "These waves read their Variable Names and Coding from it.", fix = "Keep it: it is the record of what they were read from."
   ),
+  relation("placement", "questionnaire", c(questionnaire_id = "questionnaire_id"), "remove"),
+  relation(
+    "placement", "component", c(component_id = "component_id"), "block",
+    why = "Questionnaires still print this block there.",
+    fix = "Delete it from those questionnaires first (Blocks, then the questionnaire). A block no questionnaire prints goes on its own."
+  ),
+  # What's inside a section, grid or group goes with it; a question whose dependency goes stands on its own.
+  relation("placement", "placement", c(parent_placement_id = "placement_id"), "remove"),
+  relation("placement", "placement", c(depends_on_placement_id = "placement_id"), "clear", clears = "question they depend on"),
   relation("wave_question", "wave", c(wave_id = "wave_id"), "remove"),
-  # A question placement asked in no wave goes, unless follow-ups that stay name it as theirs, or a skip sends
-  # respondents to it.
-  relation(
-    "wave_question", "questionnaire_question", c(placement_id = "placement_id"), "remove",
-    needs_child = "remove_parent",
-    kept_by = list(
-      questionnaire_question = c(parent_question_placement_id = "placement_id"),
-      questionnaire_component = c(skip_to_placement_id = "placement_id"),
-      response_option = c(skip_to_placement_id = "placement_id"),
-      open_ended = c(skip_to_placement_id = "placement_id")
-    )
-  ),
-  relation("question_category", "question", c(component_id = "component_id"), "remove"),
-  relation("question_category", "category", c(mesh_id = "mesh_id"), "remove"),
-  relation("question_scale", "question", c(component_id = "component_id"), "remove"),
-  relation("question_scale", "measurement_scale", c(scale_id = "scale_id"), "remove"),
-  relation("variable", "questionnaire_question", c(placement_id = "placement_id"), "remove"),
-  relation(
-    "variable", "subject", c(subject_id = "subject_id"), "block",
-    why = "Variables are about this subject.",
-    fix = "Change those variables to another subject first. Until then the subject can be renamed instead."
-  ),
-  relation(
-    "variable", "time_frame", c(time_frame_id = "time_frame_id"), "block",
-    why = "Variables are about this time frame.",
-    fix = "Change those variables to another time frame first. Until then the time frame can be renamed instead."
-  ),
-  relation("open_ended", "variable", c(variable_key = "variable_key"), "remove"),
-  relation("closed_ended", "variable", c(variable_key = "variable_key"), "remove"),
-  relation("response_option", "closed_ended", c(variable_key = "variable_key"), "remove"),
-  # a choice that skips to a place that goes no longer skips anywhere; its printed words stay
-  relation("response_option", "questionnaire_component", c(skip_to_placement_id = "placement_id"), "clear", clears = "question it skips to"),
-  # the same for a group that skips, and for a write-in
-  relation("questionnaire_component", "questionnaire_component", c(skip_to_placement_id = "placement_id"), "clear", clears = "question its group skips to"),
-  relation("open_ended", "questionnaire_component", c(skip_to_placement_id = "placement_id"), "clear", clears = "question it skips to"),
+  relation("wave_question", "placement", c(placement_id = "placement_id"), "remove"),
+  relation("variable", "placement", c(placement_id = "placement_id"), "remove"),
+  relation("response_option", "variable", c(variable_key = "variable_key"), "remove"),
   relation(
     "response_option", "answer_option", c(answer_option_id = "answer_option_id"), "block",
     why = "Variables already offer this answer choice.",
-    fix = "Take it off those variables first."
+    fix = "Take it off those variables first. Until then the choice can be reworded instead."
+  ),
+  relation("placement_tag", "placement", c(placement_id = "placement_id"), "remove"),
+  relation("variable_tag", "variable", c(variable_key = "variable_key"), "remove"),
+  relation("response_option_tag", "response_option", c(variable_key = "variable_key", answer_option_id = "answer_option_id"), "remove"),
+  relation(
+    "placement_tag", "tag", c(tag_id = "tag_id"), "block",
+    why = "Questions carry this tag.", fix = "Take it off those questions first. Until then the tag can be renamed instead."
   ),
   relation(
-    "answer_option_set", "answer_option", c(answer_option_id = "answer_option_id"), "block",
-    why = "Option sets already include this answer choice.",
-    fix = "Take it out of those option sets first (Option Sets, then Edit)."
+    "variable_tag", "tag", c(tag_id = "tag_id"), "block",
+    why = "Variables carry this tag.", fix = "Take it off those variables first. Until then the tag can be renamed instead."
   ),
-  relation("answer_option_set", "option_set", c(option_set_id = "option_set_id"), "remove"),
-  # the wordings merged into a choice go with it
-  relation("answer_option_alias", "answer_option", c(answer_option_id = "answer_option_id"), "remove"),
   relation(
-    "closed_ended", "option_set", c(option_set_id = "option_set_id"), "block",
-    why = "These variables offer exactly this set of choices.",
-    fix = "Keep it: a set can only go once no variable offers it."
+    "response_option_tag", "tag", c(tag_id = "tag_id"), "block",
+    why = "Answer choices of variables carry this tag.", fix = "Take it off those choices first. Until then the tag can be renamed instead."
   ),
-  # a scale item that expected answers from a set that goes no longer expects any; the item stays
-  relation("question_scale", "option_set", c(expected_option_set_id = "option_set_id"), "clear", clears = "expected choices"),
   relation(
-    "extracted_draft", "pdf_file", c(pdf_sha256 = "pdf_sha256"), "block",
-    why = "These extractions were read from it.",
-    fix = "Keep it: it is the record of what they were read from."
+    "question_scale", "measurement_scale", c(scale_id = "scale_id"), "block",
+    why = "A measurement scale that still has items can't be deleted.",
+    fix = "Delete its items first (Scale Items, then the scale)."
+  ),
+  relation(
+    "question_scale", "component", c(component_id = "component_id"), "block",
+    why = "Measurement scales list this question as an item.",
+    fix = "Take it out of those scales first (Scale Items, then the scale)."
   )
 )
 
-# Parents are deleted after what points at them, so the order a delete is
-# written in is safe: the tables, children first.
+# Parents are deleted after what points at them, so the order a delete is written in is safe: the tables,
+# children first.
 edit_delete_order <- c(
-  "response_option", "open_ended", "closed_ended", "variable", "wave_question",
-  "question_scale", "question_category", "questionnaire_question",
-  "questionnaire_component", "question", "component", "answer_option_set",
-  "option_set", "answer_option_alias", "answer_option", "wave", "questionnaire", "study", "registry",
-  "principal_investigator", "respondent_type", "component_type", "category",
-  "measurement_scale", "subject", "time_frame", "question_stem"
+  "response_option_tag", "variable_tag", "placement_tag", "response_option", "variable", "wave_question",
+  "question_scale", "placement", "component", "answer_option", "tag", "wave", "questionnaire", "study", "registry",
+  "principal_investigator", "respondent_type", "measurement_scale", "pdf_file"
 )
 
 # ------ Rows and their identity -------------------------------------------------------
@@ -200,9 +148,8 @@ edit_rows <- function(snap, table, keys) {
   rows[edit_key(rows, edit_table_key(table)) %in% keys, , drop = FALSE]
 }
 
-# The tables whose rows can be reached from rows of `table`: those that point
-# at them, and the parents that need what's removed (a question asked in no
-# wave goes with the wave), however far; `table` included.
+# The tables whose rows can be reached from rows of `table`: those that point at them, however far; `table`
+# included.
 edit_descendant_tables <- function(table) {
   found <- table
   repeat {
@@ -210,13 +157,8 @@ edit_descendant_tables <- function(table) {
       Filter(function(relation) relation$parent %in% found, edit_relations),
       function(relation) relation$child, character(1)
     )
-    needing <- vapply(
-      Filter(function(relation) relation$child %in% found && !is.null(relation$needs_child), edit_relations),
-      function(relation) relation$parent, character(1)
-    )
-    reached <- unique(c(children, needing))
-    if (all(reached %in% found)) break
-    found <- union(found, reached)
+    if (all(children %in% found)) break
+    found <- union(found, children)
   }
   found
 }
@@ -237,10 +179,10 @@ edit_referencing <- function(snap, relation, parent_keys) {
 # ------ The cascade ----------------------------------------------------------------------
 # What deleting some rows takes with it.
 # start: A list of keys named after their tables: the rows being deleted.
-# Returns: A list: `start` (as given), `removed` (the keys of every row that goes, by table,
-#   the starting rows first), `cleared` (rows that stay but have a column emptied: `table`, `columns`,
-#   `keys`, `what`) and `blocked` (what is in the way, if anything: each says `text` and
-#   `fix` and lists the `labels` of the rows involved).
+# Returns: A list: `start` (as given), `removed` (the keys of every row that goes, by table, the starting rows
+#   first), `cleared` (rows that stay but have a column emptied: `table`, `columns`, `keys`, `what`), `forgotten`
+#   (the components no placement names once these go, which the database forgets) and `blocked` (what is in the
+#   way, if anything: each says `text` and `fix` and lists the `labels` of the rows involved).
 edit_service_cascade <- function(snap, start) {
   removed <- list()
   queue <- list()
@@ -256,31 +198,17 @@ edit_service_cascade <- function(snap, start) {
   }
   for (table in names(start)) enqueue(table, start[[table]])
 
-  repeat {
-    while (length(queue) > 0) {
-      step <- queue[[1]]
-      queue <- queue[-1]
-      for (relation in Filter(function(r) r$parent == step$table, edit_relations)) {
-        hits <- edit_referencing(snap, relation, step$keys)
-        if (length(hits) == 0) next
-        if (relation$on_delete == "remove") enqueue(relation$child, hits)
-        if (relation$on_delete == "clear") {
-          cleared <- c(cleared, list(list(
-            table = relation$child, columns = names(relation$by), keys = hits, what = relation$clears
-          )))
-        }
+  while (length(queue) > 0) {
+    step <- queue[[1]]
+    queue <- queue[-1]
+    for (relation in Filter(function(r) r$parent == step$table, edit_relations)) {
+      hits <- edit_referencing(snap, relation, step$keys)
+      if (length(hits) == 0) next
+      if (relation$on_delete == "remove") enqueue(relation$child, hits)
+      if (relation$on_delete == "clear") {
+        cleared <- c(cleared, list(list(table = relation$child, columns = names(relation$by), keys = hits, what = relation$clears)))
       }
     }
-    # A parent left with none of the children it needs goes too.
-    orphans <- Filter(
-      function(orphan) length(orphan$keys) > 0,
-      lapply(
-        Filter(function(r) identical(r$needs_child, "remove_parent"), edit_relations),
-        function(relation) list(table = relation$parent, keys = edit_left_empty(snap, relation, removed))
-      )
-    )
-    if (length(orphans) == 0) break
-    for (orphan in orphans) enqueue(orphan$table, orphan$keys)
   }
 
   # A row that's going anyway needn't have anything emptied.
@@ -290,40 +218,26 @@ edit_service_cascade <- function(snap, start) {
   })
   cleared <- Filter(function(clear) length(clear$keys) > 0, cleared)
 
-  list(start = start, removed = removed, cleared = cleared, blocked = edit_blockers(snap, removed))
+  list(
+    start = start, removed = removed, cleared = cleared,
+    forgotten = edit_forgotten_components(snap, removed), blocked = edit_blockers(snap, removed)
+  )
 }
 
-# The keys of the parents (not themselves being removed) that had children
-# removed and have none left.
-edit_left_empty <- function(snap, relation, removed) {
-  if (length(removed[[relation$child]]) == 0) {
+# The components left with no placement once `removed` goes, which the database forgets when the change ends
+# (unless a measurement scale names them). Not the components being deleted themselves.
+# Returns: Their keys.
+edit_forgotten_components <- function(snap, removed) {
+  placed <- snap$placement
+  if (is.null(placed) || length(removed$placement) == 0 || is.null(snap$component)) {
     return(character())
   }
-  gone <- edit_rows(snap, relation$child, removed[[relation$child]])
-  if (nrow(gone) == 0) {
-    return(character())
-  }
-  by <- relation$by
-  children <- snap[[relation$child]]
-  parents <- snap[[relation$parent]]
-  parent_refs <- edit_key(parents, unname(by))
-  lost <- unique(edit_key(gone[stats::complete.cases(gone[names(by)]), , drop = FALSE], names(by)))
-  staying <- children[!edit_key(children, edit_table_key(relation$child)) %in% removed[[relation$child]], , drop = FALSE]
-  kept <- edit_key(staying[stats::complete.cases(staying[names(by)]), , drop = FALSE], names(by))
-  empty <- parent_refs %in% setdiff(lost, kept)
-  for (table in names(relation$kept_by)) {
-    empty <- empty & !edit_still_named(snap, table, relation$kept_by[[table]], removed, parents)
-  }
-  edit_key(parents[empty, , drop = FALSE], edit_table_key(relation$parent)) |>
-    setdiff(removed[[relation$parent]])
-}
-
-# For each of `parents`, whether a row of `table` that isn't being removed names it (`by`, as a relation's).
-edit_still_named <- function(snap, table, by, removed, parents) {
-  rows <- snap[[table]]
-  staying <- rows[!edit_key(rows, edit_table_key(table)) %in% removed[[table]], , drop = FALSE]
-  staying <- staying[stats::complete.cases(staying[names(by)]), , drop = FALSE]
-  edit_key(parents, unname(by)) %in% edit_key(staying, names(by))
+  going <- edit_key(placed, "placement_id") %in% removed$placement
+  lost <- unique(placed$component_id[going])
+  still <- unique(placed$component_id[!going])
+  scaled <- if (!is.null(snap$question_scale)) snap$question_scale$component_id else numeric()
+  orphans <- setdiff(lost, c(still, scaled))
+  setdiff(key_text(orphans), removed$component)
 }
 
 # Rows in the way: pointing at something that's going, but staying.
@@ -358,30 +272,19 @@ edit_nouns <- list(
   respondent_type = c("respondent type", "respondent types"),
   questionnaire = c("questionnaire", "questionnaires"),
   wave = c("wave", "waves"),
-  component_type = c("component type", "component types"),
-  component = c("component", "components"),
-  question = c("question", "questions"),
-  questionnaire_component = c("component in a questionnaire", "components in questionnaires"),
-  questionnaire_question = c("question in a questionnaire", "questions in questionnaires"),
-  wave_question = c("question in a wave", "questions in waves"),
-  category = c("MeSH category", "MeSH categories"),
-  question_category = c("MeSH tag on a question", "MeSH tags on questions"),
-  answer_option = c("answer choice", "answer choices"),
-  answer_option_alias = c("merged wording", "merged wordings"),
-  question_stem = c("question stem", "question stems"),
-  response_option_count = c("count of answers", "counts of answers"),
-  subject = c("subject", "subjects"),
-  time_frame = c("time frame", "time frames"),
-  answer_option_set = c("choice in an option set", "choices in option sets"),
-  option_set = c("option set", "option sets"),
-  measurement_scale = c("measurement scale", "measurement scales"),
-  question_scale = c("measurement scale membership", "measurement scale memberships"),
-  variable = c("variable", "variables"),
-  open_ended = c("open-ended variable", "open-ended variables"),
-  closed_ended = c("closed-ended variable", "closed-ended variables"),
-  response_option = c("response options for a variable", "response options for variables"),
   pdf_file = c("PDF", "PDFs"),
-  extracted_draft = c("extraction", "extractions")
+  component = c("component", "components"),
+  placement = c("block in a questionnaire", "blocks in questionnaires"),
+  wave_question = c("question in a wave", "questions in waves"),
+  variable = c("variable", "variables"),
+  answer_option = c("answer choice", "answer choices"),
+  response_option = c("response option for a variable", "response options for variables"),
+  tag = c("tag", "tags"),
+  placement_tag = c("tag on a question", "tags on questions"),
+  variable_tag = c("tag on a variable", "tags on variables"),
+  response_option_tag = c("tag on an answer choice", "tags on answer choices"),
+  measurement_scale = c("measurement scale", "measurement scales"),
+  question_scale = c("scale item", "scale items")
 )
 
 # A count of rows with their table's noun.
@@ -392,48 +295,34 @@ plural_noun <- function(n, table) {
   plural(n, nouns[1], plural_form = nouns[2])
 }
 
-# Parts of rows that are only detail of another row, so lists leave them out.
-edit_hidden_tables <- c("question", "open_ended", "closed_ended")
-
 # The order lists name kinds of rows in: the outermost first.
 edit_display_order <- c(
-  "registry", "study", "questionnaire", "wave", "component", "questionnaire_component",
-  "questionnaire_question", "wave_question", "variable", "response_option",
-  "question_category", "question_scale", "category", "measurement_scale", "answer_option",
-  "answer_option_set", "answer_option_alias", "option_set", "question_stem", "principal_investigator", "respondent_type", "component_type", "subject",
-  "time_frame", "pdf_file", "extracted_draft"
+  "registry", "study", "questionnaire", "wave", "placement", "wave_question", "variable", "response_option",
+  "placement_tag", "variable_tag", "response_option_tag", "question_scale", "component", "measurement_scale",
+  "answer_option", "tag", "principal_investigator", "respondent_type", "pdf_file"
 )
 
-# Naming a row can take other tables (a wave's name starts with its
-# questionnaire's), so reading rows to name means reading these too.
+# Naming a row can take other tables (a wave's name starts with its questionnaire's), so reading rows to name
+# means reading these too.
 edit_label_needs <- list(
   wave = "questionnaire",
-  component = "component_type",
-  question = c("component", "component_type"),
-  questionnaire_component = c("questionnaire", "component", "component_type"),
-  questionnaire_question = c("questionnaire", "component", "component_type"),
-  wave_question = c("questionnaire", "wave", "questionnaire_component", "component", "component_type"),
-  question_category = c("category", "component", "component_type"),
-  question_scale = c("measurement_scale", "component", "component_type"),
-  open_ended = "variable",
-  closed_ended = "variable",
+  placement = c("questionnaire", "component"),
+  wave_question = c("questionnaire", "wave", "placement", "component"),
+  question_scale = c("measurement_scale", "component"),
   response_option = c("variable", "answer_option"),
-  answer_option_set = c("answer_option", "option_set"),
-  answer_option_alias = "answer_option",
-  response_option_count = c("variable", "answer_option"),
-  pdf_file = "extracted_draft",
-  extracted_draft = "draft"
+  placement_tag = c("tag", "placement", "component"),
+  variable_tag = c("tag", "variable"),
+  response_option_tag = c("tag", "variable", "answer_option"),
+  pdf_file = "wave"
 )
 
-# Every table to read to work out what deleting rows of some tables reaches.
-# And to name what it finds.
+# Every table to read to work out what deleting rows of some tables reaches, and to name what it finds.
 # tables: Table names.
 # Returns: Table names.
 edit_tables_to_read <- function(tables) {
   reached <- unique(unlist(lapply(tables, edit_descendant_tables)))
-  # and what keeps a parent that would otherwise go
-  keeping <- Filter(function(relation) relation$parent %in% reached && length(relation$kept_by) > 0, edit_relations)
-  reached <- unique(c(reached, unlist(lapply(keeping, function(relation) names(relation$kept_by)))))
+  # a placement that goes may leave a component nothing prints; whether a scale keeps it
+  if ("placement" %in% reached) reached <- unique(c(reached, "component", "question_scale"))
   named_by <- unique(unlist(edit_label_needs[reached]))
   unique(c(reached, named_by, unlist(edit_label_needs[named_by])))
 }
@@ -458,14 +347,10 @@ edit_lookup <- function(snap, table, id_column, ids, column) {
   snap[[table]][[column]][match(ids, snap[[table]][[id_column]])]
 }
 
-# The rows of a table for one placement: one place a questionnaire prints a block.
-# What a block carries there: a question's settings (`questionnaire_question`), or the number it was given in
-# each wave (`wave_question`).
-# table: `"questionnaire_question"` or `"wave_question"`.
+# The wave_question rows of one placement: the number it was given in each wave that asked it.
 # placement_id: The placement.
-# Returns: The matching rows of `table`.
-edit_placed_rows <- function(snap, table, placement_id) {
-  rows <- snap[[table]]
+edit_placed_rows <- function(snap, placement_id) {
+  rows <- snap$wave_question
   rows[rows$placement_id %in% placement_id, , drop = FALSE]
 }
 
@@ -479,20 +364,22 @@ edit_questionnaire_short <- function(snap, ids) {
 }
 
 # A component's printed words, shortened.
-# Sections can be untitled, and blocks can have no words; those get a placeholder.
+# A group has no words, and a section can be untitled; those get a placeholder.
 # ids: Component ids.
 # max_characters: Where to cut the words short: only in a sentence (a summary, a warning). The page shows
 #   them whole, since it has the room.
 edit_component_text <- function(snap, ids, max_characters = Inf) {
   text <- edit_lookup(snap, "component", "component_id", ids, "text")
-  type <- edit_lookup(
-    snap, "component_type", "component_type_id",
-    edit_lookup(snap, "component", "component_id", ids, "component_type_id"), "name"
-  )
+  kind <- edit_lookup(snap, "component", "component_id", ids, "kind")
   blank <- is.na(text) | !nzchar(trimws(text))
   text <- shorten(text, max_characters)
-  text[blank] <- ifelse(is.na(type[blank]), "(no printed words)", paste0("(untitled ", tolower(type[blank]), ")"))
+  text[blank] <- ifelse(is.na(kind[blank]), "(no printed words)", ifelse(kind[blank] == "Group", "(group)", paste0("(untitled ", tolower(kind[blank]), ")")))
   text
+}
+
+# A tag as a sentence names it: its name, and its kind when the sentence doesn't say.
+edit_tag_text <- function(snap, tag_ids) {
+  paste0(edit_lookup(snap, "tag", "tag_id", tag_ids, "name"), " (", edit_lookup(snap, "tag", "tag_id", tag_ids, "kind"), ")")
 }
 
 edit_labels <- list(
@@ -502,13 +389,9 @@ edit_labels <- list(
   respondent_type = function(snap, rows) rows$name,
   questionnaire = function(snap, rows) name_with_abbreviation(rows$name, rows$abbreviation),
   wave = function(snap, rows) paste(edit_questionnaire_short(snap, rows$questionnaire_id), rows$name),
-  component_type = function(snap, rows) rows$name,
+  pdf_file = function(snap, rows) edit_pdf_names(snap, rows$pdf_sha256),
   component = function(snap, rows) edit_component_text(snap, rows$component_id),
-  question = function(snap, rows) edit_component_text(snap, rows$component_id),
-  questionnaire_component = function(snap, rows) {
-    paste0(edit_questionnaire_short(snap, rows$questionnaire_id), " · ", edit_component_text(snap, rows$component_id))
-  },
-  questionnaire_question = function(snap, rows) {
+  placement = function(snap, rows) {
     paste0(edit_questionnaire_short(snap, rows$questionnaire_id), " · ", edit_component_text(snap, rows$component_id))
   },
   wave_question = function(snap, rows) {
@@ -518,58 +401,39 @@ edit_labels <- list(
       " · ", edit_component_text(snap, edit_placement_component(snap, rows$placement_id))
     )
   },
-  category = function(snap, rows) paste0(rows$term, " (", rows$mesh_id, ")"),
-  question_category = function(snap, rows) {
-    term <- edit_lookup(snap, "category", "mesh_id", rows$mesh_id, "term")
-    paste0(ifelse(is.na(term), rows$mesh_id, term), " on “", edit_component_text(snap, rows$component_id), "”")
+  variable = function(snap, rows) {
+    paste0(rows$matr_id, ifelse(is.na(rows$label) | !nzchar(rows$label), "", paste0(" · ", rows$label)))
   },
   answer_option = function(snap, rows) rows$standardized_label,
-  answer_option_alias = function(snap, rows) {
-    paste0("“", rows$alias, "” for “", edit_lookup(snap, "answer_option", "answer_option_id", rows$answer_option_id, "standardized_label"), "”")
-  },
-  question_stem = function(snap, rows) rows$text,
-  response_option_count = function(snap, rows) {
+  response_option = function(snap, rows) {
     matr_id <- edit_lookup(snap, "variable", "variable_key", rows$variable_key, "matr_id")
     shown <- edit_lookup(snap, "answer_option", "answer_option_id", rows$answer_option_id, "standardized_label")
-    paste0(matr_id, " · ", shown, ": ", rows$respondent_count)
+    paste0(matr_id, " · ", shown, " (code ", rows$code_value, ")")
   },
-  subject = function(snap, rows) rows$name,
-  time_frame = function(snap, rows) rows$name,
-  answer_option_set = function(snap, rows) {
-    set <- edit_lookup(snap, "option_set", "option_set_id", rows$option_set_id, "name")
+  tag = function(snap, rows) rows$name,
+  placement_tag = function(snap, rows) {
+    paste0(edit_tag_text(snap, rows$tag_id), " on “", edit_component_text(snap, edit_placement_component(snap, rows$placement_id)), "”")
+  },
+  variable_tag = function(snap, rows) {
+    paste0(edit_tag_text(snap, rows$tag_id), " on ", edit_lookup(snap, "variable", "variable_key", rows$variable_key, "matr_id"))
+  },
+  response_option_tag = function(snap, rows) {
     paste0(
-      "“", edit_lookup(snap, "answer_option", "answer_option_id", rows$answer_option_id, "standardized_label"), "” in ",
-      ifelse(is.na(set), paste("option set", rows$option_set_id), paste0("“", set, "”"))
+      edit_tag_text(snap, rows$tag_id), " on ", edit_lookup(snap, "variable", "variable_key", rows$variable_key, "matr_id"),
+      " · ", edit_lookup(snap, "answer_option", "answer_option_id", rows$answer_option_id, "standardized_label")
     )
-  },
-  option_set = function(snap, rows) rows$name,
-  pdf_file = function(snap, rows) edit_pdf_names(snap, rows$pdf_sha256),
-  extracted_draft = function(snap, rows) {
-    status <- edit_lookup(snap, "draft", "draft_id", rows$draft_id, "status")
-    name <- ifelse(is.na(rows$pdf_name) | !nzchar(rows$pdf_name), paste("Extraction", rows$draft_id), rows$pdf_name)
-    ifelse(is.na(status), name, paste0(name, " (", status, ")"))
   },
   measurement_scale = function(snap, rows) rows$name,
   question_scale = function(snap, rows) {
     scale <- edit_lookup(snap, "measurement_scale", "scale_id", rows$scale_id, "name")
     paste0(ifelse(is.na(scale), "Scale", scale), " item ", rows$item_number, " · ", edit_component_text(snap, rows$component_id))
-  },
-  variable = function(snap, rows) {
-    paste0(rows$matr_id, ifelse(is.na(rows$label) | !nzchar(rows$label), "", paste0(" · ", rows$label)))
-  },
-  open_ended = function(snap, rows) edit_lookup(snap, "variable", "variable_key", rows$variable_key, "matr_id"),
-  closed_ended = function(snap, rows) edit_lookup(snap, "variable", "variable_key", rows$variable_key, "matr_id"),
-  response_option = function(snap, rows) {
-    matr_id <- edit_lookup(snap, "variable", "variable_key", rows$variable_key, "matr_id")
-    shown <- edit_lookup(snap, "answer_option", "answer_option_id", rows$answer_option_id, "standardized_label")
-    paste0(matr_id, " · ", shown, " (code ", rows$code_value, ")")
   }
 )
 
 # ------ What a delete reaches, for staff ---------------------------------------------------------
 # The cascade as lists staff can read.
-# How many of each kind of row go, a few of each by name, how it falls on each
-# questionnaire, and what is changed without going.
+# How many of each kind of row go, a few of each by name, the components the database will forget, how it
+# falls on each questionnaire, and what is changed without going.
 # cascade: The result of `edit_service_cascade()`.
 # examples: How many rows to name for each kind.
 # Returns: A list: `lines`, `changed`, `by_questionnaire` and `total` (how many other rows are affected).
@@ -588,6 +452,14 @@ edit_service_reach <- function(snap, cascade, examples = 5) {
       more = max(0, nrow(rows) - examples)
     )
   })
+  if (length(cascade$forgotten) > 0) {
+    rows <- edit_rows(snap, "component", cascade$forgotten)
+    lines <- c(lines, list(list(
+      table = "component", n = nrow(rows),
+      text = paste(plural_noun(nrow(rows), "component"), "no questionnaire prints any more (forgotten by the database)"),
+      examples = utils::head(edit_label(snap, "component", rows), examples), more = max(0, nrow(rows) - examples)
+    )))
+  }
   lines <- Filter(Negate(is.null), lines)
   changed <- lapply(cascade$cleared, function(clear) {
     rows <- edit_rows(snap, clear$table, clear$keys)
@@ -603,10 +475,9 @@ edit_service_reach <- function(snap, cascade, examples = 5) {
   )
 }
 
-# How a delete falls on each questionnaire: for every one that loses rows, what
-# it loses.
+# How a delete falls on each questionnaire: for every one that loses rows, what it loses.
 edit_by_questionnaire <- function(snap, cascade) {
-  tables <- c("questionnaire_component", "questionnaire_question", "wave_question", "variable", "wave")
+  tables <- c("placement", "wave_question", "variable", "wave")
   counts <- lapply(tables, function(table) {
     if (length(cascade$removed[[table]]) == 0) {
       return(NULL)

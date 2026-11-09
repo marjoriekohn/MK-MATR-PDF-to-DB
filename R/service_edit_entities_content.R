@@ -1,75 +1,21 @@
-# Make an edit's kinds in the group Printed content: the kinds of block, and the components and questions every
-# questionnaire that prints them shares. The kinds are listed together in edit_entities (service_edit_kinds.R).
+# Make an edit's kind in the group Printed content: the components every questionnaire that prints them shares.
+# The kinds are listed together in edit_entities (service_edit_kinds.R).
 
 # ------ Kinds of block ---------------------------------------------------------------------------------
-component_type_entity <- list(
-  label = "Component type", noun = "component type", plural = "component types", article = "a",
-  group = "Printed content", table = "component_type",
-  about = "The kinds of block a questionnaire prints: Section, Question, Instruction and so on.",
-  delete_about = "A component type can only be deleted once no component is of that kind.",
-  extra_blockers = function(snap, row) {
-    if (row$name %in% edit_core_types) {
-      list(list(
-        text = sprintf(
-          paste0(
-            "“%s” is built into this site. Questions and sections are handled differently from every other ",
-            "kind of block, and the site finds them by this name."
-          ),
-          row$name
-        ),
-        fix = "Keep it.", labels = row$name, table = "component_type"
-      ))
-    }
-  },
-  cards = function(snap, scope) {
-    rows <- snap$component_type
-    n_components <- count_in(snap$component$component_type_id, rows$component_type_id)
-    edit_cards(
-      key_text(rows$component_type_id), rows$name,
-      subtitle = ifelse(is.na(rows$description), "", rows$description),
-      facts = lapply(n_components, function(n) edit_count(n, "component")),
-      warn = ifelse(rows$name %in% edit_core_types, "Built in: the site relies on this name", NA_character_)
-    )
-  },
-  fields = function(snap, mode, row, scope) {
-    core <- mode == "update" && !is.null(row) && row$name %in% edit_core_types
-    list(
-      edit_field("name", "Name",
-        required = TRUE, placeholder = "e.g. Instruction",
-        locked = if (core) "This kind is built into the site, which finds it by its name.",
-        problem = function(value, values) {
-          same <- edit_taken(snap, "component_type", "name", value, row)
-          if (has_text(value) && nrow(same) > 0) sprintf("There's already a component type called %s.", same$name[1])
-        }
-      ),
-      edit_field("description", "Description", "textarea")
-    )
-  }
-)
-
-# Kinds of block the site treats specially (BR42, BR45, BR53).
-edit_core_types <- c("Section", "Question", "Group", "Grid")
+# The kinds of block a questionnaire prints (component.kind; component_kind_check in the database). A Section,
+# Grid or Group holds other blocks; a Group has no words of its own.
+edit_component_kinds <- c("Section", "Group", "Grid", "Question", "Instruction", "Introduction", "Definition", "Note", "Interviewer Script")
 
 # ------ Printed content: shared by every questionnaire that prints it ------------------------------
 # Whether components are questions.
-# A component is kept once and any number of questionnaires place it. A question is a
-# component of the kind Question that also has a question row.
 # component_ids: Component ids.
 edit_is_question <- function(snap, component_ids) {
-  component_ids %in% snap$question$component_id
-}
-
-# The id of a kind of block.
-# name: The kind's name, e.g. `"Question"`.
-# Returns: The `component_type_id`, or `NA` if there isn't exactly one.
-edit_type_id <- function(snap, name) {
-  id <- snap$component_type$component_type_id[snap$component_type$name == name]
-  if (length(id) == 1) id else NA_real_
+  edit_lookup(snap, "component", "component_id", component_ids, "kind") %in% "Question"
 }
 
 # "seen in 2 questionnaires: AHP, MQ"; "not printed in any questionnaire".
 edit_seen_in <- function(snap, component_id) {
-  q_ids <- unique(snap$questionnaire_component$questionnaire_id[snap$questionnaire_component$component_id == component_id])
+  q_ids <- unique(snap$placement$questionnaire_id[snap$placement$component_id == component_id])
   if (length(q_ids) == 0) {
     return("not printed in any questionnaire")
   }
@@ -83,19 +29,24 @@ edit_shared_warning <- function(snap, component_ids) {
   ifelse(n >= 2, paste("Shared: changes show in", n, "questionnaires"), NA_character_)
 }
 
-# A component's text field, kept in lower case (normal_text()). Every kind has words but a group, which has none of
-# its own (BR42).
-edit_text_field <- function(snap, mode, row, label = "Printed words", type_field = TRUE) {
-  group <- edit_type_id(snap, "Group")
+# A block's words as they are kept: lower case (normal_text()), one space between words.
+edit_words <- function(value) {
+  words <- normal_text(value)
+  if (length(words) == 0 || is.na(words)) words else squish(words)
+}
+
+# A block's words. Every kind has words but a Group, which has none of its own. `kind_of(values)` says which kind
+# the form's other fields make it, so a Group is checked for having none.
+edit_text_field <- function(snap, row, kind_of = function(values) values$kind, label = "Printed words") {
   edit_field(
     "text", label, "textarea",
-    required = !type_field, rows = 3, short = if (type_field) "words" else "wording", normalize = normal_text,
+    rows = 3, short = "words", normalize = edit_words,
     problem = function(value, values) {
-      is_group <- identical(as.numeric(values$component_type_id %||% NA), group)
-      if (type_field && !has_text(value) && !is_group) {
+      kind <- kind_of(values)
+      if (!has_text(value) && !identical(kind, "Group")) {
         return("Add the printed words. Only a group has none.")
       }
-      if (type_field && has_text(value) && is_group) {
+      if (has_text(value) && identical(kind, "Group")) {
         "A group has no words of its own. Put them in an Instruction inside it."
       }
     },
@@ -103,83 +54,41 @@ edit_text_field <- function(snap, mode, row, label = "Printed words", type_field
       if (!has_text(value)) {
         return(NULL)
       }
-      same <- edit_taken(snap, "component", "text", value, row)
+      same <- edit_same_component(snap, kind_of(values), value, row)
       if (nrow(same) > 0) {
         paste0(
-          "Another component already has exactly these words (", edit_seen_in(snap, same$component_id[1]), "). ",
-          "Using that one would keep the wording shared instead of making a copy."
+          "A ", tolower(kind_of(values) %||% "block"), " with exactly these words is in the database already (",
+          edit_seen_in(snap, same$component_id[1]), "): it is used, so the wording stays shared."
         )
       }
     }
   )
 }
 
+# The component of this kind with exactly these words, but `row`: the database keeps one for each kind and words,
+# so a change that types them means that one.
+# Returns: Its row of `component`, or none.
+edit_same_component <- function(snap, kind, text, row = NULL) {
+  same <- edit_taken(snap, "component", "text", edit_words(text), row)
+  same[same$kind %in% kind, , drop = FALSE]
+}
+
 component_entity <- list(
   label = "Component", noun = "component", plural = "components", article = "a",
   group = "Printed content", table = "component",
   about = paste0(
-    "A heading, instruction, definition or any other block that isn't a question. Each is kept ",
+    "A heading, question, instruction, definition or any other block as it is printed. Each wording is kept ",
     "once, and every questionnaire that prints it uses that one copy."
   ),
   update_about = "A component is shared. Changing its words changes them in every questionnaire that prints it.",
   delete_about = paste(
-    "Deleting a component takes it out of every questionnaire that prints it, and everything inside it if it's a",
-    "section or group."
+    "A component can only be deleted once no questionnaire prints it and no measurement scale lists it. One that",
+    "nothing prints goes on its own when the next change is made."
   ),
-  cards = function(snap, scope) {
-    rows <- snap$component[!edit_is_question(snap, snap$component$component_id), , drop = FALSE]
-    type <- edit_lookup(snap, "component_type", "component_type_id", rows$component_type_id, "name")
-    edit_cards(
-      key_text(rows$component_id), edit_component_text(snap, rows$component_id),
-      subtitle = "",
-      facts = lapply(rows$component_id, function(id) edit_seen_in(snap, id)),
-      tag = type, warn = edit_shared_warning(snap, rows$component_id)
-    )
-  },
-  fields = function(snap, mode, row, scope) {
-    types <- snap$component_type[snap$component_type$name != "Question", , drop = FALSE]
-    list(
-      edit_field(
-        "component_type_id", "Kind of block", "select",
-        required = TRUE,
-        choices = if (mode == "add") {
-          edit_choices(snap, "component_type", types, blank = "Choose a kind")
-        } else {
-          edit_choices(snap, "component_type")
-        },
-        locked = paste0(
-          "A component's kind is fixed. To print a different kind of block in just one questionnaire, ",
-          "change it there instead (Update, then Questionnaire component)."
-        )
-      ),
-      edit_text_field(snap, mode, row)
-    )
-  },
-  duplicates = function(snap, values) {
-    Filter(Negate(is.null), list(
-      edit_duplicate_rows(snap, "component", "text", values$text, "A block with exactly these words")
-    ))
-  }
-)
-
-question_entity <- list(
-  label = "Question", noun = "question", plural = "questions", article = "a",
-  group = "Printed content", table = "component",
-  about = paste0(
-    "A question's wording, kept once. Every questionnaire that asks it uses that one copy, with its ",
-    "own variables and question number."
-  ),
-  update_about = "A question is shared. Changing its wording changes it in every questionnaire that asks it.",
-  # Questions in the list are each question once; + Add there adds one to a questionnaire, with its variables
-  add_as = "questionnaire_question",
   # its card in each questionnaire lists its variables: who each is about, and its choices
-  reads = c("subject", "answer_option", "response_option", "open_ended"),
-  delete_about = paste0(
-    "Deleting a question takes it out of every questionnaire that asks it. Its variables, their ",
-    "choices, its MATR IDs, its question numbers in every wave, and its MeSH tags all go with it."
-  ),
+  reads = c("variable", "variable_tag", "tag", "answer_option", "response_option", "wave", "wave_question"),
   cards = function(snap, scope) {
-    rows <- snap$component[edit_is_question(snap, snap$component$component_id), , drop = FALSE]
+    rows <- snap$component
     boxes <- count_in(edit_placement_component(snap, snap$variable$placement_id), rows$component_id)
     edit_cards(
       key_text(rows$component_id), edit_component_text(snap, rows$component_id),
@@ -189,31 +98,22 @@ question_entity <- list(
         rows$component_id,
         boxes
       ),
-      warn = edit_shared_warning(snap, rows$component_id)
+      tag = rows$kind, warn = edit_shared_warning(snap, rows$component_id)
     )
   },
   fields = function(snap, mode, row, scope) {
-    list(edit_text_field(snap, mode, row, "Question wording", type_field = FALSE))
+    list(
+      edit_field(
+        "kind", "Kind of block", "select",
+        required = TRUE,
+        choices = c("Choose a kind" = "", stats::setNames(edit_component_kinds, edit_component_kinds)),
+        locked = if (mode == "update") "A component's kind is fixed. To print a different kind of block, add one."
+      ),
+      edit_text_field(snap, row, kind_of = function(values) if (has_text(values$kind)) values$kind else if (!is.null(row)) row$kind)
+    )
   },
   duplicates = function(snap, values) {
-    questions <- snap$component[edit_is_question(snap, snap$component$component_id), , drop = FALSE]
-    only_questions <- snap
-    only_questions$component <- questions
-    Filter(Negate(is.null), list(
-      edit_duplicate_rows(only_questions, "component", "text", values$text, "A question with exactly these words")
-    ))
-  },
-  can = function(snap, mode) {
-    if (mode == "add" && !is.null(snap$component_type) && is.na(edit_type_id(snap, "Question"))) {
-      "The database has no component type called Question, so a question can't be added yet."
-    }
-  },
-  build = function(mode, snap, row, scope, fields, values) {
-    if (mode == "add") {
-      text_field <- Filter(function(f) f$name == "text", fields)[[1]]
-      edit_new_question_items(snap, edit_service_normalize(text_field, values[["question__text"]]))
-    } else {
-      edit_update_items(edit_entities[["question"]], snap, row, fields, values)
-    }
+    same <- edit_same_component(snap, values$kind, values$text)
+    if (has_text(values$text) && nrow(same) > 0) list(list(rows = same, why = "A block of this kind with exactly these words")) else list()
   }
 )

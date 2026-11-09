@@ -40,8 +40,8 @@ page_navbar(
   nav_panel("Drafts", extraction_drafts_page_ui("drafts"), value = "drafts", icon = app_icon("drafts")),
   nav_panel("Edit Extraction", edit_extraction_ui("edit_extraction"), value = "edit_extraction"),
   nav_panel("Metadata", make_edit_ui("make_edit"), value = "make_edit", icon = app_icon("metadata")),
-  nav_panel("Requests", change_requests_ui("change_requests"), value = "change_requests", icon = app_icon("change_requests")),
   nav_panel("History", edit_history_ui("edit_history"), value = "edit_history", icon = app_icon("history")),
+  nav_panel("AI Monitor", ai_monitor_ui("ai_monitor"), value = "ai_monitor", icon = app_icon("ai_monitor")),
   nav_spacer(),
 
   # Running on the test database (MATR_DATABASE=test in .env; global.R) says so, so nobody mistakes it for live.

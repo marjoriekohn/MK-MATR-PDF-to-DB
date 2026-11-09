@@ -189,39 +189,6 @@
 .block-detail .question-panel { grid-column: 1 / -1; }
 .block-detail .variable-cards { margin: 0; padding: 0; border: 0; background: none; }
 
-// Skip conditions and logic, in sentences; one worked out from a Skip to links to that question
-.skip-logic { display: flex; flex-direction: column; gap: 0.4rem; }
-.skip-sentence {
-  display: flex;
-  align-items: flex-start;
-  gap: 0.35rem;
-  padding: 0.55rem 0.8rem;
-  border: 1px solid $line-light;
-  background-color: $vcu-white;
-  @include note($vcu-gold, 0.06);
-  .detail-note { flex-shrink: 0; margin-left: auto; align-self: center; }
-}
-// the same size of words whichever kind of sentence it is: the link isn't drawn as a button's words, and its
-// words run on from the left as a sentence does (a button lays them out centred, as a row of pieces)
-.edit-extraction-page .skip-link {
-  display: block;
-  --bs-btn-font-size: inherit;
-  --bs-btn-line-height: inherit;
-  --bs-btn-font-weight: inherit;
-  flex: 1;
-  min-height: 0;
-  padding: 0;
-  color: $vcu-black;
-  text-align: left;
-  white-space: normal;
-}
-.skip-text { flex: 1; }
-// A group's skip, in its details: "If they answer [No] to [every question] in this group, skip to [...]"
-.variable-skip.group-skip {
-  padding: 0;
-  > .form-select { flex: 0 1 10rem; width: auto; }
-}
-
 // ------ Buttons on this page ------------------------------------------------------------------------------
 // Drawn as on every page (components/_buttons.scss); a verified block's Verify is green.
 .detail-verify.is-checked {
@@ -265,7 +232,7 @@
 .problem-pop-more { list-style: none; color: $vcu-gray; }
 
 // ------ Normalize ---------------------------------------------------------------------------
-// Answer choices to word as the database does, and questions about different people to link
+// Answer choices to word as the database does
 .normalize {
   > .request-section:first-child { margin-top: 0; }
   .normalize-table {
@@ -273,17 +240,4 @@
     th, td { padding: 0.35rem 0.75rem; vertical-align: middle; }
     .is-count { text-align: right; font-variant-numeric: tabular-nums; }
   }
-}
-.normalize-all { margin-bottom: 0.75rem; }
-.normalize-group {
-  margin: 0 0 0.5rem;
-  &.is-linked { border-color: $vcu-gold; }
-  ul { margin: 0.35rem 0 0; padding-left: 1.25rem; font-size: $font-size-sm; }
-}
-.normalize-group-head {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 0.5rem;
-  .edit-card-title { flex: 1 1 16rem; margin: 0; font-size: $font-size-base; }
 }

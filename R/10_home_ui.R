@@ -7,13 +7,14 @@ home_ui <- function(id) {
     `data-ns` = ns(""),
     home_hero(ns),
     home_section(
-      # four to a row on a wide window, two by two on a tablet, one under another on a phone
+      # three to a row on a wide window, two by two on a tablet, one under another on a phone
       layout_columns(
-        col_widths = breakpoints(sm = 12, md = 6, xl = 3), fill = FALSE,
+        col_widths = breakpoints(sm = 12, md = 6, xl = 4), fill = FALSE,
         home_action(ns("go_extraction"), "upload", "New Extraction", "Upload a questionnaire PDF for Gemini to read, or type one in yourself."),
-        home_action(ns("go_drafts"), "drafts", "Extraction Drafts", "Pick up a draft, yours or a colleague's, whose change request isn't sent yet."),
+        home_action(ns("go_drafts"), "drafts", "Extraction Drafts", "Pick up a draft, yours or a colleague's, that isn't pushed yet."),
         home_action(ns("go_metadata"), "metadata", "Metadata", "View, add, change or delete registries, studies, questionnaires, waves and more."),
-        home_action(ns("go_requests"), "change_requests", "Change Requests", "Approve what colleagues send, or follow up on your own requests.")
+        home_action(ns("go_history"), "history", "Edit History", "Every change made to the database through this site, newest first."),
+        home_action(ns("go_monitor"), "ai_monitor", "AI Monitor", "How often staff correct what the AI read, and where.")
       )
     ),
     home_section(
@@ -23,8 +24,8 @@ home_ui <- function(id) {
         col_widths = breakpoints(sm = 12, md = 6, xl = 3), fill = FALSE,
         home_step(1, "upload", "Upload the questionnaire", "Choose its PDF on New Extraction. Gemini reads it in the background."),
         home_step(2, "edit", "Check every block", "On Edit Extraction, fix what was read and mark each block as checked."),
-        home_step(3, "change_requests", "Send a change request", "Submit it, and give its registry, study, questionnaire and wave."),
-        home_step(4, "verify", "A colleague approves it", "Once one other staff member approves it, it is added to the database.")
+        home_step(3, "metadata", "Push it into the database", "Give its registry, study, questionnaire and wave in Basic Info, then push it. It goes in at once."),
+        home_step(4, "history", "Keep it up to date", "On Metadata, change what is there or empty a wave and extract it again. History keeps every change.")
       )
     )
   )
@@ -41,8 +42,8 @@ home_hero <- function(ns) {
       h1("MATR Metadata Database"),
       p(
         class = "home-hero-lead",
-        "Turn questionnaire PDFs into structured metadata, review each other's changes, and keep the registry's ",
-        "studies, questionnaires and waves up to date, all in one place."
+        "Turn questionnaire PDFs into structured metadata, and keep the registry's studies, questionnaires and ",
+        "waves up to date, all in one place."
       ),
       div(
         class = "home-hero-actions",
@@ -59,11 +60,11 @@ home_hero <- function(ns) {
   )
 }
 
-# How much this person has waiting, in the banner: their work in progress, the requests waiting for them, and
-# the changes added so far. A count that couldn't be read is a dash.
-home_stats <- function(work, waiting, changes) {
+# How much this person has waiting, in the banner: their drafts in progress and the changes added so far. A count
+# that couldn't be read is a dash.
+home_stats <- function(work, changes) {
   stat <- function(n, label) div(class = "home-stat", span(class = "home-stat-value", n %||% "–"), span(class = "home-stat-label", label))
-  tagList(stat(work, "Your work in progress"), stat(waiting, "Waiting for you"), stat(changes, "Changes added"))
+  tagList(stat(work, "Your drafts in progress"), stat(changes, "Changes added"))
 }
 
 # A part of the page, under a heading of its own if it has one, with a line under the heading if that has one.

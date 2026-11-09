@@ -21,15 +21,12 @@ drafts_page <- function(me, extractions = test_extractions(), env = parent.frame
   )
 }
 
-# Four drafts that are open (two mine, one of them still being read, and a colleague's), one set aside and
-# one already sent for approval.
+# Three drafts (two mine, one of them still being read, and a colleague's).
 seed_drafts <- function(me, colleague, tree, env = parent.frame()) {
   list(
     mine = local_read_extraction(me, saved = "2026-10-02T12:00:00Z", info = picked_basic_info(tree), env = env),
     theirs = local_read_extraction(colleague, saved = "2026-10-02T11:00:00Z", info = picked_basic_info(tree), env = env),
-    reading = local_extraction(me, saved = "2026-10-02T10:00:00Z", info = picked_basic_info(tree), env = env),
-    set_aside = local_extraction(me, status = "Withdrawn", info = picked_basic_info(tree), env = env),
-    sent = local_extraction(me, status = "Awaiting Review", info = picked_basic_info(tree), env = env)
+    reading = local_extraction(me, saved = "2026-10-02T10:00:00Z", info = picked_basic_info(tree), env = env)
   )
 }
 
@@ -39,7 +36,7 @@ ours <- function(shown, drafts) intersect(ids_shown(shown), vapply(drafts, funct
 card_title <- function(tree) paste0(tree$questionnaire$name, " (ZZQ) · ", tree$wave$name)
 count_on <- function(toggle, label) as.integer(sub(sprintf(".*%s \\(([0-9]+)\\).*", label), "\\1", toggle))
 
-# One set of drafts for all three (seeding them is some fifteen requests), since nothing here changes them.
+# One set of drafts for all three (seeding them is some ten requests), since nothing here changes them.
 test_that("the open drafts are cards, everyone's by default; Mine keeps this person's; Continue opens a draft where it can go on", {
   me <- local_staff()
   colleague <- local_staff()

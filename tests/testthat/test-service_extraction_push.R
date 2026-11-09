@@ -1,703 +1,373 @@
-# Pushing an extraction to the database: what stops it, the rows it adds (worked out from the questionnaire as
-# saved and the MATR metadata database as it is), and what happens when a STAFF member or an ADMIN pushes it. The rows are
-# worked out by pure functions, tested here with data given to them, and added by the database, tested with a
-# real push that is removed again.
-
-# The marker in this file's sample words (not the run's test_marker: nothing here goes in the database).
-sample_marker <- "ZZTEST"
-
-# ------ A small questionnaire ------------------------------------------------------------------------------------
-# A section holding an instruction, a closed question and an open one. Every block's words carry the run's marker,
-# so what a push adds can be told from real data (and a push that wasn't cleaned up is noticed).
-small_draft <- function(question = paste(sample_marker, "Do you smoke?"), labels = c("Yes", "No"), subject = "Self", matr = c("zz1", "zz2")) {
-  draft <- draft_service_from_json(list(
-    questionnaire = list(name = "Small", abbreviation = "SM"),
-    components = list(list(component_type = "Section", display_order = 1, text = paste(sample_marker, "Part A"), children = list(
-      list(component_type = "Instruction", display_order = 1, text = paste(sample_marker, "Please answer.")),
-      list(
-        component_type = "Question", display_order = 2, text = question, printed_number = "1", self_contained = TRUE,
-        variables = list(list(
-          variable_type = "closed_ended", display_order = 1, subject = subject,
-          response_options = lapply(seq_along(labels), function(i) list(display_order = i, answer_option = labels[i], printed = TRUE))
-        ))
-      ),
-      list(
-        component_type = "Question", display_order = 3, text = paste(sample_marker, "How many?"), printed_number = "2", self_contained = TRUE,
-        variables = list(list(variable_type = "open_ended", display_order = 1, subject = subject, answer_data_type = "NUMBER"))
-      )
-    )))
-  ))
-  draft$variables$matr_id <- paste0(matr, "-", tolower(sample_marker))
-  draft
-}
+# Pushing an extraction into the MATR metadata database: what stops it, what the push comes to in words and
+# cards, and the push itself. The database does the push (push_extraction in sql/4_functions.sql), so it is
+# tested with a real one, into a tree of the test's own that is removed again when the test ends; what stops a
+# push and how it is described are pure functions, tested with data given to them.
 
 # ------ Before pushing -----------------------------------------------------------------------------------------------
-# AHP (questionnaire 1) and its Wave 2, which asks no questions yet.
+# An extraction going into AHP (questionnaire 1 of the sample tables) and its Wave 2, which asks no questions.
 complete_info <- function() {
-  list(info = list(registry_id = "1", study_id = "1", questionnaire_id = "1", wave_id = "2"))
+  list(id = "9", info = list(registry_id = "1", study_id = "1", questionnaire_id = "1", wave_id = "2"))
 }
 
 test_that("what stops a push is said in the order to do it", {
   catalog <- test_catalog()
   lookups <- test_lookups()
-  draft <- gold_draft()
-  draft$variables$matr_id <- paste0("q", seq_len(nrow(draft$variables)))
-  # what stops a push: its Basic Info, then its questionnaire
-  blockers <- function(record = complete_info(), draft = draft, ...) {
-    c(extraction_service_info_blockers(record, catalog = catalog, ...), extraction_service_draft_blockers(draft, lookups))
-  }
-  expect_equal(blockers(draft = draft), character())
-
-  expect_equal(blockers(list(info = list()), draft = draft)[1], "Fill in the registry, study, questionnaire and wave under Basic Info.")
-  asking <- blockers(draft = draft, question_counts = c("2" = 4L)) # the wave asks questions already
-  expect_equal(asking[1], "Fix the fields outlined in red under Basic Info.")
-  expect_equal(blockers(draft = draft_service_empty()), "Add the questionnaire's blocks and questions first.")
+  draft <- test_questionnaire_draft()
+  expect_equal(extraction_service_draft_blockers(draft, lookups), character())
+  expect_equal(extraction_service_draft_blockers(draft_service_empty(), lookups), "Add the questionnaire's blocks and questions first.")
 
   no_question <- draft
   no_question$components <- no_question$components[no_question$components$component_type != "Question", ]
   no_question$variables <- no_question$variables[0, ]
   no_question$response_options <- no_question$response_options[0, ]
-  expect_equal(blockers(draft = no_question), "Add at least one question.")
+  expect_equal(extraction_service_draft_blockers(no_question, lookups), "Add at least one question.")
 
-  missing_ids <- draft
-  missing_ids$variables$matr_id[1:3] <- NA # a blank MATR ID is among the blocks to fix
-  expect_match(blockers(draft = missing_ids), "^Fix the [1-3] blocks? marked to fix\\.$")
+  # the blocks the checks mark to fix are counted, a blank MATR ID among them
+  missing_id <- test_questionnaire_draft(matr = c(NA, "zz2"))
+  expect_equal(length(unique(draft_service_check(missing_id, lookups)$id)), 1)
+  expect_equal(extraction_service_draft_blockers(missing_id, lookups), "Fix the 1 block marked to fix.")
+  broken <- test_questionnaire_draft(matr = c(NA, NA))
+  broken$components$text[broken$components$component_type == "Instruction"] <- NA # an instruction needs its words
+  expect_equal(length(unique(draft_service_check(broken, lookups)$id)), 3)
+  expect_equal(extraction_service_draft_blockers(broken, lookups), "Fix the 3 blocks marked to fix.")
 
-  broken <- draft
-  broken$components$text[broken$components$component_type == "Question"][1] <- NA # a question needs its words
-  expect_match(blockers(draft = broken), "^Fix the 1 block marked to fix\\.$")
-})
-
-test_that("a questionnaire recorded without any blocks matches none of the draft's, and is no error", {
-  nothing <- list(
-    placements = no_rows(c("placement_id", "component_id", "parent_placement_id", "display_order")),
-    components = no_rows(c("component_id", "component_type_id", "text"))
+  # its Basic Info: everything has to be picked, and the wave has to be free
+  expect_equal(
+    extraction_service_info_blockers(list(id = "9", info = list()), catalog = catalog),
+    "Fill in the registry, study, questionnaire and wave under Basic Info."
   )
-  ids <- list(component_types = data.frame(name = character(), component_type_id = integer()))
-  expect_length(push_match_blocks(gold_draft(), nothing, ids), 0)
+  expect_equal(
+    extraction_service_info_blockers(list(id = "9", info = list(registry_id = "1")), catalog = catalog),
+    "Fill in the study, questionnaire and wave under Basic Info."
+  )
+  expect_equal(extraction_service_info_blockers(complete_info(), catalog = catalog), character())
+  expect_equal(
+    extraction_service_info_blockers(complete_info(), catalog = catalog, question_counts = c("2" = 12L)),
+    "Wave 2 already asks 12 questions. Empty the wave first (Metadata page), or pick a wave without questions."
+  )
+  elsewhere <- complete_info()
+  elsewhere$info$wave_id <- "3" # KQ's wave
+  expect_equal(extraction_service_info_blockers(elsewhere, catalog = catalog), "Pick one of this questionnaire's waves.")
+
+  # another draft going into the same wave is in the way; a pushed extraction isn't
+  other <- list(
+    id = "10", status = "Draft", prepared_by = fixture_other_staff$name, prepared_by_id = fixture_other_staff$staff_id,
+    info = complete_info()$info
+  )
+  expect_equal(
+    extraction_service_info_blockers(complete_info(), catalog = catalog, records = list(other), me = fixture_staff),
+    "Alex Rivera already has a draft going into Wave 2. Pick another wave, or continue that draft."
+  )
+  mine <- other
+  mine$prepared_by_id <- fixture_staff$staff_id
+  expect_match(
+    extraction_service_info_blockers(complete_info(), catalog = catalog, records = list(mine), me = fixture_staff),
+    "^You already have a draft going into Wave 2\\."
+  )
+  pushed <- other
+  pushed$status <- "Pushed"
+  expect_equal(
+    extraction_service_info_blockers(complete_info(), catalog = catalog, records = list(pushed, complete_info()), me = fixture_staff),
+    character()
+  )
 })
 
-test_that("blocks not yet marked as checked are counted, but don't stop a push", {
-  draft <- gold_draft()
-  expect_equal(extraction_service_unchecked(draft), nrow(draft$components))
-  checked <- with_checked(draft, draft$components$id[1:10])
-  expect_equal(extraction_service_unchecked(checked), nrow(draft$components) - 10)
+test_that("blocks not yet marked as checked are counted, but don't stop a push; the questionnaire is summed up", {
+  draft <- test_questionnaire_draft()
+  expect_equal(extraction_service_unchecked(draft), 4)
+  expect_equal(extraction_service_unchecked(with_checked(draft, draft$components$id[1:3])), 1)
   expect_equal(extraction_service_unchecked(with_checked(draft, draft$components$id)), 0)
+  expect_equal(extraction_service_draft_blockers(draft, test_lookups()), character())
+
+  expect_equal(extraction_service_draft_summary(draft), "4 blocks, with 2 questions and 2 variables.")
+  expect_equal(extraction_service_draft_summary(draft_service_empty()), "0 blocks, with 0 questions and 0 variables.")
+  expect_match(extraction_service_draft_summary(gold_draft()), "^[0-9]{1,3}(,[0-9]{3})* blocks, with [0-9,]+ questions and [0-9,]+ variables\\.$")
 })
 
-# ------ The rows, worked out ------------------------------------------------------------------------------------
-build_for <- function(draft, info = list(questionnaire_id = "7", wave_id = "41"), existing = empty_questionnaire(), options = no_options) {
-  extraction_service_build_items(draft, extraction_service_info(list(info = info)), ids = no_ids, existing = existing, options = options)
-}
-no_ids <- list(
-  component_types = data.frame(component_type_id = 1:7, name = c("Section", "Question", "Introduction", "Instruction", "Definition", "Interviewer Script", "Note")),
-  subjects = data.frame(subject_id = 1:2, name = c("Self", "Respondent's Family"))
+# ------ Said in words and cards ------------------------------------------------------------------------------------
+# What the database answers for a questionnaire pushed for the first time, and for one pushed into a second wave
+# of a questionnaire that prints it already.
+first_counts <- list(
+  component_new = 4L, placement_new = 4L, wave_question_new = 2L, variable_new = 2L, response_option_new = 2L,
+  answer_option_new = 2L, tag_new = 1L, questions = 2L, extraction_id = 5, wave_id = 41, questionnaire_id = 7
 )
-no_options <- list(
-  answer_options = data.frame(answer_option_id = numeric(), standardized_label = character()),
-  option_sets = data.frame(option_set_id = numeric(), name = character()),
-  members = data.frame(option_set_id = numeric(), answer_option_id = numeric())
+again_counts <- list(
+  component_reused = 4L, placement_reused = 4L, wave_question_new = 2L, variable_reused = 2L, questions = 2L,
+  extraction_id = 6, wave_id = 42, questionnaire_id = 7
 )
-# `existing` with some of its tables replaced.
-with_tables <- function(existing, tables) {
-  existing[names(tables)] <- tables
-  existing
-}
-
-# Questionnaire 7, recorded with nothing printed yet, and its waves 40 (asking one question) and 41 (none).
-empty_questionnaire <- function() {
-  list(
-    placements = no_rows(c("placement_id", "component_id", "parent_placement_id", "display_order")),
-    components = no_rows(c("component_id", "component_type_id", "text")),
-    questions = no_rows("placement_id"),
-    variables = no_rows(c("variable_key", "placement_id", "matr_id", "display_order")),
-    waves = data.frame(wave_id = c(40, 41), name = c("Wave 1", "Wave 2")),
-    wave_questions = data.frame(wave_id = 40, placement_id = 5)
-  )
-}
-
-test_that("a questionnaire with nothing printed yet gets every block, every question's number in the wave, and its variables", {
-  built <- build_for(small_draft())
-  items <- built$items
-  expect_equal(items$item_number, seq_len(nrow(items)))
-  expect_true(all(items$action == "Insert")) # an extraction only adds rows
-  expect_false(any(c("questionnaire", "wave") %in% items$entity_name)) # both are recorded already
-  expect_equal(built$summary[c("blocks", "questions", "variables", "choices")], list(blocks = 4L, questions = 2L, variables = 2L, choices = 2L))
-  expect_equal(built$summary[c("answer_options", "option_sets")], list(answer_options = 2L, option_sets = 1L))
-
-  lines <- item_lines(items)
-  expect_equal(sum(items$entity_name == "component" & items$attribute_name == "text"), 4)
-  expect_equal(sum(items$entity_name == "wave_question" & items$attribute_name == "question_number"), 2)
-  expect_true(all(grepl('"wave_id":41', items$record_identifier[items$entity_name == "wave_question"])))
-  expect_equal(sum(items$entity_name == "question"), 2)
-  # the answer choices yes and no make one set, in the order read; the database names it by them
-  expect_true("Insert option_set {\"option_set_id\":\"new:option_set:1\"} NA: - -> -" %in% lines)
-  members <- items[items$entity_name == "answer_option_set", ]
-  expect_equal(members$attribute_name, c("display_order", "display_order"))
-  expect_equal(members$new_value, c("1", "2"))
-  expect_equal(built$rows$option_sets$text, "yes / no")
-  # blocks are added section first, then what is inside it, numbered from 1 in their section
-  orders <- items$new_value[items$entity_name == "questionnaire_component" & items$attribute_name == "display_order"]
-  expect_equal(orders, c("1", "1", "2", "3"))
-})
-
-test_that("an answer choice and a set of choices that are there already are used, not added again", {
-  options <- list(
-    answer_options = data.frame(answer_option_id = c(10, 11), standardized_label = c("Yes", "No")),
-    option_sets = data.frame(option_set_id = 5, name = "No / Yes"),
-    members = data.frame(option_set_id = c(5, 5), answer_option_id = c(11, 10))
-  )
-  built <- build_for(small_draft(), options = options)
-  expect_equal(built$summary[c("answer_options", "option_sets", "option_sets_found")], list(answer_options = 0L, option_sets = 0L, option_sets_found = 1L))
-  closed <- built$items[built$items$entity_name == "closed_ended", ]
-  expect_equal(closed$new_value, "5") # the set that is there, whatever order its choices are in
-  expect_false("answer_option" %in% built$items$entity_name)
-  expect_equal(built$items$record_identifier[built$items$entity_name == "response_option"][1], '{"answer_option_id":10,"variable_key":"new:variable:1"}')
-
-  # it is listed by the name the database gives it
-  expect_equal(built$rows$option_sets$text, "No / Yes")
-})
-
-test_that("a choice worded the old way, or merged into another, is the one there; the exact words come first", {
-  options <- c(no_options[c("option_sets", "members")], list(
-    answer_options = data.frame(answer_option_id = c(10, 11, 12), standardized_label = c("1 to 2", "1-2", "never")),
-    aliases = data.frame(alias = "not ever", answer_option_id = 12)
-  ))
-  built <- build_for(small_draft(labels = c("1 - 2", "Not ever.")), options = options)
-  expect_false("answer_option" %in% built$items$entity_name)
-  offered <- built$items$record_identifier[built$items$entity_name == "response_option"]
-  expect_true(any(grepl('"answer_option_id":11,', offered, fixed = TRUE))) # "1-2", not the older "1 to 2"
-  expect_true(any(grepl('"answer_option_id":12,', offered, fixed = TRUE))) # "not ever" was merged into "never"
-  expect_equal(built$rows$answer_options$text, c("1-2", "never"))
-  expect_equal(built$rows$answer_options$status, rep("Already in the database", 2))
-
-  # only "1 to 2" there: it is used, as normal_answer() writes it the same way
-  options$answer_options <- options$answer_options[-2, ]
-  older <- build_for(small_draft(labels = c("1 - 2", "Never")), options = options)
-  expect_false("answer_option" %in% older$items$entity_name)
-  expect_true(any(grepl('"answer_option_id":10,', older$items$record_identifier, fixed = TRUE)))
-})
-
-test_that("a new choice that looks like one in the database says so in the preview", {
-  options <- c(no_options[c("option_sets", "members")], list(
-    answer_options = data.frame(answer_option_id = 10, standardized_label = "yes, most of the time")
-  ))
-  built <- build_for(small_draft(labels = c("Yes most of the time", "No")), options = options)
-  rows <- built$rows$answer_options
-  expect_equal(rows$detail[rows$text == "yes most of the time"], "Looks like “yes, most of the time”")
-  expect_equal(rows$detail[rows$text == "no"], "")
-  expect_true(all(rows$is_new))
-})
-
-test_that("a linked question's stem is added once, or the one there with its words is used", {
-  draft <- small_draft()
-  question <- draft$components$id[draft$components$component_type == "Question"][1]
-  draft$components$stem[draft$components$id == question] <- paste(sample_marker, "Do [subject] smoke?")
-  built <- build_for(draft)
-  lines <- item_lines(built$items)
-  expect_true(paste0("Insert question_stem {\"question_stem_id\":\"new:question_stem:1\"} text: - -> ", sample_marker, " Do [subject] smoke?") %in% lines)
-  expect_equal(sum(built$items$entity_name == "question" & built$items$attribute_name == "question_stem_id"), 1)
-  expect_equal(built$summary$stems, 1L)
-  expect_match(extraction_service_push_summary(built$summary), "1 new question stem")
-
-  there <- c(no_options, list(stems = data.frame(question_stem_id = 77, text = paste(sample_marker, " Do [subject]  smoke? "))))
-  reused <- build_for(draft, options = there)
-  expect_false("question_stem" %in% reused$items$entity_name)
-  expect_equal(reused$items$new_value[reused$items$entity_name == "question" & reused$items$attribute_name == "question_stem_id"], "77")
-})
-
-test_that("a section's condition goes on its placement, and its questions keep their own", {
-  draft <- small_draft()
-  section <- draft$components$id[draft$components$component_type == "Section"]
-  draft <- draft_service_update(draft, "components", section, "condition", "Female")
-  items <- build_for(draft)$items
-  conditions <- items[items$attribute_name %in% "condition", ]
-  expect_equal(conditions$entity_name, "questionnaire_component")
-  expect_equal(conditions$new_value, "female")
-})
-
-test_that("a write-in's unit goes with it", {
-  draft <- small_draft()
-  box <- draft$variables$id[draft$variables$variable_type == "open_ended"]
-  items <- build_for(draft_service_update(draft, "variables", box, "unit", "yrs"))$items
-  expect_equal(items$new_value[items$entity_name == "open_ended" & items$attribute_name == "unit"], "years")
-})
-
-test_that("a question whose own words have [subject] or [time frame] in them shares the stem of those words", {
-  draft <- small_draft(question = paste(sample_marker, "did [subject] smoke [time frame]?"))
-  built <- build_for(draft)
-  lines <- item_lines(built$items)
-  expect_true(paste0("Insert question_stem {\"question_stem_id\":\"new:question_stem:1\"} text: - -> ", sample_marker, " did [subject] smoke [time frame]?") %in% lines)
-  expect_equal(built$summary$stems, 1L) # and only that one: the other question's words have neither
-})
-
-test_that("how many of the wave's respondents gave an answer is added for the extraction's wave, and only where typed", {
-  draft <- small_draft(labels = c("Yes.", "NO"))
-  expect_equal(draft$response_options$answer_option, c("yes", "no")) # kept normalized
-  draft <- draft_service_update(draft, "response_options", draft$response_options$id[1], "respondent_count", "120")
-  items <- build_for(draft)$items
-  counts <- items[items$entity_name == "response_option_count", ]
-  expect_equal(nrow(counts), 1)
-  expect_equal(counts$attribute_name, "respondent_count")
-  expect_equal(counts$new_value, "120")
-  expect_match(counts$record_identifier, '"wave_id":41')
-  expect_match(counts$record_identifier, '"variable_key":"new:variable:1"')
-  expect_false("printed_label" %in% items$attribute_name) # how a choice was printed isn't kept
-})
-
-test_that("a recorded questionnaire's blocks are found where it prints them, and the rest are added", {
-  existing <- with_tables(empty_questionnaire(), list(
-    placements = data.frame(
-      placement_id = c(500, 501, 502), component_id = c(100, 101, 102), parent_placement_id = c(NA, 500, 500), display_order = c(1, 1, 2)
-    ),
-    components = data.frame(component_id = c(100, 101, 102), component_type_id = c(1, 4, 2), text = paste(sample_marker, c("Part A", "Please answer.", "Do you smoke?"))),
-    questions = data.frame(placement_id = 502),
-    variables = data.frame(variable_key = 900, placement_id = 502, matr_id = paste0("zz1-", tolower(sample_marker)), display_order = 1)
-  ))
-  built <- build_for(small_draft(), existing = existing)
-  expect_equal(built$summary$blocks_found, 3L) # the section, the instruction and the smoking question
-  expect_equal(built$summary$blocks, 1L) # the question about how many is new
-  expect_equal(built$summary$variables_found, 1L)
-  expect_equal(built$summary$variables, 1L)
-  expect_equal(built$summary$questions, 2L) # both are asked in the wave
-  wave_questions <- built$items[built$items$entity_name == "wave_question", ]
-  expect_true('{"placement_id":502,"wave_id":41}' %in% wave_questions$record_identifier)
-  # the new block goes after what is in its section already
-  order <- built$items$new_value[built$items$entity_name == "questionnaire_component" & built$items$attribute_name == "display_order"]
-  expect_equal(order, "3")
-  parent <- built$items$new_value[built$items$entity_name == "questionnaire_component" & built$items$attribute_name == "parent_placement_id"]
-  expect_equal(parent, "500") # the section's placement
-})
-
-test_that("a linked question another questionnaire prints keeps the link: it gets the stem, unless it has another", {
-  draft <- small_draft()
-  question <- draft$components$id[draft$components$component_type == "Question"][1]
-  draft$components$stem[draft$components$id == question] <- paste(sample_marker, "Do [subject] smoke?")
-  printed <- c(no_options, list(components = data.frame(component_id = 150, component_type_id = 2, text = paste(sample_marker, "Do you smoke?"))))
-
-  # it has no stem yet: the extraction gives it one, the one change it makes to a row that is there
-  built <- build_for(draft, options = printed)
-  lines <- item_lines(built$items)
-  expect_true('Update question {"component_id":150} question_stem_id: - -> new:question_stem:1' %in% lines)
-  expect_lt(match("Insert question_stem", substr(lines, 1, 20)), match('Update question {"component_id":150} question_stem_id: - -> new:question_stem:1', lines))
-  expect_equal(built$summary$linked, 1L)
-  expect_match(extraction_service_push_summary(built$summary), "1 question already there linked")
-  expect_equal(sum(built$items$action == "Update"), 1)
-
-  # it has that stem already: nothing to change
-  stems <- data.frame(question_stem_id = 77, text = paste(sample_marker, "Do [subject] smoke?"))
-  same <- build_for(draft, options = c(printed, list(stems = stems, linked = data.frame(component_id = 150, question_stem_id = 77))))
-  expect_false(any(same$items$action == "Update"))
-  expect_false("question_stem" %in% same$items$entity_name)
-
-  # it is linked under another: linking it here would unlink it from those, so the push says so
-  other <- data.frame(question_stem_id = 78, text = "Does [subject] smoke?")
-  expect_error(
-    build_for(draft, options = c(printed, list(stems = rbind(stems, other), linked = data.frame(component_id = 150, question_stem_id = 78)))),
-    "Question 1 (“ZZTEST Do you smoke?”) is printed by another questionnaire already, linked with other questions as “Does [subject] smoke?”",
-    fixed = TRUE
-  )
-})
-
-test_that("a block another questionnaire prints with the same kind and words is placed here, not copied", {
-  options <- utils::modifyList(no_options, list(components = data.frame(
-    component_id = c(300, 150, 160, 170),
-    component_type_id = c(2, 2, 4, 2), # questions, but the third is an instruction
-    text = paste(sample_marker, c("Do you smoke?", "Do  you smoke? ", "How many?", "do you smoke?"))
-  )))
-  built <- build_for(small_draft(), options = options)
-  expect_equal(built$summary[c("blocks", "blocks_shared")], list(blocks = 3L, blocks_shared = 1L))
-  items <- built$items
-  field <- function(table, attribute) items[items$entity_name == table & items$attribute_name == attribute, ]
-  # the question with those words (but for spaces) is the one placed; it is neither added again nor copied
-  expect_false(any(grepl('"component_id":150[,}]', items$record_identifier[items$entity_name %in% c("component", "question")])))
-  expect_equal(sum(items$entity_name == "component" & items$attribute_name == "text"), 3)
-  placed <- field("questionnaire_component", "component_id")
-  expect_equal(sum(placed$new_value == "150"), 1) # placed here once, with a placement of its own
-  place <- placed$record_identifier[placed$new_value == "150"]
-  expect_equal(field("questionnaire_question", "component_id")$new_value[field("questionnaire_question", "component_id")$record_identifier == place], "150")
-  expect_equal(sum(items$entity_name == "wave_question" & grepl(jsonlite::fromJSON(place)$placement_id, items$record_identifier, fixed = TRUE)), 3)
-  expect_equal(field("variable", "placement_id")$new_value[1], jsonlite::fromJSON(place)$placement_id)
-  # an instruction with a question's words, or words with other capitals, isn't the same block: "How many?" is new
-  expect_false(any(items$attribute_name == "component_id" & items$new_value %in% c("160", "170", "300")))
-
-  # a component the questionnaire prints already somewhere else is placed again, not copied
-  existing <- with_tables(empty_questionnaire(), list(
-    placements = data.frame(placement_id = 600, component_id = 150, parent_placement_id = NA_real_, display_order = 1),
-    components = data.frame(component_id = 150, component_type_id = 2, text = paste(sample_marker, "Do  you smoke? ")),
-    questions = data.frame(placement_id = 600)
-  ))
-  again <- build_for(small_draft(), existing = existing, options = options)
-  expect_equal(again$summary[c("blocks", "blocks_found", "blocks_shared")], list(blocks = 3L, blocks_found = 0L, blocks_shared = 1L))
-  again_placed <- again$items[again$items$entity_name == "questionnaire_component" & again$items$attribute_name == "component_id", ]
-  expect_true("150" %in% again_placed$new_value)
-
-  expect_match(extraction_service_push_summary(built$summary), "^Adds 3 new blocks, 1 block other questionnaires print, ")
-  expect_equal(extraction_service_what_cards(built$summary)[[1]]$facts, c("3 new", "1 shared with other questionnaires"))
-  # each block is listed, the shared one by where it is used already
-  blocks <- built$rows$blocks
-  expect_equal(nrow(blocks), 4)
-  expect_equal(sum(blocks$is_new), 3)
-  expect_equal(blocks$status[!blocks$is_new], "Printed by another questionnaire") # where isn't known here
-  expect_equal(blocks$text[!blocks$is_new], paste(sample_marker, "Do you smoke?"))
-  where <- list(
-    placed = data.frame(component_id = c(150, 150, 300), questionnaire_id = c(2, 3, 2)),
-    questionnaires = data.frame(questionnaire_id = c(2, 3), name = c("Kid Questionnaire", "Mother Questionnaire"), abbreviation = c("KQ", NA))
-  )
-  expect_equal(push_shared_status(where, 300), "Used in KQ")
-  expect_equal(push_shared_status(where, 150), "Used by 2 questionnaires")
-  where$placed$questionnaire_id[3] <- 3
-  expect_equal(push_shared_status(where, 300), "Used in Mother Questionnaire") # no abbreviation: its name
-  where$questionnaires$abbreviation[2] <- "  "
-  expect_equal(push_shared_status(where, 300), "Used in Mother Questionnaire") # a blank one is none
-  where$placed$questionnaire_id[3] <- 9 # a questionnaire that isn't listed
-  expect_equal(push_shared_status(where, 300), "Printed by another questionnaire")
-  where$placed$questionnaire_id[3] <- 3
-  shared <- build_for(small_draft(), options = c(options, where))
-  expect_equal(shared$rows$blocks$status[!shared$rows$blocks$is_new], "Used by 2 questionnaires") # 150, the oldest
-})
-
-test_that("a MATR ID that another question already has, or nothing to add, is a sentence", {
-  existing <- with_tables(empty_questionnaire(), list(
-    placements = data.frame(placement_id = 602, component_id = 102, parent_placement_id = NA_real_, display_order = 1),
-    components = data.frame(component_id = 102, component_type_id = 2, text = "Some other question"),
-    questions = data.frame(placement_id = 602),
-    variables = data.frame(variable_key = 900, placement_id = 602, matr_id = paste0("zz1-", tolower(sample_marker)), display_order = 1)
-  ))
-  expect_error(
-    build_for(small_draft(), existing = existing),
-    "already used by another question of this questionnaire. Give the variable a MATR ID of its own"
-  )
-  expect_error(build_for(draft_service_empty()), "nothing in this questionnaire to add")
-})
 
 test_that("a push is described in words", {
-  built <- build_for(small_draft())
   expect_equal(
-    extraction_service_push_summary(built$summary),
-    "Adds 4 new blocks, 2 questions asked in the wave, 2 new variables, 2 response options, 2 new answer choices and 1 new set of choices."
+    extraction_service_push_summary(first_counts),
+    "Adds 4 new blocks, 2 questions asked in the wave, 2 new variables, 2 response options, 2 new answer choices and 1 new subject, time frame or unit."
   )
-  summary <- built$summary
-  summary$blocks <- 0L
-  summary$blocks_found <- 4L
-  summary$variables_found <- 2L
-  summary$variables <- 0L
-  expect_match(extraction_service_push_summary(summary), "^Adds 4 blocks already there, 2 questions asked in the wave, 2 variables already there")
-})
-
-test_that("an extraction goes into a recorded wave that asks no questions yet, and not one that does", {
-  built <- build_for(small_draft())
-  expect_false("wave" %in% built$items$entity_name) # the wave is there already
-  expect_error(build_for(small_draft(), list(questionnaire_id = "7", wave_id = "40")), "already asks 1 question")
-  expect_error(build_for(small_draft(), list(questionnaire_id = "7", wave_id = "99")), "isn't one of this questionnaire's waves")
-  expect_error(build_for(small_draft(), list(questionnaire_id = "7", wave_id = "41"), existing = NULL), "isn't one of this questionnaire's waves")
-})
-
-test_that("repeated choices are new response options, but each answer choice and set of choices is added or reused once", {
-  # three variables offering Yes / No: three times two response options, one per variable and choice
-  draft <- small_draft()
-  question <- draft$components$id[draft$components$component_type == "Question"][1]
-  draft <- draft_service_add_box(draft, question)
-  draft <- draft_service_add_box(draft, question)
-  draft$variables$matr_id <- paste0("zz", seq_len(nrow(draft$variables)))
-  added <- build_for(draft)
-  expect_equal(added$summary$choices, 6L)
-  expect_equal(added$summary[c("answer_options", "option_sets")], list(answer_options = 2L, option_sets = 1L))
-  expect_equal(sum(added$items$entity_name == "answer_option"), 2) # Yes and No once each
-  expect_equal(length(unique(added$items$record_identifier[added$items$entity_name == "response_option"])), 6)
-
-  options <- list(
-    answer_options = data.frame(answer_option_id = c(10, 11), standardized_label = c("yes", "no")),
-    option_sets = data.frame(option_set_id = 5, name = "Yes / No"),
-    members = data.frame(option_set_id = c(5, 5), answer_option_id = c(10, 11))
+  expect_equal(
+    extraction_service_push_summary(again_counts),
+    "Adds 4 blocks already there, 4 blocks the questionnaire prints already, 2 questions asked in the wave and 2 variables already there."
   )
-  reused <- build_for(draft, options = options)
-  expect_equal(reused$summary[c("answer_options", "answer_options_found", "option_sets", "option_sets_found")],
-    list(answer_options = 0L, answer_options_found = 2L, option_sets = 0L, option_sets_found = 1L))
-  expect_equal(reused$summary$choices, 6L) # still one per variable and choice: the links are new
-
-  # each answer choice and set is listed once, with how often it is used: the space kept once saves
-  expect_equal(reused$rows$answer_options$text, c("yes", "no"))
-  expect_equal(reused$rows$answer_options$uses, c(3L, 3L))
-  expect_equal(reused$rows$answer_options$status, rep("Already in the database", 2))
-  expect_equal(reused$rows$option_sets[c("text", "uses", "is_new")], data.frame(text = "Yes / No", uses = 3L, is_new = FALSE))
-  expect_equal(added$rows$answer_options$is_new, c(TRUE, TRUE))
-  expect_equal(added$rows$answer_options$uses, c(3L, 3L)) # a set's members aren't uses
-  expect_equal(added$rows$option_sets[c("text", "uses", "is_new")], data.frame(text = "yes / no", uses = 3L, is_new = TRUE))
-
-  cards <- extraction_service_what_cards(reused$summary, reused$rows)
-  kinds <- vapply(cards, function(card) card$kind, character(1))
-  # a wave's questions and its response options are new for every question and choice: no card of their own
-  expect_equal(kinds, c("Blocks", "Variables", "Answer choices", "Sets of choices"))
-  answer_card <- cards[[which(kinds == "Answer choices")]]
-  expect_false(answer_card$is_new)
-  expect_equal(answer_card$facts, "2 already in the database")
-  expect_equal(answer_card$subtitle, "")
-  expect_equal(cards[[which(kinds == "Sets of choices")]]$facts, "1 already in the database")
-  expect_equal(nrow(answer_card$rows), 2)
-
-  html <- htmltools::renderTags(request_rows_ui(cards))$html
-  expect_lt(regexpr(">no<", html), regexpr(">yes<", html)) # each list in the order of its words
-  expect_match(html, "<details class=\"request-rows-list\">")
-  expect_match(html, "Answer choices")
-  expect_match(html, "0 new rows, 2 already there")
-  expect_match(html, "Already in the database")
-  expect_match(html, "Response options</th>")
-  expect_null(request_rows_ui(extraction_service_what_cards(reused$summary))) # no rows given, no lists
+  mixed <- list(component_new = 1L, component_reused = 3L, questions = 2L, answer_option_reused = 2L, tag_new = 2L, tag_reused = 1L)
+  expect_equal(
+    extraction_service_push_summary(mixed),
+    paste(
+      "Adds 1 new block, 3 blocks already there, 2 questions asked in the wave, 2 answer choices already there,",
+      "2 new subjects, time frames or units and 1 subject, time frame or unit already there."
+    )
+  )
+  expect_equal(extraction_service_push_summary(list()), "Adds nothing.")
 })
 
-test_that("the preview says where it goes and what it adds, without writing anything", {
+test_that("the cards for what a push adds count the rows added and the rows found, and are NEW when any is added", {
+  cards <- extraction_service_what_cards(first_counts)
+  expect_equal(vapply(cards, function(card) card$kind, character(1)), c("Blocks", "Variables", "Answer choices", "Subjects, time frames and units"))
+  expect_equal(cards[[1]][c("title", "facts", "is_new")], list(title = "4 blocks", facts = "4 new", is_new = TRUE))
+  expect_equal(cards[[2]][c("title", "facts", "is_new")], list(title = "2 variables", facts = "2 new", is_new = TRUE))
+  expect_equal(cards[[3]][c("title", "facts", "is_new")], list(title = "2 different answer choices", facts = "2 new", is_new = TRUE))
+  expect_equal(cards[[4]][c("title", "facts", "is_new")], list(title = "1 tag", facts = "1 new", is_new = TRUE))
+  expect_true(all(vapply(cards, function(card) identical(card$subtitle, ""), logical(1))))
+
+  # a second wave of a questionnaire adds no block, and finds the blocks the questionnaire prints
+  again <- extraction_service_what_cards(again_counts)
+  expect_equal(again[[1]]$title, "4 blocks")
+  expect_equal(again[[1]]$facts, c("4 already in the database", "4 printed by this questionnaire already"))
+  expect_false(again[[1]]$is_new)
+  expect_equal(again[[2]][c("title", "facts", "is_new")], list(title = "2 variables", facts = "2 already recorded", is_new = FALSE))
+  expect_equal(again[[3]]$title, "0 different answer choices")
+  expect_length(again[[3]]$facts, 0)
+  expect_false(again[[3]]$is_new)
+
+  mixed <- extraction_service_what_cards(list(component_new = 1L, component_reused = 3L, tag_reused = 2L))
+  expect_equal(mixed[[1]][c("title", "facts", "is_new")], list(title = "4 blocks", facts = c("1 new", "3 already in the database"), is_new = TRUE))
+  expect_equal(mixed[[4]][c("title", "facts", "is_new")], list(title = "2 tags", facts = "2 already in the database", is_new = FALSE))
+  # a card is drawn with its NEW badge only when it adds rows
+  expect_match(as.character(request_card_ui(cards[[1]])), "NEW")
+  expect_false(grepl("NEW", as.character(request_card_ui(again[[1]]))))
+})
+
+test_that("the cards for where a push goes name what is picked, and say what isn't picked yet", {
   catalog <- test_catalog()
-  context <- list(ids = no_ids, options = no_options)
-  info <- extraction_service_info(complete_info())
-  existing <- with_tables(empty_questionnaire(), list(waves = data.frame(wave_id = c(1, 2), name = c("Wave 1", "Wave 2"))))
-  preview <- extraction_service_request_preview(small_draft(), info, catalog, context, existing)
-  where <- vapply(preview$where, function(card) card$kind, character(1))
-  expect_equal(where, c("Registry", "Study", "Questionnaire", "Wave"))
-  expect_equal(vapply(preview$where, function(card) isTRUE(card$is_new), logical(1)), rep(FALSE, 4)) # all recorded
-  expect_equal(preview$where[[4]]$title, "Wave 2")
-  expect_null(preview$problem)
-  expect_match(preview$summary, "^Adds 4 new blocks")
-  html <- htmltools::renderTags(extraction_request_ui(preview, small_draft()))$html
-  expect_false(grepl("Where it goes", html)) # Basic Info is the form on Change Requests now
-  expect_match(html, "What it adds")
-  expect_match(html, "fa-certificate") # the blocks it adds are NEW
-  expect_match(html, "NEW")
-  expect_false(grepl("Why", html))
-
-  # until it is placed, the cards say what is still to pick, and nothing is worked out
-  unplaced <- extraction_service_request_preview(small_draft(), extraction_service_info(), catalog, context)
-  expect_true(all(vapply(unplaced$where, function(card) isTRUE(card$is_missing), logical(1))))
-  expect_length(unplaced$what, 0)
-})
-
-test_that("submitting needs only the questionnaire; its Basic Info is filled in afterwards", {
-  lookups <- test_lookups()
-  draft <- gold_draft()
-  draft$variables$matr_id <- paste0("q", seq_len(nrow(draft$variables)))
-  expect_equal(extraction_service_draft_blockers(draft, lookups), character())
-  expect_equal(extraction_service_draft_blockers(draft_service_empty(), lookups), "Add the questionnaire's blocks and questions first.")
-  expect_match(extraction_service_info_blockers(list(id = "1", info = list()), catalog = test_catalog())[1], "under Basic Info")
-  expect_match(extraction_service_draft_summary(draft), "^[0-9,]+ blocks, with [0-9,]+ questions and [0-9,]+ variables\\.$")
-})
-
-test_that("a push is titled for the request that carries it", {
-  record <- list(pdf = list(name = "x.pdf"), info = complete_info()$info)
-  expect_equal(extraction_service_push_title(record, test_catalog()), "Add Adult Health and Personality (AHP) · Wave 2")
-})
-
-test_that("the wave records each question's place among the questions, and the number printed beside it if any", {
-  draft <- draft_service_renumber_questions(small_draft())
-  first <- draft$components$id[draft$components$component_type == "Question"][1]
-  draft <- draft_service_update(draft, "components", first, "printed_number", "1a4")
-  second <- draft$components$id[draft$components$component_type == "Question"][2]
-  draft <- draft_service_update(draft, "components", second, "printed_number", "")
-  items <- build_for(draft)$items
-  asked <- items[items$entity_name == "wave_question", ]
-  expect_equal(asked$new_value[asked$attribute_name == "question_number"], c("1", "2"))
-  expect_equal(asked$new_value[asked$attribute_name == "printed_number"], "1a4")
-
-  # printed numbers can repeat, as when each section starts again at 1
-  draft <- draft_service_update(draft, "components", second, "printed_number", "1a4")
-  asked <- build_for(draft)$items
-  expect_equal(asked$new_value[asked$entity_name == "wave_question" & asked$attribute_name == "printed_number"], c("1a4", "1a4"))
-})
-
-test_that("the respondent's subject is found by either of its names, so the rename can run before or after", {
-  for (name in c("Self", "Respondent")) {
-    ids <- no_ids
-    ids$subjects <- data.frame(subject_id = c(5, 6), name = c("Respondent's Family", name))
-    items <- extraction_service_build_items(small_draft(subject = NA), extraction_service_info(list(info = list(questionnaire_id = "7", wave_id = "41"))),
-      ids = ids, existing = empty_questionnaire(), options = no_options
-    )$items
-    expect_equal(unique(items$new_value[items$entity_name == "variable" & items$attribute_name == "subject_id"]), "6")
-    expect_false("subject" %in% items$entity_name)
-  }
-})
-
-test_that("who a variable is about: a blank is the respondent, a known subject is used, and a new one is added once", {
-  draft <- small_draft(subject = NA)
-  items <- build_for(draft)$items
-  expect_equal(unique(items$new_value[items$entity_name == "variable" & items$attribute_name == "subject_id"]), "1") # Self
-  expect_false("subject" %in% items$entity_name)
-
-  boxes <- draft$variables$id
-  draft <- draft_service_update(draft, "variables", boxes[1], "subject", "respondent's family ")
-  draft <- draft_service_update(draft, "variables", boxes[2], "subject", "Respondent's Twin")
-  built <- build_for(draft)
-  items <- built$items
-  subject_ids <- items$new_value[items$entity_name == "variable" & items$attribute_name == "subject_id"]
-  expect_equal(subject_ids[1], "2") # the one there, whatever its capitals
-  expect_equal(items$new_value[items$entity_name == "subject"], "Respondent's Twin")
-  expect_equal(subject_ids[2], "new:subject:1")
-  expect_equal(built$summary$subjects, 1L)
-  expect_match(extraction_service_push_summary(built$summary), "1 new subject")
-})
-
-test_that("a subject the database names with a curly apostrophe is the one a straight apostrophe names", {
-  draft <- small_draft(subject = NA)
-  draft <- draft_service_update(draft, "variables", draft$variables$id[1], "subject", "Respondent's Family")
-  ids <- no_ids
-  ids$subjects <- data.frame(subject_id = c(1, 9), name = c("Self", "Respondent’s Family"))
-  items <- extraction_service_build_items(
-    draft, extraction_service_info(list(info = list(questionnaire_id = "7", wave_id = "41"))),
-    ids = ids, existing = empty_questionnaire(), options = no_options
-  )$items
-  expect_equal(items$new_value[items$entity_name == "variable" & items$attribute_name == "subject_id"][1], "9")
-  expect_false("subject" %in% items$entity_name)
-})
-
-test_that("when a variable is about: none is no time frame, a known one is used, and a new one is added once", {
-  draft <- small_draft(subject = NA)
-  items <- build_for(draft)$items
-  expect_false("time_frame_id" %in% items$attribute_name)
-
-  boxes <- draft$variables$id
-  draft <- draft_service_update(draft, "variables", boxes[1], "time_frame", "during the last 12 months")
-  draft <- draft_service_update(draft, "variables", boxes[2], "time_frame", "in the past 30 days")
-  ids <- c(no_ids, list(time_frames = data.frame(time_frame_id = 3, name = "In the past 12 months")))
-  built <- extraction_service_build_items(
-    draft, extraction_service_info(list(info = list(questionnaire_id = "7", wave_id = "41"))),
-    ids = ids, existing = empty_questionnaire(), options = no_options
+  where <- extraction_service_where_cards(extraction_service_info(complete_info()), catalog)
+  expect_equal(vapply(where, function(card) card$kind, character(1)), c("Registry", "Study", "Questionnaire", "Wave"))
+  expect_false(any(vapply(where, function(card) isTRUE(card$is_new) || isTRUE(card$is_missing), logical(1)))) # all recorded
+  expect_equal(where[[1]]$title, "Mid-Atlantic Twin Registry (MATR)")
+  expect_equal(where[[2]][c("title", "subtitle")], list(title = "Adult Health Study", subtitle = "Led by Dana Reyes"))
+  expect_equal(
+    where[[3]][c("title", "subtitle", "facts")],
+    list(title = "Adult Health and Personality (AHP)", subtitle = "For Adult · already in the database", facts = "2 waves")
   )
-  items <- built$items
-  frames <- items$new_value[items$entity_name == "variable" & items$attribute_name == "time_frame_id"]
-  expect_equal(frames, c("3", "new:time_frame:1")) # the one there, whatever its capitals; then a new one
-  expect_equal(items$new_value[items$entity_name == "time_frame"], "in the past 30 days")
-  expect_match(extraction_service_push_summary(built$summary), "1 new time frame")
+  expect_equal(
+    where[[4]][c("title", "subtitle", "facts")],
+    list(title = "Wave 2", subtitle = "Already in the database, with no questions yet", facts = c("Given 04/15/2022", "1,210 respondents"))
+  )
+
+  nothing <- extraction_service_where_cards(extraction_service_info(), catalog)
+  expect_true(all(vapply(nothing, function(card) isTRUE(card$is_missing), logical(1))))
+  expect_equal(unique(vapply(nothing, function(card) card$title, character(1))), "Not picked yet")
+  # picked in order: the registry first
+  some <- extraction_service_where_cards(extraction_service_info(list(info = list(registry_id = "1"))), catalog)
+  expect_equal(vapply(some, function(card) isTRUE(card$is_missing), logical(1)), c(FALSE, TRUE, TRUE, TRUE))
 })
 
-test_that("a choice that skips points at the block it skips to, added before any variable", {
-  draft <- small_draft()
-  no <- draft$response_options$id[draft$response_options$answer_option == "no"]
-  later <- draft$components$id[draft$components$component_type == "Question"][2]
-  draft <- draft_service_update(draft, "response_options", no, "skip_to_id", later)
-  draft <- draft_service_update(draft, "response_options", no, "skip_instruction", "Go to Question 2")
-  items <- build_for(draft)$items
-  skip <- items[items$entity_name == "response_option" & items$attribute_name == "skip_to_placement_id", ]
-  expect_equal(nrow(skip), 1)
-  expect_equal(skip$new_value, "new:questionnaire_component:4") # the second question's placement (after the section, the instruction, the first question)
-  # every block is placed before the first variable
-  expect_lt(max(which(items$entity_name == "questionnaire_component")), min(which(items$entity_name == "variable")))
-  expect_true(all(items$action == "Insert"))
-})
-test_that("a write-in that skips, and a skip to the end, say so in their rows; without them nothing new is sent", {
-  plain <- build_for(small_draft())$items
-  expect_false(any(plain$attribute_name %in% c("skip_to_end", "skip_condition"))) # pushes before 7_more_skips.sql runs
-  draft <- small_draft()
-  no <- draft$response_options$id[draft$response_options$answer_option == "no"]
-  draft <- draft_service_update(draft, "response_options", no, "skip_to_id", "End of Questionnaire")
-  box <- draft$variables$id[draft$variables$variable_type == "open_ended"]
-  draft <- draft_service_update(draft, "variables", box, "skip_condition", "None")
-  draft <- draft_service_update(draft, "variables", box, "skip_to_id", skip_to_end_id)
-  items <- build_for(draft)$items
-  value_of <- function(entity, attribute) items$new_value[items$entity_name == entity & items$attribute_name == attribute]
-  expect_equal(value_of("response_option", "skip_to_end"), "true")
-  expect_length(value_of("response_option", "skip_to_placement_id"), 0) # the end is no placement
-  expect_equal(value_of("open_ended", "skip_condition"), "none")
-  expect_equal(value_of("open_ended", "skip_to_end"), "true")
-})
+test_that("the preview puts the cards, the sentence and the problem together, and says when nothing was tried", {
+  catalog <- test_catalog()
+  draft <- test_questionnaire_draft()
+  info <- extraction_service_info(complete_info())
 
+  preview <- extraction_service_push_preview_ui(draft, info, catalog, first_counts)
+  expect_equal(names(preview), c("where", "what", "summary", "problem", "unchecked"))
+  expect_length(preview$where, 4)
+  expect_length(preview$what, 4)
+  expect_match(preview$summary, "^Adds 4 new blocks, ")
+  expect_null(preview$problem)
+  expect_equal(preview$unchecked, 4)
+  html <- htmltools::renderTags(extraction_request_ui(preview, draft, questionnaire = FALSE))$html
+  expect_match(html, "What it adds")
+  expect_match(html, "NEW")
+  expect_false(grepl("can't be pushed", html, fixed = TRUE))
 
-test_that("a group that skips says so where it is placed, pointing at a question printed after it; others send nothing new", {
-  plain <- build_for(small_draft())$items
-  expect_false(any(plain$entity_name == "questionnaire_component" & grepl("^skip_", plain$attribute_name))) # pushes before 13_group_skips.sql runs
-  question <- function(number) {
-    list(
-      component_type = "Question", text = paste("Question", number), printed_number = number,
-      variables = list(list(variable_type = "closed_ended", matr_id = paste0("m", number), response_options = list(list(answer_option = "Yes"), list(answer_option = "No"))))
-    )
-  }
-  draft <- draft_service_from_json(list(components = list(
-    list(component_type = "Group", skip_condition = "No", skip_instruction = "Go to Question 24", children = list(question("22a"), question("22b"))),
-    question("23"),
-    question("24")
-  )))
-  built <- build_for(draft)
-  expect_equal(built$rows$blocks$detail, rep("Question", 4)) # the group has no words, so the list leaves it out
-  items <- built$items
-  placed <- items[items$entity_name == "questionnaire_component" & grepl('"new:questionnaire_component:1"', items$record_identifier), ]
-  value_of <- function(attribute) placed$new_value[placed$attribute_name == attribute]
-  expect_equal(value_of("skip_condition"), "No")
-  expect_equal(value_of("skip_when"), "every") # what an empty one means
-  expect_equal(value_of("skip_instruction"), "Go to Question 24")
-  expect_equal(value_of("skip_to_placement_id"), "new:questionnaire_component:5") # 24: the group, 22a, 22b, 23, then it
-  # the place it skips to is added before the group's own row names it
-  first_row <- function(token) min(which(items$entity_name == "questionnaire_component" & grepl(sprintf('"%s"', token), items$record_identifier)))
-  expect_lt(first_row("new:questionnaire_component:5"), first_row("new:questionnaire_component:1"))
-  # ... and still keeps its printed place: the group first, 23 and 24 after it
-  orders <- items[items$entity_name == "questionnaire_component" & items$attribute_name == "display_order", ]
-  expect_equal(orders$new_value[match(sprintf('{"placement_id":"new:questionnaire_component:%d"}', c(1, 4, 5)), orders$record_identifier)], c("1", "2", "3"))
+  # the database refused: its sentence is the problem, and there is nothing to add
+  refusal <- "The wave Wave 2 of Adult Health and Personality already asks 12 question(s). Empty it first (Metadata > the wave > Empty), or pick a wave that asks none."
+  refused <- extraction_service_push_preview_ui(with_checked(draft, draft$components$id), info, catalog, simpleError(refusal))
+  expect_equal(refused$problem, refusal)
+  expect_length(refused$what, 0)
+  expect_equal(refused$summary, "")
+  expect_equal(refused$unchecked, 0)
+  html <- htmltools::renderTags(extraction_request_ui(refused, draft, questionnaire = FALSE))$html
+  expect_match(html, "This can't be pushed as it is", fixed = TRUE)
+  expect_match(html, "Empty it first", fixed = TRUE)
+  expect_false(grepl("What it adds", html, fixed = TRUE))
+
+  # not tried, as the Basic Info isn't complete: the cards say what to pick, and nothing is worked out
+  not_tried <- extraction_service_push_preview_ui(draft, extraction_service_info(), catalog, NULL)
+  expect_true(all(vapply(not_tried$where, function(card) isTRUE(card$is_missing), logical(1))))
+  expect_length(not_tried$what, 0)
+  expect_equal(not_tried$summary, "")
+  expect_null(not_tried$problem)
 })
 
-test_that("a block printed twice in one questionnaire is one component placed twice", {
-  question <- function(number, words) {
-    list(
-      component_type = "Question", text = words, printed_number = number,
-      variables = list(list(variable_type = "closed_ended", matr_id = paste0("m", number), response_options = list(list(answer_option = "Yes"), list(answer_option = "No"))))
-    )
-  }
-  draft <- draft_service_from_json(list(components = list(
-    list(component_type = "Section", text = "About Twin A", children = list(
-      list(component_type = "Instruction", text = "Please answer yes or no."), question("1", "My child is a good listener.")
-    )),
-    list(component_type = "Section", text = "About Twin B", children = list(
-      list(component_type = "Instruction", text = "Please answer yes or no."), question("2", "My child is a good listener.")
-    ))
-  )))
-  built <- build_for(draft)
-  items <- built$items
-  expect_equal(built$summary[c("blocks", "blocks_repeated")], list(blocks = 4L, blocks_repeated = 2L))
-  expect_equal(sum(items$entity_name == "component" & items$attribute_name == "text"), 4) # two sections, one instruction, one question
-  placed <- items$new_value[items$entity_name == "questionnaire_component" & items$attribute_name == "component_id"]
-  expect_equal(length(placed), 6)
-  expect_equal(sort(as.vector(table(placed))), c(1, 1, 2, 2)) # each section once; the instruction and the question twice
-  # each placement of the question has its own number in the wave and its own variable
-  expect_equal(length(unique(items$record_identifier[items$entity_name == "wave_question"])), 2)
-  expect_equal(length(unique(items$new_value[items$entity_name == "variable" & items$attribute_name == "placement_id"])), 2)
-  expect_match(extraction_service_push_summary(built$summary), "2 blocks printed again")
-  expect_equal(built$rows$blocks$status[built$rows$blocks$text == "Please answer yes or no."], c("New", "Printed again"))
+# ------ The push -------------------------------------------------------------------------------------------------------
+# The small questionnaire with words of its own: a run's tests all push test_questionnaire_draft(), and an answer
+# choice or a tag is kept once for the whole database until the run ends, so a push of the same words would find
+# them there. Each block, choice and unit still starts with the run's marker, so it is removed when the run ends.
+marked_draft <- function(matr = c("zz1", "zz2")) {
+  draft <- test_questionnaire_draft(matr)
+  own <- test_name("push")
+  draft$components$text <- paste(draft$components$text, own)
+  draft$response_options$answer_option <- paste(draft$response_options$answer_option, own)
+  draft$variables$unit <- ifelse(is.na(draft$variables$unit), NA_character_, paste(draft$variables$unit, own))
+  draft
+}
+
+# A draft typed by hand going into the tree's wave (or the wave given), its questionnaire saved: as the Edit
+# Extraction page leaves it before Push.
+saved_draft <- function(me, tree, draft, wave_id = tree$wave$wave_id, env = parent.frame()) {
+  typed <- picked_basic_info(tree, wave_id = wave_id)
+  record <- do.call(local_manual_extraction, c(list(me, env = env), typed))
+  draft_service_save(test_connection, record$id, draft, me$staff_id)
+  extraction_model_get(test_connection, record$id)
+}
+
+test_that("a push records the questionnaire in its wave, and the extraction is kept as Pushed", {
+  me <- local_staff()
+  tree <- local_tree()
+  draft <- marked_draft()
+  pushed <- local_pushed_questionnaire(me, tree, draft)
+  counts <- pushed$counts
+
+  expect_equal(pushed$record$status, "Pushed")
+  expect_false(is.null(pushed$record$pushed))
+  expect_equal(counts$questions, 2)
+  expect_equal(counts$component_new, 4) # the section, the instruction and the two questions
+  expect_equal(counts$placement_new, 4)
+  expect_equal(counts$wave_question_new, 2)
+  expect_equal(counts$variable_new, 2)
+  expect_equal(counts$response_option_new, 2)
+  expect_equal(counts$answer_option_new, 2) # yes and no, as marked
+  expect_equal(counts$tag_new, 1) # the unit
+  expect_null(counts$component_reused)
+  expect_null(counts$variable_reused)
+  expect_equal(as.character(counts$wave_id), as.character(tree$wave$wave_id))
+  expect_equal(as.character(counts$extraction_id), pushed$id)
+
+  # the wave asks the two questions, each with its place and the number printed beside it
+  wave <- list(wave_id = database_eq(tree$wave$wave_id))
+  expect_equal(database_model_count(test_connection, "wave_question", wave), 2)
+  asked <- database_model_get(test_connection, "wave_question", c("question_number", "printed_number"), filters = wave)
+  expect_equal(asked$question_number, c("1", "2"))
+  expect_equal(asked$printed_number, c("1", "2"))
+  # the questionnaire records the variables by their MATR IDs
+  variables <- database_model_get(
+    test_connection, "variable", c("matr_id", "variable_type"),
+    filters = list(questionnaire_id = database_eq(tree$questionnaire$questionnaire_id))
+  )
+  expect_setequal(variables$matr_id, draft$variables$matr_id)
+  expect_setequal(variables$variable_type, c("closed_ended", "open_ended"))
+
+  # it has left the drafts, and is still there as Pushed
+  expect_false(pushed$id %in% names(extraction_service_get_all(test_connection)))
+  kept <- extraction_model_get(test_connection, pushed$id)
+  expect_equal(kept$status, "Pushed")
+  expect_true(same_staff(kept$saved_by_id, me$staff_id))
+  # and can't be pushed twice
+  catalog <- questionnaire_service_get_catalog(test_connection)
+  expect_match(error_text(extraction_service_push(test_connection, kept, me, catalog)), "pushed already")
 })
 
-test_that("every group is the one Group component, placed where each is", {
-  draft <- draft_service_from_json(list(components = list(
-    list(component_type = "Group", children = list(list(component_type = "Instruction", text = "First."))),
-    list(component_type = "Group", children = list(list(component_type = "Instruction", text = "Second.")))
-  )))
-  ids <- no_ids
-  ids$component_types <- rbind(ids$component_types, data.frame(component_type_id = 8, name = "Group"))
-  built <- extraction_service_build_items(draft, extraction_service_info(list(info = list(questionnaire_id = "7", wave_id = "41"))),
-    ids = ids, existing = empty_questionnaire(), options = no_options)
-  groups <- built$items[built$items$entity_name == "component" & built$items$attribute_name == "component_type_id" & built$items$new_value == "8", ]
-  expect_equal(nrow(groups), 1)
-  # one the database has is used
-  there <- utils::modifyList(no_options, list(components = data.frame(component_id = 77, component_type_id = 8, text = NA_character_)))
-  reused <- extraction_service_build_items(draft, extraction_service_info(list(info = list(questionnaire_id = "7", wave_id = "41"))),
-    ids = ids, existing = empty_questionnaire(), options = there)
-  expect_false(any(reused$items$entity_name == "component" & reused$items$new_value %in% "8"))
-  expect_equal(sum(reused$items$attribute_name == "component_id" & reused$items$new_value == "77"), 2)
+test_that("a wave that asks questions already, and a questionnaire with none, are refused with what to do", {
+  me <- local_staff()
+  tree <- local_tree()
+  catalog <- questionnaire_service_get_catalog(test_connection)
+  local_pushed_questionnaire(me, tree, marked_draft())
+
+  # the wave asks questions now: another draft can't go into it until it is emptied
+  other <- saved_draft(me, tree, marked_draft())
+  refused <- error_text(extraction_service_push(test_connection, other, me, catalog))
+  expect_match(refused, "already asks 2 question")
+  expect_match(refused, "Empty it first (Metadata > the wave > Empty)", fixed = TRUE)
+  expect_match(error_text(extraction_service_push_preview(test_connection, other, me)), "Empty it first", fixed = TRUE)
+  expect_equal(extraction_model_get(test_connection, other$id)$status, "Draft") # nothing was written
+  expect_equal(database_model_count(test_connection, "wave_question", list(wave_id = database_eq(tree$wave$wave_id))), 2)
+
+  # a draft typed by hand whose questionnaire was never given a question
+  free <- local_wave(tree$questionnaire)
+  typed <- do.call(local_manual_extraction, c(list(me), picked_basic_info(tree, wave_id = free$wave_id)))
+  expect_match(error_text(extraction_service_push(test_connection, typed, me, catalog)), "no questions")
+  expect_equal(database_model_count(test_connection, "wave_question", list(wave_id = database_eq(free$wave_id))), 0)
 })
 
-test_that("a grid is placed with its lead-in, and says where it skips as a group does", {
-  ids <- no_ids
-  ids$component_types <- rbind(ids$component_types, data.frame(component_type_id = 9, name = "Grid"))
-  question <- function(number) {
-    list(
-      component_type = "Question", text = paste("item", number), printed_number = number,
-      variables = list(list(variable_type = "closed_ended", matr_id = paste0("m", number), response_options = list(list(answer_option = "Yes"), list(answer_option = "No"))))
-    )
-  }
-  draft <- draft_service_from_json(list(components = list(
-    list(component_type = "Grid", text = "In the past year, did you", skip_condition = "No", skip_instruction = "Go to Question 24",
-         children = list(question("22a"), question("22b"))),
-    question("24")
-  )))
-  built <- extraction_service_build_items(draft, extraction_service_info(list(info = list(questionnaire_id = "7", wave_id = "41"))),
-    ids = ids, existing = empty_questionnaire(), options = no_options)
-  items <- built$items
-  expect_true('Insert component {"component_id":"new:component:1"} text: - -> In the past year, did you' %in% item_lines(items))
-  grid <- items[items$entity_name == "questionnaire_component" & grepl('"new:questionnaire_component:1"', items$record_identifier), ]
-  expect_equal(grid$new_value[grid$attribute_name == "skip_condition"], "No")
-  expect_equal(grid$new_value[grid$attribute_name == "skip_to_placement_id"], "new:questionnaire_component:4")
-  expect_equal(built$rows$blocks$detail[1], "Grid") # listed, as it has words
+test_that("the preview says what the push would do, and writes nothing", {
+  me <- local_staff()
+  tree <- local_tree()
+  record <- saved_draft(me, tree, marked_draft())
+
+  tried <- extraction_service_push_preview(test_connection, record, me)
+  expect_equal(tried$questions, 2)
+  expect_equal(tried$component_new, 4)
+  expect_equal(tried$variable_new, 2)
+  expect_equal(tried$answer_option_new, 2)
+  expect_equal(tried$tag_new, 1)
+  expect_equal(database_model_count(test_connection, "wave_question", list(wave_id = database_eq(tree$wave$wave_id))), 0)
+  expect_equal(database_model_count(test_connection, "placement", list(questionnaire_id = database_eq(tree$questionnaire$questionnaire_id))), 0)
+  expect_equal(extraction_model_get(test_connection, record$id)$status, "Draft")
+
+  # the push then does exactly what the preview said
+  done <- extraction_service_push(test_connection, record, me, questionnaire_service_get_catalog(test_connection))
+  did <- c("component_new", "placement_new", "wave_question_new", "variable_new", "response_option_new", "answer_option_new", "tag_new", "questions")
+  expect_equal(done$counts[did], tried[did])
+  expect_equal(done$record$status, "Pushed")
+})
+
+test_that("a second wave of the same questionnaire reuses its blocks and variables, and only asks the questions anew", {
+  me <- local_staff()
+  tree <- local_tree()
+  draft <- marked_draft() # the same words and MATR IDs both times
+  local_pushed_questionnaire(me, tree, draft)
+  later <- local_wave(tree$questionnaire)
+  again <- saved_draft(me, tree, draft, wave_id = later$wave_id)
+
+  outcome <- extraction_service_push(test_connection, again, me, questionnaire_service_get_catalog(test_connection))
+  counts <- outcome$counts
+  expect_equal(counts$component_reused, 4)
+  expect_equal(counts$placement_reused, 4)
+  expect_equal(counts$variable_reused, 2)
+  expect_equal(counts$wave_question_new, 2)
+  expect_equal(counts$questions, 2)
+  expect_null(counts$component_new)
+  expect_null(counts$placement_new)
+  expect_null(counts$variable_new)
+  expect_null(counts$answer_option_new) # a variable found again keeps the choices it has
+  expect_equal(outcome$record$status, "Pushed")
+  expect_match(extraction_service_push_summary(counts), "^Adds 4 blocks already there, 4 blocks the questionnaire prints already, 2 questions asked in the wave and 2 variables already there\\.$")
+
+  # the questionnaire prints the four blocks once, with two variables, and each wave asks the two questions
+  questionnaire <- list(questionnaire_id = database_eq(tree$questionnaire$questionnaire_id))
+  expect_equal(database_model_count(test_connection, "placement", questionnaire), 4)
+  expect_equal(database_model_count(test_connection, "variable", questionnaire), 2)
+  expect_equal(database_model_count(test_connection, "wave_question", list(wave_id = database_eq(tree$wave$wave_id))), 2)
+  expect_equal(database_model_count(test_connection, "wave_question", list(wave_id = database_eq(later$wave_id))), 2)
+})
+
+test_that("saving the Basic Info writes where the extraction goes and what it is called, and nothing when nothing changed", {
+  me <- local_staff()
+  tree <- local_tree()
+  catalog <- questionnaire_service_get_catalog(test_connection)
+  record <- local_manual_extraction(me, questionnaire_id = "", wave_id = "")
+  expect_equal(extraction_service_info(record), extraction_service_info())
+  expect_null(record$summary)
+
+  typed <- picked_basic_info(tree)
+  saved <- extraction_service_save_info(test_connection, record, typed, me, catalog)
+  expect_equal(extraction_service_info(saved), typed)
+  expect_equal(saved$summary, paste(name_with_abbreviation(tree$questionnaire$name, tree$questionnaire$abbreviation), tree$wave$name, sep = " · "))
+  expect_gt(saved$revision, record$revision)
+  expect_true(same_staff(saved$saved_by_id, me$staff_id))
+
+  # the same again changes nothing, and asks the database nothing
+  before <- test_requests$count
+  again <- extraction_service_save_info(test_connection, saved, typed, me, catalog)
+  expect_equal(test_requests$count, before)
+  expect_equal(again$revision, saved$revision)
+  expect_equal(extraction_model_get(test_connection, record$id)$revision, saved$revision)
+
+  # not over a save made since the record was read
+  expect_match(error_text(extraction_service_save_info(test_connection, record, typed, me, catalog)), "changed after you opened it")
 })

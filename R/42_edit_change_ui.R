@@ -15,8 +15,7 @@ edit_change_ui <- function(id) {
 edit_reference_kinds <- c(
   registry_id = "registry", principal_investigator_id = "investigator", study_id = "study",
   respondent_type_id = "respondent_type", questionnaire_id = "questionnaire",
-  component_type_id = "component_type", answer_option_ids = "answer_option",
-  component_id = "question" # a scale item's question (the other forms' are only shown for an existing one)
+  component_id = "component" # a scale item's question
 )
 
 # Notes above the form for drop-downs that need a pick and have nothing to pick from.

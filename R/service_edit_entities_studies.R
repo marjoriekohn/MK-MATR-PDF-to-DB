@@ -8,9 +8,10 @@ registry_entity <- list(
   group = "Registries and studies", table = "registry",
   about = "The outermost container: every study, questionnaire and variable belongs to one registry.",
   delete_about = paste0(
-    "A registry holds studies, and they hold everything else. Deleting it deletes every study in ",
-    "it, with all their questionnaires, waves and variables."
+    "A registry can only be deleted once it holds no studies. Empty it first (its contents go, the registry and ",
+    "its studies stay), or delete its studies."
   ),
+  empty_about = "Its studies, questionnaires and waves stay, with nothing printed or asked in them.",
   cards = function(snap, scope) {
     rows <- snap$registry
     n_studies <- count_in(snap$study$registry_id, rows$registry_id)
@@ -49,7 +50,7 @@ investigator_entity <- list(
   group = "Registries and studies", table = "principal_investigator",
   about = "A researcher who leads a study or is its contact.",
   delete_about = paste0(
-    "An investigator can only be deleted once they no longer lead a study. Where they're a study's ",
+    "An investigator can only be deleted once they lead no study. Where they're a study's ",
     "contact, the contact is simply left empty."
   ),
   cards = function(snap, scope) {
@@ -69,21 +70,12 @@ investigator_entity <- list(
     )
   },
   fields = function(snap, mode, row, scope) {
-    contact_for <- if (!is.null(row)) sum(snap$study$contact_principal_investigator_id %in% row$principal_investigator_id) else 0
     list(
       edit_field("name", "Name", required = TRUE),
       edit_field("email", "Email",
         placeholder = "name@vcu.edu",
-        hint = "Needed only for a study's contact.",
         problem = function(value, values) {
-          if (!has_text(value)) {
-            # (the database's rule too: contact_has_email)
-            if (contact_for > 0) {
-              return(sprintf("They're the contact for %s, so they need an email.", edit_count(contact_for, "study", "studies")))
-            }
-            return(NULL)
-          }
-          if (!grepl("^[^@[:space:]]+@[^@[:space:]]+\\.[^@[:space:]]+$", trimws(value))) {
+          if (has_text(value) && !grepl("^[^@[:space:]]+@[^@[:space:]]+\\.[^@[:space:]]+$", trimws(value))) {
             "Type a full email address, like name@vcu.edu."
           }
         }
@@ -107,9 +99,10 @@ study_entity <- list(
   group = "Registries and studies", table = "study",
   about = "One research project run under a registry.",
   delete_about = paste0(
-    "Deleting a study deletes all its questionnaires, with their waves and variables. Registries ",
-    "and investigators are not affected."
+    "A study can only be deleted once it holds no questionnaires. Empty it first (its contents go, the study and ",
+    "its questionnaires stay), or delete its questionnaires."
   ),
+  empty_about = "Its questionnaires and waves stay, with nothing printed or asked in them.",
   cards = function(snap, scope) {
     rows <- snap$study
     n_q <- count_in(snap$questionnaire$study_id, rows$study_id)
@@ -130,25 +123,10 @@ study_entity <- list(
         required = TRUE,
         choices = edit_choices(snap, "registry", blank = "Choose a registry")
       ),
-      edit_field("principal_investigator_id", "Lead investigator", "select",
-        choices = investigators,
-        # one can be picked later, if none was when the study was added
-        locked = if (!is.null(row) && !is.na(row$principal_investigator_id)) "A study's lead investigator never changes once it's recorded."
-      ),
+      edit_field("principal_investigator_id", "Lead investigator", "select", choices = investigators),
       edit_field("contact_principal_investigator_id", "Contact investigator", "select",
         choices = investigators,
-        hint = "Who to contact about this study. They need an email.",
-        problem = function(value, values) {
-          people <- snap$principal_investigator
-          person <- people[key_text(people$principal_investigator_id) %in% value, , drop = FALSE]
-          # (the database's rule too: contact_has_email)
-          if (nrow(person) == 1 && !has_text(person$email)) {
-            sprintf(
-              "%s has no email, so they can't be a study's contact. Add their email first (Update, then Investigator).",
-              person$name
-            )
-          }
-        }
+        hint = "Who to contact about this study."
       ),
       edit_field("name", "Name",
         required = TRUE, placeholder = "e.g. Adult Health Study",

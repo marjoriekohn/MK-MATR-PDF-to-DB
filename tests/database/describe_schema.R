@@ -1,6 +1,7 @@
-# Writes docs/database_tables.md from the live database: every table with its
-# columns, types, defaults and keys, and, if it can, the rules the database
-# enforces on them. Run it from the project folder after a migration:
+# Writes docs/database_tables.md from a database that has the schema the scripts in sql/ build: every
+# table with its columns, types, defaults and keys, and, if it can, the rules the database enforces on
+# them. The file isn't kept in the repository until a database has that schema; run this from the project
+# folder, with .env naming such a database, after a change to the scripts:
 #   Rscript tests/database/describe_schema.R
 #
 # Two sources, and what each can say:
@@ -20,17 +21,12 @@ output_file <- "docs/database_tables.md"
 # The tables in the order a reader meets them, in groups.
 groups <- list(
   "Registries and studies" = c("registry", "principal_investigator", "study"),
-  "Questionnaires and waves" = c("respondent_type", "questionnaire", "wave"),
-  "What is printed" = c(
-    "component_type", "component", "question", "questionnaire_component",
-    "questionnaire_question", "wave_question"
-  ),
-  "Answers" = c("variable", "open_ended", "closed_ended", "answer_option", "option_set", "answer_option_set", "response_option", "subject"),
-  "Classifying questions" = c("category", "question_category", "measurement_scale", "question_scale"),
-  "Staff, drafts and applied changes (not shown to the public dashboard)" = c(
-    "staff", "draft", "draft_review_event", "edit_draft", "extracted_draft", "ai_extracted_draft",
-    "pdf_file", "applied_item"
-  )
+  "Questionnaires and waves" = c("respondent_type", "questionnaire", "wave", "pdf_file"),
+  "What is printed" = c("component", "placement", "wave_question"),
+  "Answers" = c("variable", "answer_option", "response_option"),
+  "Tags" = c("tag", "placement_tag", "variable_tag", "response_option_tag"),
+  "Measurement scales" = c("measurement_scale", "question_scale"),
+  "Staff, extractions and history (not shown to the public dashboard)" = c("staff", "extraction", "history")
 )
 
 # ------ Turning the description into text -------------------------------------
@@ -328,7 +324,7 @@ describe <- function(connection, catalog = NULL, source = "the live database's o
     },
     "",
     paste(
-      "[sql/1_setup.sql](sql/1_setup.sql) builds the database. \"Required?\" is \"yes\" for a column with no",
+      "The scripts in [sql/](../sql) build the database. \"Required?\" is \"yes\" for a column with no",
       "default that can't be left empty; a column that isn't marked can be left out when a row is added."
     ), "",
     body,

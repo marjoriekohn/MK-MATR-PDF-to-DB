@@ -92,7 +92,7 @@ outline_filter <- function() {
 block_kind_descriptions <- c(
   Section = "A part of the questionnaire under a printed heading, holding the blocks printed under it.",
   Grid = "Questions that share a printed lead-in which is part of each one (“In the past 4 weeks, how often” + “have you felt calm?”). Its words are the lead-in; each question's are the rest.",
-  `Group` = "Sets apart blocks that belong together with no words of their own: questions with an instruction or definition only they share, or that skip together. Each question is whole on its own.",
+  `Group` = "Sets apart blocks that belong together with no words of their own: questions with an instruction or definition only they share. Each question is whole on its own.",
   Question = "Asks for one or more answers, each recorded by a variable.",
   Introduction = "Opening words that say what the questionnaire or study is about.",
   Instruction = "Tells respondents how to answer, or says what the questions after it are about.",
@@ -167,34 +167,21 @@ outline_sortable_options <- sortable::sortable_options(
 # The id of the list of words offered for a kind of block, e.g. "edit_extraction-outline-suggest-Section".
 suggest_list_id <- function(ns, component_type) ns(paste0("suggest-", gsub("[^A-Za-z0-9]", "_", component_type)))
 
-# The id of the list of questions every parent-question field offers ("7 · Have you smoked…"). The page
-# script keeps it up to date as blocks move (review.js).
-parent_list_id <- function(ns) ns("parent-questions")
-
-# The id of the list of places a choice can skip to ("32 · Have you smoked…", "Section · Part B…"), which
-# every Skip to field offers. The page script keeps it up to date as blocks move (review.js).
-skip_list_id <- function(ns) ns("skip-targets")
-
 # The outline as a tree.
 # view: `list(selected, collapsed, opened, problems, suggestions, shown)`: what is selected, which
 #   sections and groups are closed, which questions have their panel open, the problems to mark, the words to
 #   offer for each kind of block (`draft_service_text_suggestions()`) and the optional fields added to
 #   variables that have nothing in them yet (`"v12:label"`; see `variable_card()`).
 outline_tree <- function(draft, view, lookups, ns) {
-  # every question's row offers the questions before it; they are worked out once for the whole tree
-  attr(draft, "outline_questions") <- outline_questions(draft)
   div(
     class = "outline-tree",
     outline_list(draft, section = NULL, view, lookups, ns),
     # The words offered as staff type, one list per kind of block, plus the variables' (answer choices, who
-    # they're about and labels), conditions, and the questions and places to skip to
+    # and when they're about, units and labels)
     lapply(names(view$suggestions %||% list()), function(component_type) {
       suggestions(suggest_list_id(ns, component_type), view$suggestions[[component_type]])
     }),
-    variable_editor_lists(ns, lookups, draft),
-    suggestions(ns("conditions"), unique(c("If yes", "If no", stats::na.omit(draft$components$condition)))),
-    suggestions(parent_list_id(ns), attr(draft, "outline_questions")$questions$label),
-    suggestions(skip_list_id(ns), skip_targets(draft)$label)
+    variable_editor_lists(ns, lookups, draft)
   )
 }
 
@@ -252,9 +239,8 @@ question_matr_ids <- function(draft) {
 # typed, blocks dragged, marks). This compares it with `draft` and says what is different: the blocks
 # to take out and to add (only the outermost: a section comes with what is in it), the rows whose
 # words or counts changed, every list's blocks in order (so a block that moved is moved, and a drag the draft refused is put back),
-# each block's display order and label, each question's number, and the questions in printed order
-# (which every parent-question field offers). When much has changed (another draft, say), drawing the
-# outline again is quicker, and this says so.
+# each block's display order and label, and each question's number. When much has changed (another draft,
+# say), drawing the outline again is quicker, and this says so.
 # drawn: The draft as the outline on the page shows it, or `NULL` if it isn't drawn yet.
 # draft: The draft as it is now.
 # most: How many blocks and rows may be drawn before drawing it all is quicker.
@@ -266,8 +252,6 @@ outline_patch <- function(drawn, draft, view, lookups, ns, most = 30, rows = NUL
   if (is.null(drawn)) {
     return(NULL)
   }
-  questions <- outline_questions(draft)
-  attr(draft, "outline_questions") <- questions
   old <- drawn$components
   new <- draft$components
   outermost <- function(ids, blocks) ids[!blocks$parent_id[match(ids, blocks$id)] %in% ids]
@@ -296,27 +280,20 @@ outline_patch <- function(drawn, draft, view, lookups, ns, most = 30, rows = NUL
       ifelse(is.na(new$question_number[is_question]), "?", new$question_number[is_question]), new$id[is_question]
     )),
     labels = stats::setNames(map_rows(new, block_label), new$id),
-    questions = as.list(questions$questions$label),
-    parent_list = parent_list_id(ns),
-    skip_targets = as.list(skip_targets(draft)$label),
-    skip_list = skip_list_id(ns),
     selected = view$selected
   )
 }
 
-# What a block's row is drawn from, as one string per block (named by id): its kind, words, printed
-# number, parent question (as its list names it) and condition, how many blocks it holds, and how many
-# variables it has (its count badge).
+# What a block's row is drawn from, as one string per block (named by id): its kind, words and printed
+# number, how many blocks it holds, and how many variables it has (its count badge).
 # What the page script keeps up to date on its own (selected, checked, problems, numbers, display order)
 # is left out.
 outline_row_signature <- function(draft) {
   blocks <- draft$components
   n_inside <- tabulate(match(blocks$parent_id, blocks$id), nbins = nrow(blocks))
-  questions <- (attr(draft, "outline_questions") %||% outline_questions(draft))$questions
-  parent <- questions$label[match(blocks$parent_question_id, questions$id)]
   n_boxes <- tabulate(match(draft$variables$component_id, blocks$id), nbins = nrow(blocks))
   stats::setNames(
-    paste(blocks$component_type, blocks$text, blocks$printed_number, parent, blocks$condition, n_inside, n_boxes, sep = "\r"),
+    paste(blocks$component_type, blocks$text, blocks$printed_number, n_inside, n_boxes, sep = "\r"),
     blocks$id
   )
 }
@@ -350,8 +327,8 @@ outline_node <- function(block, draft, view, lookups, ns) {
 }
 
 # A row: its kind, its words, how many variables a question has and what there is to fix, and the arrow that
-# opens it in the details (a question's or text block's, and a group's, whose details hold its skip). Clicking a
-# section's or group's row opens or closes it. A section's and a
+# opens it in the details (a question's or text block's). Clicking a section's, grid's or group's row opens or
+# closes it. A section's and a
 # text block's words are typed in the row once its edit button is pressed (a question's in its details), and
 # pointing at the row puts its buttons at its end: edit, change its kind, ungroup, delete. The numbers the
 # site works out (display order, place among the questions) order the blocks but aren't shown.
@@ -371,7 +348,7 @@ outline_row <- function(block, draft, view, ns) {
     if (type == "Group") span(class = "outline-group-note") else outline_text_field(block, view$problems, ns) |> tagAppendAttributes(readonly = NA),
     outline_badges(block, draft, view$problems),
     if (type != "Question") row_actions(block, view$component_types),
-    if (!is_section || type %in% skipping_types) {
+    if (!is_section) {
       review_button(
         app_icon("open"), "select",
         `data-id` = block$id, class = "btn btn-sm btn-icon btn-open", title = "Open in the editor", `aria-label` = "Open in the editor"
@@ -509,17 +486,16 @@ question_panel <- function(block, draft, view, lookups, ns) {
 
 # The details of the block picked in the list, edited beside it.
 # The header is one row: the block's kind, its words (typed there; a group has none) and what there
-# is to fix. Then, for a question, the number printed beside it, its skip logic (`skip_logic()`), its variables
-# and their choices (`question_panel()`); for a section or group, how many
-# blocks it holds, and for a group its skip (`group_skip()`). Its buttons are along the bottom (`detail_actions()`). Fields have a small label above
-# them. They are the list's own (the same `data-field`s), so the page script keeps the row and the details in
-# step as words are typed.
+# is to fix. Then, for a question, the number printed beside it, the earlier question it depends on
+# (`depends_on_field()`), and its variables and their choices (`question_panel()`); for a section, grid or
+# group, how many blocks it holds. Its buttons are along the bottom (`detail_actions()`). Fields have a small
+# label above them. They are the list's own (the same `data-field`s), so the page script keeps the row and the
+# details in step as words are typed.
 # block: One row of a draft's `components`, or `NULL` when nothing is picked.
 block_detail <- function(block, draft, view, lookups, ns) {
   if (is.null(block) || nrow(block) != 1) {
     return(div(class = "detail-empty", "Pick a block in the list to see and edit it here."))
   }
-  attr(draft, "outline_questions") <- outline_questions(draft)
   type <- block$component_type
   problems <- view$problems
   block_problems <- problems$message[problems$id == block$id]
@@ -543,225 +519,43 @@ block_detail <- function(block, draft, view, lookups, ns) {
             detail_field(tagList(app_icon("question_number"), " Question Number"), field_text(
               "components", block, "printed_number",
               placeholder = "None", label = "Question number as printed, e.g. 1a4 (blank if none is printed)", problems = problems
-            ) |> tagAppendAttributes(class = "detail-number"))
+            ) |> tagAppendAttributes(class = "detail-number")),
+            detail_field("Depends on", depends_on_field(block, draft, problems), wide = TRUE)
           ),
-          detail_section("Skip Logic", skip_logic(block, draft, ns)),
           detail_section("Variables", question_panel(block, draft, view, lookups, ns))
         )
       } else if (is_container(type)) {
-        tagList(
-          detail_section(NULL, detail_field("Holds", span(class = "detail-value", plural(sum(draft$components$parent_id %in% block$id), "block")))),
-          detail_section("Who answers it", detail_field("Only for", field_text(
-            "components", block, "condition",
-            placeholder = "Everyone", list = ns("conditions"),
-            label = "Who answers everything in it, e.g. female (blank for everyone)", problems = problems
-          ))),
-          if (type %in% skipping_types) detail_section("Skip", group_skip(block, draft, problems, ns))
-        )
+        detail_section(NULL, detail_field("Holds", span(class = "detail-value", plural(sum(draft$components$parent_id %in% block$id), "block"))))
       }
     ),
     detail_actions(block, block_problems)
   )
 }
 
-# A question's skip conditions and logic: who sees it, in sentences.
-# - Shown only for some answers to an earlier question (its parent): "This question is only shown to
-#  respondents if they answered **“Yes”** to **“Do you smoke?”**", a link to that question. Picked with Add
-#  Skip Logic, the answers are the ones picked (its condition); otherwise they are worked out from the
-#  parent's Skip tos (on a choice, or a write-in): the ones that don't skip past it. With neither, it reads
-#  "depending on how they answered".
-# - Shown only to some respondents: "This question is only shown to respondents who are:
-#  **Twins**" (its condition, when it has no parent picked).
-# - Skipped by a group's skip: "Respondents who answer **“No”** to every question in **the group with
-#  questions 22a–22d** skip this question", a link to the group (`draft_service_group_skipped()`).
-# The question is named by its words, in full, and they and the answers are in quotes. A sentence staff added
-# has a delete button that takes it away; one worked out from a Skip to goes when the Skip to does. More is
-# added with + Skip Logic, at the bottom of the details.
+# The earlier question a question depends on, picked from the questions printed before it ("7 · Have you
+# smoked…"); the blank choice means it stands on its own. A question it depends on that isn't printed before
+# it still shows, marked, and the checks point it out.
 # block: One row of a draft's `components`: a question.
-# draft: A draft, with its `outline_questions` attribute.
-skip_logic <- function(block, draft, ns) {
-  blocks <- draft$components
-  derived <- isTRUE(block$parent_from_skip)
-  has_parent <- !is.na(block$parent_question_id)
-  sentences <- list(
-    if (has_parent) {
-      # the answers picked, or else those the parent's skips leave to reach it
-      answers <- if (derived || is.na(block$condition)) skip_answers(draft, block$id, block$parent_question_id) else condition_answers(block$condition)
-      parent <- blocks[blocks$id == block$parent_question_id, , drop = FALSE]
-      words <- quoted(blank_if_na(parent$text))
-      skip_sentence(
-        review_button(
-          # which answers isn't known for a parent the AI read without them
-          if (is.null(answers)) {
-            tagList("This question is only shown to respondents depending on how they answered ", strong(words))
-          } else {
-            tagList("This question is only shown to respondents if they answered ", strong(answers), " to ", strong(words))
-          },
-          "select", `data-id` = parent$id, class = "btn btn-link skip-link", title = "Go to that question"
-        ),
-        if (derived) span(class = "detail-note", "from a Skip to in that question") else remove_logic_button(block, "answer")
-      )
-    },
-    if (!is.na(block$condition) && (!has_parent || derived)) {
-      skip_sentence(
-        span(class = "skip-text", "This question is only shown to respondents who are: ", strong(block$condition)),
-        remove_logic_button(block, "condition")
-      )
-    }
-  )
-  # for whoever the sections, grids and groups it is in are for
-  for (holder in rev(draft_service_ancestors(draft, block$id))) {
-    held_by <- blocks[blocks$id == holder, , drop = FALSE]
-    if (is.na(held_by$condition)) next
-    sentences[[length(sentences) + 1]] <- skip_sentence(review_button(
-      tagList("Everything in ", strong(container_name(draft, held_by)), " is only shown to respondents who are: ", strong(held_by$condition)),
-      "select", `data-id` = holder, class = "btn btn-link skip-link", title = "Go to it"
-    ))
-  }
-  # skipped by a group's skip, on the answers to the questions in it
-  by <- draft_service_group_skipped(draft)
-  group <- blocks[blocks$id %in% by$group[by$question == block$id], , drop = FALSE]
-  if (nrow(group) == 1) {
-    sentences[[length(sentences) + 1]] <- skip_sentence(
-      review_button(
-        tagList(
-          "Respondents who answer ", strong(if (is.na(group$skip_condition)) "as it says" else quoted(group$skip_condition)),
-          " to ", if (identical(group$skip_when, "any")) "any" else "every", " question in ", strong(group_name(draft, group$id)),
-          " skip this question"
-        ),
-        "select", `data-id` = group$id, class = "btn btn-link skip-link", title = "Go to that group"
-      ),
-      span(class = "detail-note", "from the Skip in that group")
-    )
-  }
-  sentences <- Filter(Negate(is.null), sentences)
-  div(
-    class = "skip-logic is-wide",
-    if (length(sentences) == 0) p(class = "detail-note", "Every respondent sees this question.") else sentences
-  )
-}
-
-skip_sentence <- function(...) div(class = "skip-sentence", ...)
-
-# A group's skip, on the answers to the questions in it, in its details: "If they answer [No] to [every
-# question] in this group, skip to [28 · …]", then the routing as printed. Left empty, the group doesn't skip.
-# Where it skips to is picked like a choice's (`skip_fields()`); "every question" is what an empty
-# `skip_when` means.
-# block: One row of a draft's `components`: a group.
-# draft: A draft, with its `outline_questions` attribute.
-# problems: The checks' problems, to outline a field at fault.
-group_skip <- function(block, draft, problems, ns) {
+depends_on_field <- function(block, draft, problems) {
+  questions <- outline_questions(draft)$questions
+  earlier <- questions[questions$position < questions$position[questions$id == block$id], , drop = FALSE]
   tagList(
-    detail_field(
-      "Skips when", wide = TRUE,
-      div(
-        class = "variable-skip group-skip",
-        span(class = "variable-skip-words", "If they answer"),
-        field_text(
-          "components", block, "skip_condition",
-          placeholder = "e.g. No", list = ns("answer-options"), label = "The answer that skips, e.g. No", problems = problems
-        ),
-        span(class = "variable-skip-words", "to"),
-        field_select(
-          "components", block, "skip_when", c(`any question` = "any", `every question` = "every"),
-          blank = "every question", label = "Every question in the group, or any", problems = problems
-        ),
-        span(class = "variable-skip-words", "in this group, skip to"),
-        skip_fields(block, problems, ns, skip_targets(draft), table = "components")
-      )
+    field_select(
+      "components", block, "parent_question_id", stats::setNames(earlier$id, earlier$label),
+      blank = "Stands on its own", optional = TRUE, label = "The earlier question this one depends on", problems = problems
     ),
-    detail_field(
-      "As printed", wide = TRUE,
-      field_text(
-        "components", block, "skip_instruction",
-        placeholder = "e.g. If you answered No to items 22a-d, go to Question 28", label = "The skip as printed", problems = problems
-      )
-    )
-  )
-}
-
-# A section, grid or group in a sentence: the section “part a: your health”, the grid “during the worst time:”, or
-# a group by the questions in it (group_name()).
-container_name <- function(draft, block) {
-  if (block$component_type == "Group" || is.na(block$text)) {
-    return(group_name(draft, block$id))
-  }
-  paste0("the ", tolower(block$component_type), " ", quoted(shorten(block$text, 60)))
-}
-
-# A group by the questions in it: "the group with questions 22a–22d", "the group with question 5", or "the group".
-group_name <- function(draft, id) {
-  inside <- draft_service_printed_order(draft, id)
-  questions <- draft$components[match(inside, draft$components$id), , drop = FALSE]
-  numbers <- draft_service_question_number(questions[questions$component_type %in% "Question", , drop = FALSE])
-  numbers <- numbers[!is.na(numbers) & nzchar(numbers)]
-  if (length(numbers) == 0) {
-    return("the group")
-  }
-  if (length(numbers) == 1) paste("the group with question", numbers) else paste0("the group with questions ", numbers[1], "\u2013", numbers[length(numbers)])
-}
-
-# What a group's skip says, in a sentence: "If they answer “no” to every question in this group, they skip to
-# 28 · Have you…". `targets` names where it goes (`skip_targets()`).
-group_skip_text <- function(block, targets) {
-  answer <- if (is.na(block$skip_condition)) "the answer that skips" else quoted(block$skip_condition)
-  when <- if (identical(block$skip_when, "any")) "any" else "every"
-  to <- targets$label[match(block$skip_to_id, targets$id)]
-  paste0(
-    "If they answer ", answer, " to ", when, " question in this group, they skip to ",
-    if (is.na(to)) "(where isn't picked yet)" else to
+    p(class = "detail-note", "The earlier question this one only makes sense after (a follow-up, e.g. “When did you start?” after “Do you smoke?”).")
   )
 }
 
 # Words in curly quotes: “Yes”. None gives none (recycle0), not an empty pair of quotes.
 quoted <- function(words) paste0("“", words, "”", recycle0 = TRUE)
 
-remove_logic_button <- function(block, kind) {
-  review_button(
-    app_icon("delete"), "remove_logic", `data-id` = block$id, `data-kind` = kind,
-    class = "btn btn-sm btn-icon field-remove", title = "Take this skip logic away", `aria-label` = "Take this skip logic away"
-  )
-}
-
-# The answers a question's condition names when staff picked them ("Yes or Sometimes"), each in quotes; a
-# printed "If yes" reads “yes”. NULL when it names none.
-condition_answers <- function(condition) {
-  if (is.na(condition)) NULL else paste(quoted(condition_answer_list(condition)), collapse = " or ")
-}
-
-# The answers a condition names, without quotes: "Yes or Sometimes" is "Yes" and "Sometimes".
-condition_answer_list <- function(condition) {
-  if (is.na(condition)) character() else strsplit(sub("(?i)^if\\s+", "", trimws(condition), perl = TRUE), " or ", fixed = TRUE)[[1]]
-}
-
-# The answers to `parent` that show `id`, worked out from the skips on `parent`: of each variable whose choices
-# skip past `id`, the choices that don't; of each write-in that does, anything but the answer that skips.
-# id: The question shown only for some answers.
-# parent: The question with the skips.
-# Returns: Text such as "“Yes”" or "“Yes” or “Sometimes”" or "anything but “None”", or
-#   `NULL` when none can be said.
-skip_answers <- function(draft, id, parent) {
-  printed <- draft_service_printed_order(draft)
-  place <- match(id, printed)
-  past <- function(to) ifelse(to == skip_to_end_id, TRUE, match(to, printed) > place) %in% TRUE
-  skips <- draft_service_skips(draft)
-  skips <- skips[skips$source %in% parent & past(skips$to), , drop = FALSE]
-  answers <- character()
-  for (box in unique(skips$variable_id[skips$table == "response_options"])) {
-    choices <- draft_service_children(draft, "response_options", box)
-    stays <- is.na(choices$skip_to_id) | !past(choices$skip_to_id)
-    answers <- c(answers, quoted(choices$answer_option[stays & !is.na(choices$answer_option)]))
-  }
-  writes <- skips[skips$table == "variables" & !is.na(skips$skip_condition), , drop = FALSE]
-  answers <- unique(c(answers, paste0("anything but ", quoted(writes$skip_condition), recycle0 = TRUE)))
-  if (length(answers) == 0) NULL else paste(answers, collapse = " or ")
-}
-
-# The details' buttons, along the bottom, the same size and evenly spaced: for a question Verify, + Skip
-# Logic, + Variable and Delete; for another block Verify and Delete; for a section or group Ungroup and
-# Delete. Verify marks it as checked and goes to the next block (the page script keeps it up to date as the
-# checks run); it waits until nothing is left to fix (it says so when pointed at). A section or group has no
-# Verify: it is checked once everything in it is. On a phone they are only their icons.
+# The details' buttons, along the bottom, the same size and evenly spaced: for a question Verify, + Variable
+# and Delete; for another block Verify and Delete; for a section or group Ungroup and Delete. Verify marks it as
+# checked and goes to the next block (the page script keeps it up to date as the checks run); it waits until
+# nothing is left to fix (it says so when pointed at). A section or group has no Verify: it is checked once
+# everything in it is. On a phone they are only their icons.
 # block: One row of a draft's `components`.
 # block_problems: Its problems, as sentences.
 detail_actions <- function(block, block_problems) {
@@ -783,12 +577,7 @@ detail_actions <- function(block, block_problems) {
         )
       )
     },
-    if (block$component_type == "Question") {
-      tagList(
-        button("add", "Skip Logic", "add_skip_logic", title = "Add skip logic: who sees this question"),
-        button("add", "Variable", "pick_variable", title = "Add a variable")
-      )
-    },
+    if (block$component_type == "Question") button("add", "Variable", "pick_variable", title = "Add a variable"),
     if (is_container(block$component_type)) {
       button(
         "ungroup", if (block$component_type == "Section") "Remove heading, keep contents" else "Ungroup", "ungroup",
@@ -803,88 +592,7 @@ detail_actions <- function(block, block_problems) {
   )
 }
 
-skip_logic_choice_modal <- function(ns) {
-  modalDialog(
-    title = "Add Skip Logic", easyClose = TRUE, footer = modalButton("Cancel"),
-    div(
-      class = "logic-choices",
-      actionButton(
-        ns("logic_answer"), class = "logic-choice",
-        label = tagList(
-          app_icon("skip_answer"),
-          span("This question is only shown to the respondent if they answered another question with a specific answer")
-        )
-      ),
-      actionButton(
-        ns("logic_condition"), class = "logic-choice",
-        label = tagList(
-          app_icon("skip_respondent"),
-          span("This question is only shown to the respondent if they meet a specific condition or characteristic (e.g., “Female”, “Twins”)")
-        )
-      )
-    )
-  )
-}
-
-# Shown only for some answers to an earlier question: the question, picked from those before it, then its answers.
-skip_logic_answer_modal <- function(ns, draft, id) {
-  questions <- outline_questions(draft)$questions
-  place <- questions$position[questions$id == id]
-  earlier <- questions[questions$position < place, , drop = FALSE]
-  block <- draft$components[draft$components$id == id, , drop = FALSE]
-  current <- if (!is.na(block$parent_question_id) && !isTRUE(block$parent_from_skip)) block$parent_question_id else ""
-  confirm_dialog(
-    "Shown only for some answers",
-    selectizeInput(
-      ns("logic_parent"), "The earlier question",
-      choices = c("Pick a question" = "", stats::setNames(earlier$id, earlier$label)), selected = current, width = "100%"
-    ),
-    uiOutput(ns("logic_answers")),
-    confirm_id = ns("logic_answer_save"), confirm_label = "Save", keep_label = "Cancel", easy_close = TRUE
-  )
-}
-
-# The answers of the earlier question picked: its choices to tick, or, for a question without choices, the
-# answer typed. Those staff picked before are ticked again.
-skip_logic_answer_choices <- function(ns, draft, id, parent) {
-  if (is.null(parent) || !nzchar(parent)) {
-    return(p(class = "detail-note", "Pick the earlier question first."))
-  }
-  answers <- skip_logic_parent_answers(draft, parent)
-  block <- draft$components[draft$components$id == id, , drop = FALSE]
-  before <- if (identical(block$parent_question_id, parent)) condition_answer_list(block$condition) else character()
-  if (length(answers) > 0) {
-    checkboxGroupInput(
-      ns("logic_answer_picks"), "The answers that show this question",
-      choices = answers, selected = answers[tolower(answers) %in% tolower(before)]
-    )
-  } else {
-    textInput(ns("logic_answer_text"), "The answer that shows this question", value = paste(before, collapse = " or "), placeholder = "e.g. More than 5")
-  }
-}
-
-# The choices an earlier question offers, each once, in printed order.
-skip_logic_parent_answers <- function(draft, parent) {
-  boxes <- draft_service_children(draft, "variables", parent)
-  choices <- draft$response_options[draft$response_options$variable_id %in% boxes$id, , drop = FALSE]
-  choices <- choices[order(match(choices$variable_id, boxes$id), choices$display_order), , drop = FALSE]
-  unique(choices$answer_option[!is.na(choices$answer_option)])
-}
-
-# Shown only to some respondents: who they are, in a word or two ("Twins", "Female", "Parents").
-skip_logic_condition_modal <- function(ns, current = NA) {
-  confirm_dialog(
-    "Shown only to some respondents",
-    textInput(
-      ns("logic_condition_text"), "This question is only shown to respondents who are:",
-      value = blank_if_na(current), placeholder = "e.g. Twins, Female, Parents", width = "100%"
-    ),
-    p(class = "detail-note", "A question picked as the one this question follows is taken away: a question has one condition."),
-    confirm_id = ns("logic_condition_save"), confirm_label = "Save", keep_label = "Cancel", easy_close = TRUE
-  )
-}
-
-# A draft's questions in printed order, each with its place and its label in the parent-question list
+# A draft's questions in printed order, each with its place and its label in the Depends on list
 # ("1a · Do you smoke?"), and every block's id in printed order.
 outline_questions <- function(draft) {
   printed <- draft_service_printed_order(draft)

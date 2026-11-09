@@ -21,7 +21,7 @@ ai_page <- function(me, extractions = test_extractions()) {
 
 # Removes the drafts this page made when the test ends.
 local_page_drafts <- function(me, env = parent.frame()) {
-  withr::defer(test_delete("draft", list(prepared_by = database_eq(me$staff_id), status = "neq.Applied")), envir = env)
+  withr::defer(test_delete(extraction_table, list(prepared_by = database_eq(me$staff_id), status = database_eq("Draft"))), envir = env)
 }
 
 test_that("the files chosen can be swapped until Begin Extraction, which makes the draft with them; then they can't", {

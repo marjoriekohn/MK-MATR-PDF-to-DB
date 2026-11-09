@@ -4,22 +4,16 @@
 #   queued -> sent -> received -> [assigning] -> ready      or stops at failed
 # and saves the questionnaire it read. Manual: staff type the questionnaire themselves, with or
 # without a PDF to look at, and there is no reading. Either way staff edit a copy on the Edit
-# Extraction page (see draft_service_load()). `status` belongs to the draft: Draft until its
-# change request is submitted, Awaiting Review while it waits for approval, Sent Back when a
-# reviewer returns it, Applied once it is in the MATR metadata database. A draft that is discarded is
-# deleted. An applied one is kept whole, with its PDF and reading (what the AI read and how staff changed
-# it, for analysis); Edit History lists the rows it added.
+# Extraction page (see draft_service_load()), say where it goes (its Basic Info) and push it into the
+# MATR metadata database from there (service_extraction_push.R). `status` is Draft until then, and
+# Pushed after: a pushed extraction is kept whole, with its PDF and reading (what the AI read and how
+# staff changed it: the AI Monitor reads those), and leaves the Drafts page. A draft that is discarded
+# is deleted.
 # `info` is where it goes in the database (its Basic Info): a recorded registry, study,
 # questionnaire and one of that questionnaire's waves that asks no questions yet, each saved as
-# its ID (text). It is picked on Change Requests, after the change request is submitted, so a draft
-# can have none; anything that isn't recorded yet is added from the form's drop-downs first.
+# its ID (text). It is picked on the Edit Extraction page before the push, so a draft can have none;
+# anything that isn't recorded yet is added from the form's drop-downs first.
 # Records are kept in the database (model_extraction.R); `connection` is the one made in global.R.
-
-extraction_open_statuses <- c("Draft", "Sent Back")
-
-# The drafts whose questionnaire and wave another draft mustn't take as well: those still being
-# prepared, and those waiting for approval.
-extraction_pending_statuses <- c(extraction_open_statuses, "Awaiting Review")
 
 # Where an extraction goes: the IDs of a recorded registry, study, questionnaire and wave.
 extraction_info_fields <- c("registry_id", "study_id", "questionnaire_id", "wave_id")
@@ -39,10 +33,14 @@ extraction_service_is_reading <- function(records, me) {
   any(vapply(mine, function(record) isTRUE(record$extraction_status %in% reading_statuses), logical(1)))
 }
 
-# The drafts still being prepared: not yet submitted, or sent back.
+# The drafts still being prepared: not pushed yet.
 # records: A list of extraction records.
+# prepared_by_id: Only those this staff member started, if given.
 extraction_service_open_drafts <- function(records, prepared_by_id = NULL) {
-  draft_row_service_open(records, extraction_open_statuses, prepared_by_id)
+  Filter(function(record) {
+    identical(record$status, "Draft") &&
+      (is.null(prepared_by_id) || same_staff(record$prepared_by_id, prepared_by_id))
+  }, records)
 }
 
 # A record's info with every field present.
@@ -59,7 +57,7 @@ extraction_service_info <- function(record = NULL) {
   stats::setNames(info, extraction_info_fields)
 }
 
-# An extraction's Basic Info, as the Change Requests form holds it.
+# An extraction's Basic Info, as the form holds it.
 # The form picks a recorded registry, study, questionnaire and wave (one that asks no questions yet);
 # anything new is added from its drop-down first, so its "+ Add new …" choice isn't a pick.
 # info: Where it goes, as `extraction_service_info()` returns it, or the form's picks.
@@ -96,20 +94,27 @@ extraction_service_is_read <- function(record) {
 
 # ------ Changing a draft -----------------------------------------------------------
 # Start an AI-Powered draft for an uploaded PDF.
-# Reading starts at once; what staff typed before uploading comes with it. A file that
-# isn't a PDF is turned away with a sentence.
+# Reading starts at once. A file that isn't a PDF is turned away with a sentence.
 # upload: One row of a `fileInput`'s value: `name`, `size`, `datapath`.
 # staff: Who is preparing it: `list(staff_id, name, role)`.
+# supplement: The optional file of MATR IDs and codes, as `upload`; or `NULL`.
 extraction_service_create <- function(connection, upload, staff,
                                       info = extraction_service_info(), now = Sys.time(), supplement = NULL) {
-  record <- list(
+  pdf <- store_pdf(connection, upload)
+  stored <- if (!is.null(supplement)) store_supplement(connection, supplement)
+  extraction_model_create(connection, new_ai_record(staff, pdf, stored, info, now))
+}
+
+# An AI-Powered draft that starts being read at once: its PDF (and file of Variable Names and Coding) kept already.
+new_ai_record <- function(staff, pdf, supplement, info, now) {
+  list(
     status = "Draft",
     method = extraction_ai,
     prepared_by = staff$name,
     prepared_by_id = staff$staff_id,
     started = format_time(now),
     saved = format_time(now),
-    pdf = store_pdf(connection, upload),
+    pdf = pdf,
     extraction_status = "queued",
     reading_started = format_time(now),
     reading_claimed_at = NULL,
@@ -117,9 +122,43 @@ extraction_service_create <- function(connection, upload, staff,
     error = NULL,
     info = info,
     matr_csv = NULL,
-    supplement = if (!is.null(supplement)) store_supplement(connection, supplement)
+    supplement = supplement
   )
-  extraction_model_create(connection, record)
+}
+
+# Re-extract a wave (Make an edit): empty it, then start a new AI-Powered extraction of it from the files it
+# was extracted from (its PDF, and the Variable Names and Coding if it had them, kept with the wave), with the
+# extraction prompt as it is now. The new draft goes into the same registry, study, questionnaire and wave,
+# which asks nothing now, and is reviewed and pushed like any other. The emptying is written to the history.
+# wave_id: The wave.
+# place: Where the wave is: `registry_id`, `study_id` and `questionnaire_id`.
+# me: Who starts it: `list(staff_id, name, role)`.
+# Returns: The new draft's record, being read. An error with a sentence if the wave has no PDF to read again
+#   (then nothing is emptied).
+extraction_service_reextract_wave <- function(connection, wave_id, place, me, now = Sys.time()) {
+  file <- extraction_model_wave_files(connection, wave_id)
+  if (is.null(file) || is.na(file$pdf_sha256 %||% NA)) {
+    stop("This wave wasn't extracted from a PDF on this site, so there is nothing to read again. Start a New Extraction with its PDF instead.", call. = FALSE)
+  }
+  path <- tryCatch(extraction_model_local_pdf(connection, file$pdf_sha256), error = function(problem) NULL)
+  if (is.null(path)) stop("The wave's PDF (", file$pdf_name, ") couldn't be fetched from Storage. Start a New Extraction with it instead.", call. = FALSE)
+  pdf <- list(
+    name = file$pdf_name, path = path, pages = extraction_model_page_count(path), bytes = file.size(path),
+    sha256 = file$pdf_sha256
+  )
+  supplement <- if (!is.na(file$supplement_sha256 %||% NA)) {
+    coding <- tryCatch(extraction_model_local_pdf(connection, file$supplement_sha256), error = function(problem) NULL)
+    if (is.null(coding)) stop("The wave's Variable Names and Coding (", file$supplement_name, ") couldn't be fetched from Storage.", call. = FALSE)
+    list(name = file$supplement_name, sha256 = file$supplement_sha256, bytes = file.size(coding))
+  } else if (!is.na(file$supplement_text %||% NA)) {
+    list(name = file$supplement_name, text = file$supplement_text)
+  }
+  database_model_call(connection, "empty_wave", list(p_wave_id = database_number(wave_id), p_staff_id = database_number(me$staff_id)))
+  info <- extraction_service_info(list(info = list(
+    registry_id = place$registry_id, study_id = place$study_id, questionnaire_id = place$questionnaire_id,
+    wave_id = as.character(wave_id)
+  )))
+  extraction_model_create(connection, new_ai_record(me, pdf, supplement, info, now))
 }
 
 # Start a Manual draft: the questionnaire is typed by hand.
@@ -148,14 +187,13 @@ extraction_service_create_manual <- function(connection, staff, info = extractio
 # me: Who asks: `list(staff_id, name, role)`.
 # Returns: The record as saved.
 extraction_service_retry <- function(connection, id, me) {
-  change_record(connection, id, me, restart_reading, new_revision = FALSE)
+  change_record(connection, id, me, restart_reading)
 }
 
 # Read an AI-Powered draft's PDF again from the start, with the extraction prompt as it is now (and its Variable
 # Names and Coding again, if it has the file): Re-extract on the Edit Extraction page. The questionnaire staff
-# reviewed is put aside for the new reading, with what they changed and marked as checked. Not while its change
-# request is waiting for approval (each save is a version the reviewer reads), and not if someone else saved it
-# after `expected_revision`.
+# reviewed is put aside for the new reading, with what they changed and marked as checked. Not if someone else
+# saved it after `expected_revision`.
 # me: Who asks: `list(staff_id, name, role)`.
 # expected_revision: The revision the person was looking at, or `NULL` not to check.
 # Returns: The record as saved, being read. An error with a sentence if it can't be read again.
@@ -164,14 +202,11 @@ extraction_service_reextract <- function(connection, id, me, expected_revision =
   if (!identical(record$method, extraction_ai)) {
     stop("Only an AI-Powered extraction is read from its PDF. This one was typed by hand.", call. = FALSE)
   }
-  if (identical(record$status, "Awaiting Review")) {
-    stop("It is waiting for approval on Change Requests. It can be read again once it is sent back.", call. = FALSE)
-  }
   if (is.null(extraction_service_pdf(connection, record))) {
     stop("Its PDF isn't on this site any more, so it can't be read again.", call. = FALSE)
   }
-  draft_model_clear_reviewed(connection, id, me$staff_id, expected_revision)
-  change_record(connection, id, me, restart_reading, new_revision = FALSE)
+  extraction_model_clear_questionnaire(connection, id, me$staff_id, expected_revision)
+  change_record(connection, id, me, restart_reading)
 }
 
 # The reading job saying how far it has got.
@@ -187,19 +222,18 @@ extraction_service_reading_update <- function(connection, id, reading_started, c
   extraction_model_save_reading(connection, id, changes, reading_started)
 }
 
-# Discard a draft: it is deleted from the database, with its PDF when no other draft uses the file.
-# Nobody has to approve it, but only the person who prepared it can, and not once it is applied.
+# Discard a draft: it is deleted from the database, with its PDF when nothing else uses the file.
+# Only a draft: a pushed extraction is kept.
 # me: Who discards it: `list(staff_id, name, role)`.
 # Returns: Called for its effect. An error with a sentence if the database refused.
 extraction_service_discard <- function(connection, id, me) {
   record <- extraction_model_get(connection, id)
-  extraction_model_discard(connection, id, me$staff_id)
+  extraction_model_discard(connection, id)
   extraction_service_forget_pdf(connection, record)
   invisible()
 }
 
-# Remove a discarded draft's PDF from Storage when no other draft, and no wave, uses the file. An applied
-# extraction keeps its files: its wave names them (wave_file).
+# Remove a discarded draft's PDF from Storage when no other extraction, and no wave, uses the file.
 # The draft is already gone, so a file that can't be removed only stays behind in Storage: that is a
 # warning in the log, not an error.
 # record: The draft's record, as it was.
@@ -251,7 +285,7 @@ extraction_service_load_draft <- function(connection, record) {
 # Returns: A list: `draft` (see `extraction_service_load_draft()`) and `original`, what the AI returned
 #   as a draft (`NULL` for a Manual extraction). An error if reading hasn't finished.
 extraction_service_open_draft <- function(connection, record) {
-  json <- draft_model_get_both(connection, record$id)
+  json <- extraction_model_questionnaire(connection, record$id)
   if (is.null(json$questionnaire %||% json$original)) stop("This draft hasn't been read yet.", call. = FALSE)
   list(
     draft = draft_service_from_json(json$questionnaire %||% json$original),
@@ -371,7 +405,7 @@ count_state <- function(n_done, n_total) {
 }
 
 # ------ Naming ---------------------------------------------------------------------
-# A card's title: where it goes, once that is picked on Change Requests; until then the PDF's file name.
+# A card's title: where it goes, once that is picked; until then the PDF's file name.
 # The name the AI read off the PDF isn't used: it is often a heading inside the questionnaire.
 # Returns: A string such as `"Adult Health and Personality (AHP) · Wave 3"`.
 extraction_service_title <- function(record, catalog) {
@@ -394,7 +428,7 @@ extraction_service_wave_name <- function(info, catalog) {
 }
 
 # The Edit Extraction page's heading.
-# Until staff say where it goes on Change Requests, it goes by the PDF's file name (the name the AI read off
+# Until staff say where it goes, it goes by the PDF's file name (the name the AI read off
 # the PDF is often a heading inside it), or "Unnamed questionnaire" for one typed by hand without a PDF.
 # Returns: A list: `title` (e.g. `"AHP · Wave 3"`) and `subtitle` (the full name, or `""`).
 extraction_service_heading <- function(record, catalog) {
@@ -409,7 +443,6 @@ extraction_service_heading <- function(record, catalog) {
     subtitle = if (nzchar(abbreviation)) name else ""
   )
 }
-
 
 # ------ Checks on what staff picked ---------------------------------------------------
 # The Basic Info fields still blank.
@@ -433,8 +466,8 @@ extraction_required_fields <- c(
 
 # A problem with the recorded wave an extraction goes into, or `NULL`.
 # It has to be one of the questionnaire's waves, with no questions yet (an extraction adds every
-# question the wave asks), and no other draft being prepared or waiting for approval may be going into
-# it too.
+# question the wave asks, and the database refuses a push into a wave that asks any: Empty it first on the
+# Metadata page), and no other draft may be going into it too.
 # question_counts: How many questions each of the questionnaire's waves asks: a named integer
 #   vector by wave id (`questionnaire_service_wave_question_counts()`).
 # records: All the extraction records, to find other drafts going into the same wave.
@@ -453,13 +486,14 @@ extraction_service_recorded_wave_problem <- function(info, catalog, question_cou
   n_questions <- question_counts[info$wave_id]
   if (isTRUE(n_questions > 0)) {
     return(sprintf(
-      "%s already asks %s. Pick a wave without questions, or add a new wave.", wave$name, plural(n_questions, "question")
+      "%s already asks %s. Empty the wave first (Metadata page), or pick a wave without questions.",
+      wave$name, plural(n_questions, "question")
     ))
   }
   others <- Filter(function(record) {
     other <- extraction_service_info(record)
     !identical(record$id, id) && identical(other$wave_id, info$wave_id)
-  }, draft_row_service_open(records, extraction_pending_statuses))
+  }, extraction_service_open_drafts(records))
   if (length(others) > 0) {
     who <- if (draft_row_service_is_mine(others[[1]], me)) "You" else others[[1]]$prepared_by %||% "Someone"
     has <- if (identical(who, "You")) "have" else "has"
@@ -472,49 +506,51 @@ extraction_service_recorded_wave_problem <- function(info, catalog, question_cou
 # The blocks a recorded questionnaire prints, and its questions' MATR IDs.
 # For the questionnaire an extraction goes into, the Edit Extraction page offers the blocks it already
 # prints as suggestions while a block's words are typed, and a question with the same words as one the
-# questionnaire already asks keeps its variables' MATR IDs (BR93: a MATR ID names the variable within its
+# questionnaire already asks keeps its variables' MATR IDs (a MATR ID names the variable within its
 # questionnaire), so they are filled in instead of asked for. Until a questionnaire is picked there is
 # nothing.
-# component_types: The kinds of block with their ids; read from the database unless given.
 # Returns: A list of two data frames: `texts` (`component_type`, `text`: one row per block the questionnaire
 #   prints) and `matr_ids` (`text`, `matr_id`, `display_order`: one row per variable, with its question's
 #   words and its place in the question). Both have no rows until a questionnaire is picked.
-extraction_service_recorded <- function(connection, record, component_types = NULL) {
+extraction_service_recorded <- function(connection, record) {
   info <- extraction_service_info(record)
   if (!has_text(info$questionnaire_id)) {
-    return(extraction_service_printed(NULL, component_types))
+    return(extraction_service_printed(NULL, NULL))
   }
-  existing <- push_model_existing(connection, info$questionnaire_id)
-  if (is.null(component_types)) component_types <- lookup_model_get_component_types(connection)
-  extraction_service_printed(existing, component_types)
+  here <- list(questionnaire_id = database_eq(info$questionnaire_id))
+  placements <- database_model_select(
+    connection, "placement", c("placement_id", "component:component(kind,text)"), order_by = "placement_id", filters = here
+  )
+  variables <- database_model_get(
+    connection, "variable", c("variable_key", "placement_id", "matr_id", "display_order"), order_by = "variable_key", filters = here
+  )
+  extraction_service_printed(placements, variables)
 }
 
 # What a recorded questionnaire prints: its blocks' words, and its variables' MATR IDs by question.
-# existing: From `push_model_existing()`, or `NULL` for none.
-# component_types: The kinds of block with their ids; only needed for `texts`.
+# placements: The questionnaire's placements, each with its `component` (`kind`, `text`), as
+#   `extraction_service_recorded()` reads them; or `NULL` for none.
+# variables: Its variables (`placement_id`, `matr_id`, `display_order`), as a data frame.
 # Returns: A list of two data frames, `texts` and `matr_ids`; see `extraction_service_recorded()`.
-extraction_service_printed <- function(existing, component_types = NULL) {
+extraction_service_printed <- function(placements, variables) {
   none <- list(
     texts = data.frame(component_type = character(), text = character()),
     matr_ids = data.frame(text = character(), matr_id = character(), display_order = numeric())
   )
-  if (is.null(existing)) {
+  if (length(placements) == 0) {
     return(none)
   }
-  components <- existing$components
-  type_of <- component_types$name[match(components$component_type_id, component_types$component_type_id)]
-  texts <- if (is.null(component_types)) {
-    none$texts
-  } else {
-    texts <- data.frame(component_type = as.character(type_of), text = as.character(components$text), stringsAsFactors = FALSE)
-    texts[!is.na(texts$text) & !is.na(texts$component_type), , drop = FALSE]
-  }
-  variables <- existing$variables
-  # a variable is its question's placement's, and the placement names the question's words
-  placed <- existing$placements$component_id[match(variables$placement_id, existing$placements$placement_id)]
-  question_text <- components$text[match(placed, components$component_id)]
+  placed <- data.frame(
+    placement_id = vapply(placements, function(row) as.character(row$placement_id), character(1)),
+    component_type = vapply(placements, function(row) as.character(row$component$kind %||% NA), character(1)),
+    text = vapply(placements, function(row) as.character(row$component$text %||% NA), character(1)),
+    stringsAsFactors = FALSE
+  )
+  texts <- unique(placed[!is.na(placed$text), c("component_type", "text"), drop = FALSE])
+  rownames(texts) <- NULL
   matr_ids <- data.frame(
-    text = as.character(question_text), matr_id = as.character(variables$matr_id),
+    text = placed$text[match(as.character(variables$placement_id), placed$placement_id)],
+    matr_id = as.character(variables$matr_id),
     display_order = as.numeric(variables$display_order), stringsAsFactors = FALSE
   )
   list(texts = texts, matr_ids = matr_ids[!is.na(matr_ids$text), , drop = FALSE])
@@ -534,16 +570,14 @@ extraction_service_pdf <- function(connection, record) {
 
 # Every change re-reads the record first, and saves only the fields it
 # changed, so it never undoes what someone else saved since this page read it.
-# `me` is who saves it. `new_revision` is FALSE for a change that isn't to what a
-# reviewer would read (restarting a reading, discarding). `expected_revision`, if given, is the
-# revision the person was looking at: the save is refused if the draft has moved on. Returns the
-# record as saved.
-change_record <- function(connection, id, me, change, new_revision = TRUE, expected_revision = NULL) {
+# `me` is who saves it. `expected_revision`, if given, is the revision the person was looking at: the
+# save is refused if the draft has moved on. Returns the record as saved.
+change_record <- function(connection, id, me, change, expected_revision = NULL) {
   before <- extraction_model_get(connection, id)
   after <- change(before)
   fields <- union(names(before), names(after))
   changed <- fields[!vapply(fields, function(field) identical(before[[field]], after[[field]]), logical(1))]
-  extraction_model_save(connection, after, changed, me$staff_id, expected_revision = expected_revision, new_revision = new_revision)
+  extraction_model_save(connection, after, changed, me$staff_id, expected_revision = expected_revision)
 }
 
 restart_reading <- function(record) {
@@ -560,7 +594,7 @@ store_supplement <- function(connection, upload) {
   ending <- tolower(tools::file_ext(upload$name))
   if (extraction_model_is_pdf(upload$datapath)) {
     sha256 <- extraction_model_sha256(upload$datapath)
-    extraction_model_save_pdf(connection, upload$datapath, sha256)
+    extraction_model_save_pdf(connection, upload$datapath, sha256, extraction_model_page_count(upload$datapath))
     return(list(name = upload$name, sha256 = sha256, bytes = upload$size))
   }
   if (!ending %in% supplement_text_types) {
@@ -574,10 +608,11 @@ store_pdf <- function(connection, upload) {
     stop(upload$name, " isn't a PDF. Choose the questionnaire's PDF file.", call. = FALSE)
   }
   sha256 <- extraction_model_sha256(upload$datapath)
+  pages <- extraction_model_page_count(upload$datapath)
   list(
     name = upload$name,
-    path = extraction_model_save_pdf(connection, upload$datapath, sha256),
-    pages = extraction_model_page_count(upload$datapath),
+    path = extraction_model_save_pdf(connection, upload$datapath, sha256, pages),
+    pages = pages,
     bytes = upload$size,
     sha256 = sha256
   )

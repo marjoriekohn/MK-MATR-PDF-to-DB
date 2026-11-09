@@ -1,6 +1,6 @@
 // ------ A list of things, a card each --------------------------------------------------------------------
-// Drafts (Extraction Drafts), edits (Edit History) and requests (Change Requests): what it is (a
-// title with its badges, then a line of who and when), and its buttons on the right. On a small tablet or a
+// Drafts (Extraction Drafts) and changes (Edit History): what it is (a title with its badges, then a line
+// of who and when), and its buttons on the right. On a small tablet or a
 // phone the buttons go under it, on the right; on a phone they share their row (the action bar).
 .list-card {
   display: flex;
@@ -51,10 +51,3 @@
 // "Show more" under the list
 .list-more { display: flex; justify-content: center; margin: 1.25rem 0; }
 
-// A note on a card, e.g. why a draft was sent back
-.list-card-note {
-  margin: 0.6rem 0 0;
-  padding: 0.5rem 0.8rem;
-  @include note;
-  font-size: $font-size-sm;
-}

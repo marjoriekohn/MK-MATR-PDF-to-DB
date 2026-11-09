@@ -22,33 +22,24 @@ edit_callout <- function(kind, ..., title = NULL, icon_name = NULL) {
 }
 
 # ------ The info block ----------------------------------------------------------------------------
-# Everything staff should know about the edit they are making, in one place under the sentence: what
-# the verb involves for the kind of thing, and what happens when it is sent. Nothing else on the page
-# says these again. `NULL` when there is nothing to say (a plain add or update, applied at once).
+# Everything staff should know about the edit they are making, in one place under the sentence: what the verb
+# involves for the kind of thing. Nothing else on the page says it again. `NULL` when there is nothing to say (a
+# plain add, applied at once).
 # verb: `"add"`, `"update"`, `"delete"`, or `""` while it isn't picked yet.
-# approval: Whether it waits on Change Requests for another staff member's approval.
-# editing_request: Whether a request already waiting for approval is being changed.
-edit_info_block <- function(entity, verb, approval = FALSE, editing_request = FALSE) {
+edit_info_block <- function(entity, verb) {
   doing <- c(add = "Adding", update = "Changing", delete = "Deleting")
   how <- switch(verb,
-    update = c(entity$update_about, "Pick the one to change, then change it. You'll see everywhere it's used before you send it."),
-    delete = c(entity$delete_about, "You'll see everything that goes with it, and confirm, before anything is sent."),
+    update = c(entity$update_about, "Pick the one to change, then change it. You'll see everywhere it's used before you save."),
+    delete = c(entity$delete_about, "You'll see everything that goes with it, and confirm, before anything is deleted."),
     NULL
   )
-  sent <- if (!nzchar(verb)) {
-    NULL
-  } else if (editing_request) {
-    "Saving makes a new version of this request, which nobody has approved yet."
-  } else if (approval) {
-    "Nothing changes in the MATR metadata database until one other staff member approves it on Change Requests."
-  }
-  if (length(c(how, sent)) == 0) {
+  if (length(how) == 0) {
     return(NULL)
   }
   edit_callout(
     if (identical(verb, "delete")) "danger" else "info",
-    title = if (nzchar(verb)) paste(doing[[verb]], entity$article, entity$noun),
-    lapply(c(how, sent), p)
+    title = paste(doing[[verb]], entity$article, entity$noun),
+    lapply(how, p)
   )
 }
 
@@ -152,13 +143,6 @@ edit_field_placeholder <- function(field) {
   paste0(field$label, " (", paste(notes, collapse = ", "), ")")
 }
 
-# A heading above the fields of one part of a form that is several rows.
-# title: The heading.
-# why: A sentence under it, or `NULL`.
-edit_part_heading <- function(title, why = NULL) {
-  div(class = "edit-part-heading", h3(title), if (!is.null(why)) p(class = "form-text", why))
-}
-
 # ------ What changed -------------------------------------------------------------------------------------
 # The fields that differ, old and new.
 # Words are marked where they differ, the way a tracked change reads: taken-out words
@@ -200,7 +184,7 @@ edit_changes_ui <- function(changes) {
 
 # ------ Where this appears ---------------------------------------------------------------------------------
 # What changing a row reaches.
-# For a component or question: how many questionnaires print it, and a card for each (see `edit_use_card()`). For
+# For a component: how many questionnaires print it, and a card for each (see `edit_use_card()`). For
 # anything else: the rows that point at it,
 # each kind of row a box saying how many there are, where they are, and every one of them. A few are listed as they
 # are; more are folded away, one fold for each questionnaire they are in (the most first), or one for them all.
@@ -216,11 +200,7 @@ edit_usage_ui <- function(entity, usage) {
         p(
           class = "edit-usage-count",
           strong(edit_count(n, "questionnaire")),
-          if (entity$key == "question") {
-            if (n == 1) " uses this question" else " use this question"
-          } else {
-            if (n == 1) " prints this" else " print this"
-          }
+          if (n == 1) " prints this" else " print this"
         ),
         div(class = "edit-usage-list", lapply(usage$uses, edit_use_card, entity = entity))
       )
@@ -274,12 +254,12 @@ edit_use_fold <- function(title, n, ...) {
   )
 }
 
-# A questionnaire that prints a component or asks a question, as its card in the details shows it.
-# Its name, with a button that opens the component or question as it is in that questionnaire alone; where it sits;
-# each wave that asked it, with the number it had; and each variable, with what it records, who it is about, and its
+# A questionnaire that prints a component, as its card in the details shows it.
+# Its name, with a button that opens the block as it is in that questionnaire alone; where it sits; for a question
+# each wave that asked it, with the number it had, and each variable, with what it records, who it is about, and its
 # choices.
 # use: One of `edit_service_uses()`.
-# entity: The kind of thing: a component or a question.
+# entity: The kind of thing: a component.
 edit_use_card <- function(use, entity) {
   div(
     class = "edit-use",
@@ -288,8 +268,7 @@ edit_use_card <- function(use, entity) {
       strong(class = "edit-use-name", use$questionnaire),
       review_button(
         "Open in this questionnaire", "jump",
-        `data-kind` = if (entity$key == "question") "questionnaire_question" else "questionnaire_component",
-        `data-verb` = "view", `data-scope` = key_text(use$questionnaire_id),
+        `data-kind` = "placement", `data-verb` = "view", `data-scope` = key_text(use$questionnaire_id),
         `data-key` = key_text(use$placement_id),
         class = "btn btn-sm btn-outline-dark"
       )
@@ -299,7 +278,7 @@ edit_use_card <- function(use, entity) {
       tags$ul(class = "edit-use-asked", Map(function(wave, number) {
         tags$li(span(class = "edit-use-wave", wave), paste0(" · question ", number))
       }, use$waves, unname(use$numbers)))
-    } else if (entity$key == "question") {
+    } else if (identical(use$kind, "Question")) {
       p(class = "edit-use-detail", "Not asked in any wave yet.")
     },
     if (length(use$boxes) > 0) {
@@ -336,7 +315,7 @@ edit_delete_ui <- function(entity, title, plan) {
       class = "delete-banner",
       app_icon("delete"),
       div(
-        span(class = "delete-banner-label", paste("You're proposing to delete this", entity$noun)),
+        span(class = "delete-banner-label", paste("You're deleting this", entity$noun)),
         strong(class = "delete-banner-title", title)
       )
     ),
@@ -387,7 +366,7 @@ edit_reach_ui <- function(entity, reach, plan) {
       } else {
         "Other records will change"
       },
-      "Read the lists below. When this is applied, all of it is removed together."
+      "Read the lists below. All of it is removed together, at once."
     ),
     if (length(reach$lines) > 0) {
       div(class = "reach-section", h3("Deleted along with it"), tags$ul(class = "reach-list", lapply(reach$lines, function(line) {
@@ -439,6 +418,20 @@ edit_delete_confirm_ui <- function(ns, plan) {
       textInput(ns("confirm_word"), NULL, width = "20rem", placeholder = "To be sure, type DELETE") |>
         tag_input_attributes("input", `aria-label` = "To be sure, type DELETE")
     }
+  )
+}
+
+# ------ Emptying -----------------------------------------------------------------------------------------------
+# What Empty asks first: what goes, what stays, and that it happens at once.
+# title: The row's name.
+# preview: What would be removed, from `edit_service_empty_preview()`.
+edit_empty_dialog <- function(ns, entity, title, preview) {
+  confirm_dialog(
+    paste0("Empty ", title, "?"),
+    p(preview),
+    p(strong("What stays: "), "the ", entity$noun, " itself. ", entity$empty_about),
+    p("Answer choices and tags stay too: they are vocabulary. This happens at once and is written to the Edit History."),
+    confirm_id = ns("confirm_empty"), confirm_label = "Empty it", keep_label = "Cancel"
   )
 }
 

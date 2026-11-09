@@ -1,23 +1,21 @@
 -- Resets the TEST Supabase project (rqygcjgftmtatzrzcwcf) to a clean starting point.
--- Run it whole in the test project's SQL Editor whenever the test data has piled up. It refuses to run
--- anywhere else, the real database included (step 0).
+-- Run it whole in the test project's SQL Editor whenever the tests' leftovers have piled up (a run that
+-- crashed before its cleanup). It refuses to run anywhere else, the real database included (step 0).
 --
--- What stays:
---   * every staff member but the tests' (named ZZTEST...);
---   * the questionnaires whose abbreviations are in keep_questionnaires (AHP, GNA, MQ and KQ), with everything
---     that belongs to them: their studies, registries and lead investigators, their waves, blocks and
---     questions, variables, choices and counts of respondents, scale items and categories, and the option
---     sets, answer choices, subjects and categories those use;
---   * every component type, measurement scale, respondent type and PDF (pdf_file), but the tests' own;
---   * the drafts, applied or not, with their history (applied_item), when everyone they involve is kept
---     staff and they aren't the tests' own.
--- Everything else in the public tables is removed, the tests' leftover ZZTEST rows included.
+-- After the seven scripts in sql/ the test project holds the seed (sql/7_seed.sql) and whatever the tests
+-- and the extractions staff try there add. This keeps every row that isn't a test's and removes the rest:
+--   * the tests' staff (named ZZTEST...), with every extraction that names them and every history row they wrote;
+--   * the tests' registries, investigators, respondent types, studies, questionnaires and waves (named
+--     ZZTEST...), with everything pushed into them (placements, questions, variables, choices, tags on them);
+--   * the tests' measurement scales, tags, answer options and components (named ZZTEST...), and extractions
+--     whose summary is;
+--   * PDFs (pdf_file) that no extraction or wave names any more, and components no questionnaire prints.
 -- Not touched: Supabase Auth's users, and the files in Storage.
 --
--- The database's guards refuse some of these deletes on purpose (staff are never deleted, an applied
--- draft is kept). The script turns the tables' own triggers off while it deletes and on again after.
--- The foreign keys stay on, so nothing kept can be left pointing at a removed row. Everything is one
--- transaction: if anything fails, nothing has changed.
+-- The database's guards refuse two of these deletes on purpose (staff are never deleted, the history is never
+-- changed). The script turns those two triggers off while it deletes and on again after. The foreign keys stay
+-- on, so nothing kept can be left pointing at a removed row. Everything is one transaction: if anything
+-- fails, nothing has changed.
 
 begin;
 
@@ -31,148 +29,83 @@ begin
 end
 $$;
 
--- ------ 1. What stays ---------------------------------------------------------------------------------
--- (Every keep_ table below holds no nulls: a "not in" list with a null in it would match nothing.)
--- Edit this list to keep other questionnaires.
-create temp table keep_questionnaires (abbreviation text) on commit drop;
-insert into keep_questionnaires values ('AHP'), ('GNA'), ('MQ'), ('KQ');
+-- ------ 1. The tests' staff, with their extractions and history -----------------------------------------
+create temp table test_staff on commit drop as
+  select staff_id from public.staff where name ilike 'ZZTEST%' or email ilike 'zztest%';
 
-create temp table keep_staff on commit drop as
-  select staff_id from public.staff where name not ilike 'ZZTEST%' and email not ilike 'zztest%';
+delete from public.extraction
+where prepared_by in (select staff_id from test_staff)
+   or saved_by in (select staff_id from test_staff)
+   or editing_by in (select staff_id from test_staff)
+   or summary ilike 'ZZTEST%';
 
-create temp table keep_questionnaire on commit drop as
-  select questionnaire_id from public.questionnaire
-  where abbreviation in (select abbreviation from keep_questionnaires) and name not ilike 'ZZTEST%';
+alter table public.history disable trigger history_is_kept;
+delete from public.history where staff_id in (select staff_id from test_staff);
+alter table public.history enable trigger history_is_kept;
 
-create temp table keep_study on commit drop as
-  select study_id from public.questionnaire where questionnaire_id in (select questionnaire_id from keep_questionnaire);
+alter table public.staff disable trigger staff_never_deleted;
+delete from public.staff where staff_id in (select staff_id from test_staff);
+alter table public.staff enable trigger staff_never_deleted;
 
-create temp table keep_registry on commit drop as
-  select registry_id from public.study where study_id in (select study_id from keep_study);
+-- ------ 2. The tests' trees, with what was pushed into them -------------------------------------------------
+-- A questionnaire takes its waves, placements, questions, variables, response options and tags with it.
+delete from public.wave where name ilike 'ZZTEST%';
+delete from public.questionnaire
+where name ilike 'ZZTEST%'
+   or study_id in (select study_id from public.study where name ilike 'ZZTEST%')
+   or study_id in (select s.study_id from public.study s join public.registry r on r.registry_id = s.registry_id where r.name ilike 'ZZTEST%');
+delete from public.study
+where name ilike 'ZZTEST%'
+   or registry_id in (select registry_id from public.registry where name ilike 'ZZTEST%');
+delete from public.registry where name ilike 'ZZTEST%';
+delete from public.principal_investigator p
+where p.name ilike 'ZZTEST%'
+  and not exists (select 1 from public.study s where s.principal_investigator_id = p.principal_investigator_id
+                                                  or s.contact_principal_investigator_id = p.principal_investigator_id);
+delete from public.respondent_type t
+where t.name ilike 'ZZTEST%'
+  and not exists (select 1 from public.questionnaire q where q.respondent_type_id = t.respondent_type_id);
 
-create temp table keep_wave on commit drop as
-  select wave_id from public.wave where questionnaire_id in (select questionnaire_id from keep_questionnaire);
-
-create temp table keep_component on commit drop as
-  select distinct component_id from public.questionnaire_component
-  where questionnaire_id in (select questionnaire_id from keep_questionnaire);
-
-create temp table keep_variable on commit drop as
-  select variable_key from public.variable where questionnaire_id in (select questionnaire_id from keep_questionnaire);
-
-create temp table keep_option_set on commit drop as
-  select option_set_id from public.closed_ended
-  where variable_key in (select variable_key from keep_variable) and option_set_id is not null
-  union
-  select expected_option_set_id from public.question_scale
-  where component_id in (select component_id from keep_component) and expected_option_set_id is not null;
-
-create temp table keep_answer_option on commit drop as
-  select answer_option_id from public.response_option where variable_key in (select variable_key from keep_variable)
-  union
-  select answer_option_id from public.answer_option_set where option_set_id in (select option_set_id from keep_option_set);
-
-create temp table keep_subject on commit drop as
-  select subject_id from public.variable
-  where variable_key in (select variable_key from keep_variable) and subject_id is not null;
-
-create temp table keep_category on commit drop as
-  select mesh_id from public.question_category where component_id in (select component_id from keep_component);
-
-create temp table keep_investigator on commit drop as
-  select principal_investigator_id from public.study where study_id in (select study_id from keep_study)
-  union
-  select contact_principal_investigator_id from public.study
-  where study_id in (select study_id from keep_study) and contact_principal_investigator_id is not null;
-
--- A draft stays, applied or not, with its history, when everyone it names is kept staff and it isn't the tests'.
-create temp table keep_draft on commit drop as
-  select d.draft_id from public.draft d
-  where coalesce(d.summary, '') not ilike 'ZZTEST%'
-    and d.prepared_by in (select staff_id from keep_staff)
-    and (d.saved_by is null or d.saved_by in (select staff_id from keep_staff))
-    and (d.requested_reviewer is null or d.requested_reviewer in (select staff_id from keep_staff))
-    and (d.editing_by is null or d.editing_by in (select staff_id from keep_staff))
-    and not exists (
-      select 1 from public.draft_review_event e
-      where e.draft_id = d.draft_id and e.staff_id not in (select staff_id from keep_staff)
-    );
-
--- ------ 2. The guards off while deleting -----------------------------------------------------------------
-do $$
-declare t record;
-begin
-  for t in select tablename from pg_tables where schemaname = 'public' loop
-    execute format('alter table public.%I disable trigger user', t.tablename);
-  end loop;
-end
-$$;
-
--- ------ 3. Removing the rest -------------------------------------------------------------------------------
--- Children before the rows they point at. A draft's details, reading and reviews go with it (on delete
--- cascade), and so do a variable's subtype row, choices and counts of respondents.
-delete from public.applied_item where draft_id not in (select draft_id from keep_draft);
-delete from public.draft where draft_id not in (select draft_id from keep_draft);
-
-delete from public.response_option_count where wave_id not in (select wave_id from keep_wave);
-delete from public.variable where variable_key not in (select variable_key from keep_variable);
-delete from public.wave_question where questionnaire_id not in (select questionnaire_id from keep_questionnaire);
-delete from public.question_scale where component_id not in (select component_id from keep_component);
-delete from public.question_category where component_id not in (select component_id from keep_component);
-delete from public.questionnaire_question where questionnaire_id not in (select questionnaire_id from keep_questionnaire);
-delete from public.questionnaire_component where questionnaire_id not in (select questionnaire_id from keep_questionnaire);
-delete from public.question where component_id not in (select component_id from keep_component);
-delete from public.component where component_id not in (select component_id from keep_component);
-delete from public.wave where wave_id not in (select wave_id from keep_wave);
-delete from public.questionnaire where questionnaire_id not in (select questionnaire_id from keep_questionnaire);
-delete from public.study where study_id not in (select study_id from keep_study);
-delete from public.principal_investigator where principal_investigator_id not in (select principal_investigator_id from keep_investigator);
-delete from public.registry where registry_id not in (select registry_id from keep_registry);
--- the tests' own; the rest stay
-delete from public.respondent_type
-  where name ilike 'ZZTEST%' and respondent_type_id not in (select respondent_type_id from public.questionnaire);
+-- ------ 3. The tests' vocabulary and scales, where nothing kept points at them -----------------------------------
 delete from public.question_scale where scale_id in (select scale_id from public.measurement_scale where name ilike 'ZZTEST%');
 delete from public.measurement_scale where name ilike 'ZZTEST%';
-delete from public.component_type where name ilike 'ZZTEST%';
+delete from public.tag t
+where t.name ilike 'ZZTEST%'
+  and not exists (select 1 from public.placement_tag x where x.tag_id = t.tag_id)
+  and not exists (select 1 from public.variable_tag x where x.tag_id = t.tag_id)
+  and not exists (select 1 from public.response_option_tag x where x.tag_id = t.tag_id);
+delete from public.answer_option a
+where a.standardized_label ilike 'ZZTEST%'
+  and not exists (select 1 from public.response_option x where x.answer_option_id = a.answer_option_id);
+delete from public.component c
+where c.text ilike 'ZZTEST%'
+  and not exists (select 1 from public.placement x where x.component_id = c.component_id)
+  and not exists (select 1 from public.question_scale x where x.component_id = c.component_id);
 
-delete from public.answer_option_set where option_set_id not in (select option_set_id from keep_option_set);
-delete from public.option_set where option_set_id not in (select option_set_id from keep_option_set);
-delete from public.answer_option where answer_option_id not in (select answer_option_id from keep_answer_option);
-delete from public.subject where subject_id not in (select subject_id from keep_subject);
-delete from public.category where mesh_id not in (select mesh_id from keep_category);
-
-delete from public.staff where staff_id not in (select staff_id from keep_staff);
-
--- ------ 4. The guards on again ----------------------------------------------------------------------------------
-do $$
-declare t record;
-begin
-  for t in select tablename from pg_tables where schemaname = 'public' loop
-    execute format('alter table public.%I enable trigger user', t.tablename);
-  end loop;
-end
-$$;
+-- ------ 4. What is left owned by nothing -------------------------------------------------------------------------
+select private.forget_components(array(select component_id from public.component));
+delete from public.pdf_file f
+where not exists (select 1 from public.extraction e where e.pdf_sha256 = f.pdf_sha256)
+  and not exists (select 1 from public.wave w where w.pdf_sha256 = f.pdf_sha256 or w.supplement_sha256 = f.pdf_sha256);
 
 commit;
 
 -- ------ 5. What is left ---------------------------------------------------------------------------------------
 select 'staff' as table_name, count(*) as row_count from public.staff
 union all select 'registry', count(*) from public.registry
-union all select 'study', count(*) from public.study
 union all select 'principal_investigator', count(*) from public.principal_investigator
+union all select 'study', count(*) from public.study
 union all select 'respondent_type', count(*) from public.respondent_type
 union all select 'questionnaire', count(*) from public.questionnaire
 union all select 'wave', count(*) from public.wave
-union all select 'component', count(*) from public.component
-union all select 'question', count(*) from public.question
-union all select 'variable', count(*) from public.variable
-union all select 'response_option', count(*) from public.response_option
-union all select 'option_set', count(*) from public.option_set
-union all select 'answer_option', count(*) from public.answer_option
-union all select 'subject', count(*) from public.subject
-union all select 'category', count(*) from public.category
-union all select 'measurement_scale', count(*) from public.measurement_scale
-union all select 'component_type', count(*) from public.component_type
 union all select 'pdf_file', count(*) from public.pdf_file
-union all select 'draft', count(*) from public.draft
-union all select 'applied_item', count(*) from public.applied_item;
+union all select 'component', count(*) from public.component
+union all select 'placement', count(*) from public.placement
+union all select 'wave_question', count(*) from public.wave_question
+union all select 'variable', count(*) from public.variable
+union all select 'answer_option', count(*) from public.answer_option
+union all select 'response_option', count(*) from public.response_option
+union all select 'tag', count(*) from public.tag
+union all select 'measurement_scale', count(*) from public.measurement_scale
+union all select 'extraction', count(*) from public.extraction
+union all select 'history', count(*) from public.history;

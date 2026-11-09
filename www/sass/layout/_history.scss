@@ -1,19 +1,24 @@
-// Edit History and Change Requests pages, and the list of changed rows they share
+// Edit History page, the list of changed rows it shows, and an extraction's preview (Edit Extraction)
 
 // ------ Edit History ---------------------------------------------------------------------
-// Each edit, and each request on Change Requests, is a list card (components/_list-card.scss).
+// Each change is a list card (components/_list-card.scss).
 .history-search { margin-bottom: 1.25rem; }
 
-// Add, Update, Delete, Extraction: told apart by their words; the colours only back them up.
+// What kind of change: told apart by their words; the colours only back them up. Edit History's badges say
+// what was done to the catalog (Pushed, Emptied, Added, Updated, Deleted); the AI Monitor's say what staff did to
+// the AI's reading (edited, added, deleted, moved).
 .row-badge {
-  &.is-extraction { background: rgba($vcu-green, 0.15); color: $vcu-green; font-weight: 700; }
-  &.is-add { background: rgba($vcu-green, 0.15); color: $vcu-green; font-weight: 700; }
-  &.is-update { background: $gold-highlight; font-weight: 700; }
-  &.is-delete { background: rgba($vcu-red, 0.12); color: $vcu-red; font-weight: 700; }
+  &.is-pushed, &.is-added, &.is-add { background: rgba($vcu-green, 0.15); color: $vcu-green; font-weight: 700; } // is-add: the preview's NEW rows
+  &.is-updated, &.is-edited { background: $gold-highlight; font-weight: 700; }
+  &.is-deleted { background: rgba($vcu-red, 0.12); color: $vcu-red; font-weight: 700; }
+  &.is-emptied, &.is-moved { background: $gray-tint; font-weight: 700; }
 }
 
-// ------ An extraction's change request, laid out to read -----------------------------------------
-// Before it is submitted (the Edit Extraction page's preview) and while it waits (Change Requests).
+// What a push or an emptying did, in the dialog: its counts, a line each
+.history-counts { margin: 0; padding-left: 1.25rem; }
+
+// ------ An extraction's preview, laid out to read -----------------------------------------------
+// What the Edit Extraction page shows before staff push (helpers_questionnaire.R).
 .request-section {
   margin-top: 1.25rem;
   h3 { margin: 0 0 0.5rem; font-size: $font-size-base; }
@@ -152,14 +157,4 @@
   dd { margin: 0; overflow-wrap: anywhere; }
   del { background: rgba($vcu-red, 0.12); color: $vcu-red; text-decoration: line-through; }
   ins { background: $gold-highlight; text-decoration: none; font-weight: 700; }
-}
-
-// ------ An extraction's Basic Info, on Change Requests ---------------------------------------------
-.basic-info-actions {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: flex-end;
-  gap: 0.75rem;
-  margin-top: 0.25rem;
 }

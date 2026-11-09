@@ -133,7 +133,7 @@ test_that("the drafts are read from the database, and a draft added elsewhere is
     expect_true(first$id %in% names(extractions$all()))
     second <- local_read_extraction(me, env = here) # another session, or the reading job
     expect_false(second$id %in% names(extractions$all())) # nothing has asked yet
-    session$setInputs(nav = "change_requests") # opening a page that lists them
+    session$setInputs(nav = "drafts") # opening a page that lists them
     expect_true(second$id %in% names(extractions$all()))
 
     fourth <- local_read_extraction(me, env = here)
@@ -190,10 +190,14 @@ test_that("the site is drawn with the login screen over it, and the menu's place
   expect_match(paste(rendered$head, html), "js/site.js")
   expect_true(regexpr('id="login_screen"', html) < regexpr('id="home-new_extraction"', html))
   # the menu: a link to each page staff open themselves, folding into a menu button on a narrow window
-  for (page in c("extraction", "drafts", "make_edit", "change_requests", "edit_history")) {
+  for (page in c("extraction", "drafts", "make_edit", "edit_history", "ai_monitor")) {
     expect_match(html, sprintf('data-value="%s"', page), fixed = TRUE, info = page)
   }
-  for (label in c("New Extraction", "Drafts", "Metadata", "Requests", "History")) {
+  expect_false(grepl('data-value="change_requests"', html, fixed = TRUE)) # nothing waits for approval any more
+  # in this order: Home (the title), New Extraction, Drafts, Edit Extraction (hidden), Metadata, History, AI Monitor
+  values <- regmatches(html, gregexpr('data-value="[a-z_]+"', html))[[1]]
+  expect_equal(unique(values), sprintf('data-value="%s"', c("home", "extraction", "drafts", "edit_extraction", "make_edit", "edit_history", "ai_monitor")))
+  for (label in c("New Extraction", "Drafts", "Metadata", "History", "AI Monitor")) {
     # the menu's own link: its icon, then its words
     expect_match(html, sprintf('data-value="[a-z_]+">\\s*<i[^>]*class="fas? [^"]*"[^>]*></i>\\s*%s\\s*</a>', label), perl = TRUE, info = label)
   }

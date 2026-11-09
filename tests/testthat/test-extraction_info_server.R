@@ -1,6 +1,6 @@
 # The form that says where an extraction goes (its Basic Info: registry, study, questionnaire, wave), in
-# the Change Requests dialog. Its inputs are named after the fields (`registry_id`, `wave_id`...). It
-# works on the live tables as the page read them, so these tests give it the sample tables and drafts;
+# the Edit Extraction page's push dialog. Its inputs are named after the fields (`registry_id`, `wave_id`...).
+# It works on the live tables as the page read them, so these tests give it the sample tables and drafts;
 # what the pop-ups do with the database is in test-quick_add_server.R.
 
 info_args <- function(extractions = fixed_extractions(), record_id = shiny::reactiveVal(NULL), catalog = fixed_catalog()) {
@@ -13,6 +13,23 @@ test_that("the form holds the four picks, always a recorded questionnaire's wave
     expect_equal(extraction_info_fields, c("registry_id", "study_id", "questionnaire_id", "wave_id"))
     session$setInputs(registry_id = "1", study_id = "1", questionnaire_id = "1", wave_id = "2")
     expect_equal(unlist(info()), c(registry_id = "1", study_id = "1", questionnaire_id = "1", wave_id = "2"))
+  })
+})
+
+test_that("every wave is offered, saying which ask questions already; one picked says to empty it first", {
+  seen <- local_browser()
+  local_stub("questionnaire_service_wave_question_counts", function(connection, questionnaire_id) c(`2` = 12L))
+  shiny::testServer(extraction_info_server, args = info_args(), {
+    show(list(info = list(questionnaire_id = "1", wave_id = "1")))
+    waves <- last_update(seen, "wave_id")$choices
+    expect_equal(unname(waves), c("", "1", "2", add_new_choice))
+    expect_match(names(waves)[2], "Wave 1 · given 05/01/2019 · no questions yet")
+    expect_match(names(waves)[3], "Wave 2 · given 04/15/2022 · asks 12 questions: empty it first")
+    session$setInputs(registry_id = "1", study_id = "1", questionnaire_id = "1", wave_id = "2")
+    expect_match(problems()$wave_id, "Wave 2 already asks 12 questions. Empty the wave first (Metadata page)", fixed = TRUE)
+    expect_match(text_of(output$wave_id_note), "Empty the wave first")
+    session$setInputs(wave_id = "1")
+    expect_null(problems()$wave_id)
   })
 })
 

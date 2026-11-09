@@ -58,10 +58,9 @@ test_that("a draft is ready to review when it has been read, or was typed by han
   expect_false(extraction_service_is_read(list(method = extraction_ai, extraction_status = "failed")))
 })
 
-test_that("discarding deletes the draft, and its PDF once no other draft uses it; only its preparer can", {
+test_that("discarding deletes the draft, and its PDF once no other draft uses it", {
   local_pdf_cache()
   me <- local_staff()
-  colleague <- local_staff()
   # a PDF of its own: the other tests' drafts share fake_upload()'s, and while one of them (in another process) has a
   # draft open with it, it is rightly kept
   upload <- fake_upload(text = paste0("%PDF-1.4\n% ", test_name("PDF"), "\n<< /Type /Page >>\n"))
@@ -70,7 +69,6 @@ test_that("discarding deletes the draft, and its PDF once no other draft uses it
   sha256 <- record$pdf$sha256
   pdf_rows <- function() database_model_count(test_connection, "pdf_file", list(pdf_sha256 = database_eq(sha256)))
 
-  expect_error(extraction_service_discard(test_connection, record$id, colleague), "prepared")
   extraction_service_discard(test_connection, record$id, me)
   expect_error(extraction_model_get(test_connection, record$id), "no longer in the database")
   expect_false(record$id %in% names(extraction_service_get_all(test_connection)))
@@ -127,7 +125,7 @@ test_that("saving a reviewed copy keeps how it differs from what the AI returned
   restored <- draft_service_update(again, "components", block_numbered(again, "1a")$id, "text", "Would you call yourself a nervous person?")
   extraction_service_save_draft(test_connection, ai, restored, reopened$original, me)
   expect_equal(vapply(review_edits_of(test_connection, ai$id), function(edit) edit$after, character(1)), "do you worry?")
-  expect_identical(draft_service_from_json(draft_model_get_both(test_connection, ai$id)$original), short_gold_draft())
+  expect_identical(draft_service_from_json(extraction_model_questionnaire(test_connection, ai$id)$original), short_gold_draft())
 
   manual <- local_manual_extraction(me)
   typed <- draft_service_update(short_gold_draft(), "components", block_numbered(short_gold_draft(), "1a")$id, "text", "Typed by hand")
@@ -146,7 +144,7 @@ test_that("the drafts are read again every few seconds only while one this perso
   expect_true(extraction_service_is_reading(list(a = draft(7L, "received"), b = draft(8, "ready")), me))
   expect_false(extraction_service_is_reading(list(a = draft(7, "ready"), b = draft(7, "failed"), c = draft(7, NULL)), me))
   expect_false(extraction_service_is_reading(list(a = draft(8, "sent")), me)) # someone else's
-  expect_false(extraction_service_is_reading(list(a = draft(7, "sent", status = "Discarded")), me)) # set aside
+  expect_false(extraction_service_is_reading(list(a = draft(7, "sent", status = "Pushed")), me)) # finished with
   expect_false(extraction_service_is_reading(list(), me))
 })
 
@@ -180,7 +178,7 @@ test_that("a file of Variable Names and Coding is a step of its own, after the q
 })
 
 test_that("the progress on each card is how it was read and how much of it is checked, as the Edit Extraction page counts it", {
-  record <- list(status = "Sent Back", extraction_status = "ready", info = picked_info(), matr_csv = NULL)
+  record <- list(status = "Draft", extraction_status = "ready", info = picked_info(), matr_csv = NULL)
   draft <- with_checked(gold_draft(), gold_draft()$components$id[1:10])
   progress <- extraction_service_progress(record, draft)
 
@@ -246,16 +244,18 @@ test_that("cards are named from where it goes, else what the AI read, else the P
   expect_equal(extraction_service_title(list(info = picked_info(wave_id = "")), catalog), "Adult Health and Personality (AHP)")
 })
 
-test_that("a recorded wave has to be the questionnaire's, ask no questions yet, and not be another draft's", {
+test_that("a recorded wave has to be the questionnaire's, ask no questions yet (else empty it first), and not be another draft's", {
   catalog <- test_catalog()
   info <- picked_info()
   expect_null(extraction_service_recorded_wave_problem(info, catalog))
   expect_equal(extraction_service_recorded_wave_problem(picked_info(wave_id = "3"), catalog), "Pick one of this questionnaire's waves.")
   expect_equal(
     extraction_service_recorded_wave_problem(info, catalog, question_counts = c("2" = 12L)),
-    "Wave 2 already asks 12 questions. Pick a wave without questions, or add a new wave."
+    "Wave 2 already asks 12 questions. Empty the wave first (Metadata page), or pick a wave without questions."
   )
-  other <- list(other = list(id = "other", status = "Awaiting Review", prepared_by = "D. Chen", prepared_by_id = 9L, info = info))
+  other <- list(other = list(id = "other", status = "Draft", prepared_by = "D. Chen", prepared_by_id = 9L, info = info))
+  pushed <- list(done = list(id = "done", status = "Pushed", prepared_by = "D. Chen", prepared_by_id = 9L, info = info))
+  expect_null(extraction_service_recorded_wave_problem(info, catalog, records = pushed, id = "mine")) # finished with: not in the way
   expect_match(extraction_service_recorded_wave_problem(info, catalog, records = other, id = "mine"), "D. Chen already has a draft going into Wave 2")
   expect_match(
     extraction_service_recorded_wave_problem(info, catalog, records = other, id = "mine", me = list(staff_id = 9L, name = "D. Chen")),
@@ -264,7 +264,13 @@ test_that("a recorded wave has to be the questionnaire's, ask no questions yet, 
   expect_null(extraction_service_recorded_wave_problem(info, catalog, records = other, id = "other"))
   # no wave picked yet: nothing to check
   expect_null(extraction_service_recorded_wave_problem(picked_info(wave_id = ""), catalog))
-  expect_equal(questionnaire_service_empty_wave_choices(catalog, "1", c("1" = 3L)), c("Wave 2 · given 04/15/2022 · no questions yet" = "2"))
+  # every wave of the questionnaire is offered, saying whether it asks questions yet
+  expect_equal(
+    questionnaire_service_wave_choices(catalog, "1", c("1" = 3L)),
+    c("Wave 1 · given 05/01/2019 · asks 3 questions: empty it first" = "1", "Wave 2 · given 04/15/2022 · no questions yet" = "2")
+  )
+  expect_equal(unname(questionnaire_service_wave_choices(catalog, "1")), c("1", "2"))
+  expect_length(questionnaire_service_wave_choices(catalog, "99"), 0)
 })
 
 test_that("the Edit Extraction page is headed by where it goes, else the PDF's name, never what Gemini read", {
@@ -285,6 +291,7 @@ test_that("a new wave of a recorded questionnaire knows the blocks it prints and
   expect_named(recorded, c("texts", "matr_ids"))
   expect_setequal(recorded$texts$text, pushed$draft$components$text)
   expect_setequal(recorded$texts$component_type, c("Section", "Instruction", "Question"))
+  expect_equal(anyDuplicated(recorded$texts), 0) # each wording once, however often it is printed
   expect_equal(nrow(recorded$matr_ids), 2)
   expect_setequal(recorded$matr_ids$matr_id, pushed$draft$variables$matr_id)
   smoke <- recorded$matr_ids[recorded$matr_ids$matr_id == pushed$draft$variables$matr_id[1], ]
@@ -292,18 +299,14 @@ test_that("a new wave of a recorded questionnaire knows the blocks it prints and
   expect_equal(smoke$display_order, 1)
 })
 
-test_that("an applied extraction keeps its draft, and its history has a line for each table it added to", {
+test_that("a pushed extraction is kept whole: what was read, what staff saved and where it went", {
   pushed <- shared_pushed_questionnaire()
-  kept <- extraction_model_get(test_connection, pushed$id) # what was read and reviewed stays, for analysis
-  expect_equal(kept$status, history_applied_status)
-  items <- history_model_get_items(test_connection, pushed$history_id)
-  expect_equal(anyDuplicated(items$entity_name), 0)
-  expect_true(all(startsWith(items$record_identifier, "[")))
-  variables <- jsonlite::fromJSON(items$record_identifier[items$entity_name == "variable"], simplifyVector = FALSE)
-  expect_length(variables, nrow(pushed$draft$variables))
-  changes <- history_service_changes(test_connection, pushed$history_id)
-  expect_equal(changes$counts$tables, nrow(items))
-  expect_gt(changes$counts$added, nrow(items))
+  kept <- extraction_model_get(test_connection, pushed$id) # the record of what was read and reviewed, for the AI Monitor
+  expect_equal(kept$status, "Pushed")
+  expect_equal(kept$info$wave_id, pushed$typed$wave_id)
+  expect_identical(draft_service_load(test_connection, pushed$id), pushed$draft)
+  expect_equal(pushed$counts$questions, 2)
+  expect_false(pushed$id %in% names(extraction_service_get_all(test_connection))) # not a draft any more
 })
 
 test_that("a draft with no questionnaire picked has nothing recorded", {
@@ -314,4 +317,73 @@ test_that("a draft with no questionnaire picked has nothing recorded", {
   empty <- extraction_service_recorded(test_connection, list(info = picked_basic_info(tree)))
   expect_equal(nrow(empty$texts), 0)
   expect_equal(nrow(empty$matr_ids), 0)
+})
+
+# ------ Re-extracting a wave ------------------------------------------------------------------------------
+test_that("Re-extract on a wave empties it, then starts a new extraction from its files, into that wave", {
+  me <- list(staff_id = 7, name = "Pat", role = "STAFF")
+  pdf <- withr::local_tempfile(fileext = ".pdf")
+  writeLines("%PDF-1.4\n<< /Type /Page >>\n", pdf)
+  files <- list(
+    `41` = list(wave_id = 41, pdf_sha256 = "abc", pdf_name = "AHP.pdf", supplement_name = "codes.csv", supplement_sha256 = NA, supplement_text = "AH01"),
+    `42` = list(wave_id = 42, pdf_sha256 = NA, pdf_name = NA, supplement_name = NA, supplement_sha256 = NA, supplement_text = NA)
+  )
+  emptied <- list()
+  local_stub("extraction_model_wave_files", function(connection, wave_id) files[[wave_id]])
+  local_stub("extraction_model_local_pdf", function(connection, sha256) pdf)
+  local_stub("extraction_model_create", function(connection, record) record) # what would be saved
+  local_stub("database_model_call", function(connection, name, arguments) {
+    emptied[[length(emptied) + 1]] <<- list(name = name, arguments = arguments)
+    list(questions_removed = 12)
+  })
+  place <- list(registry_id = "1", study_id = "2", questionnaire_id = "3")
+
+  record <- extraction_service_reextract_wave(NULL, "41", place, me)
+  expect_equal(emptied, list(list(name = "empty_wave", arguments = list(p_wave_id = "41", p_staff_id = "7"))))
+  expect_equal(record$method, extraction_ai)
+  expect_equal(record$extraction_status, "queued") # read at once, with the prompt as it is now
+  expect_equal(record$prepared_by_id, 7)
+  expect_equal(record$pdf[c("name", "sha256")], list(name = "AHP.pdf", sha256 = "abc"))
+  expect_equal(record$supplement, list(name = "codes.csv", text = "AH01"))
+  # the same questionnaire and the same wave, which asks nothing now
+  expect_equal(record$info, list(registry_id = "1", study_id = "2", questionnaire_id = "3", wave_id = "41"))
+
+  # a wave with no PDF to read again: nothing is emptied
+  expect_error(extraction_service_reextract_wave(NULL, "42", place, me), "wasn't extracted from a PDF")
+  expect_error(extraction_service_reextract_wave(NULL, "43", place, me), "wasn't extracted from a PDF")
+  expect_length(emptied, 1)
+})
+
+test_that("Re-extract on a real wave leaves it asking nothing, with a draft aimed at it being read", {
+  local_pdf_cache()
+  me <- local_staff()
+  tree <- local_tree()
+  upload <- fake_upload(text = paste0("%PDF-1.4\n% ", test_name("PDF"), "\n<< /Type /Page >>\n"))
+  typed <- picked_basic_info(tree)
+  record <- extraction_service_create_manual(test_connection, me, extraction_service_info(list(info = typed)), upload)
+  withr::defer(test_delete_extraction(record$id))
+  withr::defer(test_delete_pdf(record$pdf$sha256))
+  draft_service_save(test_connection, record$id, test_questionnaire_draft(), me$staff_id)
+  extraction_service_push(test_connection, extraction_model_get(test_connection, record$id), me, questionnaire_service_get_catalog(test_connection))
+  asks <- function() database_model_count(test_connection, "wave_question", list(wave_id = database_eq(tree$wave$wave_id)))
+  expect_equal(asks(), 2)
+
+  place <- typed[c("registry_id", "study_id", "questionnaire_id")]
+  again <- extraction_service_reextract_wave(test_connection, tree$wave$wave_id, place, me)
+  withr::defer(test_delete_extraction(again$id))
+  expect_equal(asks(), 0)
+  expect_equal(again$status, "Draft")
+  expect_equal(again$extraction_status, "queued")
+  expect_equal(again$pdf$sha256, record$pdf$sha256) # the wave's PDF, kept when it was pushed
+  expect_equal(again$info$wave_id, as.character(tree$wave$wave_id))
+})
+
+test_that("a wave extracted from a PDF has Re-extract on Metadata; one that wasn't has it off, saying why", {
+  on <- as.character(wave_reextract_button(list(pdf_sha256 = "abc")))
+  expect_match(on, 'data-action="reextract_wave"')
+  expect_false(grepl("disabled", on))
+  off <- as.character(wave_reextract_button(list(pdf_sha256 = NA)))
+  expect_match(off, "disabled")
+  expect_match(off, "wasn(&#39;|')t extracted from a PDF on this site")
+  expect_match(as.character(reextract_wave_dialog(shiny::NS("x"), "AHP Wave 3")), "The wave is emptied first")
 })

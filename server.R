@@ -222,21 +222,20 @@ function(input, output, session) {
     show_page <- function(page) nav_select("nav", page, session = session)
     on_page <- function(page) reactive(identical(input$nav, page))
 
-    # What the other pages add to the database (an add on Make an edit, an
-    # approved request, an extraction an ADMIN added) has to be in the drop-downs the next
-    # time they are used, so the catalog is read again whenever a page that picks
-    # from it is opened.
+    # What the other pages add to the database (an add on Make an edit, an extraction pushed) has to be in the
+    # drop-downs the next time they are used, so the catalog is read again whenever a page that picks from it is
+    # opened.
     observeEvent(input$nav, if (input$nav %in% c("extraction", "edit_extraction")) catalog$refresh())
 
     # Opening a page that lists drafts reads them again, since other staff change them too. (No
     # ignoreInit: the first page shown is Home, which doesn't list them, and with it the first page a
     # test opens would be skipped.)
-    observeEvent(input$nav, if (input$nav %in% c("home", "extraction", "drafts", "edit_extraction", "change_requests")) extractions$changed())
+    observeEvent(input$nav, if (input$nav %in% c("home", "extraction", "drafts", "edit_extraction")) extractions$changed())
 
     # ------ MODULES -----------------------------------------------------------
-    # The pages hand each other functions that open things (a draft on Edit Extraction, an edit on Make an
-    # edit). A function may name a page set up further down, since it is only looked up when it is called; what
-    # is handed over as it is (`extraction$open_details`, `extraction$show_mode`) comes from a page set up
+    # The pages hand each other functions that open things (a draft on Edit Extraction, a reading on New
+    # Extraction). A function may name a page set up further down, since it is only looked up when it is called;
+    # what is handed over as it is (`extraction$open_details`, `extraction$show_mode`) comes from a page set up
     # already, so New Extraction comes before Extraction Drafts.
 
     # ------ * Home ------------------------------------------------------------
@@ -267,26 +266,17 @@ function(input, output, session) {
       active = on_page("edit_extraction"), open_reading = extraction$open_details
     )
 
-    # ------ * Make an edit ----------------------------------------------------
-    make_edit <- make_edit_server("make_edit", database, me, show_page, active = on_page("make_edit"))
+    # ------ * Metadata (Make an edit) ----------------------------------------
+    # Re-extract on a wave shows the new extraction's reading on New Extraction.
+    make_edit_server(
+      "make_edit", database, me, show_page, active = on_page("make_edit"), open_reading = extraction$open_details
+    )
 
-    # ------ * Edit history ----------------------------------------------------
+    # ------ * Edit History ----------------------------------------------------
     edit_history_server("edit_history", database, active = on_page("edit_history"))
 
-    # ------ * Change Requests -------------------------------------------------
-    # Editing a request opens it where it was made: an edit on Make an edit, an
-    # extraction on the Edit Extraction page.
-    change_requests_server(
-      "change_requests", database, me,
-      open_edit = function(record) {
-        make_edit$open(record)
-        show_page("make_edit")
-      },
-      open_edit_extraction = open_edit_extraction,
-      catalog = catalog,
-      extractions = extractions,
-      active = on_page("change_requests")
-    )
+    # ------ * AI Monitor ------------------------------------------------------
+    ai_monitor_server("ai_monitor", database, active = on_page("ai_monitor"))
     site <<- list(catalog = catalog, extractions = extractions)
     invisible()
   }

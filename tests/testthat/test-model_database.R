@@ -59,22 +59,18 @@ test_that("counting a table asks for no rows, and can be narrowed", {
 
 test_that("a table with jsonb comes back as lists, as it was saved, with the people it names", {
   me <- local_staff()
-  saved <- local_edit(me)
+  saved <- local_history(me, "Updated", details = list(list(item_number = 1, entity_name = "respondent_type", action = "Update", attribute_name = "name", old_value = "A", new_value = "B")))
   rows <- database_model_select(
-    test_connection, "draft", c("draft_id", "status", "preparer:staff!prepared_by(name)"),
-    filters = list(draft_id = database_eq(saved$id))
+    test_connection, "history", c("history_id", "action", "details", "staff(name)"),
+    filters = list(history_id = database_eq(saved$history_id))
   )
   expect_length(rows, 1)
-  expect_equal(rows[[1]]$preparer$name, me$name)
-  expect_equal(rows[[1]]$status, "Draft")
-  details <- database_model_select(
-    test_connection, "edit_draft", c("draft_id", "form", "items", "reach"), filters = list(draft_id = database_eq(saved$id))
-  )
-  expect_equal(details[[1]]$form$action, "delete")
-  expect_equal(details[[1]]$form$values, list())
-  expect_equal(details[[1]]$items[[1]]$entity_name, "respondent_type")
+  expect_equal(rows[[1]]$staff$name, me$name)
+  expect_equal(rows[[1]]$action, "Updated")
+  expect_equal(rows[[1]]$details[[1]]$entity_name, "respondent_type")
+  expect_null(rows[[1]]$details[[1]]$record_identifier) # a key left out stays left out
   expect_length(
-    database_model_select(test_connection, "draft", "draft_id", filters = list(draft_id = database_eq(0))),
+    database_model_select(test_connection, "history", "history_id", filters = list(history_id = database_eq(0))),
     0
   )
 })
@@ -108,10 +104,10 @@ test_that("a change names the rows, says whether anything matched, and never rea
 })
 
 test_that("a function of the database is called by name, and its own sentence is shown as written", {
-  # create_draft refuses a kind it doesn't know with a sentence of its own
-  problem <- error_text(database_model_call(test_connection, "create_draft", list(p_kind = "Nonsense", p_prepared_by = 0, p_parent = list(), p_detail = list())))
-  expect_false(is.null(problem))
-  expect_false(grepl("^The MATR database had a problem", problem))
+  # empty_wave refuses a wave that isn't there with a sentence of its own
+  me <- local_staff()
+  problem <- error_text(database_model_call(test_connection, "empty_wave", list(p_wave_id = 0, p_staff_id = me$staff_id)))
+  expect_equal(problem, "That wave is no longer in the database.")
 })
 
 test_that("problems are sentences staff can act on", {
@@ -128,7 +124,7 @@ test_that("a table the key hasn't been granted is not mistaken for a bad key", {
   publishable <- list(url = test_connection$url, key = test_publishable_key())
   expect_error(
     database_model_get(publishable, "staff", "email"),
-    "won't let the site use this table \\(permission denied for table staff\\).*docs/sql/1_setup.sql"
+    "won't let the site use this table \\(permission denied for table staff\\).*sql/5_permissions.sql"
   )
 })
 
@@ -175,12 +171,11 @@ test_that("a missing table and an unreachable database are sentences too", {
 
 test_that("the database's description of itself is read from the API's root, and has every table the edit pages read", {
   description <- database_model_describe(test_connection) # a large reply, so read once for both
-  expect_true(all(c(
-    "registry", "staff", "draft", "edit_draft", "extracted_draft", "ai_extracted_draft", "pdf_file",
-    "draft_review_event", "applied_item"
-  ) %in% names(description$definitions)))
-  expect_true("/rpc/approve_draft" %in% names(description$paths))
-  expect_true("/rpc/send_back_draft" %in% names(description$paths))
+  expect_true(all(c("registry", "staff", "extraction", "history", "pdf_file") %in% names(description$definitions)))
+  for (fn in c("push_extraction", "apply_change", "empty_wave", "empty_questionnaire", "empty_study", "empty_registry")) {
+    expect_true(paste0("/rpc/", fn) %in% names(description$paths), info = fn)
+  }
+  expect_false("/rpc/approve_draft" %in% names(description$paths)) # nothing is approved any more
   # every table the edit pages read (database_tables, model_table.R) is in the database, with every column listed
   for (table in names(database_tables)) {
     expect_true(table %in% names(description$definitions), info = paste("the database has no table", table))

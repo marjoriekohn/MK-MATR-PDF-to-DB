@@ -11,6 +11,10 @@
 # own (prompts/assign_codes.md), and the variables get their MATR IDs and the choices
 # their codes (reading_service_assign()).
 #
+# The job writes the reading's own columns of EXTRACTION (reading_status, reading_claimed_at, reading_pid,
+# reading_error, model, prompt_version, ai_original), by extraction id, only while the row is still being read
+# for the reading it was started for (model_extraction.R).
+#
 # State kept outside the database: `reading_jobs`, the jobs this site started. It is made once, when the site
 # loads (new.env() at the top level of this file), so it belongs to the R process, not to a session: every
 # session that process serves sees the same one, and the site's other R processes have their own. Shiny runs one
@@ -164,10 +168,6 @@ carry_on <- function(blocks, more) {
     is_container(blocks[[last]]$component_type)
   if (continues_section) {
     blocks[[last]]$children <- carry_on(blocks[[last]]$children, more[[1]]$children)
-    # a group's skip is printed after its questions, so it can come with the pages that finish it
-    for (field in c("skip_condition", "skip_when", "skip_instruction")) {
-      blocks[[last]][[field]] <- blocks[[last]][[field]] %||% more[[1]][[field]]
-    }
     more <- more[-1]
   }
   c(blocks, more)
@@ -182,7 +182,7 @@ tokens_used <- function(answers) {
   )
 }
 
-# The prompt, with the lookup lists filled in, so a type, subject or time frame staff add
+# The prompt, with the lookup lists filled in, so a subject or time frame staff add
 # reaches Gemini without editing the prompt.
 reading_service_instructions <- function(lookups, prompt_path = reading_prompt_path) {
   prompt <- reading_model_prompt(prompt_path)
@@ -193,8 +193,7 @@ reading_service_instructions <- function(lookups, prompt_path = reading_prompt_p
     # a database without the list yet still shows the form they take
     time_frames = quoted(if (length(lookups$time_frames)) lookups$time_frames else c("in your lifetime", "in the past 12 months", "in the past 30 days")),
     answer_data_types = quoted(lookups$answer_data_types),
-    # not a choice with [subject] in it: Gemini writes who a choice names as printed, and staff link the questions
-    answer_options = paste0("  - ", grep(subject_placeholder, lookups$answer_options, fixed = TRUE, value = TRUE, invert = TRUE), collapse = "\n")
+    answer_options = paste0("  - ", lookups$answer_options, collapse = "\n")
   )
   for (name in names(lists)) {
     prompt <- gsub(paste0("{{", name, "}}"), lists[[name]], prompt, fixed = TRUE)
@@ -210,10 +209,10 @@ reading_service_prompt_version <- function(instructions) {
 
 # ------ Into the Edit Extraction page's shape ----------------------------------------------------
 # Counts display_order 1, 2, 3... down each list, keeps only the fields each kind
-# of block has (in tests/testthat/fixtures/gna_gold.json's order, leaving out empty ones), and
-# tidies the text: one space between words, straight quotes, and the form's words in lower case (normal_text()). A block put inside
-# one that isn't a section or group moves out to sit straight after it. A variable about the
-# respondent has no subject.
+# of block has (in tests/testthat/fixtures/gna_gold.json's order, leaving out empty ones; what the prompt
+# no longer asks for, such as routing, is dropped), and tidies the text: one space between words, straight
+# quotes, and the form's words in lower case (normal_text()). A block put inside one that isn't a section or
+# group moves out to sit straight after it. A variable about the respondent has no subject.
 reading_service_tidy <- function(reading) {
   list(
     questionnaire = without_blanks(list(
@@ -230,14 +229,8 @@ tidy_blocks <- function(blocks) {
     block <- blocks[[i]]
     type <- block$component_type
     if (is_container(type)) {
-      # a group or a grid can skip, on the answers to the questions in it (service_draft_skips.R)
-      skips <- type %in% skipping_types
       return(without_blanks(list(
         component_type = type, display_order = i, text = normal_text(clean_text(block$text)), page = block$page,
-        condition = normal_text(clean_text(block$condition)),
-        skip_condition = if (skips) normal_text(clean_text(block$skip_condition)),
-        skip_when = if (skips && !is.null(block$skip_condition)) tidy_skip_when(block$skip_when),
-        skip_instruction = if (skips) normal_text(clean_text(block$skip_instruction)),
         children = tidy_blocks(block$children)
       )))
     }
@@ -250,17 +243,10 @@ tidy_blocks <- function(blocks) {
       text = normal_text(clean_text(block$text)),
       page = block$page,
       printed_number = clean_number(block$printed_number),
-      self_contained = block$self_contained %||% TRUE,
-      condition = normal_text(clean_text(block$condition)),
       parent_question = clean_number(block$parent_question),
       variables = tidy_boxes(block$variables)
     ))
   })
-}
-
-# Whether a group skips when every question in it gets the answer, or any: "every" unless the AI said "any".
-tidy_skip_when <- function(when) {
-  if (identical(tolower(trimws(as.character(when %||% ""))), "any")) "any" else "every"
 }
 
 lift_misplaced_children <- function(blocks) {
@@ -279,8 +265,7 @@ tidy_boxes <- function(boxes) {
       return(without_blanks(list(
         variable_type = box$variable_type, display_order = i, label = normal_text(clean_text(box$label)),
         subject = blank_respondent(clean_text(box$subject) %||% NA), time_frame = tidy_time_frame(box$time_frame),
-        answer_data_type = box$answer_data_type, unit = tidy_unit(box$unit),
-        skip_condition = normal_text(clean_text(box$skip_condition)), skip_instruction = normal_text(clean_text(box$skip_instruction))
+        answer_data_type = box$answer_data_type, unit = tidy_unit(box$unit)
       )))
     }
     without_blanks(list(
@@ -299,8 +284,7 @@ tidy_choices <- function(choices) {
     choice <- choices[[i]]
     without_blanks(list(
       display_order = i,
-      answer_option = normal_answer(clean_text(choice$answer_option) %||% NA),
-      skip_instruction = normal_text(clean_text(choice$skip_instruction))
+      answer_option = normal_answer(clean_text(choice$answer_option) %||% NA)
     ))
   })
 }
@@ -580,7 +564,7 @@ reading_service_run <- function(connection, id, reading_started, read = reading_
           }
         )
       }
-      if (draft_model_save_reading(connection, id, reading$json, reading_started)) {
+      if (extraction_model_save_reading_result(connection, id, reading$json, reading_started)) {
         update(
           extraction_status = "ready", error = not_applied, model = reading$model,
           prompt_version = reading$prompt_version

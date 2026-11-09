@@ -2,8 +2,8 @@
 # One for every page that edits a question's variables: Edit Extraction's outline (in the picked question's
 # details) and Make an edit (`variable_editor_server()`). The page keeps the draft and says how a change is
 # made; this keeps how the editor shows it: which variables' choices staff closed (`choices_closed`; they are open until then), which optional
-# fields were added empty (`shown`, as "v3:subject" or "o12:respondent_count"), the questions whose shared
-# choices are edited one by one (`split`), and the field just added, which gets the cursor when it is drawn.
+# fields were added empty (`shown`, as "v3:subject"), the questions whose shared choices are edited one by one
+# (`split`), and the field just added, which gets the cursor when it is drawn.
 # Its buttons add variables (from a dialog: Choices or Write-in) and choices, give a variable's codes to the
 # other questions with the same choices (Apply to All?), open and close a variable's choices, edit a grid's
 # shared choices together or one by one, add and take away optional fields, and delete variables and choices.
@@ -39,10 +39,10 @@ variable_editor <- function(draft, change, redraw, ns) {
     now$variables$component_id[now$variables$id %in% variable]
   }
 
-  # Which table an optional field is in: a variable's subject, time frame, label and (a write-in's) skip, or a choice's
-  # count of respondents and skip.
+  # The table an optional field is in (a variable's subject, time frame, label and unit), or NULL for a field that
+  # isn't optional.
   optional_table <- function(name) {
-    if (name %in% names(optional_variable_fields)) "variables" else if (name %in% names(optional_choice_fields)) "response_options"
+    if (name %in% names(optional_variable_fields)) "variables"
   }
 
   action <- function(event) {
@@ -71,7 +71,7 @@ variable_editor <- function(draft, change, redraw, ns) {
         redraw(event$id)
       },
       show_field = show_field(event$id, event$name),
-      hide_field = hide_field(now, event$id, event$name, shared),
+      hide_field = hide_field(now, event$id, event$name),
       delete = {
         if (!event$table %in% c("variables", "response_options")) {
           return(FALSE) # a block: the page's own
@@ -133,8 +133,8 @@ variable_editor <- function(draft, change, redraw, ns) {
     change(draft_service_copy_codes(draft(), id))
   }
 
-  # An optional field added to a variable or choice shows, empty, with the cursor in it; its question is drawn
-  # again for it. It stays until everything is drawn again from scratch, unless something is typed into it.
+  # An optional field added to a variable shows, empty, with the cursor in it; its question is drawn again for
+  # it. It stays until everything is drawn again from scratch, unless something is typed into it.
   show_field <- function(id, name) {
     table <- optional_table(name)
     if (is.null(table)) {
@@ -145,32 +145,15 @@ variable_editor <- function(draft, change, redraw, ns) {
     redraw(question_of(table, id))
   }
 
-  # The delete button of an optional field: it is emptied (a change Undo takes back) and hidden again; in the
-  # shared choices, in every variable's choice.
-  hide_field <- function(now, id, name, shared = character()) {
+  # The delete button of an optional field: it is emptied (a change Undo takes back) and hidden again.
+  hide_field <- function(now, id, name) {
     table <- optional_table(name)
     if (is.null(table)) {
       return()
     }
     shown(setdiff(shown(), paste0(id, ":", name)))
-    # taking away where a choice or write-in skips to takes its link with its printed words (and the answer)
-    fields <- switch(name,
-      skip_instruction = c("skip_to_id", "skip_instruction"),
-      skip = c("skip_condition", "skip_instruction", "skip_to_id"),
-      name
-    )
     row <- match(id, now[[table]]$id)
-    if (any(!is.na(unlist(now[[table]][row, fields])))) {
-      changed <- now
-      for (field in fields) {
-        changed <- if (table == "response_options" && length(shared) > 0) {
-          draft_service_update_shared(changed, shared, id, field, "")
-        } else {
-          draft_service_update(changed, table, id, field, "")
-        }
-      }
-      change(changed)
-    }
+    if (!is.na(now[[table]][[name]][row])) change(draft_service_update(now, table, id, name, ""))
     redraw(question_of(table, id))
   }
 
@@ -188,13 +171,12 @@ variable_editor <- function(draft, change, redraw, ns) {
 }
 
 # Make an edit's variable editor: the variables of the question being added, edited as Edit Extraction edits a
-# question's (`variable_editor()`), with Skip to as the words printed for it (there is no outline here to link
-# it to) and without Apply to All? (there are no other questions).
+# question's (`variable_editor()`), without Apply to All? (there are no other questions).
 # The form holds the variables as JSON (`edit_variables_parse()`): `load()` gives them to the editor when the
 # form is drawn, and `value()` is them again, as they are now. Changes aren't kept for Undo: each field and
 # button is its own small change, and the form isn't sent until it is checked.
-# Returns: A list: `load(json, options)`, where `options` is the field's (`subjects`, `answer_data_types`,
-#   `answer_options`), and `value()`, a reactive of the variables as JSON (`NULL` until loaded).
+# Returns: A list: `load(json, options)`, where `options` is the field's (`subjects`, `time_frames`, `units`,
+#   `answer_data_types`, `answer_options`), and `value()`, a reactive of the variables as JSON (`NULL` until loaded).
 variable_editor_server <- function(id) {
   moduleServer(id, function(input, output, session) {
     ns <- session$ns
@@ -227,7 +209,7 @@ variable_editor_server <- function(id) {
       version()
       isolate({
         now <- req(draft())
-        view <- c(editor$view(), list(focus = editor$take_focus(), skip_words = TRUE, apply_codes = FALSE, counts = FALSE))
+        view <- c(editor$view(), list(focus = editor$take_focus(), apply_codes = FALSE))
         variable_editor_body(now$components[1, , drop = FALSE], now, view, lookups, ns)
       })
     })
@@ -239,8 +221,8 @@ variable_editor_server <- function(id) {
         isolate({
           variables <- tryCatch(edit_variables_parse(json), error = function(problem) list())
           lookups <<- list(
-            subjects = options$subjects, time_frames = options$time_frames, answer_data_types = options$answer_data_types,
-            answer_options = options$answer_options
+            subjects = options$subjects, time_frames = options$time_frames, units = options$units,
+            answer_data_types = options$answer_data_types, answer_options = options$answer_options
           )
           editor$reset()
           draft(edit_variables_draft(variables))

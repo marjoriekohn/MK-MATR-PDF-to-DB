@@ -1,0 +1,146 @@
+// AI Monitor page: its headline numbers, the chart and the prompts beside it, and the commonest corrections
+
+// ------ The headline numbers ----------------------------------------------------------------------
+.monitor-totals {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 1rem;
+  margin-bottom: 1.5rem;
+  @include media-breakpoint-down(md) { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+.monitor-stat {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  padding: 1rem 1.25rem;
+  border: 1px solid $card-border-color;
+  border-top: 3px solid $vcu-gold;
+  border-radius: $card-border-radius;
+  background: $vcu-white;
+  box-shadow: $shadow-card;
+}
+.monitor-stat-value {
+  font-family: $font-family-serif;
+  font-size: $section-title-font-size;
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+  line-height: 1.2;
+}
+.monitor-stat-label { color: $vcu-gray; font-size: $font-size-sm; }
+
+// ------ The chart, and the prompts beside it ------------------------------------------------------
+.monitor-panels {
+  display: grid;
+  grid-template-columns: minmax(0, 2fr) minmax(0, 1fr);
+  gap: 1rem;
+  margin-bottom: 2rem;
+  @include media-breakpoint-down(lg) { grid-template-columns: minmax(0, 1fr); }
+}
+.monitor-panel {
+  min-width: 0;
+  padding: 1.25rem 1.5rem;
+  border: 1px solid $card-border-color;
+  border-radius: $card-border-radius;
+  background: $vcu-white;
+  box-shadow: $shadow-card;
+  @include media-breakpoint-down(sm) { padding: 1rem; }
+}
+.monitor-panel-title { margin: 0 0 0.25rem; font-size: $title-font-size; }
+.monitor-panel-text { margin: 0 0 1rem; color: $vcu-gray; font-size: $font-size-sm; }
+.monitor-empty { padding: 2rem 0; color: $vcu-gray; text-align: center; }
+
+.monitor-chart {
+  display: block;
+  width: 100%;
+  height: auto;
+  overflow: visible;
+}
+.monitor-bar {
+  fill: $vcu-gold;
+  &:hover { fill: mix($vcu-gold, $vcu-black, 80%); }
+  &.is-zero { fill: transparent; }
+}
+.monitor-bar-value {
+  fill: $vcu-black;
+  font-size: $font-size-xxs;
+  font-weight: 700;
+  text-anchor: middle;
+}
+.monitor-axis { stroke: $vcu-gray; stroke-width: 1; }
+.monitor-grid-line { stroke: $line-light; stroke-width: 1; }
+.monitor-axis-label {
+  fill: $vcu-gray;
+  font-size: $font-size-xxs;
+  &.is-x { text-anchor: middle; }
+  &.is-y { text-anchor: end; dominant-baseline: middle; }
+}
+
+.monitor-table {
+  margin: 0;
+  font-size: $font-size-sm;
+  th, td { padding: 0.4rem 0.5rem; vertical-align: top; }
+  .is-count { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+  code { color: $vcu-black; }
+}
+.monitor-table-note { color: $vcu-gray; font-size: $font-size-xs; }
+
+// ------ The commonest corrections -----------------------------------------------------------------
+.monitor-section-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 0.5rem 2rem;
+  margin-bottom: 1rem;
+  .section-text { margin-bottom: 0; }
+}
+
+// a kind of correction: a card that opens to its repeated corrections
+.monitor-kind {
+  margin-bottom: 0.75rem;
+  border: 1px solid $card-border-color;
+  border-radius: $card-border-radius;
+  background: $vcu-white;
+  box-shadow: $shadow-card;
+  &[open] { border-color: $gold-border; }
+}
+.monitor-kind-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.25rem 0.75rem;
+  padding: 0.9rem 1.25rem;
+  cursor: pointer;
+  &:hover { background: $gold-faint; }
+  .monitor-kind[open] > & { border-bottom: 1px solid $line-light; }
+}
+.monitor-kind-label { font-family: $font-family-serif; font-size: $title-font-size; font-weight: 700; }
+.monitor-kind-reach { color: $vcu-gray; font-size: $font-size-sm; }
+
+// what kind of change: the badges' colours are _history.scss's
+
+.monitor-examples { display: flex; flex-direction: column; }
+.monitor-example {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  padding: 0.75rem 1.25rem;
+  & + & { border-top: 1px solid $line-light; }
+  @include media-breakpoint-down(md) { flex-wrap: wrap; }
+}
+.monitor-example-body { flex: 1 1 0; min-width: 0; }
+.monitor-example-change { display: flex; flex-wrap: wrap; align-items: baseline; gap: 0.35rem 0.5rem; }
+.monitor-value {
+  padding: 0.1rem 0.4rem;
+  border-radius: $border-radius;
+  overflow-wrap: anywhere;
+  &.is-before { background: rgba($vcu-red, 0.08); text-decoration: line-through; text-decoration-color: rgba($vcu-red, 0.5); }
+  &.is-after { background: rgba($vcu-green, 0.1); }
+  &.is-none { color: $vcu-gray; font-style: italic; text-decoration: none; }
+}
+.monitor-arrow { color: $vcu-gray; }
+.monitor-example-actions {
+  display: flex;
+  flex-shrink: 0;
+  @include media-breakpoint-down(md) { width: 100%; justify-content: flex-end; }
+}

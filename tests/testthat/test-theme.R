@@ -76,7 +76,7 @@ test_that("the menu bar has the pages' links (not Home's or Edit Extraction's), 
   expect_match(css_rule(css, ".navbar .navbar-brand"), "text-overflow:\\s*ellipsis")
 })
 
-test_that("drafts, edits and change requests are one kind of list card, and no page draws its own", {
+test_that("drafts and changes are one kind of list card, and no page draws its own", {
   css <- site_css()
   expect_match(css_rule(css, ".list-card"), "border:\\s*1px solid")
   for (page in names(sass_sources())) {
@@ -103,10 +103,6 @@ test_that("a section's title in the list is plain words, not a white box: its ru
   title <- regexpr("\\.outline-text \\{[^}]*background:\\s*transparent", css)
   expect_gt(boxes, 0)
   expect_gt(title, boxes)
-})
-
-test_that("a skip sentence that links to its question has the same size of words as one that doesn't", {
-  expect_match(css_rule(site_css(), ".edit-extraction-page .skip-link"), "--bs-btn-font-size:\\s*inherit")
 })
 
 test_that("the stylesheet carries a fingerprint of every file in www/sass, so a cached copy is never one from before an edit", {
@@ -137,7 +133,7 @@ test_that("text sizes are defaults.scss's, not typed in on a page", {
   }
 })
 
-test_that("a note beside something (a reviewer's words, a hint, a warning) is drawn once, in components/_note.scss", {
+test_that("a note beside something (a hint, a warning, a sign-in problem) is drawn once, in components/_note.scss", {
   pages <- sass_sources()
   expect_true("_note.scss" %in% names(pages))
   # a coloured rule down a box's left is a note's; only a page's title has one of its own (_page.scss)

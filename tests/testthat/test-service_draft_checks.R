@@ -27,8 +27,9 @@ test_that("each broken rule is reported against the block to fix", {
   # a printed number can be missing, or repeat (each section can start again at 1)
   expect_false(any(draft_service_check(edit("components", q1a, "printed_number", ""), test_lookups())$id == q1a))
   expect_false(any(draft_service_check(edit("components", q1a, "printed_number", "1B"), test_lookups())$id == q1a))
-  expect_true(problem_for(edit("components", q1a, "self_contained", "FALSE"), "Pick the question it follows"))
-  expect_true(problem_for(edit("components", q1a, "parent_question_id", q1b), "printed before it"))
+  # the question it depends on has to be a question printed before it
+  expect_true(problem_for(edit("components", q1a, "parent_question_id", q1b), "Pick the question it depends on again. It has to be a question printed before it."))
+  expect_false(any(grepl("depends on", draft_service_check(edit("components", q1b, "parent_question_id", q1a), test_lookups())$message)))
   expect_true(problem_for(suppressMessages(draft_service_delete(draft, "variables", box)), "Add at least one variable"))
   no_choices <- suppressMessages(draft_service_delete(draft_service_delete(draft, "response_options", choices[2]), "response_options", choices[1]))
   expect_true(problem_for(no_choices, "add its choices"))
@@ -110,15 +111,6 @@ test_that("a section needs its printed heading, a group has none, and a section 
   nested$components$component_type[nested$components$id == inner] <- "Section"
   nested$components$text[nested$components$id == inner] <- "Part B"
   expect_true(any(problems_of(nested)$id == inner & grepl("can't be inside a group", problems_of(nested)$message)))
-})
-
-test_that("a count of respondents can't be below 0, and a choice without one is fine", {
-  draft <- gold_draft()
-  expect_false(any(grepl("respondents", draft_service_check(draft, test_lookups())$message)))
-  below <- draft_service_update(draft, "response_options", "o1", "respondent_count", "-3")
-  problems <- draft_service_check(below, test_lookups())
-  expect_true(any(grepl("can't be below 0", problems$message)))
-  expect_false(any(grepl("can't be below 0", draft_service_check(draft_service_update(draft, "response_options", "o1", "respondent_count", "0"), test_lookups())$message)))
 })
 
 test_that("each variable of a question with several has a label of its own, so the rows of a grid can be told apart", {

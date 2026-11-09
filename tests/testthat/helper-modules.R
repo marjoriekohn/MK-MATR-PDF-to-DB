@@ -31,18 +31,14 @@ shared_catalog <- function(env = parent.frame()) {
   })
 }
 
-# The lookup tables (lookup_model_get_*: component types, subjects, time frames, answer options and their
-# aliases), read once for a test file and handed to every later read until the test ends. The tests don't add
+# The lookup tables (lookup_model_get_*: tags and answer options), read once for a test file and handed to every later read until the test ends. The tests don't add
 # to them, and test-service_lookup.R reads them from the database itself. A test that wants one read to fail
 # stubs it after this, so its stub is the one used.
 shared_lookups <- function(env = parent.frame()) {
   if (!is_test_body(env)) {
     return(invisible())
   }
-  reads <- c(
-    "lookup_model_get_component_types", "lookup_model_get_subjects", "lookup_model_get_time_frames",
-    "lookup_model_get_answer_options", "lookup_model_get_answer_option_aliases"
-  )
+  reads <- c("lookup_model_get_tags", "lookup_model_get_answer_options")
   tables <- file_shared(env, "lookups", function(file_env) {
     stats::setNames(lapply(reads, function(read) get(read)(test_connection)), reads)
   })
@@ -62,6 +58,20 @@ fixed_catalog <- function(catalog = test_catalog()) {
 # (by id), and `changed()` does nothing.
 fixed_extractions <- function(records = list()) {
   list(all = shiny::reactive(records), changed = function() invisible())
+}
+
+# A row of the history, as the database writes one when staff change the catalog. The history is never
+# deleted (history_is_kept), so the row isn't removed here: it goes when the staff member who made it is forgotten
+# at the end of the test (helper-00_realdb.R; the test project's own function removes their history rows).
+# staff: Who made the change, from `local_staff()`.
+# action: `"Pushed"`, `"Emptied"`, `"Added"`, `"Updated"` or `"Deleted"`.
+# details: What was done: a list of items for an edit, a named list of counts for a push or an emptying.
+# Returns: The row as the database stored it, as a list.
+local_history <- function(staff, action = "Added", summary = paste("Added the respondent type", test_name("Parents")),
+                          entity = "respondent_type", record_id = "1", details = NULL) {
+  database_model_insert(test_connection, "history", list(
+    staff_id = staff$staff_id, action = action, entity = entity, record_id = record_id, summary = summary, details = details
+  ))
 }
 
 # The extraction drafts as server.R shares them: `all()` reads them from the database

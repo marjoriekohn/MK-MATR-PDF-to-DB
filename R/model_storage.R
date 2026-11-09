@@ -1,12 +1,12 @@
 # ------ Files kept in Supabase Storage ---------------------------------------------
 # A copy of the site keeps its files on the disk of the server it runs on, and a hosted site loses
 # them when it restarts or is deployed again, and doesn't share them between its servers. So the files
-# a draft needs later (its PDF) are also kept in a bucket in the project's Storage, which the site's
+# an extraction needs later (its PDF) are also kept in a bucket in the project's Storage, which the site's
 # server writes with the secret key (the same `connection` as the database, in the apikey header).
-# The bucket is public, so the dashboard can link the PDF each wave was extracted from (wave_file names
-# it): anyone can download a file by its address, but only the site's server can add or remove one.
-# A draft's PDF is unlisted (the dashboard only sees wave_file's), not hidden. The bucket is made by
-# docs/sql/1_setup.sql (section 7, "The PDFs' bucket").
+# The bucket is public, so the dashboard can link the PDF each wave was extracted from (wave.pdf_sha256
+# names it): anyone can download a file by its address, but only the site's server can add or remove one.
+# An extraction's PDF is unlisted until it is pushed (the dashboard only sees the waves'), not hidden. The
+# bucket is made by sql/5_permissions.sql.
 #
 #   curl "$SUPABASE_URL/storage/v1/object/public/extraction-pdfs/<sha256>.pdf"
 
@@ -95,7 +95,7 @@ storage_problem <- function(response, bucket) {
   body <- tryCatch(httr2::resp_body_json(response), error = function(problem) list())
   if (identical(body$code, "NoSuchBucket")) {
     return(sprintf(
-      "The file storage has no bucket called %s yet, so the PDF can't be kept. Run the statement under \"The PDFs' bucket\" in docs/sql/1_setup.sql.",
+      "The file storage has no bucket called %s yet, so the PDF can't be kept. Run the statement under \"The PDFs' bucket\" in sql/5_permissions.sql.",
       bucket
     ))
   }

@@ -37,7 +37,7 @@ shared_staff_stubs <- function(log, env = parent.frame()) {
     log$made <- log$made + 1L
     list(staff_id = 9000L + log$made, name = name %||% paste("Stand-in", role, log$made), role = role, email = "x@example.test")
   }, env = env)
-  local_stub("test_clear_drafts", function(staff_id) log$cleared <- c(log$cleared, staff_id), env = env)
+  local_stub("test_forget_work", function(staff_id) log$cleared <- c(log$cleared, staff_id), env = env)
 }
 pool_log <- new.env()
 pool_log$made <- 0L
@@ -57,7 +57,7 @@ test_that("a test file's first test makes the staff it asks for, one for each ti
   expect_equal(pool_log$made, 6L)
 })
 
-test_that("the file's next test is given the same staff, in the same order, with what pointed at them cleared", {
+test_that("the file's next test is given the same staff, in the same order, with what they did forgotten", {
   withr::defer(rm(list = ".matr_shared_staff", envir = parent.env(environment()))) # the stand-ins go with this test
   expect_setequal(pool_log$cleared, 9001:9003) # when the last test ended
   shared_staff_stubs(pool_log)
@@ -105,43 +105,70 @@ test_that("every name a test makes has the run's marker and is different each ti
   expect_false(identical(a, b))
 })
 
-test_that("a staff member is made for the test, and removed with the drafts and history that point at them", {
+# Whether no row of `table` has `value` in `column`.
+gone <- function(table, column, value) {
+  nrow(database_model_get(test_connection, table, column, filters = stats::setNames(list(database_eq(value)), column))) == 0
+}
+
+test_that("a staff member is made for the test, and removed with the extractions and history that name them", {
   # Everything the helpers make is removed when the function they were called in ends; this one ends by hand.
   made <- (function() {
     scope <- environment()
     me <- local_staff(env = scope)
     admin <- local_staff("ADMIN", env = scope)
     tree <- local_tree(env = scope)
-    record <- local_extraction(me, env = scope)
-    kind <- edit_entities$respondent_type
-    name <- test_name("Respondent Type")
-    snap <- edit_service_load(test_connection, kind)
-    fields <- edit_service_fields(kind, snap, "add")
-    values <- utils::modifyList(edit_service_initial(kind, fields, snap, "add"), list(respondent_type__name = name))
-    # an edit applied by the ADMIN is in the history, and what it added is in the tables
-    added <- edit_service_quick_add(test_connection, kind, snap, fields, values, admin)
-    local_applied(added$history_id, env = scope)
-    present <- nrow(database_model_get(test_connection, "respondent_type", "name", filters = list(name = database_eq(name)))) == 1
+    # an extraction aimed at the tree's wave, and a history row, as the site writes them
+    extraction <- database_model_insert(test_connection, "extraction", list(
+      method = "Manual", prepared_by = me$staff_id, saved_by = me$staff_id, summary = test_name("Extraction"),
+      info = list(wave_id = as.character(tree$wave$wave_id))
+    ), select = "extraction_id")
+    history <- database_model_insert(test_connection, "history", list(
+      staff_id = admin$staff_id, action = "Added", entity = "respondent_type",
+      record_id = as.character(tree$respondent_type$respondent_type_id), summary = test_name("Added a respondent type")
+    ), select = "history_id")
     withr::deferred_run(scope)
-    list(me = me, admin = admin, tree = tree, record = record, added = added, name = name, present = present)
+    list(me = me, admin = admin, tree = tree, extraction = extraction, history = history)
   })()
   expect_match(made$me$name, test_marker)
   expect_equal(made$me$role, "STAFF")
   expect_equal(made$admin$role, "ADMIN")
-  expect_match(made$record$id, "^[0-9]+$")
-  expect_match(made$added$key, "^[0-9]+$")
-  expect_true(made$present)
+  expect_match(as.character(made$extraction$extraction_id), "^[0-9]+$")
 
-  gone <- function(table, column, value) {
-    nrow(database_model_get(test_connection, table, column, filters = stats::setNames(list(database_eq(value)), column))) == 0
-  }
-  # the database keeps staff and applied drafts for good, but the test project's own functions remove them
+  # the database keeps staff and the history for good, but the test project's own functions remove them
   expect_true(gone("staff", "staff_id", made$me$staff_id))
   expect_true(gone("staff", "staff_id", made$admin$staff_id))
-  expect_true(gone("draft", "draft_id", made$record$id))
-  expect_true(gone("respondent_type", "name", made$name))
-  expect_true(gone("draft", "draft_id", made$added$history_id))
-  expect_equal(nrow(history_model_get_items(test_connection, as.character(made$added$history_id))), 0)
+  expect_true(gone("extraction", "extraction_id", made$extraction$extraction_id))
+  expect_true(gone("history", "history_id", made$history$history_id))
+  expect_true(gone("wave", "wave_id", made$tree$wave$wave_id))
   expect_true(gone("study", "study_id", made$tree$study$study_id))
   expect_true(gone("registry", "registry_id", made$tree$registry$registry_id))
+  # an extraction that has gone already is no error to remove again
+  expect_no_error(test_delete_extraction(made$extraction$extraction_id))
+})
+
+test_that("the vocabulary a push adds, and extractions, are removed by their marker", {
+  # what a push would add, made here by hand under a marker of this test's own, so nothing else of the run's is touched
+  marker <- paste(test_marker, "vocabulary")
+  me <- local_staff()
+  tag <- database_model_insert(test_connection, "tag", list(kind = "unit", name = paste(marker, "unit", test_counter())))
+  option <- database_model_insert(test_connection, "answer_option", list(standardized_label = tolower(paste(marker, "choice", test_counter()))))
+  component <- database_model_insert(test_connection, "component", list(kind = "Note", text = tolower(paste(marker, "note", test_counter()))))
+  extraction <- database_model_insert(test_connection, "extraction", list(
+    method = "Manual", prepared_by = me$staff_id, saved_by = me$staff_id, summary = paste(marker, "extraction", test_counter())
+  ), select = "extraction_id")
+  # (should the removal fail, they are removed the plain way)
+  withr::defer({
+    test_delete("tag", list(tag_id = database_eq(tag$tag_id)))
+    test_delete("answer_option", list(answer_option_id = database_eq(option$answer_option_id)))
+    test_delete("component", list(component_id = database_eq(component$component_id)))
+    test_delete_extraction(extraction$extraction_id)
+  })
+
+  expect_error(test_forget_marked("not a marker"), "ZZTEST")
+  removed <- test_forget_marked(marker)
+  expect_equal(unlist(removed[c("tags", "answer_options", "components", "extractions")]), c(tags = 1, answer_options = 1, components = 1, extractions = 1))
+  expect_true(gone("tag", "tag_id", tag$tag_id))
+  expect_true(gone("answer_option", "answer_option_id", option$answer_option_id))
+  expect_true(gone("component", "component_id", component$component_id))
+  expect_true(gone("extraction", "extraction_id", extraction$extraction_id))
 })

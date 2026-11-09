@@ -1,8 +1,8 @@
-# The Extraction Drafts page: every extraction draft whose change request isn't submitted yet, a card each.
+# The Extraction Drafts page: every extraction draft that isn't pushed yet, a card each.
 extraction_drafts_page_ui <- function(id) {
   div(
     class = "page extraction-page drafts-page",
-    page_header("Extraction Drafts", "Pick up a draft whose change request isn't submitted yet.", eyebrow = "Work in progress", icon_name = "drafts"),
+    page_header("Extraction Drafts", "Pick up a draft that isn't pushed yet.", eyebrow = "Work in progress", icon_name = "drafts"),
     extraction_drafts_ui(id)
   )
 }
@@ -52,7 +52,6 @@ draft_card <- function(record, draft, catalog, me, now = Sys.time()) {
   mine <- draft_row_service_is_mine(record, me)
   editor <- draft_row_service_editor(record, me, now)
   failed <- identical(record$extraction_status, "failed")
-  sent_back <- record$sent_back
   steps <- extraction_service_progress(record, draft)
   div(
     class = "list-card",
@@ -63,15 +62,11 @@ draft_card <- function(record, draft, catalog, me, now = Sys.time()) {
         class = "list-card-title-row",
         h2(class = "list-card-title", extraction_service_title(record, catalog)),
         row_badge(if (mine) "Yours" else draft_row_service_preparer(record), class = if (mine) "is-mine"),
-        if (!is.null(sent_back)) row_badge("Sent back", class = "is-warning"),
         if (identical(record$method, extraction_manual)) row_badge("Typed by hand"),
         if (failed) row_badge("Reading stopped", class = "is-warning"),
         if (!is.null(editor)) row_badge(app_icon("edit"), sprintf(" %s is actively working on this", editor$by), class = "is-editing")
       ),
       p(class = "list-card-meta", draft_meta(record)),
-      if (!is.null(sent_back)) {
-        div(class = "list-card-note", strong(paste0(sent_back$by, ":")), paste0("“", sent_back$note, "”"))
-      },
       div(class = "draft-progress", map_rows(steps, function(step) {
         span(class = "progress-step", progress_dot(step$state), step$label)
       }))
@@ -107,11 +102,7 @@ draft_card <- function(record, draft, catalog, me, now = Sys.time()) {
 draft_meta <- function(record) {
   pieces <- c(
     paste("Started", day_phrase(parse_time(record$started))),
-    if (!is.null(record$sent_back)) {
-      paste("sent back by", record$sent_back$by %||% "a reviewer", day_phrase(parse_time(record$sent_back$date)))
-    } else {
-      paste("last saved", time_ago(parse_time(record$saved)))
-    },
+    paste("last saved", time_ago(parse_time(record$saved))),
     if (identical(record$extraction_status, "failed")) record$error
   )
   paste(pieces[has_text(pieces)], collapse = " · ")

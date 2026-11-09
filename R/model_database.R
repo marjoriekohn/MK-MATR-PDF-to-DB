@@ -1,15 +1,16 @@
 # ------ The MATR database ----------------------------------------------------------
-# The live tables (REGISTRY, STUDY, QUESTIONNAIRE, WAVE...) and the drafts staff
-# are still working on (DRAFT and its detail tables) are in a PostgreSQL database that
-# Supabase hosts. The site talks to it through Supabase's REST API, as this does
-# from a terminal:
+# The catalog (registry, study, questionnaire, wave, component, variable...) and the
+# tables private to the site (staff, extraction, history) are in a PostgreSQL database
+# that Supabase hosts (docs/database_design.md; built by sql/). The site talks to it
+# through Supabase's REST API, as this does from a terminal:
 #   curl "$SUPABASE_URL/rest/v1/registry?select=name,abbreviation" -H "apikey: $SUPABASE_SECRET_KEY"
 # Only this server holds the key; the browser never talks to the database. The
-# secret key gets past Row Level Security, which hides STAFF, WRITE_HISTORY and
-# the drafts from the publishable key, so it never goes to a browser or into
-# a log. It can also change any table: the database's own rules (its constraints,
-# triggers and draft functions) and the site's service functions are what stand
-# between staff and a wrong change, so nothing a browser sends is used without them.
+# secret key gets past Row Level Security, which hides staff, extraction and history
+# from the publishable key, so it never goes to a browser or into a log. It can also
+# change any table: the database's own rules (its constraints, triggers and the
+# functions that change several tables at once: push_extraction, apply_change,
+# empty_*) and the site's service functions are what stand between staff and a wrong
+# change, so nothing a browser sends is used without them.
 #
 # This file is the only place that makes requests to the database. Every other
 # model function names a table and what it wants from it; services and modules
@@ -62,7 +63,7 @@ database_max_tries <- 3
 # Every row of `table`, with only `columns`, sorted by `order_by`.
 # columns: The columns to read, as a character vector.
 # order_by: The columns to sort by; each can end in `.desc`. Defaults to the first column.
-# filters: Narrow the rows: a named list of PostgREST filters, e.g. `list(kind = database_eq("Edit"))`.
+# filters: Narrow the rows: a named list of PostgREST filters, e.g. `list(status = database_eq("Pushed"))`.
 # page_size: Rows asked for at a time; Supabase sends at most 1,000.
 # Returns: A data frame with `columns`; with no rows, one whose columns are logical.
 database_model_get <- function(connection, table, columns, order_by = columns[1],
@@ -81,7 +82,7 @@ database_model_get <- function(connection, table, columns, order_by = columns[1]
 # Read a table whose rows hold jsonb.
 # Like `database_model_get()`, but each row comes back as a list, and a jsonb value
 # as the lists it was saved as, not turned into data frames.
-# select: PostgREST's `select`: columns, which can embed another table, e.g. `"preparer:staff!prepared_by(name)"`.
+# select: PostgREST's `select`: columns, which can embed another table, e.g. `"staff(name)"`.
 # order_by: The columns to sort by, or `NULL` for the database's order.
 # most: The most rows to read (the first, in `order_by`'s order), up to a page; all of them by default.
 # Returns: A list with one list per row; empty if there are none.
@@ -193,13 +194,29 @@ database_model_update <- function(connection, table, changes, filters, select = 
   database_rows(response)
 }
 
+# Delete the rows of a table that match filters.
+# There must be a filter: this never empties a table.
+# filters: Which rows, as for `database_model_get()`.
+# select: The columns of the deleted rows to send back.
+# Returns: The rows deleted, as a list of lists; empty if nothing matched.
+database_model_delete <- function(connection, table, filters, select = "*") {
+  if (length(filters) == 0) stop("Deleting from a table needs to say which rows.", call. = FALSE)
+  response <- database_request(connection, table) |>
+    httr2::req_method("DELETE") |>
+    database_filter(filters) |>
+    httr2::req_url_query(select = select, .multi = "comma") |>
+    httr2::req_headers(Prefer = "return=representation") |>
+    database_perform()
+  database_rows(response)
+}
+
 # Call a function of the database.
 # For what has to change several tables at once: separate requests can't share a transaction,
 # a function does. It is called through `/rpc/<name>` with named arguments.
-# name: The function's name, e.g. `"apply_pending_edit"`.
+# name: The function's name, e.g. `"apply_change"`.
 # arguments: A named list of its arguments.
 # Returns: What the function returns, as R values (NULL when it returns nothing). An error with the function's own sentence if
-#   it refused, e.g. an edit that isn't approved.
+#   it refused, e.g. a wave that already asks questions.
 database_model_call <- function(connection, name, arguments = list()) {
   response <- database_request(connection, paste0("rpc/", name)) |>
     httr2::req_method("POST") |>
@@ -217,12 +234,12 @@ database_model_call <- function(connection, name, arguments = list()) {
 # A filter is a column's name and what to do with it. The value is encoded into the
 # URL by httr2, so what staff type is never pasted in.
 # value: What the column must equal.
-# Returns: A string for use in a `filters` list, e.g. `list(kind = database_eq("Edit"))`.
+# Returns: A string for use in a `filters` list, e.g. `list(status = database_eq("Pushed"))`.
 database_eq <- function(value) paste0("eq.", value)
 
 # A PostgREST filter for "is one of".
 # values: What the column may equal; none matches no row.
-# Returns: A string for use in a `filters` list, e.g. `list(draft_id = database_in(c(1, 2)))`.
+# Returns: A string for use in a `filters` list, e.g. `list(wave_id = database_in(c(1, 2)))`.
 database_in <- function(values) {
   # The list is part of the filter's own syntax, so only plain values (numbers, ids) may go in it.
   if (!all(grepl("^[A-Za-z0-9_.-]+$", as.character(values)))) stop("A filter can only list plain values.", call. = FALSE)
@@ -283,16 +300,16 @@ database_problem <- function(response) {
   status <- httr2::resp_status(response)
   body <- tryCatch(httr2::resp_body_json(response), error = function(problem) list())
   message <- body$message %||% ""
-  # P0001 is a function of ours refusing with a sentence for staff (docs/sql/1_setup.sql): show it as written.
+  # P0001 is a function of ours refusing with a sentence for staff (sql/4_functions.sql): show it as written.
   if (identical(body$code, "P0001") && nzchar(message)) {
     return(message)
   }
   # 42501 is PostgreSQL's "permission denied": the key is fine, but the table
-  # hasn't been granted to it (docs/sql/1_setup.sql grants each table).
+  # hasn't been granted to it (sql/5_permissions.sql grants each table).
   if (identical(body$code, "42501")) {
     return(paste0(
       "The MATR database won't let the site use this table (", message, "). ",
-      "The table needs granting to the service_role; see the grants in docs/sql/1_setup.sql."
+      "The table needs granting to the service_role; see the grants in sql/5_permissions.sql."
     ))
   }
   # 23505 is a row with the same words or name as one the database has. The site looks for those first, so it is
