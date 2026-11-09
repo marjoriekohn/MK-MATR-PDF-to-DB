@@ -81,7 +81,7 @@
 // off one side
 .btn-file { border-radius: $border-radius !important; }
 
-// The uploaded PDF
+// A file given (the PDF, the file of Variable Names and Coding): its kind in a box, its name and facts
 .pdf-file {
   display: flex;
   align-items: center;
@@ -122,10 +122,6 @@
 .upload-pair {
   > .shiny-html-output:empty { position: absolute; }
   &:has(> .shiny-html-output:empty) > .shiny-html-output:not(:empty) { grid-column: 1 / -1; }
-}
-.supplement-note { margin: 0; }
-.pdf-file.is-supplement {
-  .pdf-file-icon { align-items: center; padding-bottom: 0; font-size: $icon-font-size; }
 }
 
 // ------ Reading progress ---------------------------------------------------------------

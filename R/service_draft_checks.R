@@ -116,25 +116,26 @@ variable_problems <- function(draft, matr_ids = TRUE) {
   }
   # A question with several variables is a grid or battery: each row is labelled with its own words, so it can be
   # found and told apart, but for a lone check box, whose one choice says what it records, and a write-in whose unit
-  # does (feet and inches). Two rows can share words only when they are about different people ("Age" of Twin A
-  # and of Twin B), times (lifetime and the past 30 days) or units.
+  # does (feet and inches). Two rows can share words only when they are about different people ("Age" of twin a
+  # and of twin b), times (lifetime and the past 30 days) or units. A roster (a table of blank slots for the
+  # respondent's children or siblings) is the exception: its rows are alike in every way and have no labels, since
+  # their order and their MATR IDs tell them apart (a researcher asks for the whole roster, not the third child).
   label <- trimws(boxes$label)
   label[!nzchar(label)] <- NA
   unit <- if (is.null(boxes$unit)) rep(NA_character_, nrow(boxes)) else boxes$unit
   time_frame <- if (is.null(boxes$time_frame)) rep(NA_character_, nrow(boxes)) else boxes$time_frame
   named <- !is.na(label) | (!is_choice_box & !is.na(unit))
   in_grid <- ave(seq_along(boxes$id), boxes$component_id, FUN = length) > 1
-  row_key <- ifelse(
-    !named, NA,
-    paste(tolower(label), tolower(unit), tolower(blank_respondent(boxes$subject)), tolower(time_frame), sep = "\r")
-  )
+  told_apart <- paste(tolower(label), tolower(unit), tolower(normal_subject(boxes$subject)), tolower(time_frame), sep = "\r")
+  row_key <- ifelse(!named, NA, told_apart)
+  roster <- roster_rows(boxes, choices, told_apart, is.na(label))
   rbind(
     box_problem(is_choice_box & n_choices < 1, "add its choices."), # a lone check box has one
     box_problem(
-      in_grid & !named & !(is_choice_box & n_choices == 1),
+      in_grid & !named & !(is_choice_box & n_choices == 1) & !roster,
       "label it with its row's words, so it can be told apart from the question's other variables.", "label"
     ),
-    box_problem(duplicated_within(row_key, boxes$component_id), "give it a label the question's other variables don't have.", "label"),
+    box_problem(duplicated_within(row_key, boxes$component_id) & !roster, "give it a label the question's other variables don't have.", "label"),
     choice_problem(is.na(choices$answer_option), "fill in the blank choice.", "answer_option"),
     choice_problem(duplicated_within(choices$answer_option, choices$variable_id), "list each choice once.", "answer_option"),
     choice_problem(
@@ -150,6 +151,26 @@ variable_problems <- function(draft, matr_ids = TRUE) {
       "give it a MATR ID no other variable has.", "matr_id"
     )
   )
+}
+
+# Which variables are rows of a roster: a question whose variables are all unlabelled and each alike to another
+# of them in everything else (kind of answer, choices and their codes, unit, subject and time frame), such as
+# "What is the child's sex?" with a yes/no variable for each of five children, or a weight column with pounds and
+# ounces for each child. They are told apart by their order and MATR IDs, so none needs a label.
+# told_apart: Each variable's label, unit, subject and time frame as one key.
+# unlabelled: Whether each variable has no label.
+# Returns: A logical vector, one per variable.
+roster_rows <- function(boxes, choices, told_apart, unlabelled) {
+  if (nrow(boxes) == 0) {
+    return(logical())
+  }
+  coded <- vapply(boxes$id, function(id) {
+    own <- choices[choices$variable_id %in% id, , drop = FALSE]
+    paste(sort(paste(own$code_value, own$answer_option)), collapse = "\n")
+  }, character(1))
+  alike <- paste(told_apart, boxes$variable_type, boxes$answer_data_type, coded, sep = "\r")
+  alike_count <- ave(seq_along(alike), boxes$component_id, alike, FUN = length)
+  as.logical(ave(as.integer(alike_count > 1 & unlabelled), boxes$component_id, FUN = function(fits) all(fits == 1)))
 }
 
 # One problem for each id where `condition` holds. `table`, `rows` and `field` say which field is at

@@ -191,7 +191,8 @@ reading_service_instructions <- function(lookups, prompt_path = reading_prompt_p
     component_types = quoted(lookups$component_types),
     subjects = quoted(lookups$subjects),
     # a database without the list yet still shows the form they take
-    time_frames = quoted(if (length(lookups$time_frames)) lookups$time_frames else c("in your lifetime", "in the past 12 months", "in the past 30 days")),
+    time_frames = quoted(if (length(lookups$time_frames)) lookups$time_frames else c("lifetime", "past 12 months", "past 30 days")),
+    units = quoted(if (length(lookups$units)) lookups$units else c("years", "pounds")),
     answer_data_types = quoted(lookups$answer_data_types),
     answer_options = paste0("  - ", lookups$answer_options, collapse = "\n")
   )
@@ -264,13 +265,13 @@ tidy_boxes <- function(boxes) {
     if (box$variable_type == "open_ended") {
       return(without_blanks(list(
         variable_type = box$variable_type, display_order = i, label = normal_text(clean_text(box$label)),
-        subject = blank_respondent(clean_text(box$subject) %||% NA), time_frame = tidy_time_frame(box$time_frame),
+        subject = normal_subject(clean_text(box$subject) %||% NA), time_frame = tidy_time_frame(box$time_frame),
         answer_data_type = box$answer_data_type, unit = tidy_unit(box$unit)
       )))
     }
     without_blanks(list(
       variable_type = box$variable_type, display_order = i, label = normal_text(clean_text(box$label)),
-      subject = blank_respondent(clean_text(box$subject) %||% NA), time_frame = tidy_time_frame(box$time_frame),
+      subject = normal_subject(clean_text(box$subject) %||% NA), time_frame = tidy_time_frame(box$time_frame),
       response_options = tidy_choices(box$response_options)
     ))
   })

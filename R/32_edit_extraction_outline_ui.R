@@ -532,8 +532,9 @@ block_detail <- function(block, draft, view, lookups, ns) {
   )
 }
 
-# The earlier question a question depends on, picked from the questions printed before it ("7 · Have you
-# smoked…"); the blank choice means it stands on its own. A question it depends on that isn't printed before
+# The earlier question a question depends on, picked from the questions printed before it ("7 · Have you smoked
+# cigarettes at any time in your life?", whole: the browser cuts what doesn't fit); the blank choice means it stands
+# on its own. A question it depends on that isn't printed before
 # it still shows, marked, and the checks point it out.
 # block: One row of a draft's `components`: a question.
 depends_on_field <- function(block, draft, problems) {
@@ -605,7 +606,7 @@ outline_questions <- function(draft) {
       id = questions$id,
       position = match(questions$id, printed),
       # recycle0: a draft with no questions yet has no labels, not one made of the separator
-      label = paste0(ifelse(is.na(numbers), "?", numbers), outline_number_separator, shorten(questions$text, 50), recycle0 = TRUE),
+      label = paste0(ifelse(is.na(numbers), "?", numbers), outline_number_separator, questions$text, recycle0 = TRUE),
       stringsAsFactors = FALSE
     )
   )

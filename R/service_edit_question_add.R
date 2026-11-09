@@ -23,7 +23,7 @@ edit_variables_default <- function() {
 edit_variables_options <- function(snap) {
   tags <- function(kind) sort(snap$tag$name[snap$tag$kind %in% kind])
   list(
-    subjects = tags("subject")[!is.na(blank_respondent(tags("subject")))],
+    subjects = tags("subject")[!is.na(normal_subject(tags("subject")))],
     time_frames = tags("time frame"),
     units = tags("unit"),
     answer_data_types = c("NUMBER", "TEXT", "DATE", "TIME"),
@@ -223,8 +223,7 @@ edit_variable_items <- function(snap, q, placement, variables) {
     }
     tags <- c(subject = "subject", time_frame = "time frame", unit = "unit")
     for (field in names(tags)) {
-      name <- edit_variable_text(box[[field]])
-      if (field == "subject") name <- edit_variable_text(blank_respondent(name))
+      name <- edit_variable_text(if (field == "subject") normal_subject(box[[field]]) else edit_tag_name(tags[[field]], box[[field]]))
       if (!nzchar(name)) next
       add("variable_tag", edit_identifier(list(tag_id = tag_for(tags[[field]], name), variable_key = token)), "Insert", NULL, NA, NA)
     }

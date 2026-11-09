@@ -98,7 +98,7 @@ test_that("where a shared component appears lists each questionnaire, its place 
   expect_match(where, "In a. about you · position 3", fixed = TRUE)
   # each questionnaire's card: the number it was asked as in each wave, its variables and their choices
   expect_match(where, "Wave 1 · question 2", fixed = TRUE)
-  expect_match(where, "AH02SM [smokes now] [Respondent]", fixed = TRUE)
+  expect_match(where, "AH02SM [smokes now] [respondent]", fixed = TRUE)
   expect_match(where, "1 = yes", fixed = TRUE)
   expect_match(where, "Open in this questionnaire")
   expect_match(paste(as.character(edit_usage_ui(edit_entities$component, usage)), collapse = ""), 'data-kind="placement" data-verb="view" data-scope="1" data-key="104"', fixed = TRUE)
@@ -125,8 +125,8 @@ test_that("a questionnaire lists its blocks in printed order by kind, and a wave
   usage <- edit_service_usage(entity, snap, edit_service_row(entity, snap, "1"))
   asked <- Filter(function(line) line$table == "wave_question", usage$pointing)[[1]]
   expect_equal(asked$text, "4 questions asked")
-  expect_equal(asked$labels[2], "2 · do you now smoke cigarettes? [smokes now] [Respondent]")
-  expect_equal(asked$labels[3], "2a · how many cigarettes do you smoke on a typical day? [cigarettes per day] [cigarettes] [Respondent]")
+  expect_equal(asked$labels[2], "2 · do you now smoke cigarettes? [smokes now] [respondent]")
+  expect_equal(asked$labels[3], "2a · how many cigarettes do you smoke on a typical day? [cigarettes per day] [cigarettes] [respondent]")
 })
 
 test_that("a component nothing prints, and a row nothing points at, say they affect nothing else", {

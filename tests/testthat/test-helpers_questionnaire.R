@@ -18,8 +18,8 @@ test_that("the questionnaire is a table: a row for each variable with its MATR I
   expect_equal(row$tags, "")
   choices <- draft_service_children(draft, "response_options", first$id)
   expect_equal(row$coding[[1]], paste(choices$code_value, "=", choices$answer_option)) # each choice on its own line
-  children <- draft$variables[draft$variables$subject %in% "Respondent's Children", ][1, ]
-  expect_match(rows$tags[rows$matr_id %in% children$matr_id][1], "[Respondent's Children]", fixed = TRUE)
+  children <- draft$variables[draft$variables$subject %in% "children", ][1, ]
+  expect_match(rows$tags[rows$matr_id %in% children$matr_id][1], "[children]", fixed = TRUE)
   # each row names the sections and groups it is in
   around <- draft$components[draft$components$id %in% draft_service_ancestors(draft, questions$id[1]), , drop = FALSE]
   expect_gt(nrow(around), 0)
@@ -69,17 +69,17 @@ test_that("a variable's label and subject go in square brackets, and a number re
   draft$components$text[draft$components$id == question] <- paste0(number, ". ", words)
   box <- draft$variables$id[draft$variables$component_id == question][1]
   draft$variables$label[draft$variables$id == box] <- "Lifetime"
-  draft$variables$subject[draft$variables$id == box] <- "Respondent's Siblings"
+  draft$variables$subject[draft$variables$id == box] <- "siblings"
   matr <- draft$variables$matr_id[draft$variables$id == box]
   row <- questionnaire_preview_rows(draft)
   row <- row[row$matr_id %in% matr, ]
   expect_equal(row$text, words)
-  expect_equal(row$tags, "[Lifetime] [Respondent's Siblings]")
+  expect_equal(row$tags, "[Lifetime] [siblings]")
   # a unit and a time frame are shown too: label, unit, time frame, subject
   draft$variables$unit[draft$variables$id == box] <- "hours"
-  draft$variables$time_frame[draft$variables$id == box] <- "in the past 30 days"
+  draft$variables$time_frame[draft$variables$id == box] <- "past 30 days"
   row <- questionnaire_preview_rows(draft)
-  expect_equal(row$tags[row$matr_id %in% matr], "[Lifetime] [hours] [in the past 30 days] [Respondent's Siblings]")
+  expect_equal(row$tags[row$matr_id %in% matr], "[Lifetime] [hours] [past 30 days] [siblings]")
 
   draft$variables$subject[draft$variables$id == box] <- NA
   draft$variables$label[draft$variables$id == box] <- NA

@@ -52,10 +52,10 @@ list_sortable_options <- function(handle) {
 
 # A question's variables, as a table: one line for each, in printed order.
 # A line has the variable's MATR ID and its response: for a write-in the kind of answer, for a variable with
-# choices the choices in short ("1 Yes · 2 No"), which are open under the line (their editor) until the line is clicked to close them. Who it's
-# about, when it's about, its label and (a write-in's) unit have their own columns, there once a variable of the
-# question has one (Subject is blank for the respondent); a line's "+" adds them. The order the variables are
-# in is kept (they are dragged into a new one) but not shown. When the question's variables all offer the
+# choices the choices in short ("1 Yes · 2 No"), which are open under the line (their editor) until the line is clicked to close them. Its tags
+# (who it's about, when it's about, and a write-in's unit: `variable_tags()`) are pills in a box of their own, with
+# + Tag to add one; its label has a column, there once a variable of the question has one, which a line's "+"
+# adds. The order the variables are in is kept (they are dragged into a new one) but not shown. When the question's variables all offer the
 # same choices (a grid's columns), the
 # choices are shown once under the table and edited once for all of them, unless staff chose to edit each
 # variable's own (`view$split`). + Variable, at the bottom of the details, asks whether it has choices or is a
@@ -70,14 +70,14 @@ variable_cards <- function(block, draft, view, lookups, ns) {
   boxes <- draft_service_children(draft, "variables", block$id)
   shared <- if (block$id %in% view$split) character() else draft_service_shared_choices(draft, block$id)
   list_id <- ns(paste0("boxes-", block$id))
-  # the Subject, Time frame, Label and Unit columns, once one of the variables shows it
-  columns <- intersect(names(optional_variable_fields), unlist(map_rows(boxes, shown_optional, optional_variable_fields, view)))
+  # the Label column, once one of the variables shows a label
+  columns <- intersect("label", unlist(map_rows(boxes, shown_optional, optional_variable_fields, view)))
   div(
-    class = c("variable-cards", paste0("has-", columns, recycle0 = TRUE), paste0("optional-", length(columns))),
+    class = c("variable-cards", paste0("has-", columns, recycle0 = TRUE)),
     if (nrow(boxes) > 0) {
       div(
         class = "variable-line variable-head", `aria-hidden` = "true",
-        span(), span("MATR ID"), span("Response"), lapply(optional_variable_fields[columns], span), span(), span()
+        span(), span("MATR ID"), span("Response"), span("Tags"), lapply(optional_variable_fields[columns], span), span(), span()
       )
     },
     div(
@@ -103,8 +103,6 @@ variable_line <- function(box, draft, view, lookups, ns, shared = character(), c
   choices_at_fault <- any(problems$table %in% "response_options" & problems$row %in% choices$id)
   is_open <- is_choice_box && !box$id %in% shared && !box$id %in% view$closed
   showing <- shown_optional(box, optional_variable_fields, view)
-  # a variable with choices has no unit
-  addable <- setdiff(names(optional_variable_fields), c(showing, if (is_choice_box) "unit"))
   div(
     class = c("variable-card", field_problem_class(problems, "variables", box$id, NA), if (is_open) "is-open"),
     `data-id` = box$id,
@@ -137,6 +135,7 @@ variable_line <- function(box, draft, view, lookups, ns, shared = character(), c
         },
         class = "is-response"
       ),
+      variable_cell("Tags", variable_tags(box, showing, view, ns, is_choice_box), class = "is-tags"),
       lapply(columns, function(name) {
         variable_cell(
           optional_variable_fields[[name]],
@@ -146,10 +145,10 @@ variable_line <- function(box, draft, view, lookups, ns, shared = character(), c
       }),
       span(
         class = "variable-add",
-        if (length(addable) > 0) {
-          add_field_menu(
-            box, addable, optional_variable_fields,
-            if (is_choice_box) "Add who or when it's about, or a label" else "Add who or when it's about, a label, or its unit"
+        if (!"label" %in% showing) {
+          review_button(
+            app_icon("add"), "show_field", `data-id` = box$id, `data-name` = "label",
+            class = "btn btn-sm btn-icon", title = "Add a label", `aria-label` = "Add a label"
           )
         }
       ),
@@ -163,27 +162,57 @@ variable_line <- function(box, draft, view, lookups, ns, shared = character(), c
   )
 }
 
-# The optional fields of a variable, by what its "+" menu calls them: who it's about (blank is the
-# respondent), when it's about ("in the past 30 days"), its label, and for a write-in the unit its number is in
-# ("years"). A variable shows one when it has something in it, or once it is added.
+# The optional fields of a variable, by what the page calls them: its tags (who it's about, blank for the
+# respondent; when it's about, "past 30 days"; for a write-in the unit its number is in, "years") and its label. A
+# variable shows one when it has something in it, or once it is added.
 optional_variable_fields <- c(subject = "Subject", time_frame = "Time frame", label = "Label", unit = "Unit")
+# The fields that are tags (rows of TAG, by kind), in the order the pills come in.
+tag_fields <- optional_variable_fields[c("subject", "time_frame", "unit")]
 
-# A variable's subject, time frame, label or unit, with its delete button that takes it away.
-variable_optional <- function(box, name, view, ns) {
+# A variable's tags: a pill for each it has (`tag_pill()`), coloured by kind, in a box drawn like a field, and
+# + Tag at the end offering the kinds it hasn't got (a variable with choices has no unit).
+# showing: The optional fields the variable shows (`shown_optional()`).
+variable_tags <- function(box, showing, view, ns, is_choice_box) {
+  pills <- intersect(names(tag_fields), showing)
+  addable <- setdiff(names(tag_fields), c(showing, if (is_choice_box) "unit"))
+  div(
+    class = "tag-box",
+    lapply(pills, tag_pill, box = box, view = view, ns = ns),
+    if (length(addable) > 0) {
+      add_field_menu(box, addable, tag_fields, "Add a tag: who or when it's about, or its unit", text = "Tag", class = "tag-add")
+    }
+  )
+}
+
+# One tag of a variable: its words, typed in a pill of its kind's colour (the database's tags of that kind are
+# offered as they are typed), with the × that takes it away.
+tag_pill <- function(name, box, view, ns) {
   input <- switch(name,
     subject = field_text(
       "variables", box, "subject",
-      placeholder = "Who it's about", list = ns("subjects"), label = "Subject: who it's about (blank for the respondent)",
-      problems = view$problems
+      placeholder = "who it's about", list = ns("subjects"), label = "Subject: who it's about (blank for the respondent)",
+      problems = view$problems, class = "tag-pill-input"
     ),
     time_frame = field_text(
       "variables", box, "time_frame",
-      placeholder = "e.g. in the past 30 days", list = ns("time-frames"), label = "Time frame: when its answer is about",
-      problems = view$problems
+      placeholder = "when", list = ns("time-frames"), label = "Time frame: when its answer is about",
+      problems = view$problems, class = "tag-pill-input"
     ),
-    label = field_text("variables", box, "label", placeholder = "Label", list = ns("labels"), label = "Label"),
-    unit = field_text("variables", box, "unit", placeholder = "e.g. years", list = ns("units"), label = "Unit: what its number is in")
+    unit = field_text(
+      "variables", box, "unit",
+      placeholder = "unit", list = ns("units"), label = "Unit: what its number is in",
+      problems = view$problems, class = "tag-pill-input"
+    )
   )
+  # as wide as its words (or its placeholder), so the pill fits them
+  input <- tagAppendAttributes(input, size = max(nchar(blank_if_na(box[[name]])), nchar(input$attribs$placeholder)) + 1)
+  if (identical(view$focus, paste0(box$id, ":", name))) input <- tagAppendAttributes(input, `data-focus-now` = NA)
+  span(class = c("tag-pill", paste0("is-", name)), input, remove_field_button(box, name, tag_fields, icon = "remove"))
+}
+
+# A variable's label, with its delete button that takes it away.
+variable_optional <- function(box, name, view, ns) {
+  input <- field_text("variables", box, "label", placeholder = "Label", list = ns("labels"), label = "Label")
   if (identical(view$focus, paste0(box$id, ":", name))) input <- tagAppendAttributes(input, `data-focus-now` = NA)
   span(class = c("variable-optional", paste0("is-", name)), input, remove_field_button(box, name, optional_variable_fields))
 }
@@ -268,14 +297,15 @@ choice_row <- function(choice, problems, ns) {
   )
 }
 
-# The "+" of a variable: the optional fields it doesn't show yet (`names` says what each is called).
-add_field_menu <- function(row, fields, names, title) {
+# A "+" menu of the optional fields a variable doesn't show yet (`names` says what each is called): an icon alone,
+# or with `text` beside it ("+ Tag").
+add_field_menu <- function(row, fields, names, title, text = NULL, class = NULL) {
   div(
-    class = "dropdown add-field",
+    class = c("dropdown add-field", class),
     tags$button(
-      type = "button", class = "btn btn-sm btn-icon dropdown-toggle", `data-bs-toggle` = "dropdown", `aria-expanded` = "false",
+      type = "button", class = c("btn btn-sm dropdown-toggle", if (is.null(text)) "btn-icon"), `data-bs-toggle` = "dropdown", `aria-expanded` = "false",
       title = title, `aria-label` = title,
-      app_icon("add")
+      if (is.null(text)) app_icon("add") else icon_label("add", text)
     ),
     tags$ul(
       class = "dropdown-menu dropdown-menu-end",
@@ -287,10 +317,11 @@ add_field_menu <- function(row, fields, names, title) {
 }
 
 # The delete button that empties an optional field of a variable and hides it again; Undo brings it back.
-remove_field_button <- function(row, field, names) {
+# icon: Its icon: a tag pill's ×, or the trash can.
+remove_field_button <- function(row, field, names, icon = "delete") {
   what <- paste("Take away", tolower(names[[field]]))
   review_button(
-    app_icon("delete"), "hide_field",
+    app_icon(icon), "hide_field",
     `data-id` = row$id, `data-name` = field, class = "btn btn-sm btn-icon field-remove", title = what, `aria-label` = what
   )
 }

@@ -31,7 +31,7 @@ draft_service_update <- function(draft, table, id, field, value) {
     matr_id = set_matr_id(draft, row, value),
     parent_question_id = set_parent_question(draft, row, value),
     subject = {
-      draft$variables$subject[row] <- blank_respondent(value)
+      draft$variables$subject[row] <- normal_subject(value)
       draft
     },
     time_frame = {

@@ -4,7 +4,7 @@
 # ------ Tags ------------------------------------------------------------------------------------------
 # A tag's kinds (tag_kind_check in the database), and how each kind's name is written one way.
 edit_tag_kinds <- c("subject", "time frame", "unit")
-edit_tag_normalize <- list(subject = straight_quotes, "time frame" = normal_time_frame, unit = normal_unit)
+edit_tag_normalize <- list(subject = normal_subject_words, "time frame" = normal_time_frame, unit = normal_unit)
 
 # A tag's name as it is saved: by its kind's rule, straight quotes for all.
 edit_tag_name <- function(kind, name) {
@@ -17,7 +17,7 @@ tag_entity <- list(
   group = "Shared lists", table = "tag",
   about = paste0(
     "A word a researcher can filter by, put on a question, a variable or an answer choice: a subject (who the ",
-    "answer is about, like “Respondent's Twin”), a time frame (like “in the past 30 days”) or a unit (like ",
+    "answer is about, like “twin”), a time frame (like “past 30 days”) or a unit (like ",
     "“pounds”), each written one way. The Edit Extraction page offers these, and an extraction adds any other it finds."
   ),
   update_about = "A tag is shared. Renaming it renames it everywhere it is used.",
@@ -41,9 +41,9 @@ tag_entity <- list(
         locked = if (mode == "update") "A tag's kind is fixed. To tag things another way, add a tag of that kind."
       ),
       edit_field("name", "Name",
-        required = TRUE, placeholder = "e.g. Respondent's Parents, in the past 6 months, pounds",
+        required = TRUE, placeholder = "e.g. parents, past six months, pounds",
         normalize = function(value) edit_tag_name(if (!is.null(row)) row$kind, value),
-        hint = "Written one way: “during the last 12 months” is saved as “in the past 12 months”.",
+        hint = "Written one way: “Respondent’s Twin” is saved as “twin”, “during the last 12 months” as “past 12 months”.",
         problem = function(value, values) {
           kind <- if (has_text(values$kind)) values$kind else row$kind
           if (!has_text(value) || !has_text(kind)) {

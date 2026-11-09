@@ -89,8 +89,12 @@ from `private.normal_question()`: it strips the words that only ask for the answ
 your", "write your", a trailing "now", directions in brackets) so "what is your height?", "enter your
 height" and "height" share `height`. The dashboard groups by it. It is computed by the database, never
 typed, so it can't drift. Answer choices are normalized the same way (`private.normal_answer`, mirrored by
-the site's `normal_answer()`), and time frames and units by the site (`normal_time_frame()`,
-`normal_unit()`) before they become tags.
+the site's `normal_answer()`), and tags by the site before they become rows of `tag`: a subject is the
+relation to the respondent alone, in lower case (`normal_subject()`: "Respondent's Twin" is "twin"; who the
+respondent is comes from the wave's respondent type, so the dashboard can say "Twin's mother"), a time frame is
+"lifetime" or "past N units" with N in words under ten (`normal_time_frame()`: "past 30 days", "past six
+months"), and a unit is written out (`normal_unit()`: "pounds"). The database matches a tag's name ignoring
+case, so a spelling that slips past the site still finds the one tag.
 
 **Emptying.** `empty_wave`, `empty_questionnaire`, `empty_study`, `empty_registry` remove what the thing
 holds, keep the thing itself, and remove what that leaves owned by nothing: questions no wave asks any

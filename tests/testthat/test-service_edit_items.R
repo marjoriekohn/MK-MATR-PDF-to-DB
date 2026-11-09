@@ -43,7 +43,7 @@ test_that("a locked field can't be changed, whatever's sent", {
   form <- form_for("wave", "update", "2", wave__questionnaire_id = "4")
   expect_equal(nrow(form_items(form)$items), 0)
   form <- form_for("tag", "update", "17", tag__kind = "unit", tag__name = "in the past 7 days")
-  expect_equal(item_lines(form_items(form)$items), 'Update tag {"tag_id":17} name: in the past week -> in the past 7 days')
+  expect_equal(item_lines(form_items(form)$items), 'Update tag {"tag_id":17} name: past week -> past seven days')
 })
 
 # ------ Add ------------------------------------------------------------------------------------------
@@ -69,11 +69,11 @@ test_that("a tag is added with its kind, its name written that kind's way", {
   form <- form_for("tag", "add", tag__kind = "time frame", tag__name = "During the last 3 months")
   expect_equal(item_lines(form_items(form)$items), c(
     'Insert tag {"tag_id":"new:tag:1"} kind: - -> time frame',
-    'Insert tag {"tag_id":"new:tag:1"} name: - -> in the past 3 months'
+    'Insert tag {"tag_id":"new:tag:1"} name: - -> past three months'
   ))
   expect_equal(form_items(form)$summary, "Added the tag “During the last 3 months”")
   form <- form_for("tag", "add", tag__kind = "subject", tag__name = "Respondent’s Twin")
-  expect_equal(form_items(form)$items$new_value[2], "Respondent's Twin")
+  expect_equal(form_items(form)$items$new_value[2], "twin")
 })
 
 test_that("a component is added with its kind and words, in lower case; a group with none", {
@@ -124,9 +124,9 @@ test_that("a row that nothing points at is deleted alone, and its summary says s
   built <- edit_service_build(entity, "delete", snap, row)
   expect_equal(item_lines(built$items), c(
     'Delete tag {"tag_id":2} kind: subject -> -',
-    'Delete tag {"tag_id":2} name: Respondent\'s Family -> -'
+    'Delete tag {"tag_id":2} name: family -> -'
   ))
-  expect_equal(built$summary, "Deleted the tag “Respondent's Family”")
+  expect_equal(built$summary, "Deleted the tag “family”")
   expect_false(built$plan$far_reaching)
 })
 
@@ -330,7 +330,7 @@ choice <- function(code, words) list(code_value = code, answer_option = words)
 
 test_that("a new question is added with its place, its dependency, its numbers in each wave that asks it, and its variables", {
   vars <- variables_json(
-    list(variable_type = "closed_ended", matr_id = "AH09NW", subject = "Respondent's Twin", label = "", time_frame = "in the past week", response_options = list(choice("1", "Yes"), choice("0", "Never"))),
+    list(variable_type = "closed_ended", matr_id = "AH09NW", subject = "twin", label = "", time_frame = "past week", response_options = list(choice("1", "Yes"), choice("0", "Never"))),
     list(variable_type = "open_ended", matr_id = "AH09HT", subject = "", label = "Height", answer_data_type = "NUMBER", unit = "inches")
   )
   form <- form_for("placement", "add", scope = "1", placement__kind = "Question", placement__text = "How tall are you?",
@@ -356,7 +356,7 @@ test_that("a new question is added with its place, its dependency, its numbers i
     'Insert wave_question {"placement_id":"new:placement:1","wave_id":2} question_number: - -> 1'
   ) %in% lines))
   expect_false(any(grepl('"wave_id":2} printed_number', lines))) # none printed there
-  # the variables: a choice in the list is used (yes, never), a tag in the list is used (in the past week), new ones are added once
+  # the variables: a choice in the list is used (yes, never), a tag in the list is used (past week), new ones are added once
   variables <- built$items[built$items$entity_name == "variable", ]
   expect_equal(variables$new_value[variables$attribute_name == "matr_id"], c("AH09NW", "AH09HT"))
   expect_equal(variables$new_value[variables$attribute_name == "variable_type"], c("closed_ended", "open_ended"))
@@ -367,7 +367,7 @@ test_that("a new question is added with its place, its dependency, its numbers i
     'Insert response_option {"answer_option_id":1,"variable_key":"new:variable:1"} code_value: - -> 1',
     'Insert response_option {"answer_option_id":16,"variable_key":"new:variable:1"} display_order: - -> 2',
     'Insert tag {"tag_id":"new:tag:1"} kind: - -> subject',
-    'Insert tag {"tag_id":"new:tag:1"} name: - -> Respondent\'s Twin',
+    'Insert tag {"tag_id":"new:tag:1"} name: - -> twin',
     'Insert variable_tag {"tag_id":"new:tag:1","variable_key":"new:variable:1"} NA: - -> -',
     'Insert variable_tag {"tag_id":17,"variable_key":"new:variable:1"} NA: - -> -',
     'Insert tag {"tag_id":"new:tag:2"} kind: - -> unit',
@@ -424,7 +424,7 @@ test_that("the variables start as one, about the respondent, with one blank choi
   expect_equal(start[[1]]$variable_type, "closed_ended")
   expect_equal(start[[1]]$response_options[[1]]$code_value, "1")
   vars <- variables_json(
-    list(variable_type = "closed_ended", matr_id = "A1", subject = "Respondent's Twin", label = "twin", time_frame = "in the past week", response_options = list(choice("1", "yes"), choice("0", "no"))),
+    list(variable_type = "closed_ended", matr_id = "A1", subject = "twin", label = "twin", time_frame = "past week", response_options = list(choice("1", "yes"), choice("0", "no"))),
     list(variable_type = "open_ended", matr_id = "A2", subject = "", label = "", answer_data_type = "NUMBER", unit = "inches")
   )
   back <- edit_variables_json(edit_variables_draft(edit_variables_parse(vars)))
@@ -435,8 +435,8 @@ test_that("the variables start as one, about the respondent, with one blank choi
 
 test_that("the variable editor offers the tags there are, by kind, and the answer choices", {
   options <- edit_variables_options(test_snapshot(c("tag", "answer_option")))
-  expect_equal(options$subjects, c("Respondent's Children", "Respondent's Family", "Respondent's Siblings", "Twins (compared)")) # not the respondent, who is blank
-  expect_equal(options$time_frames[1], "in the past 12 months")
+  expect_equal(options$subjects, c("children", "family", "siblings", "twins (compared)")) # not the respondent, who is blank
+  expect_equal(options$time_frames[1], "lifetime")
   expect_equal(options$units, c("cigarettes", "years"))
   expect_equal(options$answer_data_types, c("NUMBER", "TEXT", "DATE", "TIME"))
   expect_true("yes" %in% options$answer_options)

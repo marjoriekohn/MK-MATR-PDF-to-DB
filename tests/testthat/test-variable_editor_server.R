@@ -6,7 +6,7 @@ cards_html <- function(output) paste(output$cards$html, collapse = "")
 variables_json_of <- function(...) as.character(jsonlite::toJSON(list(...), auto_unbox = TRUE))
 
 editor_options <- list(
-  subjects = c("Siblings", "Children"), time_frames = "in your lifetime", units = c("pounds", "years"),
+  subjects = c("Siblings", "Children"), time_frames = "lifetime", units = c("pounds", "years"),
   answer_data_types = c("NUMBER", "TEXT", "DATE", "TIME"), answer_options = c("Yes", "No")
 )
 

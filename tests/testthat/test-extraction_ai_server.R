@@ -50,8 +50,7 @@ test_that("the files chosen can be swapped until Begin Extraction, which makes t
     expect_equal(record()$prepared_by_id, me$staff_id)
     expect_match(text_of(output$pdf_card), "AHP_wave3.pdf 2 pages")
     expect_false(grepl("Replace", output$pdf_card$html)) # the files are the draft's now
-    expect_match(text_of(output$supplement_box), "^Variable Names and Coding from codes.csv")
-    expect_match(output$supplement_box$html, "codes.csv</strong>.", fixed = TRUE) # the full stop against the name, no space
+    expect_match(text_of(output$supplement_box), "^CSV codes.csv Variable Names and Coding")
     expect_match(text_of(output$reading), "Reading your questionnaire")
     expect_match(output$footer_button$html, "Open in Edit Extraction")
     expect_match(output$footer_button$html, "disabled")

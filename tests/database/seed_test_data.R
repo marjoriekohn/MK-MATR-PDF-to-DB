@@ -133,11 +133,11 @@ samples <- list(
         "You and Your Twin",
         grid(
           "In the past 30 days, how often have you...",
-          question("sad", "felt sad or down?", choose("KQ8A", never_often, time_frame = "in the past 30 days")),
-          question("trouble_sleeping", "had trouble falling asleep?", choose("KQ8B", never_often, time_frame = "in the past 30 days")),
-          question("argued", "argued with your twin?", choose("KQ8C", never_often, subject = "Respondent's Twin", time_frame = "in the past 30 days"))
+          question("sad", "felt sad or down?", choose("KQ8A", never_often, time_frame = "past 30 days")),
+          question("trouble_sleeping", "had trouble falling asleep?", choose("KQ8B", never_often, time_frame = "past 30 days")),
+          question("argued", "argued with your twin?", choose("KQ8C", never_often, subject = "twin", time_frame = "past 30 days"))
         ),
-        question("same_room", "Do you and your twin share a bedroom?", choose("KQ9", yes_no, subject = "Respondent's Twin"))
+        question("same_room", "Do you and your twin share a bedroom?", choose("KQ9", yes_no, subject = "twin"))
       ),
       note("Thank you! Please put this questionnaire in the envelope and seal it.")
     )
@@ -148,11 +148,11 @@ samples <- list(
       introduction("Please answer these questions about your twins. If you are not sure of an answer, give your best guess."),
       section(
         "About the Twins",
-        question("twin_type", "Are your twins identical or fraternal?", choose("MQ1", twin_type, subject = "Respondent's Children")),
+        question("twin_type", "Are your twins identical or fraternal?", choose("MQ1", twin_type, subject = "children")),
         question(
           "birth_weight", "How much did each twin weigh at birth?",
-          write_in("MQ2A", label = "Twin A", unit = "ounces", subject = "Respondent's Children"),
-          write_in("MQ2B", label = "Twin B", unit = "ounces", subject = "Respondent's Children")
+          write_in("MQ2A", label = "Twin A", unit = "ounces", subject = "children"),
+          write_in("MQ2B", label = "Twin B", unit = "ounces", subject = "children")
         ),
         question("weeks", "How many weeks pregnant were you when the twins were born?", write_in("MQ3", unit = "weeks"))
       ),
@@ -161,14 +161,14 @@ samples <- list(
         instruction("Answer for each twin."),
         question(
           "asthma", "Has a doctor ever told you that either twin has asthma?",
-          choose("MQ4A", yes_no, label = "Twin A", subject = "Respondent's Children"),
-          choose("MQ4B", yes_no, label = "Twin B", subject = "Respondent's Children")
+          choose("MQ4A", yes_no, label = "Twin A", subject = "children"),
+          choose("MQ4B", yes_no, label = "Twin B", subject = "children")
         ),
-        question("smoker", "Does anyone who lives in the twins' home smoke cigarettes?", choose("MQ5", yes_no, subject = "Respondent's Family")),
+        question("smoker", "Does anyone who lives in the twins' home smoke cigarettes?", choose("MQ5", yes_no, subject = "family")),
         question("cigarettes", "About how many cigarettes a day are smoked in the home?", write_in("MQ6", unit = "cigarettes", time_frame = "per day"), printed = "5a", follows = "smoker"),
         question("doctor_visits", "In the past 12 months, how many times has each twin seen a doctor?",
-          write_in("MQ7A", label = "Twin A", unit = "visits", subject = "Respondent's Children", time_frame = "in the past 12 months"),
-          write_in("MQ7B", label = "Twin B", unit = "visits", subject = "Respondent's Children", time_frame = "in the past 12 months")
+          write_in("MQ7A", label = "Twin A", unit = "visits", subject = "children", time_frame = "past 12 months"),
+          write_in("MQ7B", label = "Twin B", unit = "visits", subject = "children", time_frame = "past 12 months")
         ),
         question("comments", "Is there anything else you would like to tell us about your twins' health?", write_in("MQ8", type = "TEXT"))
       ),

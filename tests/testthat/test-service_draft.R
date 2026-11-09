@@ -253,11 +253,11 @@ test_that("a grid holds only its questions with their instructions and definitio
   expect_error(draft_service_update(draft, "components", grid, "component_type", "Group"), "has no words of its own")
 })
 
-test_that("who a variable is about and the form's words are written with straight quotes, however they are typed", {
-  expect_equal(blank_respondent(c("Respondent’s Siblings", " “Twin A” ", "Respondent")), c("Respondent's Siblings", '"Twin A"', NA))
+test_that("who a variable is about is the relation alone, in lower case, and the form's words have straight quotes, however they are typed", {
+  expect_equal(normal_subject(c("Respondent’s Siblings", " “Twin A” ", "Respondent")), c("siblings", '"twin a"', NA))
   expect_equal(normal_text("the child’s “sex”"), "the child's \"sex\"")
   draft <- draft_service_update(gold_draft(), "variables", "v1", "subject", "Respondent’s Twin")
-  expect_equal(draft$variables$subject[1], "Respondent's Twin")
+  expect_equal(draft$variables$subject[1], "twin")
 })
 
 test_that("a write-in's unit is written one way, kept with the draft, and changed like any field", {

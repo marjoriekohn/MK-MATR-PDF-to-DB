@@ -56,19 +56,27 @@ insert into public.wave (wave_id, questionnaire_id, name, respondent_count, admi
 on conflict (wave_id) do update set questionnaire_id = excluded.questionnaire_id, name = excluded.name,
   respondent_count = excluded.respondent_count, administered_date = excluded.administered_date;
 
--- the subjects list (written with straight quotes, as the site writes them)
+-- the tags: subjects (the relation to the respondent, in lower case), time frames and units, written one way
+-- (R/service_draft.R: normal_subject(), normal_time_frame(), normal_unit())
 insert into public.tag (tag_id, kind, name) values
-  (107894001, 'subject', 'Respondent''s Son'),
-  (175894758, 'subject', 'Respondent''s Daughter'),
-  (552931313, 'subject', 'Respondent''s Mother'),
-  (684985819, 'subject', 'Respondent'),
-  (742386590, 'subject', 'Respondent''s Siblings'),
-  (835895131, 'subject', 'Respondent''s Sister'),
-  (868145262, 'subject', 'Respondent''s Twin'),
-  (893244383, 'subject', 'Respondent''s Children'),
-  (903010384, 'subject', 'Respondent''s Father'),
-  (923939683, 'subject', 'Respondent''s Brother'),
-  (968416887, 'subject', 'Respondent''s Family')
+  (923939683, 'subject', 'brother'),
+  (893244383, 'subject', 'children'),
+  (175894758, 'subject', 'daughter'),
+  (968416887, 'subject', 'family'),
+  (903010384, 'subject', 'father'),
+  (552931313, 'subject', 'mother'),
+  (684985819, 'subject', 'respondent'),
+  (742386590, 'subject', 'siblings'),
+  (835895131, 'subject', 'sister'),
+  (107894001, 'subject', 'son'),
+  (868145262, 'subject', 'twin'),
+  (642902192, 'time frame', 'lifetime'),
+  (899022208, 'time frame', 'past 30 days'),
+  (409015614, 'time frame', 'past six months'),
+  (433114348, 'time frame', 'past two weeks'),
+  (149500717, 'time frame', 'past week'),
+  (267860203, 'time frame', 'past year'),
+  (225091318, 'unit', 'pounds')
 on conflict (tag_id) do update set kind = excluded.kind, name = excluded.name;
 
 insert into public.answer_option (answer_option_id, standardized_label) values

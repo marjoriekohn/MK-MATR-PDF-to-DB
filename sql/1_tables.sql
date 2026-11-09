@@ -30,8 +30,8 @@ set matr.start_over = 'yes';
 -- which questions a wave actually asked, with their numbers. A question's answers are recorded in
 -- VARIABLES (one per MATR ID, the column in the response data): open-ended (a number, text, date or time
 -- the respondent writes) or closed-ended (chosen from its RESPONSE_OPTIONS, each an ANSWER_OPTION kept once
--- for the whole registry, with the code it was recorded as). TAGS (a subject such as "Respondent's Twin", a
--- time frame such as "in the past 30 days", a unit such as "pounds") can be put on a question, a variable
+-- for the whole registry, with the code it was recorded as). TAGS (a subject such as "twin", a
+-- time frame such as "past 30 days", a unit such as "pounds") can be put on a question, a variable
 -- or a response option. Questions that ask the same thing in different words ("what is your weight?",
 -- "enter your weight") share a NORMAL_TEXT, worked out by the database. Staff work in EXTRACTIONS (one row
 -- each, with the questionnaire as JSON until it is pushed) and everything they change is written to HISTORY.
@@ -352,8 +352,8 @@ create table public.response_option (
 
 -- A word the dashboard can filter by, put on a question (placement_tag), a variable (variable_tag) or a
 -- response option (response_option_tag). One list for each kind:
---   subject     who the answer is about: "Respondent", "Respondent's Twin", "Twin A"
---   time frame  when it is about, written one way (R/service_draft.R, normal_time_frame()): "in the past 30 days"
+--   subject     who the answer is about, the relation alone in lower case (R/service_draft.R, normal_subject()): "twin", "children"
+--   time frame  when it is about, written one way (R/service_draft.R, normal_time_frame()): "past 30 days", "lifetime"
 --   unit        what an open-ended number is in, written one way (normal_unit()): "pounds", "years"
 -- One tag for each kind and name, ignoring case and outer spaces (3_indexes.sql). Straight quotes only, as
 -- the site writes them, so a name typed either way is the one name.

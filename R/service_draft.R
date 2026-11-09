@@ -203,11 +203,12 @@ time_frame_preposition <- "(?:in|during|over|within|for)\\s+"
 time_frame_pattern <- paste0("(?:", time_frame_lifetime, "|", time_frame_preposition, time_frame_past, ")")
 
 # Time frames written one way.
-# The time a variable's answer is about, as the database keeps it, so the questions about the same time are found
-# together whatever words the forms use: "in your lifetime" ("in your life", "during your whole lifetime"), and "in
-# the past" a number of days, weeks, months or years ("during the last 12 months" and "over the past twelve
-# months" are "in the past 12 months"; "in the last year" is "in the past year"). Any other is kept as typed, in
-# lower case ("since your last birthday").
+# The time a variable's answer is about, as the database keeps it (a tag), so the questions about the same time are
+# found together whatever words the forms use: "lifetime" ("in your life", "during your whole lifetime"), and
+# "past" a number of days, weeks, months or years, the number in words up to nine and in figures from ten
+# ("during the last 12 months" and "over the past twelve months" are "past 12 months"; "in the last year" is "past
+# year"; "within the last 6 weeks" is "past six weeks"). Any other is kept as typed, in lower case ("since your
+# last birthday").
 # text: Time frames as printed or typed.
 # Returns: The time frames, with `NA` for a blank.
 normal_time_frame <- function(text) {
@@ -226,31 +227,40 @@ normal_time_frame <- function(text) {
 time_frame_words <- function(found) {
   past <- regmatches(found, regexec(paste0("(?i)(?:past|last|previous)\\s+(?:([0-9]+|[a-z]+)\\s+)?", time_frame_unit), found, perl = TRUE))[[1]]
   if (length(past) == 0) {
-    return("in your lifetime")
+    return("lifetime")
   }
   count <- tolower(past[2])
   count <- if (!nzchar(count)) 1L else if (count %in% number_words) match(count, number_words) else as.integer(count)
   unit <- tolower(past[3])
-  if (count == 1) paste("in the past", unit) else paste("in the past", count, paste0(unit, "s"))
+  if (count == 1) paste("past", unit) else paste("past", if (count < 10) number_words[count] else count, paste0(unit, "s"))
 }
 
 # Whether blocks of these kinds hold other blocks.
 # component_types: Kinds of block.
 is_container <- function(component_types) component_types %in% container_types
 
-# Who a variable is about when it is about the respondent: the subject the database keeps for them, and the
-# name it had before ("Self"). Staff and the AI leave About blank for the
-# respondent; the blank is saved to the database as this subject.
-respondent_subject <- "Respondent"
-respondent_names <- c("Respondent", "Self")
+# The names a subject can have for the respondent: staff and the AI leave a variable's subject blank for them.
+respondent_names <- c("respondent", "self")
+
+# Who a variable is about, written one way: the relation to the respondent alone, in lower case ("twin",
+# "children", "mother"), so "Respondent's Twin", "respondent's twin" and "twin" are one tag. Who the respondent is
+# (a twin, a parent) is the wave's respondent type, so the dashboard can say "Twin's mother".
+# subjects: Subjects as typed or read.
+# Returns: The subjects, in lower case, with straight quotes and without "respondent's" before the relation; `NA`
+#   for a blank.
+normal_subject_words <- function(subjects) {
+  subjects <- squish(normal_text(as.character(subjects)))
+  subjects <- sub("^(the )?respondent'?s ", "", subjects, perl = TRUE)
+  subjects[!is.na(subjects) & !nzchar(subjects)] <- NA
+  subjects
+}
 
 # Who a variable is about, with the respondent as a blank.
-# subjects: Subjects as typed or read; "Respondent" or "Self" in any capitals, or a blank, is the
-#   respondent.
-# Returns: The subjects, trimmed and with straight quotes, with `NA` for the respondent.
-blank_respondent <- function(subjects) {
-  subjects <- trimws(straight_quotes(as.character(subjects)))
-  subjects[!is.na(subjects) & (!nzchar(subjects) | tolower(subjects) %in% tolower(respondent_names))] <- NA
+# subjects: Subjects as typed or read; "Respondent" or "Self" in any capitals, or a blank, is the respondent.
+# Returns: The subjects as `normal_subject_words()` writes them, with `NA` for the respondent.
+normal_subject <- function(subjects) {
+  subjects <- normal_subject_words(subjects)
+  subjects[!is.na(subjects) & subjects %in% respondent_names] <- NA
   subjects
 }
 
@@ -374,7 +384,7 @@ draft_service_from_json <- function(json) {
       display_order = as.numeric(seq_along(boxes)),
       variable_type = pluck(boxes, "variable_type"),
       label = pluck(boxes, "label"),
-      subject = blank_respondent(pluck(boxes, "subject")),
+      subject = normal_subject(pluck(boxes, "subject")),
       time_frame = normal_time_frame(pluck(boxes, "time_frame")),
       answer_data_type = pluck(boxes, "answer_data_type"),
       matr_id = pluck(boxes, "matr_id"),

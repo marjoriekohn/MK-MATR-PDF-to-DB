@@ -128,7 +128,7 @@ test_that("tidying numbers each list, cleans the text and keeps only each block'
 test_that("a reading's words are kept in lower case, without a figure that repeats the number word before it", {
   # an older reading's skips and conditions come along too: they are left behind
   asked <- question("4", boxes = list(list(
-    variable_type = "open_ended", label = "Age Started", unit = "Yrs.", subject = "Respondent's Siblings",
+    variable_type = "open_ended", label = "Age Started", unit = "Yrs.", subject = "siblings",
     time_frame = "During the LAST 12 months", answer_data_type = "NUMBER", skip_condition = "None",
     skip_instruction = "Go to Question 9"
   )))
@@ -153,8 +153,8 @@ test_that("a reading's words are kept in lower case, without a figure that repea
   expect_equal(box$label, "age started")
   expect_equal(box$unit, "years") # its own field, abbreviation written out
   # names the database lists, numbers and the questionnaire's own name aren't the form's words
-  expect_equal(box$subject, "Respondent's Siblings")
-  expect_equal(box$time_frame, "in the past 12 months") # written one way (normal_time_frame())
+  expect_equal(box$subject, "siblings")
+  expect_equal(box$time_frame, "past 12 months") # written one way (normal_time_frame())
   expect_equal(tidied$questionnaire, list(name = "General Nutrition Assessment", abbreviation = "GNA"))
   old_fields <- c("skip_condition", "skip_when", "skip_instruction", "condition", "self_contained")
   expect_false(any(old_fields %in% c(names(grid), names(asked), names(box))))
@@ -202,9 +202,9 @@ test_that("the prompt lists what the lookup tables hold", {
   expect_false(grepl("{{", instructions, fixed = TRUE))
   expect_match(instructions, '"Interviewer Script"', fixed = TRUE)
   expect_match(instructions, '"Grid"', fixed = TRUE)
-  expect_match(instructions, '"Respondent\'s Siblings"', fixed = TRUE)
-  expect_match(instructions, '"in the past 30 days"', fixed = TRUE)
-  expect_match(instructions, '"Twins (compared)"', fixed = TRUE)
+  expect_match(instructions, '"siblings"', fixed = TRUE)
+  expect_match(instructions, '"past 30 days"', fixed = TRUE)
+  expect_match(instructions, '"twins (compared)"', fixed = TRUE)
   expect_match(instructions, "  - not difficult at all", fixed = TRUE)
 })
 

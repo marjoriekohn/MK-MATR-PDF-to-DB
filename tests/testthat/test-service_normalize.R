@@ -133,12 +133,12 @@ test_that("using another wording changes it everywhere, unless a variable would 
 test_that("a time frame is written one way however it is printed", {
   expect_equal(
     normal_time_frame(c(
-      "During the LAST 12 months", "over the past twelve months", "in the past year", "within the last 30 days",
-      "in your life", "during your lifetime", "in the past 4 weeks", "past week", "In the last month"
+      "During the LAST 12 months", "over the past twelve months", "past year", "within the last 30 days",
+      "in your life", "during your lifetime", "past four weeks", "past week", "In the last month"
     )),
     c(
-      "in the past 12 months", "in the past 12 months", "in the past year", "in the past 30 days",
-      "in your lifetime", "in your lifetime", "in the past 4 weeks", "in the past week", "in the past month"
+      "past 12 months", "past 12 months", "past year", "past 30 days",
+      "lifetime", "lifetime", "past four weeks", "past week", "past month"
     )
   )
   expect_equal(normal_time_frame("Since your last birthday"), "since your last birthday") # one it doesn't know: as typed

@@ -26,7 +26,7 @@ lookup_service_get_all <- function(connection) {
   list(
     component_types = edit_component_kinds,
     # the respondent is a blank, not a pick
-    subjects = subjects[!is.na(blank_respondent(subjects))],
+    subjects = subjects[!is.na(normal_subject(subjects))],
     time_frames = of_kind("time frame"),
     units = of_kind("unit"),
     answer_options = as.character(choices$standardized_label),

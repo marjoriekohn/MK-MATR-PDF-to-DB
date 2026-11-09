@@ -39,7 +39,7 @@ test_that("a question is added whole, numbered in its wave, and a second one bef
     me, tree, "add",
     placement__kind = "Question", placement__text = words, placement__asked_in = key_text(tree$wave$wave_id),
     placement__variables = variables_json(
-      list(variable_type = "closed_ended", matr_id = test_name("SM"), subject = subject, time_frame = "in the past 30 days", response_options = list(choice("1", yes), choice("0", "no"))),
+      list(variable_type = "closed_ended", matr_id = test_name("SM"), subject = subject, time_frame = "past 30 days", response_options = list(choice("1", yes), choice("0", "no"))),
       list(variable_type = "open_ended", matr_id = test_name("CG"), label = "cigarettes a day", answer_data_type = "NUMBER", unit = unit)
     )
   )
@@ -68,7 +68,7 @@ test_that("a question is added whole, numbered in its wave, and a second one bef
   expect_true("new:answer_option:1" %in% names(first$new_ids))
   tagged <- table_model_get(test_connection, "variable_tag", list(variable_key = database_in(variables$variable_key)))
   tags <- table_model_get(test_connection, "tag", list(tag_id = database_in(tagged$tag_id)))
-  expect_setequal(paste(tags$kind, tags$name), c(paste("subject", subject), "time frame in the past 30 days", paste("unit", normal_unit(unit))))
+  expect_setequal(paste(tags$kind, tags$name), c(paste("subject", normal_subject(subject)), "time frame past 30 days", paste("unit", normal_unit(unit))))
 
   # a second question put first: the first moves along, and the wave numbers them again
   second <- apply_block(

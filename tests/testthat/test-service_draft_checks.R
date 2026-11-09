@@ -133,13 +133,22 @@ test_that("each variable of a question with several has a label of its own, so t
   # the same words for someone else are another row ("Age" of Twin A and of Twin B), and so are they for another time
   expect_equal(nrow(problems_of(asked(closed("Age", subject = "Twin A"), closed("Age", subject = "Twin B")))), 0)
   timed <- function(label, time_frame) c(closed(label), list(time_frame = time_frame))
-  expect_equal(nrow(problems_of(asked(timed("Times", "in your lifetime"), timed("Times", "in the past 30 days")))), 0)
+  expect_equal(nrow(problems_of(asked(timed("Times", "lifetime"), timed("Times", "past 30 days")))), 0)
   # a write-in's unit tells it apart too (AHP 1: feet and inches)
-  measured <- function(unit) list(variable_type = "open_ended", answer_data_type = "NUMBER", unit = unit)
+  measured <- function(unit, ...) list(variable_type = "open_ended", answer_data_type = "NUMBER", unit = unit, ...)
   expect_equal(nrow(problems_of(asked(measured("feet"), measured("inches")))), 0)
   expect_equal(
-    problems_of(asked(measured("years"), measured("years")))$message,
+    problems_of(asked(measured("years"), measured("years"), measured("years", label = "Age started")))$message,
     sprintf("Variable %d: give it a label the question's other variables don't have.", 1:2)
+  )
+  # a roster's rows (the first child, the second, …) are alike in everything and have no labels: their order and
+  # MATR IDs tell them apart, so none is asked for a label; with a row unlike the others it isn't a roster
+  expect_equal(nrow(problems_of(asked(measured("years"), measured("years")))), 0)
+  expect_equal(nrow(problems_of(asked(closed(subject = "children"), closed(subject = "children"), closed(subject = "children")))), 0)
+  expect_equal(nrow(problems_of(asked(measured("pounds"), measured("ounces"), measured("pounds"), measured("ounces")))), 0)
+  expect_equal(
+    problems_of(asked(closed(subject = "children"), closed(subject = "children"), closed(subject = "children", choices = c("yes", "no"))))$message,
+    sprintf("Variable %d: label it with its row's words, so it can be told apart from the question's other variables.", 1:3)
   )
 
   unlabelled <- problems_of(asked(closed("Walked to work"), closed()))

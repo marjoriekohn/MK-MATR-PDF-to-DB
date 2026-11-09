@@ -7,6 +7,7 @@ app_icons <- c(
   # doing things
   add = "circle-plus",
   delete = "trash",
+  remove = "xmark", # a tag pill's ×
   edit = "pen-to-square",
   undo = "rotate-left",
   save = "floppy-disk",

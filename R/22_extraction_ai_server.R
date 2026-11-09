@@ -102,8 +102,12 @@ extraction_ai_server <- function(
 
     output$supplement_box <- renderUI({
       begun <- !is.null(reading())
-      name <- if (begun) reading()$supplement$name else supplement_upload()$name
-      supplement_card(name, begun, ns)
+      file <- if (begun) {
+        reading()$supplement
+      } else if (!is.null(supplement_upload())) {
+        list(name = supplement_upload()$name, bytes = supplement_upload()$size)
+      }
+      supplement_card(file, begun, ns)
     })
 
     # Begin Extraction until it has begun, once a PDF is chosen; then Open in Edit Extraction, once reading has finished.

@@ -597,13 +597,13 @@ test_that("variables with the same choices show them once, edited for all of the
 })
 
 test_that("a variable's About and label show when they have something in them, and can be added and taken away", {
-  draft <- draft_service_update(short_gold_draft(), "variables", "v1", "subject", "Respondent's Family")
+  draft <- draft_service_update(short_gold_draft(), "variables", "v1", "subject", "family")
   page <- edit_extraction_state(draft)
   seen <- local_browser()
   shiny::testServer(extraction_outline_server, args = outline_args(page), {
     page$selected("c3")
     html <- detail_html(output)
-    expect_match(html, 'data-id="v1" data-field="subject"[^>]*value="Respondent&#39;s Family"|value="Respondent&#39;s Family"[^>]*data-id="v1" data-field="subject"')
+    expect_match(html, 'data-id="v1" data-field="subject"[^>]*value="family"|value="family"[^>]*data-id="v1" data-field="subject"')
     expect_match(html, 'data-action="hide_field" data-id="v1" data-name="subject"')
     expect_false(grepl('data-action="show_field" data-id="v1" data-name="subject"', html))
     # a label is added, empty, with the cursor in it; × on About makes it the respondent again
@@ -619,12 +619,11 @@ test_that("a variable's About and label show when they have something in them, a
   })
 })
 
-test_that("a write-in variable has the same + for its subject and label, and one for its unit, offered from the database's units", {
+test_that("a write-in variable's + Tag offers its subject and unit, and + adds a label; the unit is offered from the database's units", {
   draft <- draft_service_update(short_gold_draft(), "variables", "v1", "variable_type", "open_ended")
   view <- list(problems = draft_service_check(draft, test_lookups()), shown = character())
-  # the Unit column is there once a variable of the question shows one (variable_cards() works that out)
-  line_of <- function(draft, view, columns = character()) {
-    htmltools::renderTags(variable_line(draft$variables[draft$variables$id == "v1", ], draft, view, test_lookups(), shiny::NS("x"), columns = columns))$html
+  line_of <- function(draft, view) {
+    htmltools::renderTags(variable_line(draft$variables[draft$variables$id == "v1", ], draft, view, test_lookups(), shiny::NS("x")))$html
   }
   html <- line_of(draft, view)
   expect_match(html, 'data-field="answer_data_type"')
@@ -632,16 +631,17 @@ test_that("a write-in variable has the same + for its subject and label, and one
   expect_match(html, 'data-action="show_field" data-id="v1" data-name="label"')
   expect_match(html, 'data-action="show_field" data-id="v1" data-name="unit"') # what its number is in
   expect_false(grepl("skip", html)) # a question hangs off another by Depends on; routing isn't kept
-  # added, the unit is typed with the database's units offered, the cursor in it
-  html <- line_of(draft, utils::modifyList(view, list(shown = "v1:unit", focus = "v1:unit")), columns = "unit")
-  expect_match(html, 'list="x-units"[^>]*data-table="variables" data-id="v1" data-field="unit"[^>]*data-focus-now')
+  # added, the unit is a pill of its kind, typed with the database's units offered, the cursor in it
+  html <- line_of(draft, utils::modifyList(view, list(shown = "v1:unit", focus = "v1:unit")))
+  expect_match(html, '<span class="tag-pill is-unit">\\s*<input type="text" class="form-control form-control-sm tag-pill-input" value="" placeholder="unit" list="x-units"[^>]*data-table="variables" data-id="v1" data-field="unit"[^>]*data-focus-now')
+  expect_false(grepl('data-action="show_field" data-id="v1" data-name="unit"', html)) # + Tag no longer offers it
   lists <- htmltools::renderTags(variable_editor_lists(shiny::NS("x"), utils::modifyList(test_lookups(), list(units = c("pounds", "years"))), draft))$html
   units <- regmatches(lists, regexpr('<datalist id="x-units">.*?</datalist>', lists))
   expect_match(units, '<option value="pounds">')
   expect_match(units, '<option value="years">')
   # a write-in with a unit shows it, written one way
   measured <- draft_service_update(draft, "variables", "v1", "unit", "Yrs.")
-  expect_match(line_of(measured, view, columns = "unit"), 'value="years"[^>]*data-field="unit"|data-field="unit"[^>]*value="years"')
+  expect_match(line_of(measured, view), 'value="years"[^>]*data-field="unit"|data-field="unit"[^>]*value="years"')
 })
 
 test_that("each block notes the PDF page it was read from, for Open PDF to open at", {
@@ -707,7 +707,7 @@ test_that("the picked block's details are drawn: its words, its number and what 
     expect_match(html, 'class="block-detail" data-id="c3"')
     expect_match(html, 'data-field="text" data-id="c3"')
     expect_false(grepl('data-field="component_type"', html)) # its kind isn't changed here
-    expect_match(html, 'class="variable-cards optional-0"')
+    expect_match(html, 'class="variable-cards"')
     expect_lt(regexpr('data-field="printed_number"', html), regexpr('data-field="parent_question_id"', html))
     expect_lt(regexpr("Depends on", html), regexpr("<h3>Variables</h3>", html))
     expect_false(grepl("Skip Logic|skip|Categories|Measurement Scale|Coming soon", html)) # none is on this page
@@ -779,30 +779,37 @@ test_that("the toolbar is + Block, Filter, Search, Expand All, Collapse All and 
   expect_match(html, 'id="outline-detail"')
 })
 
-test_that("a variable's line is its MATR ID and response, with About and Label columns once one has them, and no kind or number", {
+test_that("a variable's line is its MATR ID, response and tags, with a Label column once one has a label, and no kind or number", {
   draft <- draft_service_add_box(short_gold_draft(), "c3")
   view <- list(problems = draft_service_check(draft, test_lookups()), shown = character(), split = "c3")
   cards <- function(draft) htmltools::renderTags(variable_cards(component(draft, "c3"), draft, view, test_lookups(), shiny::NS("x")))$html
   html <- cards(draft)
-  expect_match(text_of(html), "MATR ID Response", fixed = TRUE)
+  expect_match(text_of(html), "MATR ID Response Tags", fixed = TRUE)
   expect_false(grepl("Subject|Label|Kind", regmatches(html, regexpr('<div class="variable-line variable-head".*?</div>', html))))
   expect_false(grepl('data-field="variable_type"|variable-card-number', html))
   # + Variable is at the bottom of the details, not under the variables
   expect_false(grepl("Add Variable|add_box|wide-menu", html))
   # the line between two variables, not between the column names and the first (_edit_extraction.scss)
   expect_match(html, 'class="variable-line variable-head"')
-  # one variable with an About gives the table an About column; the other's cell there is empty
+  # every variable has a Tags box with + Tag in it, and no pills until it has a tag
+  expect_match(html, 'class="variable-cards"')
+  expect_equal(lengths(regmatches(html, gregexpr('class="tag-box"', html))), nrow(draft_service_children(draft, "variables", "c3")))
+  expect_false(grepl("tag-pill", html))
+  expect_match(html, 'class="dropdown add-field tag-add"')
+  # a subject is a pill of its kind, its words typed in it; a time frame a pill of its own, written one way
   about <- draft_service_update(draft, "variables", "v1", "subject", "Respondent's Family")
   html <- cards(about)
-  expect_match(html, 'class="variable-cards has-subject optional-1"')
-  expect_match(regmatches(html, regexpr('<div class="variable-line variable-head".*?</div>', html)), "<span>Subject</span>")
-  expect_equal(lengths(regmatches(html, gregexpr('class="variable-cell is-subject"', html))), 2)
-  # and a time frame a Time frame column, written one way
+  expect_match(html, '<span class="tag-pill is-subject">\\s*<input type="text" class="form-control form-control-sm tag-pill-input" value="family"')
+  expect_match(html, 'data-action="hide_field" data-id="v1" data-name="subject"') # its ×
   timed <- draft_service_update(about, "variables", "v1", "time_frame", "During the last 30 days")
   html <- cards(timed)
-  expect_match(html, 'class="variable-cards has-subject has-time_frame optional-2"')
-  expect_match(regmatches(html, regexpr('<div class="variable-line variable-head".*?</div>', html)), "<span>Time frame</span>")
-  expect_match(html, 'value="in the past 30 days"')
+  expect_match(html, '<span class="tag-pill is-time_frame">\\s*<input type="text" class="form-control form-control-sm tag-pill-input" value="past 30 days"')
+  # a label is a column, there once a variable has one; the other's cell there is empty
+  labelled <- draft_service_update(timed, "variables", "v1", "label", "Smokes now")
+  html <- cards(labelled)
+  expect_match(html, 'class="variable-cards has-label"')
+  expect_match(regmatches(html, regexpr('<div class="variable-line variable-head".*?</div>', html)), "<span>Label</span>")
+  expect_equal(lengths(regmatches(html, gregexpr('class="variable-cell is-label"', html))), 2)
 })
 
 test_that("+ Variable asks for choices or a write-in, each said in a box, and adds the kind picked", {

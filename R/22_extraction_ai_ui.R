@@ -54,52 +54,60 @@ pdf_choice <- function(ns) {
   )
 }
 
+# A file given: its kind in a box (PDF, CSV), its name, a line of facts under it, and any buttons beside it.
+# The PDF and the file of Variable Names and Coding are drawn the same way, chosen or begun.
+# name: The file's name.
+# facts: What to say under the name, joined with " · ".
+# ...: Buttons (Replace, Remove), if the file can still be changed.
+file_card <- function(name, facts, ...) {
+  kind <- toupper(tools::file_ext(name))
+  div(
+    class = "pdf-file",
+    span(class = "pdf-file-icon", if (nzchar(kind)) kind else "FILE"),
+    div(class = "pdf-file-name", strong(name), div(class = "form-text", paste(facts, collapse = " · "))),
+    ...
+  )
+}
+
+# A file input drawn as the quiet Replace button beside a file.
+replace_button <- function(ns, id, accept) {
+  fileInput(ns(id), NULL, accept = accept, buttonLabel = "Replace") |> tagAppendAttributes(class = "file-button")
+}
+
 # The PDF: the one chosen, which can be swapped until the extraction begins, or the draft's.
 # pdf: `list(name, bytes)`, and `pages` once the draft has it.
 # begun: Whether the extraction has begun: the draft has the file, so it can't be swapped.
 pdf_file <- function(pdf, ns, begun = TRUE) {
   facts <- c(if (!is.null(pdf$pages)) plural(pdf$pages, "page"), file_size(pdf$bytes))
-  div(
-    class = "pdf-file",
-    span(class = "pdf-file-icon", "PDF"),
-    div(class = "pdf-file-name", strong(pdf$name), div(class = "form-text", paste(facts, collapse = " · "))),
-    if (!begun) {
-      fileInput(ns("replace_pdf"), NULL, accept = c(".pdf", "application/pdf"), buttonLabel = "Replace") |>
-        tagAppendAttributes(class = "file-button")
-    }
-  )
+  file_card(pdf$name, facts, if (!begun) replace_button(ns, "replace_pdf", c(".pdf", "application/pdf")))
 }
 
 # ------ The file of Variable Names and Coding (optional) ---------------------------------
 # Somewhere to give the file of Variable Names and Coding (MATR IDs and codes), or the file given.
 # Optional. Gemini applies it once the questionnaire is read and checked, as a step of its own. It can be
-# given, changed or taken away until the extraction begins; after that the page only says which file it is.
-# name: The file's name, or `NULL` if none is given.
+# given, changed or taken away until the extraction begins; after that the page only shows which file it is, as
+# it shows the PDF.
+# file: The file given, `list(name, bytes)` (`bytes` when it is known), or `NULL` if none is.
 # begun: Whether the extraction has begun.
 # Returns: A UI element, or `NULL` once the extraction has begun without one.
-supplement_card <- function(name, begun, ns) {
+supplement_card <- function(file, begun, ns) {
   accept <- c(".pdf", ".csv", ".tsv", ".txt")
-  if (begun) {
-    return(if (!is.null(name)) {
-      p(class = "form-text supplement-note", app_icon("matr_id"), " Variable Names and Coding from ", strong(name, .noWS = "after"), ".")
+  if (is.null(file)) {
+    return(if (!begun) {
+      file_box(
+        fileInput(ns("supplement"), NULL, accept = accept, buttonLabel = "Choose file"),
+        strong("Optional: Variable Names and Coding"),
+        div("A codebook or list (PDF, CSV or text) giving each variable its name (MATR ID) and each answer its code.
+          They're applied once the questionnaire is read; the questionnaire itself isn't changed."),
+        icon = "matr_id"
+      ) |> tagAppendAttributes(class = "is-supplement")
     })
   }
-  if (is.null(name)) {
-    return(file_box(
-      fileInput(ns("supplement"), NULL, accept = accept, buttonLabel = "Choose file"),
-      strong("Optional: Variable Names and Coding"),
-      div("A codebook or list (PDF, CSV or text) giving each variable its name (MATR ID) and each answer its code.
-          They're applied once the questionnaire is read; the questionnaire itself isn't changed."),
-      icon = "matr_id"
-    ) |> tagAppendAttributes(class = "is-supplement"))
-  }
-  div(
-    class = "pdf-file is-supplement",
-    span(class = "pdf-file-icon", app_icon("matr_id")),
-    div(class = "pdf-file-name", strong(name), div(class = "form-text", "Variable Names and Coding, applied once the questionnaire is read")),
-    fileInput(ns("supplement"), NULL, accept = accept, buttonLabel = "Replace") |>
-      tagAppendAttributes(class = "file-button"),
-    actionButton(ns("remove_supplement"), "Remove", class = "btn-outline-dark")
+  facts <- c("Variable Names and Coding", if (!is.null(file$bytes)) file_size(file$bytes))
+  file_card(
+    file$name, facts,
+    if (!begun) replace_button(ns, "supplement", accept),
+    if (!begun) actionButton(ns("remove_supplement"), "Remove", class = "btn-outline-dark")
   )
 }
 

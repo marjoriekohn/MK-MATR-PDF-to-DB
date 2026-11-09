@@ -143,8 +143,8 @@ test_that("a variable about the respondent is the same, written as a blank, Resp
   expect_true(is.na(original()$variables$subject[1]))
   expect_equal(edits_of(draft_service_update(original(), "variables", box, "subject", "Self")), list())
   expect_equal(edits_of(draft_service_update(original(), "variables", box, "subject", "respondent")), list())
-  edit <- edits_of(draft_service_update(original(), "variables", box, "subject", "Respondent's Siblings"))[[1]]
-  expect_equal(c(edit$field, edit$after), c("subject", "Respondent's Siblings"))
+  edit <- edits_of(draft_service_update(original(), "variables", box, "subject", "siblings"))[[1]]
+  expect_equal(c(edit$field, edit$after), c("subject", "siblings"))
   expect_null(edit$before)
 })
 

@@ -225,13 +225,13 @@ test_that("a registry's name, and a study's name in its registry, can't be added
 })
 
 test_that("a tag's name is written its kind's way, and is in its kind's list once", {
-  expect_equal(edit_tag_name("time frame", "During the last 12 months"), "in the past 12 months")
-  expect_equal(edit_tag_name("subject", "Respondent’s Twin"), "Respondent's Twin")
+  expect_equal(edit_tag_name("time frame", "During the last 12 months"), "past 12 months")
+  expect_equal(edit_tag_name("subject", "Respondent’s Twin"), "twin")
   expect_equal(edit_tag_name("unit", "Lbs"), normal_unit("Lbs"))
   taken <- form_for("tag", "add", tag__kind = "subject", tag__name = " respondent’s family ")
-  expect_equal(edit_service_check(taken$fields, taken$values)$problems$tag__name, "“Respondent's Family” is already in the list of subjects.")
+  expect_equal(edit_service_check(taken$fields, taken$values)$problems$tag__name, "“family” is already in the list of subjects.")
   # the same words are fine as another kind
-  other_kind <- form_for("tag", "add", tag__kind = "unit", tag__name = "Respondent's Family")
+  other_kind <- form_for("tag", "add", tag__kind = "unit", tag__name = "family")
   expect_length(edit_service_check(other_kind$fields, other_kind$values)$problems, 0)
   # a tag may keep its own name
   same <- form_for("tag", "update", "1", tag__name = "RESPONDENT")

@@ -162,7 +162,7 @@ review_edit_value <- function(draft, table, id, field) {
   if (field == "parent_question_id") {
     value <- draft_service_question_number(draft$components[match(value, draft$components$id), , drop = FALSE])
   }
-  if (field == "subject") value <- blank_respondent(value)
+  if (field == "subject") value <- normal_subject(value)
   review_blank(value)
 }
 
@@ -175,7 +175,7 @@ review_edit_keys <- function(draft, table, rows, field) {
     refs <- draft$components$ref[match(value, draft$components$id)]
     return(ifelse(is.na(value), NA_character_, ifelse(is.na(refs), "new", refs)))
   }
-  if (field == "subject") value <- blank_respondent(value)
+  if (field == "subject") value <- normal_subject(value)
   value <- trimws(as.character(value))
   value[!is.na(value) & !nzchar(value)] <- NA
   value

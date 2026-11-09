@@ -9,9 +9,9 @@ $code-width: 4.25rem; // a choice's code: a few digits
 .variable-editor-add { margin-top: 0.6rem; }
 
 // ------ Variables and choices -----------------------------------------------
-// A question's variables as a table: one line each, in printed order (not numbered). The Subject, Time frame and Label
-// columns are there once a variable has one (has-subject, has-time_frame, has-label; optional-N says how many). Below about 40rem a line's cells stack,
-// each named by its data-label, since the column names are hidden then.
+// A question's variables as a table: one line each, in printed order (not numbered): MATR ID, response, tags, and a
+// Label column once a variable has one (has-label). Below about 40rem a line's cells stack, each named by its
+// data-label, since the column names are hidden then.
 .variable-cards {
   container-type: inline-size;
   margin: 0.5rem 0 0;
@@ -23,25 +23,16 @@ $code-width: 4.25rem; // a choice's code: a few digits
 
 .box-list { display: flex; flex-direction: column; margin-top: 0.25rem; }
 
-// handle, MATR ID (narrow: an ID is a few characters), response, [about], [time frame], [label], +, delete
+// handle, MATR ID (narrow: an ID is a few characters), response, tags, [label], + label, delete
 .variable-line {
   display: grid;
-  grid-template-columns: 1rem minmax(3.5rem, 5rem) minmax(10rem, 1fr) 1.9rem 1.9rem;
+  grid-template-columns: 1rem minmax(3.5rem, 5rem) minmax(10rem, 1.3fr) minmax(9rem, 1fr) 1.9rem 1.9rem;
   align-items: center;
   gap: 0.4rem;
   padding: 0.35rem 0;
 }
-.variable-cards.optional-1 .variable-line {
-  grid-template-columns: 1rem minmax(3.5rem, 5rem) minmax(10rem, 1.4fr) minmax(8rem, 1fr) 1.9rem 1.9rem;
-}
-.variable-cards.optional-2 .variable-line {
-  grid-template-columns: 1rem minmax(3.5rem, 5rem) minmax(10rem, 1.4fr) repeat(2, minmax(8rem, 1fr)) 1.9rem 1.9rem;
-}
-.variable-cards.optional-3 .variable-line {
-  grid-template-columns: 1rem minmax(3.5rem, 4.5rem) minmax(9rem, 1.4fr) repeat(3, minmax(7rem, 1fr)) 1.9rem 1.9rem;
-}
-.variable-cards.optional-4 .variable-line {
-  grid-template-columns: 1rem minmax(3rem, 4rem) minmax(8rem, 1.3fr) repeat(4, minmax(6rem, 1fr)) 1.9rem 1.9rem;
+.variable-cards.has-label .variable-line {
+  grid-template-columns: 1rem minmax(3.5rem, 4.5rem) minmax(9rem, 1.3fr) minmax(9rem, 1fr) minmax(7rem, 0.8fr) 1.9rem 1.9rem;
 }
 .variable-head {
   padding-bottom: 0;
@@ -84,7 +75,7 @@ $code-width: 4.25rem; // a choice's code: a few digits
     > .is-id { order: 2; }
     > .variable-add { order: 3; }
     > .variable-delete { order: 4; }
-    > .is-response, > .is-subject, > .is-time_frame, > .is-label, > .is-unit { order: 5; grid-column: 2 / -1; }
+    > .is-response, > .is-tags, > .is-label { order: 5; grid-column: 2 / -1; }
   }
   .variable-cards .choice-table { margin-left: 0; }
   // a choice's tags each take a line under its code and words, named
@@ -133,7 +124,63 @@ $code-width: 4.25rem; // a choice's code: a few digits
 
 .add-field .dropdown-toggle::after { display: none; }
 
-// A variable's subject, time frame or label, with its ×
+// ------ Tags ---------------------------------------------------------------------------------
+// A variable's tags, in a box drawn like a field: a pill for each, in its kind's colour (VCU's accents: subject
+// purple, time frame blue, unit gray), its words typed in the pill and offered from the database's tags of that
+// kind, with its ×; then + Tag, a dashed pill, offering the kinds it hasn't got.
+.tag-box {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.25rem;
+  min-height: calc(1.5em + 0.5rem + 2px); // as tall as a small field
+  padding: 0.2rem 0.3rem;
+  border: 1px solid $control-line;
+  border-radius: $border-radius;
+  background: $vcu-white;
+}
+.tag-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.1rem;
+  max-width: 100%;
+  padding: 0 0.15rem 0 0.6rem;
+  border-radius: $border-radius-pill;
+  color: $vcu-white;
+  font-size: $font-size-xs;
+  font-weight: 600;
+  line-height: 1.7;
+  &.is-subject { background: $vcu-purple; }
+  &.is-time_frame { background: $vcu-blue; }
+  &.is-unit { background: $vcu-gray; }
+  &:focus-within { box-shadow: 0 0 0 2px rgba($vcu-gold, 0.6); }
+  .tag-pill-input, .variable-cell & .form-control {
+    width: auto;
+    max-width: 100%;
+    min-width: 2rem;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    color: inherit;
+    font: inherit;
+    box-shadow: none;
+    &::placeholder { color: rgba($vcu-white, 0.75); font-weight: 400; }
+    &:focus { outline: none; }
+  }
+  .field-remove { color: inherit; opacity: 0.8; &:hover, &:focus { opacity: 1; color: inherit; } }
+}
+.tag-add .dropdown-toggle {
+  padding: 0 0.55rem 0 0.35rem;
+  border: 1px dashed $control-line;
+  border-radius: $border-radius-pill;
+  color: $vcu-gray;
+  font-size: $font-size-xs;
+  line-height: 1.7;
+  .btn-text { margin-left: 0.15rem; }
+  &:hover, &:focus { border-color: $vcu-gray; color: $vcu-black; }
+}
+
+// A variable's label, with its ×
 .variable-optional {
   display: flex;
   width: 100%;

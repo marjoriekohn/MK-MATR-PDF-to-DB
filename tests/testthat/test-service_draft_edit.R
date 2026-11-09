@@ -108,7 +108,7 @@ test_that("what staff type is stored as the column's type, blanks as NA", {
   expect_identical(draft_service_update(draft, "variables", "v1", "matr_id", "Q1A")$variables$matr_id[1], "Q1A") # not words
   expect_identical(
     draft_service_update(draft, "variables", "v1", "time_frame", "Over the past twelve months")$variables$time_frame[1],
-    "in the past 12 months"
+    "past 12 months"
   )
   expect_error(draft_service_update(draft, "components", "c3", "id", "c9"), "can't be changed")
   # the fields that went with skips, conditions and respondent counts can't be typed into
@@ -619,7 +619,7 @@ test_that("who a variable is about is blank for the respondent, however it is ty
   box <- draft$variables$id[1]
   expect_true(is.na(draft_service_update(draft, "variables", box, "subject", "self")$variables$subject[1]))
   expect_true(is.na(draft_service_update(draft, "variables", box, "subject", " ")$variables$subject[1]))
-  expect_equal(draft_service_update(draft, "variables", box, "subject", " Respondent's Twin ")$variables$subject[1], "Respondent's Twin")
+  expect_equal(draft_service_update(draft, "variables", box, "subject", " twin ")$variables$subject[1], "twin")
 })
 
 test_that("ungrouping keeps a group's blocks, in order, where the group was", {
