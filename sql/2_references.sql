@@ -1,5 +1,5 @@
 -- =====================================================================================================
--- MATR metadata database, script 2 of 7: REFERENCES (foreign keys)
+-- MATR metadata database, script 2 of 8: REFERENCES (foreign keys)
 -- =====================================================================================================
 -- Run after 1_tables.sql. Nothing cascades unless noted: deleting a row that others point at is refused.
 --

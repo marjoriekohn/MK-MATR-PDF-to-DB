@@ -1,5 +1,5 @@
 -- =====================================================================================================
--- MATR metadata database, script 4 of 7: FUNCTIONS
+-- MATR metadata database, script 4 of 8: FUNCTIONS
 -- =====================================================================================================
 -- Run after 3_indexes.sql; can be run again at any time (it replaces every function and trigger).
 --

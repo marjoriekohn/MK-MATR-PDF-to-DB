@@ -1,7 +1,7 @@
 -- =====================================================================================================
--- MATR metadata database, script 1 of 7: TABLES
+-- MATR metadata database, script 1 of 8: TABLES
 -- =====================================================================================================
--- The seven scripts in this folder build the whole database on a Supabase project, in order, each run
+-- The eight scripts in this folder build the whole database on a Supabase project, in order, each run
 -- whole in the SQL Editor:
 --
 --   1_tables.sql        start over, then the tables: columns, primary keys, checks
@@ -11,9 +11,10 @@
 --   5_permissions.sql   Row Level Security and grants: what the dashboard, staff and the site may do
 --   6_descriptions.sql  comments shown in the Supabase table editor
 --   7_seed.sql          the starting rows: registries, studies, questionnaires, waves, lists, staff
+--   8_search.sql        the dashboard's search by meaning: an embedding of every question, kept up to date
 --
 -- Each script is one transaction: if a statement fails, that script changes nothing, and the ones before
--- it stay. Fix the cause and run that script again. Scripts 3 to 7 can be run again on their own at any
+-- it stay. Fix the cause and run that script again. Scripts 3 to 8 can be run again on their own at any
 -- time (they replace what they made before); 1 and 2 start over.
 --
 -- WHAT THIS SCRIPT DOES FIRST: it removes the schemas public and private with everything in them, so
@@ -32,8 +33,8 @@ set matr.start_over = 'yes';
 -- the respondent writes) or closed-ended (chosen from its RESPONSE_OPTIONS, each an ANSWER_OPTION kept once
 -- for the whole registry, with the code it was recorded as). TAGS (a subject such as "twin", a
 -- time frame such as "past 30 days", a unit such as "pounds") can be put on a question, a variable
--- or a response option. Questions that ask the same thing in different words ("what is your weight?",
--- "enter your weight") share a NORMAL_TEXT, worked out by the database. Staff work in EXTRACTIONS (one row
+-- or a response option. The dashboard finds questions by meaning, through an embedding of each
+-- question (8_search.sql). Staff work in EXTRACTIONS (one row
 -- each, with the questionnaire as JSON until it is pushed) and everything they change is written to HISTORY.
 -- =====================================================================================================
 
@@ -121,42 +122,6 @@ as $$
     ))),
     '[.:[:space:]]+$', ''
   )), '');
-$$;
-
--- What a question asks, stripped of the words that only ask for it: "what is your height?", "enter your
--- height", "write your height", "your height now" and "height" are all "height". It is worked out for
--- every Question (component.normal_text) and never typed, so questions that ask the same thing are found
--- together however they were printed; the printed words stay as they are. A grouping key, not a rewrite:
--- a question it doesn't recognise keeps its own words, lower case.
-create function private.normal_question(p_text text)
-returns text
-language sql
-immutable
-set search_path = ''
-as $$
-  with lowered as (
-    select lower(private.squish(translate(coalesce(p_text, ''), E'‘’“”', '''''""'))) as t
-  ),
-  -- "(check one)", "(please circle all that apply)" are directions, not the question
-  no_directions as (
-    select regexp_replace(t, '\s*\((?:please )?(?:check|circle|mark|tick|select) (?:one|all that apply)\)\s*', ' ', 'g') as t
-    from lowered
-  ),
-  -- the words that ask for the answer
-  no_asking as (
-    select regexp_replace(t,
-      '^(?:please,? )?(?:(?:what|which) (?:is|was|are|were) |what''s |enter |write(?: in| down)? |record |give |state |indicate |list |specify |type |provide |fill in |tell us |describe |estimate |please )',
-      '') as t
-    from no_directions
-  ),
-  no_article as (
-    select regexp_replace(t, '^(?:your|the|a|an|his|her|their) ', '') as t from no_asking
-  ),
-  -- "now", "today" and the punctuation at the end
-  no_tail as (
-    select regexp_replace(t, '(?:\s+(?:now|today|currently|at present|please))?[\s.:?!,;]*$', '') as t from no_article
-  )
-  select nullif(private.squish(t), '') from no_tail;
 $$;
 
 
@@ -259,15 +224,12 @@ create table public.pdf_file (
 --   Definition    explains a term
 --   Note          any other printed remark
 --   Interviewer Script  what an interviewer reads aloud or follows
--- normal_text is worked out for every Question by private.normal_question(): questions that ask the same
--- thing in different words share it.
 create table public.component (
   component_id bigint primary key default private.random_id('component', 'component_id'),
   kind         text   not null
     constraint component_kind_check check (kind in ('Section', 'Group', 'Grid', 'Question', 'Instruction', 'Introduction',
                                                     'Definition', 'Note', 'Interviewer Script')),
   text         text   constraint component_text_not_blank check (text is null or btrim(text) <> ''),
-  normal_text  text   generated always as (case when kind = 'Question' then private.normal_question(text) end) stored,
   constraint component_group_has_no_text check ((kind = 'Group') = (text is null))
 );
 

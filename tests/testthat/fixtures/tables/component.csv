@@ -1,17 +1,17 @@
-component_id,kind,text,normal_text
-1,Section,a. about you,
-2,Instruction,please answer every question. skip any you prefer not to answer.,
-3,Question,what is your date of birth?,date of birth
-4,Question,do you now smoke cigarettes?,do you now smoke cigarettes
-5,Question,how many cigarettes do you smoke on a typical day?,how many cigarettes do you smoke on a typical day
-6,Section,b. your health,
-7,Question,how often do you see a doctor?,how often do you see a doctor
-8,Introduction,the next questions are about your mood.,
-9,Question,how often in the past week did you feel sad?,how often in the past week did you feel sad
-10,Section,mood,
-11,Question,did you smoke during your pregnancy?,did you smoke during your pregnancy
-12,Section,pregnancy,
-13,Definition,a twin is one of two children born at the same birth.,
-14,Question,how many children do you have?,how many children do you have
-15,Note,thank you for taking part.,
-16,Group,,
+component_id,kind,text
+1,Section,a. about you
+2,Instruction,please answer every question. skip any you prefer not to answer.
+3,Question,what is your date of birth?
+4,Question,do you now smoke cigarettes?
+5,Question,how many cigarettes do you smoke on a typical day?
+6,Section,b. your health
+7,Question,how often do you see a doctor?
+8,Introduction,the next questions are about your mood.
+9,Question,how often in the past week did you feel sad?
+10,Section,mood
+11,Question,did you smoke during your pregnancy?
+12,Section,pregnancy
+13,Definition,a twin is one of two children born at the same birth.
+14,Question,how many children do you have?
+15,Note,thank you for taking part.
+16,Group,

@@ -41,14 +41,20 @@ the database and to maintain what is already there.
 
 ## Setting up the database
 
-The database is a Supabase project built by the seven scripts in
+The database is a Supabase project built by the eight scripts in
 [sql/](sql), run in order, each whole, in the project's SQL Editor:
 `1_tables.sql` (starts over: it removes every table and row first, and
 refuses to while a questionnaire has content unless its
 `set matr.start_over = 'yes'` line is uncommented), `2_references.sql`,
 `3_indexes.sql`, `4_functions.sql`, `5_permissions.sql`,
-`6_descriptions.sql` and `7_seed.sql` (the starting rows: registries,
-studies, questionnaires, waves, lists and staff).
+`6_descriptions.sql`, `7_seed.sql` (the starting rows: registries,
+studies, questionnaires, waves, lists and staff) and `8_search.sql` (the
+dashboard's search by meaning; run it again whenever `5_permissions.sql`
+is run). Before `8_search.sql`, deploy the Edge Functions in
+[supabase/functions](supabase/functions)
+(`supabase functions deploy --project-ref <ref>`) and tell the database
+where the project is, once:
+`select vault.create_secret('https://<ref>.supabase.co', 'project_url');`.
 [docs/database_design.md](docs/database_design.md) says what the schema
 is and why. The site reads the project's address and keys from `.env`
 (`SUPABASE_URL`, `SUPABASE_SECRET_KEY`, `SUPABASE_PUBLISHABLE_KEY`);

@@ -1,7 +1,8 @@
 -- =====================================================================================================
--- MATR metadata database, script 5 of 7: PERMISSIONS
+-- MATR metadata database, script 5 of 8: PERMISSIONS
 -- =====================================================================================================
--- Run after 4_functions.sql; can be run again at any time. Three roles reach the database through the
+-- Run after 4_functions.sql; can be run again at any time, and then run 8_search.sql again too, since this
+-- takes back its grants. Three roles reach the database through the
 -- REST API:
 --   anon, authenticated   the public dashboard: reads the catalog, upvotes, nothing else. A signed-in
 --                         staff member (authenticated, with an email in staff) may also read the private

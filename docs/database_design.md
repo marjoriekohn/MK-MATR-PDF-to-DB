@@ -24,7 +24,7 @@ component, one row per answer choice, no duplicate questions.
 | `questionnaire` | a form | name and abbreviation unique within its study |
 | `wave` | one administration of a form | also keeps the PDF and supplement it was extracted from (`pdf_sha256`, `supplement_*`); kept when emptied so Re-extract can read them again |
 | `pdf_file` | a PDF in Storage, by SHA-256 | pages, bytes |
-| `component` | one printed wording, kept once | `kind` (Section, Group, Grid, Question, Instruction, Introduction, Definition, Note, Interviewer Script), `text`, and for a Question `normal_text` (generated) |
+| `component` | one printed wording, kept once | `kind` (Section, Group, Grid, Question, Instruction, Introduction, Definition, Note, Interviewer Script), `text` |
 | `placement` | one place a questionnaire prints a component | `parent_placement_id` (the Section/Grid/Group it is in), `display_order`, `depends_on_placement_id` (the earlier question it only makes sense after) |
 | `wave_question` | that a wave asked a question | `question_number` (its place, 1, 2, 3...), `printed_number` (as printed) |
 | `variable` | one MATR ID | `variable_type` (`open_ended`/`closed_ended`), `answer_data_type` (NUMBER/TEXT/DATE/TIME, open-ended only), `label` |
@@ -84,11 +84,10 @@ tagging is built), `component_type` (nine fixed kinds are a check constraint), `
 (see normalization) and `wave_file` (folded into `wave`).
 
 **Normalization of question text.** The printed words stay verbatim (lower case) in `component.text`,
-because researchers want to see how a question was printed. `component.normal_text` is a generated column
-from `private.normal_question()`: it strips the words that only ask for the answer ("what is your", "enter
-your", "write your", a trailing "now", directions in brackets) so "what is your height?", "enter your
-height" and "height" share `height`. The dashboard groups by it. It is computed by the database, never
-typed, so it can't drift. Answer choices are normalized the same way (`private.normal_answer`, mirrored by
+because researchers want to see how a question was printed. Each wording is one component, so the dashboard
+groups a question by its component, and finds questions that ask the same thing in other words by meaning: an
+embedding of each question in `question_embedding`, kept up to date by the database (`sql/8_search.sql`).
+Answer choices are normalized the same way (`private.normal_answer`, mirrored by
 the site's `normal_answer()`), and tags by the site before they become rows of `tag`: a subject is the
 relation to the respondent alone, in lower case (`normal_subject()`: "Respondent's Twin" is "twin"; who the
 respondent is comes from the wave's respondent type, so the dashboard can say "Twin's mother"), a time frame is

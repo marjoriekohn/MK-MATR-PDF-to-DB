@@ -1,5 +1,5 @@
 -- =====================================================================================================
--- MATR metadata database, script 7 of 7: SEED
+-- MATR metadata database, script 7 of 8: SEED
 -- =====================================================================================================
 -- Run after 6_descriptions.sql; can be run again at any time (a row already there is updated to this).
 -- The starting rows: what the live database held on 2026-11-08, before this schema, apart from anything

@@ -1,5 +1,5 @@
 -- =====================================================================================================
--- MATR metadata database, script 6 of 7: DESCRIPTIONS
+-- MATR metadata database, script 6 of 8: DESCRIPTIONS
 -- =====================================================================================================
 -- Run after 5_permissions.sql; can be run again at any time. What the Supabase table editor shows beside
 -- each table and column.
@@ -19,7 +19,6 @@ comment on column public.wave.supplement_text   is 'The file of MATR IDs and cod
 comment on table public.pdf_file                is 'A PDF uploaded to the site, once per file (by its SHA-256): its pages and size. The file itself is in Storage, bucket extraction-pdfs, as <hash>.pdf. The dashboard sees only a wave''s.';
 comment on table public.component               is 'One piece of printed material, held once for the whole registry: one for each kind and wording, however many times it is printed. The one Group is shared by every group.';
 comment on column public.component.kind         is 'Section, Group, Grid (hold other blocks); Question (has variables); Instruction, Introduction, Definition, Note, Interviewer Script (remarks).';
-comment on column public.component.normal_text  is 'For a Question: what it asks, stripped of the words that only ask for it ("what is your height?" is "height"), worked out by the database. Questions that ask the same thing share it.';
 comment on table public.placement               is 'One place where a questionnaire prints a component: what holds it, its order, and for a question the earlier question it depends on. Variables and wave numbers attach here.';
 comment on column public.placement.depends_on_placement_id is 'For a Question: the earlier Question it only makes sense after ("When did you start?" after "Do you smoke?"). Empty for a question that stands on its own.';
 comment on table public.wave_question           is 'That a wave asked a question: its place among the wave''s questions (question_number) and the number printed beside it (printed_number).';

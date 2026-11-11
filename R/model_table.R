@@ -12,9 +12,6 @@
 #           hold letters (2a, AH25LF)
 #   date    a day, as YYYY-MM-DD
 #
-# `derived` lists values the database works out when a row is read (a question's normal_text): they are
-# read like columns, but never written.
-#
 # sql/1_tables.sql builds the tables, and docs/database_design.md says why they look the way they do.
 
 database_tables <- list(
@@ -67,12 +64,10 @@ database_tables <- list(
     key = "pdf_sha256", order_by = "pdf_sha256",
     columns = c(pdf_sha256 = "text", pdf_pages = "number", pdf_bytes = "number")
   ),
-  # One wording, kept once however many questionnaires print it. normal_text is worked out by the database for a
-  # Question (private.normal_question()).
+  # One wording, kept once however many questionnaires print it.
   component = list(
     key = "component_id", order_by = "component_id",
-    columns = c(component_id = "id", kind = "text", text = "text"),
-    derived = c(normal_text = "text")
+    columns = c(component_id = "id", kind = "text", text = "text")
   ),
   placement = list(
     key = "placement_id", order_by = c("questionnaire_id", "placement_id"),
@@ -134,8 +129,8 @@ database_tables <- list(
   )
 )
 
-# What is read of a table: its columns, then what the database works out.
-table_read_columns <- function(spec) c(spec$columns, spec$derived)
+# What is read of a table: its columns.
+table_read_columns <- function(spec) spec$columns
 
 # Read a whole table as the Metadata page sees it.
 # Every row of `table`, with every column listed in `database_tables`, as the kinds

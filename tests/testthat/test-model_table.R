@@ -15,17 +15,16 @@ test_that("columns come back as the kinds the table lists, and a null is NA", {
   expect_true(is.na(rows$description))
 })
 
-test_that("numbers in text columns stay text, and what the database works out is read too", {
+test_that("numbers in text columns stay text", {
   numbers <- table_model_get(test_connection, "wave_question", list(wave_id = database_eq(0)))
   expect_type(numbers$question_number, "character")
   expect_type(numbers$placement_id, "double")
   expect_type(table_model_get(test_connection, "pdf_file", list(pdf_sha256 = database_eq("none")))$pdf_sha256, "character")
-  words <- tolower(test_name("height"))
-  question <- local_row("component", list(kind = "Question", text = paste("what is your", words)), "component_id")
+  words <- paste("what is your", tolower(test_name("height")))
+  question <- local_row("component", list(kind = "Question", text = words), "component_id")
   rows <- table_model_get(test_connection, "component", list(component_id = database_eq(question$component_id)))
-  expect_named(rows, c("component_id", "kind", "text", "normal_text"))
-  expect_equal(rows$kind, "Question")
-  expect_equal(rows$normal_text, words) # the database strips the asking words
+  expect_named(rows, c("component_id", "kind", "text"))
+  expect_equal(rows$text, words) # kept as printed
 })
 
 test_that("a table the page doesn't know is a sentence", {

@@ -1,5 +1,5 @@
 -- =====================================================================================================
--- MATR metadata database, script 3 of 7: INDEXES
+-- MATR metadata database, script 3 of 8: INDEXES
 -- =====================================================================================================
 -- Run after 2_references.sql; can be run again at any time. Primary keys and unique constraints already
 -- make an index, and an index also serves any search on its first columns, so a foreign key only needs one
@@ -39,9 +39,6 @@ create unique index measurement_scale_name_unique              on public.measure
 create unique index measurement_scale_abbreviation_unique      on public.measurement_scale (lower(btrim(abbreviation)));
 
 -- ------ Lookups ---------------------------------------------------------------------------------------
--- questions that ask the same thing, for the dashboard
-drop index if exists public.component_normal_text_idx;
-create index component_normal_text_idx on public.component (normal_text) where normal_text is not null;
 
 -- ------ Foreign keys ----------------------------------------------------------------------------------
 drop index if exists public.study_registry_id_idx;
