@@ -13,9 +13,10 @@
 --   public.question_embedding   one row per Question: the text that is embedded, and its embedding (empty
 --                               until made, and emptied when the text changes)
 --   triggers on component and placement
---                               after any change, note that the texts may be out of date
---   cron job embed-questions    every 10 seconds: brings the texts up to date, and asks the embed-questions Edge
---                               Function to fill the empty embeddings
+--                               with any change, note that the texts may be out of date
+--   cron job embed-questions    every 10 seconds: brings the texts up to date (between changes to the catalog,
+--                               never during one), and asks the embed-questions Edge Function to fill the
+--                               empty embeddings
 --   public.match_questions()    the questions closest to a search's embedding; the search-questions Edge
 --                               Function calls it, and the dashboard calls that
 --
@@ -51,9 +52,14 @@ alter table public.question_embedding add column if not exists embedded_at times
 create index if not exists question_embedding_embedding_idx
   on public.question_embedding using hnsw (embedding extensions.vector_cosine_ops);
 
--- One row while the texts may be out of date: the catalog changed since they were last made.
-create table if not exists private.question_embedding_stale (
-  stale boolean primary key default true constraint question_embedding_stale_one_row check (stale)
+-- A row or more while the texts may be out of date: the catalog changed since they were last made. Nothing
+-- in a row but its number, so noting a change never waits for another change's note. (It was one row with a
+-- key before: a change then waited for any other that had noted itself, and for the cron job while that made
+-- the texts, which could end in a deadlock. Made again here for a database from then; the last line of this
+-- script notes that the texts are to be made.)
+drop table if exists private.question_embedding_stale;
+create table private.question_embedding_stale (
+  note_id bigint generated always as identity primary key
 );
 
 -- One row: when the cron job last called embed-questions, and how many calls in a row have filled nothing.
@@ -164,8 +170,24 @@ as $$
 $$;
 
 -- ------ Keeping them up to date ----------------------------------------------------------------------------
--- After any change to what the texts are made of. Once per statement, and only a note: a push writes many
--- rows, and the texts are made once, by the cron job.
+-- Changes to the catalog and the making of the texts take turns, on one lock: every change holds it shared
+-- (so changes don't wait for each other) from its first statement on component or placement until it commits,
+-- and the cron job makes the texts only when it can have it to itself, i.e. between changes. Without it the two
+-- can deadlock: a change that has deleted a question waits for the job, while the job, adding that question's
+-- text, waits for the change.
+create or replace function private.question_embedding_lock()
+returns bigint
+language sql
+immutable
+set search_path = ''
+as $$
+  select 6272518410793351; -- any number nothing else in the database locks on
+$$;
+
+-- Before any change to what the texts are made of: wait for the cron job if it is making the texts, then note
+-- that they are out of date. Once per statement, and only a note: a push writes many rows, and the texts are
+-- made once, by the cron job. A note that is already there is enough: the job can't take it away before this
+-- change commits.
 create or replace function private.question_embeddings_out_of_date()
 returns trigger
 language plpgsql
@@ -173,23 +195,27 @@ security definer -- the site's role writes the catalog but not private tables; a
 set search_path = ''
 as $$
 begin
-  insert into private.question_embedding_stale default values on conflict do nothing;
+  perform pg_catalog.pg_advisory_xact_lock_shared(private.question_embedding_lock());
+  if not exists (select 1 from private.question_embedding_stale) then
+    insert into private.question_embedding_stale default values;
+  end if;
   return null;
 end;
 $$;
 
 drop trigger if exists question_embeddings_out_of_date on public.component;
 create trigger question_embeddings_out_of_date
-  after insert or update or delete or truncate on public.component
+  before insert or update or delete or truncate on public.component
   for each statement execute function private.question_embeddings_out_of_date();
 drop trigger if exists question_embeddings_out_of_date on public.placement;
 create trigger question_embeddings_out_of_date
-  after insert or update or delete or truncate on public.placement
+  before insert or update or delete or truncate on public.placement
   for each statement execute function private.question_embeddings_out_of_date();
 -- (A database set up before the labels were left out has one on variable too.)
 drop trigger if exists question_embeddings_out_of_date on public.variable;
 
--- Run by the cron job: make the texts again if the catalog changed, then, while any embedding is empty, ask
+-- Run by the cron job: make the texts again if the catalog changed and no change is under way (one that is
+-- leaves its note, so the next run makes them), then, while any embedding is empty, ask
 -- the embed-questions Edge Function to fill some (pg_net sends the call once this commits). A call embeds 4,
 -- about all the CPU an Edge Function gets, so every 10 seconds fills about 24 a minute. One call at a time:
 -- calls at once share a worker, and all of them stop when it runs out of CPU.
@@ -212,8 +238,10 @@ begin
   where jobid in (select jobid from cron.job where jobname = 'embed-questions') and end_time < now() - interval '1 day';
 
   if exists (select 1 from private.question_embedding_stale) then
-    delete from private.question_embedding_stale;
-    perform private.refresh_question_embedding_texts();
+    if pg_catalog.pg_try_advisory_xact_lock(private.question_embedding_lock()) then
+      delete from private.question_embedding_stale;
+      perform private.refresh_question_embedding_texts();
+    end if;
   end if;
 
   if not exists (select 1 from public.question_embedding where embedding is null) then
@@ -287,6 +315,7 @@ grant execute on function public.match_questions(extensions.vector, double preci
 
 revoke all on private.question_embedding_stale from public, anon, authenticated, service_role;
 revoke all on private.question_embedding_calls from public, anon, authenticated, service_role;
+revoke all on function private.question_embedding_lock() from public, anon, authenticated;
 revoke all on function private.question_embedding_texts() from public, anon, authenticated;
 revoke all on function private.refresh_question_embedding_texts() from public, anon, authenticated;
 revoke all on function private.embed_questions() from public, anon, authenticated;
@@ -298,6 +327,6 @@ comment on column public.question_embedding.embedded_at is 'When the embed-quest
 comment on function public.match_questions(extensions.vector, double precision, integer) is 'The questions closest in meaning to a search''s embedding (gte-small): for the search-questions Edge Function.';
 
 -- ------ Make the texts for the questions already there -----------------------------------------------------
-insert into private.question_embedding_stale default values on conflict do nothing;
+insert into private.question_embedding_stale default values;
 
 commit;
