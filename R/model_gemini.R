@@ -22,9 +22,10 @@ gemini_longest_pause_seconds <- 30
 gemini_busy_statuses <- c(429, 500, 502, 503, 504)
 
 # Have Gemini read a PDF.
-# One request for each prompt, all about the same PDF, sent at once. A busy Gemini is
+# One request for each prompt, sent at once. A busy Gemini is
 # asked again (see `gemini_model_perform()`). Errors are sentences staff can act on.
-# pdf_path: The PDF, or `NULL` to send the prompts alone (what Gemini reads is in them).
+# pdf_path: The PDF every request is about; or one for each prompt (a long questionnaire's pages around each
+#   request's own); or `NULL` to send the prompts alone (what Gemini reads is in them).
 # prompts: A character vector, one prompt for each request.
 # api_key: The Gemini API key; defaults to `GEMINI_KEY`.
 # Returns: A list with one answer for each prompt: `text`, `model`, `input_tokens`,
@@ -34,7 +35,8 @@ gemini_model_generate <- function(pdf_path, prompts, model = "gemini-3.8-flash",
   if (!nzchar(api_key)) {
     stop("There's no Gemini API key. Add GEMINI_KEY to the .env file and restart the site.", call. = FALSE)
   }
-  sending <- lapply(prompts, function(prompt) gemini_model_request(pdf_path, prompt, model, api_key))
+  paths <- rep_len(if (is.null(pdf_path)) list(NULL) else as.list(pdf_path), length(prompts))
+  sending <- Map(function(path, prompt) gemini_model_request(path, prompt, model, api_key), paths, prompts)
   lapply(gemini_model_perform(sending), function(response) {
     if (inherits(response, "error")) stop("Couldn't reach Gemini: ", conditionMessage(response), call. = FALSE)
     gemini_model_parse(httr2::resp_body_json(response), httr2::resp_status(response))

@@ -152,13 +152,16 @@ test_that("reading steps follow the reading job's status", {
   states <- function(status, error = NULL) {
     extraction_service_reading_steps(list(extraction_status = status, error = error))$state
   }
-  expect_equal(states("queued"), c("done", "in_progress", "not_started", "not_started", "not_started"))
-  expect_equal(states("received"), c("done", "done", "done", "in_progress", "not_started"))
-  expect_equal(states("ready"), rep("done", 5))
+  expect_equal(states("queued"), c("done", "in_progress", "not_started", "not_started", "not_started", "not_started"))
+  expect_equal(states("received"), c("done", "done", "done", "in_progress", "not_started", "not_started"))
+  expect_equal(states("assigning"), c(rep("done", 4), "in_progress", "not_started"))
+  expect_equal(states("ready"), rep("done", 6))
 
   failed <- extraction_service_reading_steps(list(extraction_status = "failed", error = "Stopped on page 6 of 18"))
   expect_equal(failed$state[3], "attention")
   expect_equal(failed$detail[3], "Stopped on page 6 of 18")
+  # without a file of them, the Variable Names and Coding are looked for in the PDF itself
+  expect_equal(failed$detail[5], "Takes any variable names and codes the PDF prints")
 })
 
 test_that("a file of Variable Names and Coding is a step of its own, after the questionnaire is read and checked", {

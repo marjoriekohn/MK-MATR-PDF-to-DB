@@ -1841,6 +1841,41 @@
         "RemoteSha": "1.9.3"
       }
     },
+    "qpdf": {
+      "Source": "CRAN",
+      "Repository": "https://packagemanager.posit.co/cran/latest",
+      "description": {
+        "Package": "qpdf",
+        "Type": "Package",
+        "Title": "Split, Combine and Compress PDF Files",
+        "Version": "1.4.1",
+        "Authors@R": "c(person(\"Jeroen\", \"Ooms\", role = c(\"aut\", \"cre\"), \n    email = \"jeroenooms@gmail.com\", comment = c(ORCID = \"0000-0002-4035-0289\")),\n        person(\"Ben\", \"Raymond\", role = \"ctb\"),\n        person(\"Jay Berkenbilt\", role = \"cph\", comment = \"Author of libqpdf\"))",
+        "Description": "Content-preserving transformations transformations of PDF files such \n    as split, combine, and compress. This package interfaces directly to the 'qpdf' \n    C++ library <https://qpdf.sourceforge.io/> and does not require any command \n    line utilities. Note that 'qpdf' does not read actual content from PDF files: \n    to extract text and data you need the 'pdftools' package.",
+        "License": "Apache License 2.0",
+        "URL": "https://docs.ropensci.org/qpdf/\nhttps://ropensci.r-universe.dev/qpdf",
+        "BugReports": "https://github.com/ropensci/qpdf/issues",
+        "Encoding": "UTF-8",
+        "Imports": "Rcpp, askpass, curl",
+        "LinkingTo": "Rcpp",
+        "RoxygenNote": "7.2.1",
+        "Suggests": "testthat",
+        "SystemRequirements": "libjpeg",
+        "NeedsCompilation": "yes",
+        "Packaged": "2025-06-30 11:12:14 UTC; jeroen",
+        "Author": "Jeroen Ooms [aut, cre] (ORCID: <https://orcid.org/0000-0002-4035-0289>),\n  Ben Raymond [ctb],\n  Jay Berkenbilt [cph] (Author of libqpdf)",
+        "Maintainer": "Jeroen Ooms <jeroenooms@gmail.com>",
+        "Repository": "RSPM",
+        "Date/Publication": "2025-07-02 09:40:02 UTC",
+        "Built": "R 4.5.0; aarch64-apple-darwin20; 2026-07-06 12:13:12 UTC; unix",
+        "RemoteType": "standard",
+        "RemoteRef": "qpdf",
+        "RemotePkgRef": "qpdf",
+        "RemoteRepos": "https://packagemanager.posit.co/cran/latest",
+        "RemoteReposName": "CRAN",
+        "RemotePkgPlatform": "aarch64-apple-darwin20",
+        "RemoteSha": "1.4.1"
+      }
+    },
     "rappdirs": {
       "Source": "CRAN",
       "Repository": "https://packagemanager.posit.co/cran/latest",
@@ -2526,10 +2561,10 @@
       "checksum": "77391b0a11a0a2acf57f00d85b0f17e0"
     },
     "prompts/assign_codes.md": {
-      "checksum": "d6630e81e7866171e90ae4596330aee9"
+      "checksum": "0763658604e7b4ebd877df7361faafc7"
     },
     "prompts/extraction.md": {
-      "checksum": "82e744896a9bf75a3ee819d30766ce91"
+      "checksum": "3b41fa02e3f147d0780c509cda57d06f"
     },
     "R/10_home_server.R": {
       "checksum": "5bd14c66f7ee075f3b4fa76c2b1cd2c3"
@@ -2553,7 +2588,7 @@
       "checksum": "7b6392ba608895c880c896827e308c68"
     },
     "R/22_extraction_ai_ui.R": {
-      "checksum": "26ca4853faffcbdf2bd496c217c2e2b8"
+      "checksum": "e2143dfe57e255d7f7de210c543e52a1"
     },
     "R/23_extraction_manual_server.R": {
       "checksum": "45aaa74d31f4550af1b6e3f305325598"
@@ -2649,10 +2684,10 @@
       "checksum": "f9f7280973d6dec658c961a5ebd1e42b"
     },
     "R/model_extraction.R": {
-      "checksum": "d4dc494bff0597d9cc2c1a773ca2ae3a"
+      "checksum": "872d47b26bae19ba72b86bf14bb34467"
     },
     "R/model_gemini.R": {
-      "checksum": "a35efe74a2e859eb5b2f604c055452f9"
+      "checksum": "40dc83b1a8ef772b77e7b640c4f3d52e"
     },
     "R/model_history.R": {
       "checksum": "194a88de20141c246ab69d28681d1cf0"
@@ -2745,7 +2780,7 @@
       "checksum": "b3bee9bcc4d815cda0e4c5be701f933a"
     },
     "R/service_extraction.R": {
-      "checksum": "ee419f8827c36d1a9dc30b5b66116d4c"
+      "checksum": "54e5324ec6faca8771959f2644d6e49f"
     },
     "R/service_history.R": {
       "checksum": "3cc67de1dde9805386b32dc756a1fb64"
@@ -2763,13 +2798,13 @@
       "checksum": "35a033b3bb050306c98373eb7cae8a8b"
     },
     "R/service_reading.R": {
-      "checksum": "2a2f2e24eacb8941aaf40e4e9ac8d806"
+      "checksum": "ea912cedff48cdf5cc24a907e6013e4b"
     },
     "R/service_staff.R": {
       "checksum": "6d73f7e319f30181f1ac62c0bab95ae2"
     },
     "renv.lock": {
-      "checksum": "42263eb6a892ea4545d9f6eadf276d6d"
+      "checksum": "200d5ec4735bae10a771c136eb447211"
     },
     "server.R": {
       "checksum": "5aee179809c0f1d62dfe4e7561eab350"

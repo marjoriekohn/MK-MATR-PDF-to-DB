@@ -485,6 +485,18 @@ extraction_model_is_pdf <- function(path) {
 }
 
 # Count a PDF's pages.
+# Some of a PDF's pages, as a PDF of their own in the session's temporary folder, so a long questionnaire can go to
+# Gemini a few pages at a time (Gemini counts, and charges for, every page it is sent). Cut by the qpdf package.
+# path: The PDF.
+# from, to: The first and last page to keep.
+# Returns: The new PDF's path, or `NULL` when qpdf isn't installed (the whole PDF is sent instead).
+extraction_model_pdf_pages <- function(path, from, to) {
+  if (!requireNamespace("qpdf", quietly = TRUE)) {
+    return(NULL)
+  }
+  qpdf::pdf_subset(path, pages = from:to, output = tempfile(sprintf("pages_%d-%d_", from, to), fileext = ".pdf"))
+}
+
 # The PDF's page tree says how many pages it has (`/Type /Pages ... /Count 8`; a tree of trees gives several
 # counts, and the whole is the largest). Most PDFs pack the tree into compressed object streams, so those are
 # unpacked and looked through as well. Counting the page objects themselves is only the fallback: a PDF saved

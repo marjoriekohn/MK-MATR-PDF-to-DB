@@ -17,7 +17,10 @@ the database and to maintain what is already there.
 - **Home page**: How many extraction drafts you have in progress and
   how many changes have been made, and a card for each page.
 - **New Extraction**: Staff upload a questionnaire PDF. Gemini reads it
-  into blocks, questions, variables and choices. Staff review and
+  into blocks, questions, variables and choices, then gives the
+  variables their MATR IDs and the choices their codes from a codebook
+  uploaded with it, or from the PDF itself when it prints them (as a
+  REDCap data dictionary does). Staff review and
   correct the whole extraction on the Edit Extraction page (the AI reads
   the number printed beside each question, and the site numbers the
   questions in order), give the variables their MATR IDs from a CSV (in

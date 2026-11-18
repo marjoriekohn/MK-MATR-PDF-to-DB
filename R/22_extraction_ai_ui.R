@@ -98,7 +98,8 @@ supplement_card <- function(file, begun, ns) {
         fileInput(ns("supplement"), NULL, accept = accept, buttonLabel = "Choose file"),
         strong("Optional: Variable Names and Coding"),
         div("A codebook or list (PDF, CSV or text) giving each variable its name (MATR ID) and each answer its code.
-          They're applied once the questionnaire is read; the questionnaire itself isn't changed."),
+          They're applied once the questionnaire is read. Not needed when the questionnaire PDF prints them itself
+          (as a REDCap data dictionary does)."),
         icon = "matr_id"
       ) |> tagAppendAttributes(class = "is-supplement")
     })

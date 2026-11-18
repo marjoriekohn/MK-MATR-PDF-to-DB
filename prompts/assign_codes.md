@@ -1,8 +1,8 @@
 # Giving a questionnaire's variables their Variable Names and Coding
 
-You are helping the Mid-Atlantic Twin Registry (MATR) record a printed questionnaire. Its questions have already been read: each answer a question records is a **variable**, listed under "The variables" below as JSON. You are also given a file from the study, such as a codebook or data dictionary, that names the variables in the response data (their **variable names**, which MATR calls MATR IDs, such as `kq5a`, `AH25LF` or `q12b`) and says how each answer is **coded** (the value stored for each answer category, such as `1 = Yes, 0 = No`, or `a = Never, b = Sometimes`). The file is attached as a PDF, or follows the variables as text (often a spreadsheet saved as CSV).
+You are helping the Mid-Atlantic Twin Registry (MATR) record a printed questionnaire. Its questions have already been read: each answer a question records is a **variable**, listed under "The variables" below as JSON. You are also given a file from the study, such as a codebook or data dictionary, that names the variables in the response data (their **variable names**, which MATR calls MATR IDs, such as `kq5a`, `AH25LF` or `q12b`) and says how each answer is **coded** (the value stored for each answer category, such as `1 = Yes, 0 = No`, or `a = Never, b = Sometimes`). The file is attached as a PDF, or follows the variables as text (often a spreadsheet saved as CSV). It may also be the questionnaire PDF itself, when the study gave no separate file: see "When the file is the questionnaire" below.
 
-Find each variable's entry in the file, and give its variable name, the code of each of its choices and, when the entry names one, the measurement scale its question comes from. You only add names, codes and scales: the questionnaire itself has been read and is not yours to change, so never suggest new variables, choices or questions.
+Find each variable's entry in the file, and give its variable name, the code of each of its choices, the codes of any categories its entry codes that the questionnaire doesn't print, and, when the entry names one, the measurement scale its question comes from. The questionnaire itself has been read and is not yours to change: never suggest new variables or questions, and add a choice only as "Categories the questionnaire doesn't print" below says.
 
 ## The variables
 
@@ -29,6 +29,14 @@ Codebooks are messy. Expect all of this:
 - **Entries the questionnaire doesn't have.** The file may list variables that weren't extracted or aren't questions at all: scales, subscales, totals, scores, recodes, derived or computed variables (often named with suffixes like `_r`, `_sum`, `_score`, or described as "Subscale (kq46a kq46f)"). Skip them. Never give one of their names to a variable.
 - **A measurement scale named with the question.** Some files say which published scale a question comes from, usually as the scale's abbreviation in brackets right after the question's words: "Would you call yourself a nervous person? (EPQ-R)", "Do you often feel ""fed-up""? (EPQ-R)". That is the variable's `scale` (see "Scales" below); it is not part of the question's wording, so leave it aside when you match the wording.
 - **Abbreviated or reworded categories.** "< avg." is "below average", "Much > avg" is "much above average", "Yrs" is years, "DK" is "don't know", and a year or a month may stand for a category ("1977" for born in 1977). Match categories to choices by meaning.
+- **Codes listed once for the whole file.** A table of codes for missing data printed once for every variable ("Codes for Missing Data": NI = No information, NASK = Not asked, …) belongs to no entry. Never give those codes to a variable.
+
+## When the file is the questionnaire
+
+When "The file" below says the PDF is the questionnaire itself, look for variable names and codes printed beside its questions. A REDCap data dictionary ("Data Dictionary Codebook") prints each field's variable name in square brackets (`[domicile]`: its name is `domicile`, without the brackets) and each category's code beside its label (`1  Apartment`, `999  Prefer not to answer`). Some printed questionnaires print a small code beside each box (`1 ☐ Yes  2 ☐ No`): those are the choices' codes. Only the pages the variables are printed on may be attached; the variables are on them.
+
+- A question's printed number ("12", "41", "Q5") is not a variable name, nor is the number of a row in a data dictionary. Give a `matr_id` only when the PDF prints a variable's name.
+- A questionnaire that prints no variable names and no codes has nothing to give: answer `{"variables":[]}`.
 
 ## How to match
 
@@ -37,8 +45,27 @@ Codebooks are messy. Expect all of this:
 - Use `about` to tell apart entries that differ only by whom they are about: "(mother)" and "(father)" versions of the same item are separate variables, often with names that differ by a last digit (`kq15e1` for the mother, `kq15e2` for the father). Give the mother's name to the variable about the mother.
 - A variable name often carries the question's number (`kq12b`, `AH12B`). Use that only to confirm a match, never against the wording.
 - Match each choice to its code by the category with the same meaning, not by position. Some variables are **reverse coded** (often named with `_r`): their codes run the other way ("not at all" = 3 … "a lot" = 0), and each choice must get its own category's code. Copy each code exactly as the file prints it: `1`, `0`, `-9`, `a`, `B`.
-- A check-all-that-apply list is usually one variable per box, each coded as marked or not (for example `1 = Yes, 0 = No`).
-- Give only what the file says. If you can't find a variable's entry, or you're unsure which of two entries it is, leave the variable out. If the entry gives no code for one of its choices, leave that choice out. Never invent a variable name or a code, and never give the same variable name to two variables.
+- A check-all-that-apply list is usually one variable per box, each coded as marked or not (for example `1 = Yes, 0 = No`). Some files code it as one variable instead: see "A check-all list coded as one variable" below.
+- Give only what the file says. If you can't find a variable's entry, or you're unsure which of two entries it is, leave the variable out. If the entry gives no code for one of its choices, leave that choice out. Never invent a variable name or a code, and never give the same variable name to two variables (but for the boxes below).
+
+## Categories the questionnaire doesn't print
+
+An entry often codes more categories than the questionnaire prints for its variable: a "No" for a lone box left unmarked (the box prints only "Yes", the entry codes `1 = Yes; 2 = No`), or a code for an answer that is missing (`99 = No answer`, `-9 = Refused`, `999 = Prefer not to answer` when the questionnaire doesn't offer it). Give each such category in the variable's `more_choices`, with its `code` exactly as the file prints it and its `answer` in the registry's standard wording: all in lower case, abbreviations written out ("DK" is "don't know"), and, when one of these registry wordings says the same thing, that one exactly as listed:
+{{answer_options}}
+
+- Only categories this variable's own entry lists, with their codes. Never one you work out, one that "usually" goes with such a question, or a code listed once for the whole file.
+- Only for a variable whose choices are all in the file: give every printed choice its code in `choices` too.
+- Not for a category that matches one of the variable's choices: that choice gets the code in `choices`.
+- Not for a variable without choices (one written in), and not for the boxes of a check-all list coded as one variable.
+
+## A check-all list coded as one variable
+
+Some files code a check-all-that-apply list as one variable with a code for each box, not one variable per box. A REDCap "checkbox" field does: the field `income` lists its boxes as `1  income___1  My own paycheck`, `2  income___2  My own unemployment benefit`, `999  income___999  Prefer not to answer`. The questionnaire has been read with one variable per box (each labelled with the box's words, or, for a list of people, with the person as `about`).
+
+- Give each box's variable the field's name as its `matr_id`, the same for every box: `income`, never `income___1`, which only names the box for the form's skip instructions.
+- Give each box's variable the box's code as its `box_code`: `"1"` for "My own paycheck", `"999"` for "Prefer not to answer". Match boxes to codes by their words, not their order.
+- Leave out the box variables' `choices` and `more_choices`: each box becomes one choice of the one variable, coded with its `box_code`.
+- Use `box_code` only for a list the file codes this way. A list whose boxes each have their own variable name (`kq12a`, `kq12b`, each coded `1 = Yes, 0 = No`) is coded as usual, with `choices`.
 
 ## Scales
 
@@ -55,8 +82,8 @@ When a variable's entry names the published measurement scale its question comes
 
 Answer with one JSON object and nothing else: no prose, no markdown fences. Write it compactly, without indentation or line breaks. Its shape:
 
-{"variables":[{"id":"v1","matr_id":"kq1","scale":"EPQ-R","choices":[{"id":"o1","code":"1"},{"id":"o2","code":"2"}]},{"id":"v2","matr_id":"kq2"}]}
+{"variables":[{"id":"v1","matr_id":"kq1","scale":"EPQ-R","choices":[{"id":"o1","code":"1"},{"id":"o2","code":"2"}],"more_choices":[{"answer":"no answer","code":"99"}]},{"id":"v2","matr_id":"kq2"},{"id":"v3","matr_id":"income","box_code":"1"},{"id":"v4","matr_id":"income","box_code":"2"}]}
 
-- `variables`: one object for each variable you found in the file, with its `id`, its `matr_id` (the variable name exactly as the file writes it), its `scale` if its entry names one, and `choices` (each choice's `id` and `code`) if it has choices and the file codes them.
-- Every `matr_id`, `scale` and `code` is text, in quotes.
-- Leave out a variable you didn't find, and leave out `matr_id`, `scale` or `choices` when the file doesn't give them.
+- `variables`: one object for each variable you found in the file, with its `id`, its `matr_id` (the variable name exactly as the file writes it), its `scale` if its entry names one, `choices` (each choice's `id` and `code`) if it has choices and the file codes them, `more_choices` (each category's `answer` and `code`) for categories its entry codes that the questionnaire doesn't print, and `box_code` for a box of a check-all list coded as one variable.
+- Every `matr_id`, `scale`, `box_code`, `answer` and `code` is text, in quotes.
+- Leave out a variable you didn't find, and leave out `matr_id`, `scale`, `choices`, `more_choices` or `box_code` when the file doesn't give them.

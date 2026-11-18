@@ -379,6 +379,35 @@ test_that("a questionnaire is read two pages at a time, and the pieces joined", 
   expect_equal(reading$tokens$most_in_one_answer, 70)
 })
 
+test_that("a long PDF goes to Gemini cut to each request's pages and two on either side", {
+  cuts <- list()
+  local_stub("extraction_model_pdf_pages", function(path, from, to) {
+    cuts[[length(cuts) + 1]] <<- c(from, to)
+    sprintf("pages_%d-%d.pdf", from, to)
+  })
+  local_stub("reading_whole_pdf_pages", 4)
+  sent_to <- NULL
+  three <- function() lapply(1:3, function(i) answer_with(question(as.character(i))))
+  gemini <- stand_in_gemini(three, three) # a reading with a cut PDF, then one without
+  generate <- gemini$generate
+  gemini$generate <- function(pdf_path, prompts, model) {
+    sent_to <<- pdf_path
+    generate(pdf_path, prompts, model)
+  }
+  read_with(gemini, pages = 5, pdf_path = "long.pdf")
+  expect_equal(cuts, list(c(1, 4), c(1, 5), c(3, 5)))
+  expect_equal(sent_to, c("pages_1-4.pdf", "pages_1-5.pdf", "pages_3-5.pdf"))
+  expect_equal(strsplit(gemini$asked(), "\n")[[1]][3], paste(
+    "This PDF is pages 3-5 of a questionnaire of 5 pages. Record page 5 of the 5: this PDF's page 3.",
+    "Its other pages are there only to show what comes before and after them."
+  ))
+
+  # without qpdf to cut it, every request gets the whole PDF
+  local_stub("extraction_model_pdf_pages", function(path, from, to) NULL)
+  expect_message(read_with(gemini, pages = 5, pdf_path = "long.pdf"), "qpdf isn't installed")
+  expect_equal(sent_to, "long.pdf")
+})
+
 test_that("a section carried on inside a carried-on section joins its first part", {
   earlier <- list(section_of(question("1"), group_of(question("2a"))))
   later <- list(section_of(group_of(question("2b"), continued = TRUE), question("3"), continued = TRUE))
@@ -593,7 +622,118 @@ test_that("a PDF of MATR IDs and codes is sent as the request's file, and codes 
   expect_equal(first$code_value[1:2], c("1", "2")) # counted, not the repeated "1"
 })
 
+closed <- function(..., label = NULL, subject = NULL) {
+  answers <- c(...)
+  without_blanks(list(
+    variable_type = "closed_ended", label = label, subject = subject,
+    response_options = lapply(seq_along(answers), function(i) list(display_order = i, answer_option = answers[i]))
+  ))
+}
+asking <- function(...) list(component_type = "Question", text = "q", variables = list(...))
+answers_of <- function(variable) vapply(variable$response_options, function(choice) choice$answer_option, "")
+codes_of <- function(variable) vapply(variable$response_options, function(choice) choice$code_value %||% NA_character_, "")
+
+test_that("choices the file codes that the questionnaire doesn't print are added after the printed ones", {
+  json <- list(components = list(
+    asking(closed("yes")), # a lone box
+    asking(closed("yes", "no")),
+    asking(closed("yes", "no")),
+    asking(list(variable_type = "open_ended", answer_data_type = "NUMBER"))
+  ))
+  filled <- assign_into(json, list(variables = list(
+    list(id = "v1", choices = list(list(id = "o1", code = "1")), more_choices = list(list(answer = "No", code = "2"))),
+    list(
+      id = "v2", choices = list(list(id = "o2", code = "1"), list(id = "o3", code = "2")),
+      more_choices = list(
+        list(answer = "No answer.", code = "99"),
+        list(answer = "no", code = "3"), # the questionnaire has it already
+        list(answer = "refused", code = "2") # its code is taken
+      )
+    ),
+    # a printed choice the file doesn't code would be counted, and could clash: nothing is added
+    list(id = "v3", choices = list(list(id = "o4", code = "1")), more_choices = list(list(answer = "no answer", code = "2"))),
+    list(id = "v4", more_choices = list(list(answer = "missing", code = "-9"))) # written in: no choices
+  )))
+  variables <- lapply(filled$components, function(block) block$variables[[1]])
+  expect_equal(answers_of(variables[[1]]), c("yes", "no"))
+  expect_equal(codes_of(variables[[1]]), c("1", "2"))
+  expect_equal(variables[[1]]$response_options[[2]]$display_order, 2)
+  expect_equal(answers_of(variables[[2]]), c("yes", "no", "no answer"))
+  expect_equal(codes_of(variables[[2]]), c("1", "2", "99"))
+  expect_equal(answers_of(variables[[3]]), c("yes", "no"))
+  expect_null(variables[[4]]$response_options)
+})
+
+test_that("a check-all list the file codes as one variable is joined into one, a choice for each box", {
+  other <- list(variable_type = "open_ended", label = "please describe", answer_data_type = "TEXT")
+  json <- list(components = list(
+    asking(closed("yes", "no", label = "my own paycheck"), closed("yes", "no", label = "other"), other,
+           closed("yes", "no", label = "prefer not to answer")),
+    asking(closed("yes", "no", subject = "mother"), closed("yes", "no", subject = "father"), closed("yes", "no", label = "someone else")), # people, and words
+    asking(closed("yes", "no", label = "dog"), closed("yes", "no", label = "cat")) # two boxes, one code
+  ))
+  box <- function(id, name, code) list(id = id, matr_id = name, box_code = code)
+  filled <- assign_into(json, list(variables = list(
+    box("v1", "income", "1"), box("v2", "income", "6"), list(id = "v3", matr_id = "income_o"), box("v4", "income", "999"),
+    box("v5", "lives", "1"), box("v6", "lives", "2"), box("v7", "lives", "7"),
+    box("v8", "pets", "1"), box("v9", "pets", "1")
+  )))
+  income <- filled$components[[1]]$variables
+  expect_length(income, 2)
+  expect_equal(income[[1]]$matr_id, "income") # the field's name, not a box's ("income___1")
+  expect_equal(answers_of(income[[1]]), c("my own paycheck", "other", "prefer not to answer"))
+  expect_equal(codes_of(income[[1]]), c("1", "6", "999"))
+  expect_null(income[[1]]$label)
+  expect_equal(income[[2]]$matr_id, "income_o") # the write-in stays, after it
+  expect_equal(vapply(income, function(variable) variable$display_order, 1), 1:2)
+
+  lives <- filled$components[[2]]$variables
+  expect_length(lives, 1)
+  expect_equal(answers_of(lives[[1]]), c("mother", "father", "someone else"))
+  expect_equal(codes_of(lives[[1]]), c("1", "2", "7"))
+  expect_null(lives[[1]]$subject)
+
+  pets <- filled$components[[3]]$variables # can't be joined: kept as read, without the field's name
+  expect_length(pets, 2)
+  expect_null(pets[[1]]$matr_id)
+  expect_equal(answers_of(pets[[1]]), c("yes", "no"))
+
+  # the same field's name on boxes of two questions is given twice, and neither keeps it
+  twice <- assign_into(
+    list(components = list(asking(closed("yes", "no", label = "a")), asking(closed("yes", "no", label = "b")))),
+    list(variables = list(box("v1", "same", "1"), box("v2", "same", "2")))
+  )
+  expect_null(twice$components[[1]]$variables[[1]]$matr_id)
+  expect_null(twice$components[[2]]$variables[[1]]$matr_id)
+})
+
+test_that("the questionnaire PDF as the file is named as such, and a long one is cut to each batch's pages", {
+  local_stub("reading_assign_batch", 2)
+  local_stub("reading_whole_pdf_pages", 4)
+  local_stub("extraction_model_pdf_pages", function(path, from, to) sprintf("pages_%d-%d.pdf", from, to))
+  json <- list(components = lapply(c(1, 3, 7), function(page) c(asking(closed("yes", "no")), page = page)))
+  sent <- NULL
+  generate <- function(pdf_path, prompts, model) {
+    sent <<- list(paths = pdf_path, prompts = prompts)
+    lapply(prompts, function(prompt) list(text = '{"variables":[]}'))
+  }
+  questionnaire <- list(name = "survey.pdf", path = "survey.pdf", pages = 10, questionnaire = TRUE)
+  reading_service_assign(json, questionnaire, generate = generate, prompt_path = assign_prompt, answer_options = c("yes", "no answer"))
+  expect_equal(sent$paths, c("pages_1-6.pdf", "pages_7-10.pdf")) # from the first page to two past the pair
+  expect_match(sent$prompts[1], "The file is the questionnaire PDF itself: its pages 1-6, of 10.", fixed = TRUE)
+  expect_match(sent$prompts[1], "\n  - no answer\n", fixed = TRUE) # the registry's wordings
+  expect_false(any(grepl('"page"', sent$prompts, fixed = TRUE))) # the page isn't sent
+
+  reading_service_assign(json, modifyList(questionnaire, list(pages = 4)), generate = generate, prompt_path = assign_prompt)
+  expect_equal(sent$paths, "survey.pdf") # a short one goes whole
+  expect_match(sent$prompts[1], "The file is the questionnaire PDF itself.", fixed = TRUE)
+})
+
 # ------ The job ------------------------------------------------------------------------
+# Every reading ends by looking for MATR IDs and codes (in the draft's file of them, or else its PDF), which would
+# call Gemini: jobs whose tests aren't about that get none.
+no_codes <- function(json, ...) json
+
 # The watcher is given the drafts of the staff the test made only: the database holds other people's too, and it would
 # start (and stop) jobs for them.
 my_drafts <- function(...) {
@@ -612,7 +752,7 @@ test_that("the job saves what Gemini read and marks the draft ready", {
     progress("received")
     list(json = short_gold_json(), model = "gemini-3.8-flash", prompt_version = "abc123")
   }
-  reading_service_run(test_connection, record$id, record$reading_started, read = read)
+  reading_service_run(test_connection, record$id, record$reading_started, read = read, assign = no_codes)
 
   saved <- extraction_model_get(test_connection, record$id)
   expect_equal(seen, "sent")
@@ -650,12 +790,34 @@ test_that("the job reads the file of MATR IDs and codes once the questionnaire i
   expect_equal(read_anyway$error, "Gemini is busy") # shown on the step, which says to type the IDs on Edit Extraction
 })
 
+test_that("without a file of MATR IDs and codes, the job looks for them in the questionnaire PDF itself", {
+  me <- local_staff()
+  local_pdf_cache()
+  record <- extraction_service_create(test_connection, fake_upload(), me)
+  read <- function(pdf_path, lookups, progress) list(json = short_gold_json(), model = "m", prompt_version = "p")
+  given <- NULL
+  wordings <- NULL
+  assign <- function(json, supplement, scales = NULL, answer_options = NULL) {
+    given <<- supplement
+    wordings <<- answer_options
+    json
+  }
+  reading_service_run(test_connection, record$id, record$reading_started, read = read, assign = assign)
+  expect_true(given$questionnaire)
+  expect_equal(given$name, record$pdf$name)
+  expect_identical(readBin(given$path, "raw", 1e4), readBin(record$pdf$path, "raw", 1e4))
+  expect_true(length(wordings) > 0) # the registry's wordings, for choices the file codes that the PDF doesn't print
+  saved <- extraction_model_get(test_connection, record$id)
+  expect_equal(saved$extraction_status, "ready")
+  expect_null(saved$error)
+})
+
 test_that("Re-extract reads a draft's PDF again, putting aside the questionnaire staff reviewed", {
   me <- local_staff()
   local_pdf_cache()
   record <- extraction_service_create(test_connection, fake_upload(), me)
   read <- function(pdf_path, lookups, progress) list(json = short_gold_json(), model = "m", prompt_version = "p")
-  reading_service_run(test_connection, record$id, record$reading_started, read = read)
+  reading_service_run(test_connection, record$id, record$reading_started, read = read, assign = no_codes)
   checked <- draft_service_update(short_gold_draft(), "components", "c3", "checked", TRUE)
   revision <- draft_service_save(test_connection, record$id, checked, me$staff_id)
   expect_false(is.null(extraction_model_questionnaire(test_connection, record$id)$questionnaire))
@@ -666,7 +828,7 @@ test_that("Re-extract reads a draft's PDF again, putting aside the questionnaire
   expect_equal(again$extraction_status, "queued")
   expect_null(extraction_model_questionnaire(test_connection, record$id)$questionnaire)
   # once read again, it opens as the new reading, nothing marked as checked
-  reading_service_run(test_connection, record$id, again$reading_started, read = read)
+  reading_service_run(test_connection, record$id, again$reading_started, read = read, assign = no_codes)
   expect_false(any(extraction_service_load_draft(test_connection, again)$components$checked))
 
   typed <- extraction_service_create_manual(test_connection, me)
@@ -690,7 +852,7 @@ test_that("the job reads the pick lists from the database for Gemini", {
   }
   subject <- local_row("tag", list(kind = "subject", name = test_name("Subject")), "tag_id")
   unit <- local_row("tag", list(kind = "unit", name = test_name("unit")), "tag_id")
-  reading_service_run(test_connection, record$id, record$reading_started, read = read)
+  reading_service_run(test_connection, record$id, record$reading_started, read = read, assign = no_codes)
   expect_true(subject$name %in% given$subjects)
   expect_true(unit$name %in% given$units)
   expect_true("Section" %in% given$component_types)
@@ -701,7 +863,7 @@ test_that("a reading that fails says why", {
   local_pdf_cache()
   record <- extraction_service_create(test_connection, fake_upload(), me)
   read <- function(...) stop("Gemini is busy right now. Try reading again in a few minutes.")
-  reading_service_run(test_connection, record$id, record$reading_started, read = read)
+  reading_service_run(test_connection, record$id, record$reading_started, read = read, assign = no_codes)
 
   saved <- extraction_model_get(test_connection, record$id)
   expect_equal(saved$extraction_status, "failed")
@@ -720,7 +882,7 @@ test_that("a PDF this server hasn't got is fetched from Storage to read", {
     read_from <<- pdf_path
     list(json = short_gold_json(), model = "gemini-3.8-flash", prompt_version = "abc123")
   }
-  reading_service_run(test_connection, record$id, record$reading_started, read = read)
+  reading_service_run(test_connection, record$id, record$reading_started, read = read, assign = no_codes)
   expect_equal(extraction_model_get(test_connection, record$id)$extraction_status, "ready")
   expect_identical(readBin(read_from, "raw", 1e4), readBin(upload$datapath, "raw", 1e4))
 })
@@ -749,7 +911,7 @@ test_that("a job whose reading was restarted saves nothing", {
     extraction_service_retry(test_connection, record$id, me) # staff press Try reading again meanwhile
     list(json = short_gold_json(), model = "gemini-3.8-flash", prompt_version = "abc123")
   }
-  reading_service_run(test_connection, record$id, record$reading_started, read = read)
+  reading_service_run(test_connection, record$id, record$reading_started, read = read, assign = no_codes)
 
   saved <- extraction_model_get(test_connection, record$id)
   expect_equal(saved$extraction_status, "queued")

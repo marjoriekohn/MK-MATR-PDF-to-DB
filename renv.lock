@@ -1874,6 +1874,26 @@
       "Maintainer": "Gábor Csárdi <csardi.gabor@gmail.com>",
       "Repository": "CRAN"
     },
+    "qpdf": {
+      "Package": "qpdf",
+      "Version": "1.4.1",
+      "Source": "Repository",
+      "Type": "Package",
+      "Title": "Split, Combine and Compress PDF Files",
+      "Imports": [
+        "Rcpp",
+        "askpass",
+        "curl"
+      ],
+      "LinkingTo": [
+        "Rcpp"
+      ],
+      "Suggests": [
+        "testthat"
+      ],
+      "NeedsCompilation": "yes",
+      "Repository": "RSPM"
+    },
     "rappdirs": {
       "Package": "rappdirs",
       "Version": "0.3.4",

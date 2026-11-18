@@ -3,13 +3,15 @@
 # answering with JSON in the shape the prompt describes: the questionnaire's
 # blocks, nested as printed. Gemini can only write so much in one answer, so it
 # reads two pages per request, the requests sent at once, and their answers are
-# joined. reading_service_tidy() turns the whole into the JSON the Edit Extraction page
-# loads (tests/testthat/fixtures/gna_gold.json is a hand-checked example), and the draft checks
+# joined. A short PDF goes whole with every request; a long one is cut to the pages around each request's own,
+# since Gemini charges for every page it is sent. reading_service_tidy() turns the whole into the JSON the Edit
+# Extraction page loads (tests/testthat/fixtures/gna_gold.json is a hand-checked example), and the draft checks
 # look it over. If they find problems, Gemini reads it once more, told what
-# they were, and the reading with fewer problems is kept. If the draft has a file of
-# MATR IDs and codes (its `supplement`), Gemini then reads that, in a request of its
-# own (prompts/assign_codes.md), and the variables get their MATR IDs and the choices
-# their codes (reading_service_assign()).
+# they were, and the reading with fewer problems is kept. Then Gemini reads the draft's file of
+# MATR IDs and codes (its `supplement`), or without one the questionnaire PDF itself (some print each variable's
+# name and codes, as REDCap's data dictionary does), in requests of their own (prompts/assign_codes.md), and the
+# variables get their MATR IDs and the choices their codes, with any choices the file codes that the
+# questionnaire doesn't print (reading_service_assign()).
 #
 # The job writes the reading's own columns of EXTRACTION (reading_status, reading_claimed_at, reading_pid,
 # reading_error, model, prompt_version, ai_original), by extraction id, only while the row is still being read
@@ -35,6 +37,11 @@ reading_assign_prompt_path <- "prompts/assign_codes.md"
 # be more than Gemini writes in one answer, so its variables go in several requests, sent at once.
 reading_assign_batch <- 80
 reading_pages_at_once <- 2
+# A PDF with more pages than this goes to Gemini cut to each request's pages and `reading_pages_around` on either
+# side, so a question that runs on over the next pages is there in full. A shorter one goes whole, so Gemini can
+# look back to the heading of a section that began several pages before.
+reading_whole_pdf_pages <- 20
+reading_pages_around <- 2
 
 # Read a questionnaire PDF into the JSON the Edit Extraction page loads.
 # Gemini reads a few pages at a time, the requests sent at once, and the answers are
@@ -52,7 +59,9 @@ reading_service_read <- function(pdf_path, lookups, progress = function(status) 
                                  pages = NULL) {
   instructions <- reading_service_instructions(lookups)
   pages <- pages %||% count_pages(pdf_path, generate, model)
-  requests <- page_requests(pages)
+  sending <- page_files(pdf_path, pages)
+  on.exit(unlink(setdiff(sending$paths, pdf_path)), add = TRUE)
+  requests <- sending$requests
   feedback <- ""
   best <- NULL
   failure <- NULL
@@ -61,7 +70,7 @@ reading_service_read <- function(pdf_path, lookups, progress = function(status) 
     progress("sent")
     # If Gemini fails the second time, the first reading still stands; why it failed goes in the job's log.
     answers <- tryCatch(
-      generate(pdf_path, paste0(instructions, "\n\n## Your pages\n\n", requests, feedback), model = model),
+      generate(sending$paths, paste0(instructions, "\n\n## Your pages\n\n", requests, feedback), model = model),
       error = function(problem) {
         if (is.null(best)) stop(problem)
         message("Reading again failed, so the first reading is kept: ", conditionMessage(problem))
@@ -152,8 +161,34 @@ page_requests <- function(pages) {
   sprintf(
     "This PDF has %s. Record %s.",
     plural(pages, "page"),
-    ifelse(first == last, paste("page", first), paste0("pages ", first, "-", last))
+    page_words(first, last)
   )
+}
+
+page_words <- function(first, last) ifelse(first == last, paste("page", first), paste0("pages ", first, "-", last))
+
+# What each request is sent: the PDF and its words naming the pages to record. A short PDF goes whole with every
+# request (`page_requests()`). A long one is cut to each request's pages and `reading_pages_around` on either side,
+# its words naming them both ways: "This PDF is pages 7-12 of a questionnaire of 41 pages. Record pages 9-10 of
+# the 41: this PDF's pages 3-4." Without qpdf to cut it, the whole PDF goes.
+# Returns: A list: `paths`, one PDF for each request (or the one PDF for all), and `requests`, their words.
+page_files <- function(pdf_path, pages) {
+  if (pages > reading_whole_pdf_pages) {
+    first <- first_pages(pages)
+    last <- pmin(first + reading_pages_at_once - 1, pages)
+    from <- pmax(1, first - reading_pages_around)
+    to <- pmin(pages, last + reading_pages_around)
+    cut <- Map(function(from, to) extraction_model_pdf_pages(pdf_path, from, to), from, to)
+    if (!any(vapply(cut, is.null, logical(1)))) {
+      return(list(paths = unlist(cut), requests = sprintf(
+        "This PDF is %s of a questionnaire of %s. Record %s of the %d: this PDF's %s. Its other pages are there only to show what comes before and after them.",
+        page_words(from, to), plural(pages, "page"), page_words(first, last), pages,
+        page_words(first - from + 1, last - from + 1)
+      )))
+    }
+    message("qpdf isn't installed, so every request is sent the whole PDF of ", plural(pages, "page"), ".")
+  }
+  list(paths = pdf_path, requests = page_requests(pages))
 }
 
 # The PDF says how many pages it has, unless it keeps its list of pages
@@ -449,39 +484,83 @@ block_name <- function(blocks) {
 # ------ MATR IDs and codes from a second file -------------------------------------------
 # Give a reading's variables their MATR IDs, and its choices their codes, from a file that lists them; and its
 # questions their measurement scale, when the file names one with the question ("Are you a worrier? (EPQ-R)").
-# Gemini reads the file (a codebook or a list: a PDF, or text) with the reading's variables, each named by an
-# id (v1, v2... and o1, o2... for the choices, in printed order), and answers with what the file gives for
-# each. The variables go `reading_assign_batch` at a time, each batch with the whole file, the requests sent at
-# once. Only what it gives is filled in. A MATR ID it gives two variables, or codes that repeat within a
+# Gemini reads the file (a codebook or a list: a PDF, or text; or the questionnaire PDF itself, when it prints
+# them) with the reading's variables, each named by an id (v1, v2... and o1, o2... for the choices, in printed
+# order), and answers with what the file gives for each. The variables go `reading_assign_batch` at a time, each
+# batch with the whole file (or, for a long questionnaire PDF, the pages its variables are on), the requests sent
+# at once. Only what it gives is filled in. A MATR ID it gives two variables, or codes that repeat within a
 # variable, are left out, for staff to give on the Edit Extraction page.
 # json: A reading, as `reading_service_tidy()` returns it.
 # supplement: The file: `list(name, path)` for a PDF, `list(name, text)` for text
-#   (`extraction_service_supplement_file()`).
+#   (`extraction_service_supplement_file()`); or the questionnaire PDF, `list(name, path, pages, questionnaire = TRUE)`.
 # generate: `gemini_model_generate()` or a stand-in.
 # prompt_path: The prompt's file.
 # scales: The registry's measurement scales (`lookup_service_get_all()$scales`), which the prompt lists.
-# Returns: The reading, with `matr_id` on the variables and `code_value` on the choices the file gave, and
-#   `scale` on the questions it names one for.
+# answer_options: The registry's standard wordings of choices, which the prompt lists for the choices it adds.
+# Returns: The reading, with `matr_id` on the variables and `code_value` on the choices the file gave, `scale` on
+#   the questions it names one for, the choices the file codes that the questionnaire doesn't print, and a
+#   check-all list the file codes as one variable joined into one (assign_into()).
 reading_service_assign <- function(json, supplement, generate = gemini_model_generate, model = reading_gemini_model,
-                                   prompt_path = reading_assign_prompt_path, scales = NULL) {
+                                   prompt_path = reading_assign_prompt_path, scales = NULL, answer_options = NULL) {
   variables <- assign_variables(json)
   if (length(variables) == 0) {
     return(json)
   }
-  instructions <- gsub("{{scales}}", scale_lines(scales), reading_model_prompt(prompt_path), fixed = TRUE)
-  file <- if (!is.null(supplement$text)) paste0("\n\n## The file (", supplement$name, ")\n\n", supplement$text)
-  batches <- split(variables, ceiling(seq_along(variables) / reading_assign_batch))
-  prompts <- vapply(batches, function(batch) {
-    paste0(instructions, "\n\n## The variables\n\n", jsonlite::toJSON(unname(batch), auto_unbox = TRUE), file)
+  instructions <- reading_model_prompt(prompt_path)
+  instructions <- gsub("{{scales}}", scale_lines(scales), instructions, fixed = TRUE)
+  instructions <- gsub("{{answer_options}}", answer_option_lines(answer_options), instructions, fixed = TRUE)
+  batches <- unname(split(variables, ceiling(seq_along(variables) / reading_assign_batch)))
+  sending <- assign_files(supplement, batches)
+  on.exit(unlink(setdiff(sending$paths, supplement$path)), add = TRUE)
+  prompts <- vapply(seq_along(batches), function(i) {
+    described <- lapply(batches[[i]], function(variable) variable[names(variable) != "page"])
+    paste0(instructions, "\n\n## The variables\n\n", jsonlite::toJSON(described, auto_unbox = TRUE), sending$files[i])
   }, character(1))
-  answers <- generate(supplement$path, unname(prompts), model = model)
+  answers <- generate(sending$paths, prompts, model = model)
   given <- unlist(lapply(answers, function(answer) json_in(answer$text)$variables), recursive = FALSE)
   assign_into(json, list(variables = given))
 }
 
+answer_option_lines <- function(answer_options) {
+  if (length(answer_options) == 0) {
+    return("  - (the registry lists none yet)")
+  }
+  paste0("  - ", answer_options, collapse = "\n")
+}
+
+# What each batch of variables is sent with: the file (`paths`, one for all or one for each batch), and the words
+# after the variables that say what it is (`files`). A file of text goes in the words. The questionnaire's own PDF
+# is named as such, and a long one is cut to the pages the batch's variables are on: each block is marked with
+# the first page of the pair it was read in, so from that page to `reading_pages_around` past the pair.
+assign_files <- function(supplement, batches) {
+  n <- length(batches)
+  if (!is.null(supplement$text)) {
+    return(list(paths = NULL, files = rep(paste0("\n\n## The file (", supplement$name, ")\n\n", supplement$text), n)))
+  }
+  if (!isTRUE(supplement$questionnaire)) {
+    return(list(paths = supplement$path, files = rep("", n)))
+  }
+  whole <- list(paths = supplement$path, files = rep("\n\n## The file\n\nThe file is the questionnaire PDF itself.", n))
+  pages <- supplement$pages %||% NA
+  on <- lapply(batches, function(batch) vapply(batch, function(variable) as.numeric(variable$page %||% NA), numeric(1)))
+  if (is.na(pages) || pages <= reading_whole_pdf_pages || anyNA(unlist(on))) {
+    return(whole)
+  }
+  from <- vapply(on, min, numeric(1))
+  to <- pmin(pages, vapply(on, max, numeric(1)) + reading_pages_at_once - 1 + reading_pages_around)
+  cut <- Map(function(from, to) extraction_model_pdf_pages(supplement$path, from, to), from, to)
+  if (any(vapply(cut, is.null, logical(1)))) {
+    return(whole)
+  }
+  list(paths = unlist(cut), files = sprintf(
+    "\n\n## The file\n\nThe file is the questionnaire PDF itself: its %s, of %d. These variables are printed on them.",
+    page_words(from, to), pages
+  ))
+}
+
 # Each variable of a reading, in printed order, with the ids the assigning prompt names it and its choices by,
 # and what helps find it in the file: its question's printed number and words, its label, and who and when it
-# is about (its own tag, or else its question's).
+# is about (its own tag, or else its question's); and the page its question was read on (`page`, which isn't sent).
 assign_variables <- function(json) {
   found <- list()
   n_box <- 0
@@ -497,7 +576,7 @@ assign_variables <- function(json) {
         found[[length(found) + 1]] <<- without_blanks(list(
           id = paste0("v", n_box), question = block$printed_number, text = block$text, label = box$label,
           about = box$subject %||% block$subject, when = box$time_frame %||% block$time_frame,
-          choices = if (length(choices) > 0) choices
+          choices = if (length(choices) > 0) choices, page = block$page
         ))
       }
       walk(block$children)
@@ -507,50 +586,71 @@ assign_variables <- function(json) {
   found
 }
 
-# The reading with what Gemini gave (`given$variables`, each `id`, `matr_id`, `scale` and `choices`, each `id`
-# and `code`) filled in, walking the blocks in the order assign_variables() named them. Only a variable's matr_id,
-# a choice's code_value and a question's scale are set: no block, variable or choice is added, moved, taken away
-# or reworded. A question's scales are the ones the file names with its variables, all of them, unless the
-# questionnaire itself printed one, which stands.
+# The reading with what Gemini gave (`given$variables`, each `id`, `matr_id`, `scale`, `box_code`, `choices`, each
+# `id` and `code`, and `more_choices`, each `answer` and `code`) filled in, walking the blocks in the order
+# assign_variables() named them. A variable's matr_id, a choice's code_value and a question's scale are set, and:
+# - Choices the file codes that the questionnaire doesn't print (the "No" of a lone box, "99 = no answer") are
+#   added after the printed ones, when every printed one has its code from the file (so no counted code can
+#   clash with them) and neither the answer nor the code is there already. Only closed-ended variables get them.
+# - The boxes of a check-all list the file codes as one variable (REDCap's checkbox fields, each box given the
+#   field's name and its own `box_code`) are joined into one variable with a choice per box (join_boxes()).
+# Nothing else is added, moved, taken away or reworded. A question's scales are the ones the file names with its
+# variables, all of them, unless the questionnaire itself printed one, which stands.
 assign_into <- function(json, given) {
   matr_ids <- list()
   codes <- list()
   scales <- list()
+  box_codes <- list()
+  more <- list()
   for (box in given$variables %||% list()) {
+    id <- box$id
+    if (is.null(id)) next
     matr_id <- clean_text(as.character(box$matr_id %||% ""))
-    if (!is.null(box$id) && !is.null(matr_id)) matr_ids[[box$id]] <- matr_id
+    if (!is.null(matr_id)) matr_ids[[id]] <- matr_id
     scale <- tidy_scale(as.character(box$scale %||% ""))
-    if (!is.null(box$id) && !is.null(scale)) scales[[box$id]] <- scale
+    if (!is.null(scale)) scales[[id]] <- scale
+    box_code <- clean_text(as.character(box$box_code %||% ""))
+    if (!is.null(box_code)) box_codes[[id]] <- box_code
     for (choice in box$choices %||% list()) {
       code <- clean_text(as.character(choice$code %||% ""))
       if (!is.null(choice$id) && !is.null(code)) codes[[choice$id]] <- code
     }
+    more[[id]] <- Filter(Negate(is.null), lapply(box$more_choices %||% list(), function(choice) {
+      answer <- normal_answer(clean_text(as.character(choice$answer %||% "")) %||% NA)
+      code <- clean_text(as.character(choice$code %||% ""))
+      if (!is.na(answer) && !is.null(code)) list(answer_option = answer, code_value = code)
+    }))
   }
-  given_twice <- unlist(matr_ids)[duplicated(tolower(unlist(matr_ids)))]
+  given_twice <- names_given_twice(matr_ids, box_codes, variable_owners(json$components))
   n_box <- 0
   n_choice <- 0
   fill <- function(blocks) {
     lapply(blocks, function(block) {
       if (length(block$variables) > 0) {
         named <- character()
-        block$variables <- lapply(block$variables, function(box) {
-          n_box <<- n_box + 1
-          named <<- c(named, scales[[paste0("v", n_box)]])
-          matr_id <- matr_ids[[paste0("v", n_box)]]
-          if (!is.null(matr_id) && !tolower(matr_id) %in% tolower(given_twice)) box$matr_id <- matr_id
+        ids <- paste0("v", n_box + seq_along(block$variables))
+        n_box <<- n_box + length(block$variables)
+        block$variables <- Map(function(box, id) {
+          named <<- c(named, scales[[id]])
+          matr_id <- matr_ids[[id]]
+          if (!is.null(matr_id) && !tolower(matr_id) %in% given_twice) box$matr_id <- matr_id
           if (length(box$response_options) > 0) {
-            ids <- paste0("o", n_choice + seq_along(box$response_options))
+            choice_ids <- paste0("o", n_choice + seq_along(box$response_options))
             n_choice <<- n_choice + length(box$response_options)
-            mine <- lapply(ids, function(id) codes[[id]])
+            mine <- lapply(choice_ids, function(choice_id) codes[[choice_id]])
             if (!any(duplicated(unlist(mine)))) {
               box$response_options <- Map(function(choice, code) {
                 if (!is.null(code)) choice$code_value <- code
                 choice
               }, box$response_options, mine)
+              if (!any(vapply(mine, is.null, logical(1))) && identical(box$variable_type, "closed_ended")) {
+                box$response_options <- with_more_choices(box$response_options, more[[id]])
+              }
             }
           }
           box
-        })
+        }, block$variables, ids)
+        block$variables <- join_boxes(unname(block$variables), ids, box_codes)
         if (is.null(block$scale) && length(named) > 0) block$scale <- normal_scale(paste(named, collapse = ", "))
       }
       if (length(block$children) > 0) block$children <- fill(block$children)
@@ -561,15 +661,104 @@ assign_into <- function(json, given) {
   json
 }
 
+# Which question each variable is in, by the ids assign_variables() gives them: "b1", "b2"... in the same walk.
+variable_owners <- function(blocks) {
+  owners <- character()
+  n_block <- 0
+  walk <- function(blocks) {
+    for (block in blocks) {
+      n_block <<- n_block + 1
+      owners <<- c(owners, rep(paste0("b", n_block), length(block$variables)))
+      walk(block$children)
+    }
+  }
+  walk(blocks)
+  stats::setNames(owners, paste0("v", seq_along(owners)))
+}
+
+# The MATR IDs (in lower case) Gemini gave more than one variable, which none of them keeps: but the boxes of one
+# question given one field's name, each with its code (`box_codes`), are one variable once joined.
+names_given_twice <- function(matr_ids, box_codes, owners) {
+  if (length(matr_ids) == 0) {
+    return(character())
+  }
+  ids <- names(matr_ids)
+  holder <- ifelse(ids %in% names(box_codes), unname(owners[ids]), ids)
+  holders <- unique(data.frame(name = tolower(unlist(matr_ids)), holder = holder))
+  unique(holders$name[duplicated(holders$name)])
+}
+
+# A variable's choices with those the file codes that the questionnaire doesn't print after them, each once:
+# one whose answer or code a choice has already is left out.
+with_more_choices <- function(choices, more) {
+  for (choice in more %||% list()) {
+    answers <- vapply(choices, function(had) had$answer_option %||% NA_character_, character(1))
+    had_codes <- vapply(choices, function(had) had$code_value %||% NA_character_, character(1))
+    if (choice$answer_option %in% answers || choice$code_value %in% had_codes) next
+    choices[[length(choices) + 1]] <- c(list(display_order = length(choices) + 1), choice)
+  }
+  choices
+}
+
+# A question's variables with the boxes of a check-all list that the file codes as one variable joined into one,
+# in the first box's place: the field's name as its MATR ID, and a choice for each box, the box's words (its
+# label; for a box of a person, its subject) coded as the file codes the box. Boxes that can't be joined (two with
+# one code or the same words, or about different times or, beside a label, different people) keep their own
+# choices, and none keeps the field's name.
+# variables: The question's variables, with the MATR IDs given.
+# ids: Their ids ("v1"...).
+# box_codes: Each box's code, by id.
+join_boxes <- function(variables, ids, box_codes) {
+  fields <- vapply(seq_along(variables), function(i) {
+    if (!is.null(box_codes[[ids[i]]])) variables[[i]]$matr_id %||% NA_character_ else NA_character_
+  }, character(1))
+  if (all(is.na(fields))) {
+    return(variables)
+  }
+  for (field in unique(fields[!is.na(fields)])) {
+    at <- which(fields %in% field)
+    boxes <- variables[at]
+    tags <- function(tag) vapply(boxes, function(box) box[[tag]] %||% NA_character_, character(1))
+    labels <- tags("label")
+    answers <- normal_answer(ifelse(is.na(labels), tags("subject"), labels))
+    # beside a label, a box's subject says whom it is about, and they must agree; a box of people has none of its own
+    labelled <- !anyNA(labels)
+    codes <- unname(unlist(box_codes[ids[at]]))
+    same_people <- !labelled || length(unique(tags("subject"))) == 1
+    if (anyNA(answers) || anyDuplicated(answers) || anyDuplicated(codes) || !same_people ||
+      length(unique(tags("time_frame"))) > 1) {
+      variables[at] <- lapply(boxes, function(box) {
+        box$matr_id <- NULL
+        box
+      })
+      next
+    }
+    variables[[at[1]]] <- without_blanks(list(
+      variable_type = "closed_ended", matr_id = field,
+      subject = if (labelled) boxes[[1]]$subject, time_frame = boxes[[1]]$time_frame,
+      response_options = lapply(seq_along(at), function(k) {
+        list(display_order = k, answer_option = answers[k], code_value = codes[k])
+      })
+    ))
+    variables[at[-1]] <- list(NULL)
+  }
+  variables <- Filter(Negate(is.null), variables)
+  lapply(seq_along(variables), function(i) {
+    variable <- variables[[i]]
+    variable$display_order <- i
+    variable
+  })
+}
+
 # ------ The reading job ---------------------------------------------------------------
 # Reading takes a minute or more, so each draft is read by a background R
 # process (callr) while staff carry on. The job moves the draft's
 # extraction_status along
-#   queued -> sent -> received -> [assigning] -> ready      or stops at failed
-# and saves the questionnaire to the draft. `assigning` is a step of its own, only for a draft with a
-# file of Variable Names and Coding: the questionnaire has been read and checked, and Gemini is giving
-# its variables their MATR IDs and its choices their codes. That adds only those two fields; the
-# questionnaire stays as it was read. "Try reading again"
+#   queued -> sent -> received -> assigning -> ready      or stops at failed
+# and saves the questionnaire to the draft. `assigning` is a step of its own: the questionnaire has been read
+# and checked, and Gemini is giving its variables their MATR IDs and its choices their codes, from the draft's
+# file of Variable Names and Coding or else from the PDF itself. That adds only those, and the choices the file
+# codes that the questionnaire doesn't print; the questionnaire stays as it was read. "Try reading again"
 # sets it back to queued, which starts a new job. Jobs outlive the session that
 # started them, and the site too.
 
@@ -644,21 +833,28 @@ reading_service_run <- function(connection, id, reading_started, read = reading_
       }
       lookups <- lookup_service_get_all(connection)
       reading <- read(pdf$path, lookups, progress = function(status) update(extraction_status = status))
-      # Then, as a step of its own, the Variable Names and Coding: the file may have been added while the
-      # questionnaire was read. Only MATR IDs, codes and scales are added; without the file, or if it can't be read, the
-      # questionnaire stands as it was read (why is kept, to show on the step) and the IDs are given on Edit Extraction.
+      # Then, as a step of its own, the Variable Names and Coding: from the draft's file of them (it may have been
+      # added while the questionnaire was read), or else from the questionnaire PDF itself, which may print them
+      # (REDCap's data dictionary does; if it doesn't, nothing is given). Only MATR IDs, codes, scales and the
+      # choices the file codes are added. If the file can't be read, the questionnaire stands as it was read (why
+      # is kept, to show on the step) and the IDs are given on Edit Extraction.
       not_applied <- NULL
-      if (!is.null(extraction_model_get(connection, id)$supplement)) {
-        update(extraction_status = "assigning")
-        reading$json <- tryCatch(
-          assign(reading$json, extraction_service_supplement_file(connection, id), scales = lookups$scales),
-          error = function(problem) {
-            not_applied <<- conditionMessage(problem)
-            message("The Variable Names and Coding couldn't be applied: ", not_applied)
-            reading$json
-          }
-        )
-      }
+      update(extraction_status = "assigning")
+      reading$json <- tryCatch(
+        {
+          file <- extraction_service_supplement_file(connection, id) %||%
+            list(
+              name = pdf$name, path = pdf$path, pages = pdf$pages %||% extraction_model_page_count(pdf$path),
+              questionnaire = TRUE
+            )
+          assign(reading$json, file, scales = lookups$scales, answer_options = lookups$answer_options)
+        },
+        error = function(problem) {
+          not_applied <<- conditionMessage(problem)
+          message("The Variable Names and Coding couldn't be applied: ", not_applied)
+          reading$json
+        }
+      )
       if (extraction_model_save_reading_result(connection, id, reading$json, reading_started)) {
         update(
           extraction_status = "ready", error = not_applied, model = reading$model,

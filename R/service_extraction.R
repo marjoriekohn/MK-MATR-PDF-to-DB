@@ -1,7 +1,7 @@
 # ------ Extraction drafts --------------------------------------------------------
 # An extraction starts one of two ways. AI-Powered: staff upload a questionnaire PDF, and the
 # reading job (Gemini; service_reading.R) moves `extraction_status` along
-#   queued -> sent -> received -> [assigning] -> ready      or stops at failed
+#   queued -> sent -> received -> assigning -> ready      or stops at failed
 # and saves the questionnaire it read. Manual: staff type the questionnaire themselves, with or
 # without a PDF to look at, and there is no reading. Either way staff edit a copy on the Edit
 # Extraction page (see draft_service_load()), say where it goes (its Basic Info) and push it into the
@@ -351,14 +351,16 @@ reading_steps <- data.frame(
 extraction_service_reading_steps <- function(record) {
   status <- record$extraction_status
   steps <- reading_steps
-  # A file of Variable Names and Coding is a step of its own, once the questionnaire is read and checked.
-  coding <- !is.null(record$supplement)
-  if (coding) {
-    steps <- rbind(steps[1:4, ], data.frame(
-      label = "Applying Variable Names and Coding",
-      detail = paste("Applies the Variable Names and Coding in", record$supplement$name)
-    ), steps[5, ], make.row.names = FALSE)
-  }
+  # The Variable Names and Coding are a step of its own, once the questionnaire is read and checked: from the
+  # draft's file of them, or else from the PDF itself.
+  steps <- rbind(steps[1:4, ], data.frame(
+    label = "Applying Variable Names and Coding",
+    detail = if (is.null(record$supplement)) {
+      "Takes any variable names and codes the PDF prints"
+    } else {
+      paste("Applies the Variable Names and Coding in", record$supplement$name)
+    }
+  ), steps[5, ], make.row.names = FALSE)
   n_done <- switch(status,
     queued = 1,
     sent = 2,
@@ -374,7 +376,7 @@ extraction_service_reading_steps <- function(record) {
   if (status == "queued") steps$detail[2] <- "Waiting to start"
   if (status == "failed") steps$detail[3] <- record$error %||% "Gemini stopped before the end."
   # read, but the Variable Names and Coding couldn't be applied: the draft is ready without them
-  if (status == "ready" && coding && !is.null(record$error)) {
+  if (status == "ready" && !is.null(record$error)) {
     steps$state[5] <- "attention"
     steps$detail[5] <- paste0("Couldn't apply them (", record$error, "). Type the MATR IDs on the Edit Extraction page.")
   }
