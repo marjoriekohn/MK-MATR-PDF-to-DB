@@ -31,8 +31,9 @@ variable_editor_body <- function(block, draft, view, lookups, ns) {
 }
 
 # The words a variable's fields offer as they are typed: the answer choices, who and when a variable can be about,
-# the units a write-in can be in, and the labels the draft's variables have.
-# lookups: The pick lists: `answer_options`, `subjects`, `time_frames` and `units` (the database's tags).
+# the units a write-in can be in, the labels the draft's variables have, and the measurement scales a question
+# can be an item of (each offered by its abbreviation, with what it is short for beside it).
+# lookups: The pick lists: `answer_options`, `subjects`, `time_frames` and `units` (the database's tags), and `scales`.
 # Returns: A tag list of `datalist`s.
 variable_editor_lists <- function(ns, lookups, draft) {
   tagList(
@@ -40,6 +41,7 @@ variable_editor_lists <- function(ns, lookups, draft) {
     suggestions(ns("subjects"), lookups$subjects),
     suggestions(ns("time-frames"), lookups$time_frames),
     suggestions(ns("units"), lookups$units),
+    suggestions(ns("scales"), lookups$scales),
     suggestions(ns("labels"), label_suggestions(draft))
   )
 }

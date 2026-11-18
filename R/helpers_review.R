@@ -166,7 +166,9 @@ field_select <- function(table, row, field, choices, blank = "Pick one…",
 # values: The suggestions.
 # Returns: A `datalist`.
 suggestions <- function(id, values) {
-  tags$datalist(id = id, lapply(values, function(value) tags$option(value = value)))
+  # a value with a name (a scale's abbreviation, named by what it is short for) shows the name beside it
+  said <- names(values) %||% rep("", length(values))
+  tags$datalist(id = id, Map(function(value, name) tags$option(value = value, label = if (nzchar(name)) name), unname(values), said))
 }
 
 blank_if_na <- function(value) {

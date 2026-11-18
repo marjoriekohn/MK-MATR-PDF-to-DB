@@ -7,7 +7,8 @@
 -- placement takes it along) and through those its questions' numbers in each wave, its variables, their
 -- response options and tags. What is shared stays: a component, an answer option, a tag, a scale. Deleting
 -- a shared row that something still uses is refused. A component no questionnaire prints any more is
--- forgotten by private.forget_components() (4_functions.sql) when the change that unplaced it ends, unless a scale names it.
+-- forgotten by private.forget_components() (4_functions.sql) when the change that unplaced it ends, and its
+-- scale items with it.
 -- Above a questionnaire nothing cascades: a study or a registry that still holds anything can't be deleted;
 -- empty it first (public.empty_study(), public.empty_registry()).
 
@@ -20,6 +21,13 @@ alter table public.study
     foreign key (principal_investigator_id) references public.principal_investigator (principal_investigator_id),
   add constraint study_contact_principal_investigator_id_fkey
     foreign key (contact_principal_investigator_id) references public.principal_investigator (principal_investigator_id);
+
+-- a publication's place in a study's list goes with the study, and with the publication
+alter table public.study_publication
+  add constraint study_publication_study_id_fkey
+    foreign key (study_id) references public.study (study_id) on delete cascade,
+  add constraint study_publication_publication_id_fkey
+    foreign key (publication_id) references public.publication (publication_id) on delete cascade;
 
 alter table public.questionnaire
   add constraint questionnaire_study_id_fkey

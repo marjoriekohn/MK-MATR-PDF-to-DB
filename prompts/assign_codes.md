@@ -2,7 +2,7 @@
 
 You are helping the Mid-Atlantic Twin Registry (MATR) record a printed questionnaire. Its questions have already been read: each answer a question records is a **variable**, listed under "The variables" below as JSON. You are also given a file from the study, such as a codebook or data dictionary, that names the variables in the response data (their **variable names**, which MATR calls MATR IDs, such as `kq5a`, `AH25LF` or `q12b`) and says how each answer is **coded** (the value stored for each answer category, such as `1 = Yes, 0 = No`, or `a = Never, b = Sometimes`). The file is attached as a PDF, or follows the variables as text (often a spreadsheet saved as CSV).
 
-Find each variable's entry in the file, and give its variable name and the code of each of its choices. You only add names and codes: the questionnaire itself has been read and is not yours to change, so never suggest new variables, choices or questions.
+Find each variable's entry in the file, and give its variable name, the code of each of its choices and, when the entry names one, the measurement scale its question comes from. You only add names, codes and scales: the questionnaire itself has been read and is not yours to change, so never suggest new variables, choices or questions.
 
 ## The variables
 
@@ -27,6 +27,7 @@ Codebooks are messy. Expect all of this:
 - **Columns that aren't codes.** Percentages, counts ("Total N"), ages and other statistics sit beside the codes. A category's code is the value in the code column ("Value(s)", "Code", "Value"), usually a small whole number or a letter, never a percentage or a count.
 - **Question numbers you can't rely on.** The file may number the questions of another version or wave of the questionnaire, or of several (a "Pilot" column and a "1st Wave" column that disagree: 5a in one is 5b in the other). Use a number only to confirm a match the wording already makes.
 - **Entries the questionnaire doesn't have.** The file may list variables that weren't extracted or aren't questions at all: scales, subscales, totals, scores, recodes, derived or computed variables (often named with suffixes like `_r`, `_sum`, `_score`, or described as "Subscale (kq46a kq46f)"). Skip them. Never give one of their names to a variable.
+- **A measurement scale named with the question.** Some files say which published scale a question comes from, usually as the scale's abbreviation in brackets right after the question's words: "Would you call yourself a nervous person? (EPQ-R)", "Do you often feel ""fed-up""? (EPQ-R)". That is the variable's `scale` (see "Scales" below); it is not part of the question's wording, so leave it aside when you match the wording.
 - **Abbreviated or reworded categories.** "< avg." is "below average", "Much > avg" is "much above average", "Yrs" is years, "DK" is "don't know", and a year or a month may stand for a category ("1977" for born in 1977). Match categories to choices by meaning.
 
 ## How to match
@@ -39,12 +40,23 @@ Codebooks are messy. Expect all of this:
 - A check-all-that-apply list is usually one variable per box, each coded as marked or not (for example `1 = Yes, 0 = No`).
 - Give only what the file says. If you can't find a variable's entry, or you're unsure which of two entries it is, leave the variable out. If the entry gives no code for one of its choices, leave that choice out. Never invent a variable name or a code, and never give the same variable name to two variables.
 
+## Scales
+
+When a variable's entry names the published measurement scale its question comes from, give it as the variable's `scale`.
+
+- Write the scale's abbreviation. When it is one of the registry's scales, use the abbreviation exactly as listed here, whether the file gives the abbreviation or the full name:
+{{scales}}
+  For any other scale, write its abbreviation as the file does, without the brackets.
+- An entry that names more than one ("How soon after you woke up did you smoke your first cigarette (FTND) (CDS-12)") has them all, in the file's order, separated by a comma and a space: "FTND, CDS-12".
+- Give it only when the entry names one. Never work a scale out from what the question asks, and don't take another bracket for one: "(mother)", "(check one)", "(Range 0-9)", "(kq46a kq46f)".
+- Most files name none: then leave `scale` out of every variable.
+
 ## Your answer
 
 Answer with one JSON object and nothing else: no prose, no markdown fences. Write it compactly, without indentation or line breaks. Its shape:
 
-{"variables":[{"id":"v1","matr_id":"kq1","choices":[{"id":"o1","code":"1"},{"id":"o2","code":"2"}]},{"id":"v2","matr_id":"kq2"}]}
+{"variables":[{"id":"v1","matr_id":"kq1","scale":"EPQ-R","choices":[{"id":"o1","code":"1"},{"id":"o2","code":"2"}]},{"id":"v2","matr_id":"kq2"}]}
 
-- `variables`: one object for each variable you found in the file, with its `id`, its `matr_id` (the variable name exactly as the file writes it), and `choices` (each choice's `id` and `code`) if it has choices and the file codes them.
-- Every `matr_id` and `code` is text, in quotes.
-- Leave out a variable you didn't find, and leave out `matr_id` or `choices` when the file doesn't give them.
+- `variables`: one object for each variable you found in the file, with its `id`, its `matr_id` (the variable name exactly as the file writes it), its `scale` if its entry names one, and `choices` (each choice's `id` and `code`) if it has choices and the file codes them.
+- Every `matr_id`, `scale` and `code` is text, in quotes.
+- Leave out a variable you didn't find, and leave out `matr_id`, `scale` or `choices` when the file doesn't give them.

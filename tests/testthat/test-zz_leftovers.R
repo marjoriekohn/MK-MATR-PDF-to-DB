@@ -12,7 +12,7 @@ test_that("the tests left no marked rows: not in the catalog, and no extractions
   # It removes only what nothing points at, so a tree a test left behind still shows below.
   test_forget_marked(test_marker)
   marked <- c(
-    staff = "name", registry = "name", principal_investigator = "name", study = "name",
+    staff = "name", registry = "name", principal_investigator = "name", study = "name", publication = "title",
     respondent_type = "name", questionnaire = "name", wave = "name", component = "text",
     tag = "name", answer_option = "standardized_label", measurement_scale = "name",
     extraction = "summary", history = "summary"

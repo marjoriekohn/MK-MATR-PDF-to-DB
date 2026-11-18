@@ -486,7 +486,8 @@ question_panel <- function(block, draft, view, lookups, ns) {
 
 # The details of the block picked in the list, edited beside it.
 # The header is one row: the block's kind, its words (typed there; a group has none) and what there
-# is to fix. Then, for a question, the number printed beside it with its own tags next to it (`question_tags()`:
+# is to fix. Then, for a question, the number printed beside it, the measurement scale it is an item of (its
+# abbreviation, typed or picked from the database's scales; several with commas between) and its own tags next to that (`question_tags()`:
 # who and when all of it is about), the earlier question it depends on (`depends_on_field()`), and its variables
 # and their choices (`question_panel()`); for a section, grid or
 # group, how many blocks it holds. Its buttons are along the bottom (`detail_actions()`). Fields have a small
@@ -522,6 +523,11 @@ block_detail <- function(block, draft, view, lookups, ns) {
                 "components", block, "printed_number",
                 placeholder = "None", label = "Question number as printed, e.g. 1a4 (blank if none is printed)", problems = problems
               ) |> tagAppendAttributes(class = "detail-number")),
+              detail_field("Measurement Scale", field_text(
+                "components", block, "scale",
+                placeholder = "None", list = ns("scales"), problems = problems,
+                label = "Measurement scale the question is an item of, by its abbreviation, e.g. EPQ-R (several with commas between; blank if none)"
+              ) |> tagAppendAttributes(class = "detail-scale")),
               detail_field("Question Tags", question_tags(block, view, ns))
             ),
             detail_field(label_with_help("Depends on", depends_on_help), depends_on_field(block, draft, problems), wide = TRUE)

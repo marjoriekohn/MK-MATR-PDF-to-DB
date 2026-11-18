@@ -26,14 +26,15 @@ publishable <- list(url = Sys.getenv("SUPABASE_URL"), key = Sys.getenv("SUPABASE
 # update at. The dashboard reads the catalog tables and nothing else.
 catalog_tables <- list(
   registry = c("registry_id", "name"), principal_investigator = c("principal_investigator_id", "name"),
-  study = c("study_id", "name"), respondent_type = c("respondent_type_id", "name"),
+  study = c("study_id", "name"), publication = c("publication_id", "title"),
+  study_publication = c("study_id", "publication_id"), respondent_type = c("respondent_type_id", "name"),
   questionnaire = c("questionnaire_id", "name"), wave = c("wave_id", "name"), pdf_file = c("pdf_sha256", "pdf_pages"),
   component = c("component_id", "text"), placement = c("placement_id", "display_order"),
   wave_question = c("wave_id", "printed_number"), variable = c("variable_key", "label"),
   answer_option = c("answer_option_id", "standardized_label"), response_option = c("variable_key", "code_value"),
   tag = c("tag_id", "name"), placement_tag = c("placement_id", "tag_id"), variable_tag = c("variable_key", "tag_id"),
   response_option_tag = c("variable_key", "tag_id"), measurement_scale = c("scale_id", "name"),
-  question_scale = c("scale_id", "item_number")
+  question_scale = c("scale_id", "component_id")
 )
 private_tables <- list(staff = c("staff_id", "name"), extraction = c("extraction_id", "summary"), history = c("history_id", "summary"))
 tables <- c(catalog_tables, private_tables)

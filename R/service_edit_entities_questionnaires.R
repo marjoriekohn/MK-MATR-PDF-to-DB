@@ -63,8 +63,8 @@ questionnaire_entity <- list(
   ),
   delete_about = paste0(
     "Deleting a questionnaire deletes its waves and everything printed in it: every block, every question's ",
-    "numbers in each wave, and every variable with its choices. A component another questionnaire prints stays, ",
-    "and so does one a measurement scale lists; the rest are forgotten."
+    "numbers in each wave, and every variable with its choices. A component another questionnaire prints stays; ",
+    "the rest are forgotten, and taken out of any measurement scale they were items of."
   ),
   empty_about = "It and its waves stay, with nothing printed or asked in them.",
   cards = function(snap, scope) {

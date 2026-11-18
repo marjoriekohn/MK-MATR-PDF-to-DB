@@ -53,6 +53,7 @@ make_edit_ui <- function(id) {
 make_edit_kinds <- list(
   registry = c("Registries", "Registry"),
   study = c("Studies", "Study"),
+  publication = c("Publications", "Publication"),
   questionnaire = c("Questionnaires", "Questionnaire"),
   wave = c("Waves", "Wave"),
   placement = c("Blocks", "Block"),

@@ -5,7 +5,7 @@
 
 # The fields staff can change by typing or picking. A value keeps its column's type.
 editable_fields <- list(
-  components = c("component_type", "text", "printed_number", "parent_question_id", "checked", "subject", "time_frame"),
+  components = c("component_type", "text", "printed_number", "parent_question_id", "checked", "subject", "time_frame", "scale"),
   variables = c("variable_type", "label", "subject", "time_frame", "answer_data_type", "unit", "matr_id"),
   response_options = c("answer_option", "code_value")
 )
@@ -36,6 +36,10 @@ draft_service_update <- function(draft, table, id, field, value) {
     },
     time_frame = {
       draft[[table]]$time_frame[row] <- normal_time_frame(value)
+      draft
+    },
+    scale = { # a question's measurement scales
+      draft$components$scale[row] <- normal_scale(value)
       draft
     },
 
@@ -118,7 +122,7 @@ set_component_type <- function(draft, row, type) {
   if (type == "Question") {
     return(draft)
   }
-  draft$components[row, c("question_number", "printed_number", "parent_question_id")] <- NA
+  draft$components[row, c("question_number", "printed_number", "parent_question_id", "scale")] <- NA
   n_boxes <- sum(draft$variables$component_id == block$id)
   if (n_boxes > 0) {
     message(sprintf(

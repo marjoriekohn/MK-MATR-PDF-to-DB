@@ -227,12 +227,24 @@ reading_service_instructions <- function(lookups, prompt_path = reading_prompt_p
     time_frames = quoted(as_written(normal_time_frame, lookups$time_frames, c("lifetime", "past year", "past month"))),
     units = quoted(as_written(normal_unit, lookups$units, c("years", "pounds"))),
     answer_data_types = quoted(lookups$answer_data_types),
+    scales = scale_lines(lookups$scales),
     answer_options = paste0("  - ", lookups$answer_options, collapse = "\n")
   )
   for (name in names(lists)) {
     prompt <- gsub(paste0("{{", name, "}}"), lists[[name]], prompt, fixed = TRUE)
   }
   prompt
+}
+
+# The registry's measurement scales, a line each: the abbreviation a question's `scale` is written as, then what
+# it is short for, so a scale printed by its full name is found too.
+# scales: The abbreviations, each named by its scale's full name (`lookup_service_get_all()`).
+scale_lines <- function(scales) {
+  if (length(scales) == 0) {
+    return("  - (the registry lists none yet)")
+  }
+  full <- names(scales) %||% rep("", length(scales))
+  paste0("  - ", scales, ifelse(nzchar(full) & full != scales, paste0(": ", full), ""), collapse = "\n")
 }
 
 # A lookup list's names as `normal` writes them, each once; `otherwise` for an empty list.
@@ -288,6 +300,7 @@ tidy_blocks <- function(blocks) {
       parent_question = clean_number(block$parent_question),
       subject = normal_subject(clean_text(block$subject) %||% NA),
       time_frame = tidy_time_frame(block$time_frame),
+      scale = tidy_scale(block$scale),
       variables = tidy_boxes(block$variables)
     ))
   })
@@ -352,6 +365,12 @@ tidy_choices <- function(choices) {
 tidy_time_frame <- function(time_frame) {
   time_frame <- normal_time_frame(clean_text(time_frame) %||% NA)
   if (!is.na(time_frame)) time_frame
+}
+
+# The measurement scales a question is an item of, as they are kept (normal_scale()); NULL for none.
+tidy_scale <- function(scale) {
+  scale <- normal_scale(clean_text(scale) %||% NA)
+  if (!is.na(scale)) scale
 }
 
 # The unit a write-in's number is in, written one way (normal_unit()); NULL for none.
@@ -428,7 +447,8 @@ block_name <- function(blocks) {
 }
 
 # ------ MATR IDs and codes from a second file -------------------------------------------
-# Give a reading's variables their MATR IDs, and its choices their codes, from a file that lists them.
+# Give a reading's variables their MATR IDs, and its choices their codes, from a file that lists them; and its
+# questions their measurement scale, when the file names one with the question ("Are you a worrier? (EPQ-R)").
 # Gemini reads the file (a codebook or a list: a PDF, or text) with the reading's variables, each named by an
 # id (v1, v2... and o1, o2... for the choices, in printed order), and answers with what the file gives for
 # each. The variables go `reading_assign_batch` at a time, each batch with the whole file, the requests sent at
@@ -439,14 +459,16 @@ block_name <- function(blocks) {
 #   (`extraction_service_supplement_file()`).
 # generate: `gemini_model_generate()` or a stand-in.
 # prompt_path: The prompt's file.
-# Returns: The reading, with `matr_id` on the variables and `code_value` on the choices the file gave.
+# scales: The registry's measurement scales (`lookup_service_get_all()$scales`), which the prompt lists.
+# Returns: The reading, with `matr_id` on the variables and `code_value` on the choices the file gave, and
+#   `scale` on the questions it names one for.
 reading_service_assign <- function(json, supplement, generate = gemini_model_generate, model = reading_gemini_model,
-                                   prompt_path = reading_assign_prompt_path) {
+                                   prompt_path = reading_assign_prompt_path, scales = NULL) {
   variables <- assign_variables(json)
   if (length(variables) == 0) {
     return(json)
   }
-  instructions <- reading_model_prompt(prompt_path)
+  instructions <- gsub("{{scales}}", scale_lines(scales), reading_model_prompt(prompt_path), fixed = TRUE)
   file <- if (!is.null(supplement$text)) paste0("\n\n## The file (", supplement$name, ")\n\n", supplement$text)
   batches <- split(variables, ceiling(seq_along(variables) / reading_assign_batch))
   prompts <- vapply(batches, function(batch) {
@@ -485,15 +507,20 @@ assign_variables <- function(json) {
   found
 }
 
-# The reading with what Gemini gave (`given$variables`, each `id`, `matr_id` and `choices`, each `id` and
-# `code`) filled in, walking the blocks in the order assign_variables() named them. Only a variable's matr_id and a
-# choice's code_value are set: no block, variable or choice is added, moved, taken away or reworded.
+# The reading with what Gemini gave (`given$variables`, each `id`, `matr_id`, `scale` and `choices`, each `id`
+# and `code`) filled in, walking the blocks in the order assign_variables() named them. Only a variable's matr_id,
+# a choice's code_value and a question's scale are set: no block, variable or choice is added, moved, taken away
+# or reworded. A question's scales are the ones the file names with its variables, all of them, unless the
+# questionnaire itself printed one, which stands.
 assign_into <- function(json, given) {
   matr_ids <- list()
   codes <- list()
+  scales <- list()
   for (box in given$variables %||% list()) {
     matr_id <- clean_text(as.character(box$matr_id %||% ""))
     if (!is.null(box$id) && !is.null(matr_id)) matr_ids[[box$id]] <- matr_id
+    scale <- tidy_scale(as.character(box$scale %||% ""))
+    if (!is.null(box$id) && !is.null(scale)) scales[[box$id]] <- scale
     for (choice in box$choices %||% list()) {
       code <- clean_text(as.character(choice$code %||% ""))
       if (!is.null(choice$id) && !is.null(code)) codes[[choice$id]] <- code
@@ -505,8 +532,10 @@ assign_into <- function(json, given) {
   fill <- function(blocks) {
     lapply(blocks, function(block) {
       if (length(block$variables) > 0) {
+        named <- character()
         block$variables <- lapply(block$variables, function(box) {
           n_box <<- n_box + 1
+          named <<- c(named, scales[[paste0("v", n_box)]])
           matr_id <- matr_ids[[paste0("v", n_box)]]
           if (!is.null(matr_id) && !tolower(matr_id) %in% tolower(given_twice)) box$matr_id <- matr_id
           if (length(box$response_options) > 0) {
@@ -522,6 +551,7 @@ assign_into <- function(json, given) {
           }
           box
         })
+        if (is.null(block$scale) && length(named) > 0) block$scale <- normal_scale(paste(named, collapse = ", "))
       }
       if (length(block$children) > 0) block$children <- fill(block$children)
       block
@@ -612,18 +642,16 @@ reading_service_run <- function(connection, id, reading_started, read = reading_
       if (is.null(pdf)) {
         stop("The PDF isn't on this site any more. Choose Replace PDF and upload it again.", call. = FALSE)
       }
-      reading <- read(
-        pdf$path, lookup_service_get_all(connection),
-        progress = function(status) update(extraction_status = status)
-      )
+      lookups <- lookup_service_get_all(connection)
+      reading <- read(pdf$path, lookups, progress = function(status) update(extraction_status = status))
       # Then, as a step of its own, the Variable Names and Coding: the file may have been added while the
-      # questionnaire was read. Only MATR IDs and codes are added; without the file, or if it can't be read, the
+      # questionnaire was read. Only MATR IDs, codes and scales are added; without the file, or if it can't be read, the
       # questionnaire stands as it was read (why is kept, to show on the step) and the IDs are given on Edit Extraction.
       not_applied <- NULL
       if (!is.null(extraction_model_get(connection, id)$supplement)) {
         update(extraction_status = "assigning")
         reading$json <- tryCatch(
-          assign(reading$json, extraction_service_supplement_file(connection, id)),
+          assign(reading$json, extraction_service_supplement_file(connection, id), scales = lookups$scales),
           error = function(problem) {
             not_applied <<- conditionMessage(problem)
             message("The Variable Names and Coding couldn't be applied: ", not_applied)

@@ -679,3 +679,17 @@ test_that("a question's variables share their choices when they all offer the sa
   own <- draft_service_update(draft, "response_options", first[1], "answer_option", "Boy")
   expect_equal(draft_service_shared_choices(own, q), character())
 })
+
+test_that("a question's measurement scale is its abbreviation, kept through a save, and goes when the block stops being a question", {
+  draft <- short_gold_draft()
+  question <- draft$components$id[draft$components$component_type == "Question"][1]
+  expect_true(all(is.na(draft$components$scale)))
+  scaled <- draft_service_update(draft, "components", question, "scale", " (EPQ-R) ")
+  expect_equal(component(scaled, question)$scale, "EPQ-R") # without the brackets it is printed in
+  saved <- draft_service_from_json(draft_service_to_json(scaled))
+  expect_equal(saved$components$scale[saved$components$component_type == "Question"][1], "EPQ-R")
+  expect_equal(sum(!is.na(saved$components$scale)), 1)
+  expect_true(is.na(component(draft_service_update(scaled, "components", question, "scale", ""), question)$scale))
+  other <- suppressMessages(draft_service_update(scaled, "components", question, "component_type", "Instruction"))
+  expect_true(is.na(component(other, question)$scale)) # only a question is an item of a scale
+})

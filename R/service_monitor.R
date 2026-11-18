@@ -13,6 +13,7 @@ monitor_field_words <- c(
   name = "name", abbreviation = "abbreviation",
   component_type = "kind", text = "text", printed_number = "printed number",
   parent_question_id = "the question it depends on",
+  scale = "measurement scale",
   variable_type = "type", label = "label", subject = "subject", time_frame = "time frame",
   answer_data_type = "answer data type", unit = "unit",
   answer_option = "wording",

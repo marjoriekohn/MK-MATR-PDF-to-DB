@@ -212,7 +212,7 @@ test_that("a delete says what goes with it, what is only changed, what the datab
   expect_match(html, "Kept, but changed 1 block in a questionnaire will lose their question they depend on", fixed = TRUE)
   expect_match(html, "How it falls on each questionnaire AHP 1 block in a questionnaire · 2 questions in waves · 1 variable", fixed = TRUE)
   section <- edit_service_delete_plan(entity, snap, edit_service_row(entity, snap, "101"))
-  expect_match(text_of(edit_delete_ui(entity, "a. about you", section)), "4 components no questionnaire prints any more (forgotten by the database)", fixed = TRUE)
+  expect_match(text_of(edit_delete_ui(entity, "a. about you", section)), "4 components no questionnaire prints any more (forgotten by the database, with any scale items)", fixed = TRUE)
   expect_false(grepl("propos", html))
 })
 

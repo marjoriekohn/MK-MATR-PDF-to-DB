@@ -81,6 +81,7 @@ test_lookups <- function() {
     subjects = tags$name[tags$kind == "subject"],
     time_frames = tags$name[tags$kind == "time frame"],
     units = tags$name[tags$kind == "unit"],
+    scales = stats::setNames(fixture_table("measurement_scale")$abbreviation, fixture_table("measurement_scale")$name),
     answer_options = fixture_table("answer_option")$standardized_label,
     answer_data_types = c("NUMBER", "TEXT", "DATE", "TIME"),
     problems = character()

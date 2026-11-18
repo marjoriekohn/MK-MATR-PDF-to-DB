@@ -25,7 +25,7 @@ placement_entity <- list(
   delete_about = paste0(
     "This only removes the block from this place in the questionnaire, with everything inside it, its numbers in ",
     "each wave and its variables with their choices. The wording stays in the database while another ",
-    "questionnaire prints it or a measurement scale lists it; otherwise it is forgotten."
+    "questionnaire prints it; otherwise it is forgotten, and taken out of any measurement scale it was an item of."
   ),
   reads = c(
     "component", "wave", "wave_question", "variable", "variable_tag", "tag", "answer_option", "response_option",

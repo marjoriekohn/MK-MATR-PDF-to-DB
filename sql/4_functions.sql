@@ -6,14 +6,19 @@
 --   4a. Rules a constraint can't express        triggers on the tables
 --   4b. Helpers                                 private.*: not reachable through the REST API
 --   4c. What the site calls (through /rpc/)     public.push_extraction, reopen_wave, apply_change, empty_*
---   4d. What the dashboard calls                public.upvote_questionnaire
---   4e. Who is staff                            public.is_active_staff, for Row Level Security
+--   4d. What the dashboard calls                public.upvote_questionnaire, public.unstar_questionnaire
+--   4e. Who is staff                            private.is_active_staff, for Row Level Security
 --
 -- Everything that changes several tables at once is a function, because separate REST calls can't share
 -- a transaction. The site saves, claims and discards an extraction draft with plain REST calls on the one
 -- extraction table; only pushing it is a function.
 
 begin;
+
+-- ------ A database built before a scale's items lost their numbers ----------------------------------------
+-- A question is in a scale or it isn't, in no order (1_tables.sql), so question_scale has no item_number. A
+-- database built with the column loses it here, with the check and the unique rule that were on it.
+alter table public.question_scale drop column if exists item_number;
 
 -- =====================================================================================================
 -- 4a. RULES A CONSTRAINT CAN'T EXPRESS
@@ -312,6 +317,36 @@ begin
 end;
 $$;
 
+-- The measurement scale a question's `scale` names: the one with that abbreviation, or else that name, ignoring
+-- case and outer spaces. A scale the database hasn't got is added, named by its abbreviation until staff give
+-- it its full name (Make an edit).
+create or replace function private.scale_id(p_scale text)
+returns bigint
+language plpgsql
+set search_path = public, pg_temp
+as $$
+declare
+  the_words text := private.squish(p_scale);
+  the_id    bigint;
+begin
+  if the_words is null or the_words = '' then
+    return null;
+  end if;
+  select scale_id into the_id from public.measurement_scale
+  where lower(btrim(abbreviation)) = lower(the_words) or lower(btrim(name)) = lower(the_words)
+  order by (lower(btrim(abbreviation)) = lower(the_words)) desc
+  limit 1;
+  if the_id is null then
+    insert into public.measurement_scale (name, abbreviation) values (the_words, the_words) returning scale_id into the_id;
+    perform private.push_note('measurement_scale', false, the_id, the_words);
+  else
+    perform private.push_note('measurement_scale', true, the_id,
+                              (select abbreviation from public.measurement_scale where scale_id = the_id));
+  end if;
+  return the_id;
+end;
+$$;
+
 -- The tags an extraction's JSON puts on a question (a block), a variable or a response option: its `subject`,
 -- `time_frame` and `unit`, where it has them.
 create or replace function private.push_tags(p_item jsonb, p_placement_id bigint, p_variable_key bigint, p_answer_option_id bigint)
@@ -420,7 +455,10 @@ $$;
 -- The component is kept once per kind and words. A placement the questionnaire has already (an earlier wave
 -- asked it) with this component under the same parent is reused, once per push; otherwise a new placement goes
 -- after the parent's others. A Question is marked asked in the wave with its numbers, and depends on the
--- question its `parent_question` names (by question number, the question's place among the wave's).
+-- question its `parent_question` names (by question number, the question's place among the wave's). A Question
+-- whose block names a measurement scale (`scale`: one, or several with commas between) has its wording put in
+-- each (question_scale): the wording is the scale's item wherever it is printed, so a push only ever adds one;
+-- staff take one out on Make an edit.
 create or replace function private.push_block(p_block jsonb, p_questionnaire_id bigint, p_wave_id bigint, p_parent_id bigint)
 returns void
 language plpgsql
@@ -434,6 +472,9 @@ declare
   worded        boolean := false; -- the database had this wording (its component) already
   reused        boolean := false; -- the questionnaire printed it here already (its placement)
   depends_on    bigint;
+  a_scale       text;
+  the_scale     bigint;
+  added         integer;
   child         jsonb;
 begin
   if the_kind is null then
@@ -496,6 +537,15 @@ begin
     perform private.push_note('wave_question', false);
     perform private.push_variables(p_block, p_questionnaire_id, the_placement);
     perform private.push_tags(p_block, the_placement, null, null);
+    -- its measurement scales: one, or several with commas between ("FTND, CDS-12")
+    for a_scale in
+      select btrim(named) from regexp_split_to_table(coalesce(p_block ->> 'scale', ''), '[,;]') as named where btrim(named) <> ''
+    loop
+      the_scale := private.scale_id(a_scale);
+      insert into public.question_scale (scale_id, component_id) values (the_scale, the_component) on conflict do nothing;
+      get diagnostics added = row_count;
+      perform private.push_note('scale_item', added = 0, the_component);
+    end loop;
   end if;
 
   for child in select value from jsonb_array_elements(coalesce(p_block -> 'children', '[]'::jsonb)) loop
@@ -628,24 +678,24 @@ begin
                       else 'Pushed the extraction of %s, %s: %s questions, %s new variables.' end,
                  q.name, w.name, counts ->> 'questions', coalesce(counts ->> 'variable_new', '0')),
           counts);
-  -- with the names of what the preview lists: the tags, answer choices and option sets it adds and finds, and the
-  -- questions the database has already (the history keeps the counts alone)
+  -- with the names of what the preview lists: the tags, answer choices, option sets and measurement scales it adds
+  -- and finds, and the questions the database has already (the history keeps the counts alone)
   return counts || jsonb_build_object('names', (
     select coalesce(jsonb_object_agg(key, list), '{}'::jsonb)
     from (
       select what || case when was_there then '_reused' else '_new' end as key, jsonb_agg(name order by name) as list
       from pg_temp.push_tally
-      where name is not null and (what in ('tag', 'answer_option', 'option_set') or (what = 'question' and was_there))
+      where name is not null and (what in ('tag', 'answer_option', 'option_set', 'measurement_scale') or (what = 'question' and was_there))
       group by 1
     ) as named
   ));
 end;
 $$;
 
--- Forget the components among these that nothing prints or names any more: a change that unplaced them
--- (a block deleted or reworded, a questionnaire emptied) leaves them owned by nothing. Only the components a
--- change touched are looked at, so a component another change is adding at the same moment is left alone.
--- A component a measurement scale names stays.
+-- Forget the components among these that nothing prints any more: a change that unplaced them (a block deleted
+-- or reworded, a wave or questionnaire emptied) leaves them owned by nothing. Only the components a change
+-- touched are looked at, so a component another change is adding at the same moment is left alone. A question
+-- no questionnaire prints is no measurement scale's item either, so its scale items go with it.
 create or replace function private.forget_components(p_component_ids bigint[])
 returns integer
 language plpgsql
@@ -657,10 +707,12 @@ begin
   if p_component_ids is null or cardinality(p_component_ids) = 0 then
     return 0;
   end if;
+  delete from public.question_scale k
+  where k.component_id = any (p_component_ids)
+    and not exists (select 1 from public.placement p where p.component_id = k.component_id);
   delete from public.component c
   where c.component_id = any (p_component_ids)
-    and not exists (select 1 from public.placement p where p.component_id = c.component_id)
-    and not exists (select 1 from public.question_scale s where s.component_id = c.component_id);
+    and not exists (select 1 from public.placement p where p.component_id = c.component_id);
   get diagnostics n = row_count;
   return n;
 end;
@@ -800,7 +852,8 @@ $$;
 
 -- What a wave asks, as the blocks of an extraction's JSON (docs/database_design.md): the questionnaire's
 -- placements under p_parent_id in order, each naming its component (`component_id`), a question with its numbers
--- in the wave, the question it depends on, its tags and its variables with their choices and codes. Left out:
+-- in the wave, the question it depends on, its tags, its measurement scale and its variables with their choices
+-- and codes. Left out:
 -- a question the wave doesn't ask (another wave's), and a section, grid or group whose questions are all other
 -- waves'. Every block is marked checked: it was reviewed before it was pushed.
 create or replace function private.wave_blocks(p_wave_id bigint, p_questionnaire_id bigint, p_parent_id bigint)
@@ -832,7 +885,11 @@ begin
         'parent_question', (select d.question_number from public.wave_question d
                             where d.wave_id = p_wave_id and d.placement_id = pl.depends_on_placement_id),
         'subject', private.tag_name('subject', pl.placement_id, null),
-        'time_frame', private.tag_name('time frame', pl.placement_id, null)
+        'time_frame', private.tag_name('time frame', pl.placement_id, null),
+        -- the scales its wording is an item of, by abbreviation ("CDS-12, FTND")
+        'scale', (select string_agg(m.abbreviation, ', ' order by lower(m.abbreviation))
+                  from public.question_scale k join public.measurement_scale m on m.scale_id = k.scale_id
+                  where k.component_id = pl.component_id)
       )) || jsonb_build_object('variables', (
         select coalesce(jsonb_agg(jsonb_strip_nulls(jsonb_build_object(
           'variable_type', v.variable_type, 'matr_id', v.matr_id, 'label', v.label, 'answer_data_type', v.answer_data_type,
@@ -966,7 +1023,8 @@ set search_path = public, pg_temp
 as $$
 declare
   editable constant text[] := array[
-    'registry', 'principal_investigator', 'study', 'respondent_type', 'questionnaire', 'wave', 'pdf_file',
+    'registry', 'principal_investigator', 'study', 'publication', 'study_publication', 'respondent_type',
+    'questionnaire', 'wave', 'pdf_file',
     'component', 'placement', 'wave_question', 'variable', 'answer_option', 'response_option',
     'tag', 'placement_tag', 'variable_tag', 'response_option_tag', 'measurement_scale', 'question_scale'
   ];
@@ -1358,19 +1416,42 @@ begin
 end;
 $$;
 
+-- One upvote fewer, when a dashboard visitor takes back their star. Never below zero. Runs as its owner, like
+-- upvote_questionnaire().
+create or replace function public.unstar_questionnaire(p_questionnaire_id bigint)
+returns integer
+language plpgsql
+security definer
+set search_path = public, pg_temp
+as $$
+declare
+  n integer;
+begin
+  update public.questionnaire set upvote_count = greatest(upvote_count - 1, 0)
+  where questionnaire_id = p_questionnaire_id
+  returning upvote_count into n;
+  if n is null then
+    raise exception 'There is no questionnaire %.', p_questionnaire_id;
+  end if;
+  return n;
+end;
+$$;
+
 
 -- =====================================================================================================
 -- 4e. WHO IS STAFF
 -- =====================================================================================================
 
 -- Whether the signed-in person (auth.jwt() email) is an active row of staff: for the row policies on the
--- private tables (5_permissions.sql). staff.email matches ignoring case (staff_email_unique).
-create or replace function public.is_active_staff()
+-- private tables (5_permissions.sql). staff.email matches ignoring case (staff_email_unique). It runs as its
+-- owner, to read staff whoever asks, so it is kept out of the schema the REST API offers: nobody can call
+-- it through /rpc/, only the policies use it. (It was public.is_active_staff(); 5_permissions.sql removes that.)
+create or replace function private.is_active_staff()
 returns boolean
 language sql
 stable
 security definer
-set search_path = public, pg_temp
+set search_path = ''
 as $$
   select exists (
     select 1 from public.staff s

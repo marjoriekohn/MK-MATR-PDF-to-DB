@@ -255,7 +255,7 @@ test_that("Scale Items have a section for each measurement scale, and an item ad
     expect_match(scales, sprintf('class="outline-node" data-id="question_scale:%s"', key_text(scale$scale_id)), fixed = TRUE)
     add(session, "question_scale", key_text(scale$scale_id))
     draw_form()
-    session$setInputs(`change-question_scale__component_id` = key_text(question$component_id), `change-question_scale__item_number` = "1")
+    session$setInputs(`change-question_scale__component_id` = key_text(question$component_id))
     expect_true(change$ready())
     session$setInputs(submit = 1)
     expect_match(done()$history_id, "^[0-9]+$")
@@ -264,7 +264,7 @@ test_that("Scale Items have a section for each measurement scale, and an item ad
   withr::defer(test_delete("question_scale", list(scale_id = database_eq(scale$scale_id))), priority = "first")
   rows <- table_model_get(test_connection, "question_scale", list(scale_id = database_eq(scale$scale_id)))
   expect_equal(rows$component_id, question$component_id)
-  expect_equal(rows$item_number, "1")
+  expect_named(rows, c("scale_id", "component_id")) # an item is its scale and its question, no number
 })
 
 test_that("+ Add of a block asks which questionnaire, then shows the form, with a question's fields once Question is picked", {

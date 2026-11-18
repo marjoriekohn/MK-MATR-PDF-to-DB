@@ -7,6 +7,7 @@ edit_entities <- list(
   registry = registry_entity,
   investigator = investigator_entity,
   study = study_entity,
+  publication = publication_entity,
   respondent_type = respondent_type_entity,
   questionnaire = questionnaire_entity,
   wave = wave_entity,

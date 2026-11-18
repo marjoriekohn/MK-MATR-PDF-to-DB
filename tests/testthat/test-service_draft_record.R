@@ -179,7 +179,7 @@ test_that("a tag the reviewer puts on a question is an edit to the block", {
 })
 
 test_that("only what the AI reads is compared: the fields of each table are the ones it returns", {
-  expect_equal(review_edit_fields$components, c("component_type", "text", "printed_number", "parent_question_id", "subject", "time_frame"))
+  expect_equal(review_edit_fields$components, c("component_type", "text", "printed_number", "parent_question_id", "subject", "time_frame", "scale"))
   expect_equal(review_edit_fields$variables, c("variable_type", "label", "subject", "time_frame", "answer_data_type", "unit"))
   expect_equal(review_edit_fields$response_options, "answer_option")
   # every compared field is one the draft has (nothing left from skips, conditions or respondent counts)

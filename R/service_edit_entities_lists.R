@@ -193,31 +193,26 @@ measurement_scale_entity <- list(
   }
 )
 
-# A scale item's number, for sorting: 2 before 10, and 12a after 12.
-edit_item_order <- function(numbers) {
-  order(suppressWarnings(as.numeric(gsub("[^0-9.].*$", "", numbers))), numbers, method = "radix")
-}
-
 scale_scope <- list(table = "measurement_scale", label = "In which measurement scale?")
 
+# A scale's items are its questions, in no order of their own: a question is in a scale or it isn't. So an item
+# has nothing to change: it is added and deleted. A push adds one for a question whose extraction names its scale.
 question_scale_entity <- list(
   label = "Scale item", noun = "scale item", plural = "scale items", article = "a",
   group = "Shared lists", table = "question_scale", scope = scale_scope,
-  about = "A question that is an item of a measurement scale, with its item number in the published scale.",
-  update_about = "This changes the item in this scale only. The question itself isn't changed.",
+  about = "A question that is an item of a measurement scale.",
   delete_about = "This only takes the question out of this scale. The question stays, in every questionnaire that asks it.",
   reads = "component",
+  can = function(snap, mode) {
+    if (mode == "update") "A scale item is its question and nothing more. To use another question, delete this item and add one."
+  },
   cards = function(snap, scope) {
     if (!nzchar(scope %||% "")) {
       return(edit_cards(character(), character()))
     }
     rows <- snap$question_scale[snap$question_scale$scale_id %in% as.numeric(scope), , drop = FALSE]
-    rows <- rows[edit_item_order(rows$item_number), , drop = FALSE]
-    edit_cards(
-      edit_key(rows, c("scale_id", "component_id")), edit_component_text(snap, rows$component_id),
-      subtitle = paste("Item", rows$item_number),
-      tag = "Question"
-    )
+    rows <- rows[order(edit_component_text(snap, rows$component_id), method = "radix"), , drop = FALSE]
+    edit_cards(edit_key(rows, c("scale_id", "component_id")), edit_component_text(snap, rows$component_id), tag = "Question")
   },
   fields = function(snap, mode, row, scope) {
     scale <- as.numeric(scope %||% row$scale_id)
@@ -228,35 +223,21 @@ question_scale_entity <- list(
         required = TRUE, choices = edit_choices(snap, "component", questions, blank = "Choose a question"),
         locked = "An item is its question. To use another question, delete this item and add one.",
         problem = function(value, values) {
-          there <- in_scale[in_scale$component_id %in% as.numeric(value), , drop = FALSE]
-          if (nrow(there) > 0) sprintf("This question is already item %s of this scale.", there$item_number[1])
-        }
-      ),
-      edit_field("item_number", "Item number",
-        required = TRUE, placeholder = "e.g. 3 or 12a",
-        problem = function(value, values) {
-          same <- edit_taken(snap, "question_scale", "item_number", value, row, within = list(scale_id = scale))
-          if (has_text(value) && nrow(same) > 0) {
-            sprintf("Item %s of this scale is already “%s”.", same$item_number[1], edit_component_text(snap, same$component_id[1], 50))
-          }
+          if (as.numeric(value) %in% in_scale$component_id) "This question is already an item of this scale."
         }
       )
     )
   },
   build = function(mode, snap, row, scope, fields, values) {
-    if (mode == "update") {
-      return(edit_update_items(edit_entities[["question_scale"]], snap, row, fields, values))
-    }
     question <- Filter(function(field) field$name == "component_id", fields)[[1]]
     key <- edit_identifier(list(
       component_id = as.numeric(edit_service_normalize(question, values[[question$id]])), scale_id = as.numeric(scope)
     ))
-    number <- Filter(function(field) field$name == "item_number", fields)[[1]]
-    edit_item("question_scale", key, "Insert", "item_number", NA, edit_service_normalize(number, values[[number$id]]))
+    edit_item("question_scale", key, "Insert", NULL, NA, NA)
   },
   summary_add = function(snap, scope, fields, values) {
     scale <- edit_lookup(snap, "measurement_scale", "scale_id", as.numeric(scope), "name")
     question <- edit_component_text(snap, as.numeric(values[["question_scale__component_id"]]), 60)
-    paste0("Added “", question, "” to the measurement scale “", scale, "” as item ", trimws(values[["question_scale__item_number"]]))
+    paste0("Added “", question, "” to the measurement scale “", scale, "”")
   }
 )

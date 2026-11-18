@@ -1,4 +1,5 @@
-# Make an edit's kinds in the group Registries and studies: registries, their investigators and studies.
+# Make an edit's kinds in the group Registries and studies: registries, their investigators and studies, and the
+# studies' publications.
 # The kinds are listed together in edit_entities (service_edit_kinds.R); the pieces their forms are built from
 # are in service_edit_entities.R.
 
@@ -113,7 +114,12 @@ study_entity <- list(
       subtitle = paste0(
         registry, ifelse(is.na(lead), "", paste0(" · led by ", lead)), ifelse(is.na(rows$status), "", paste0(" · ", rows$status))
       ),
-      facts = lapply(n_q, function(n) edit_count(n, "questionnaire"))
+      facts = Map(
+        function(questionnaires, publications) {
+          c(edit_count(questionnaires, "questionnaire"), if (publications > 0) edit_count(publications, "publication"))
+        },
+        n_q, count_in(snap$study_publication$study_id, rows$study_id)
+      )
     )
   },
   fields = function(snap, mode, row, scope) {
@@ -150,6 +156,131 @@ study_entity <- list(
     registry <- if (has_text(values$registry_id)) list(registry_id = as.numeric(values$registry_id))
     Filter(Negate(is.null), list(
       edit_duplicate_rows(snap, "study", "name", values$name, "A study with this name", within = registry)
+    ))
+  }
+)
+
+# ------ Publications ------------------------------------------------------------------------------------
+# A paper, chapter or report that used a study's data (PUBLICATION). One can be about several studies, and a
+# study has many, so which studies it is about is a table of its own (STUDY_PUBLICATION): the form picks them
+# with the publication, and saving adds and removes those rows with it.
+
+# What a DOI looks like (publication_doi_format in the database).
+doi_pattern <- "^10\\.[0-9]{4,9}/[^[:space:]]+$"
+
+# What a plain link looks like (publication_url_format in the database).
+link_pattern <- "^https?://[^[:space:]]+$"
+
+# A DOI as it is kept: the DOI alone, in lower case, whatever was pasted ("https://doi.org/10.1007/BF01065905",
+# "doi:10.1007/BF01065905"). The link to the publication is https://doi.org/ followed by it.
+# Returns: The DOIs; what isn't one comes back trimmed, for the form to point out.
+normal_doi <- function(doi) {
+  doi <- trimws(as.character(doi))
+  doi <- sub("^(https?://)?(dx\\.)?doi\\.org/", "", doi, ignore.case = TRUE)
+  tolower(sub("^doi:[[:space:]]*", "", doi, ignore.case = TRUE))
+}
+
+# The studies a publication is about.
+# Returns: Their IDs.
+publication_studies <- function(snap, publication_id) {
+  links <- snap$study_publication
+  links$study_id[key_text(links$publication_id) %in% key_text(publication_id)]
+}
+
+publication_entity <- list(
+  label = "Publication", noun = "publication", plural = "publications", article = "a",
+  group = "Registries and studies", table = "publication",
+  about = paste0(
+    "A paper, chapter or report that used a study's data. It can be about more than one study: each study it is ",
+    "about lists it."
+  ),
+  update_about = "A publication is shared by the studies it is about: a change shows in each of their lists.",
+  delete_about = "Deleting a publication takes it off every study's list. The studies stay.",
+  reads = c("study", "registry", "study_publication"),
+  cards = function(snap, scope) {
+    rows <- snap$publication
+    said <- function(...) {
+      parts <- c(...)
+      paste(parts[!is.na(parts) & nzchar(parts)], collapse = " · ")
+    }
+    about <- lapply(rows$publication_id, function(id) {
+      sort(edit_lookup(snap, "study", "study_id", publication_studies(snap, id), "name"))
+    })
+    edit_cards(
+      key_text(rows$publication_id), rows$title,
+      subtitle = vapply(seq_len(nrow(rows)), function(i) {
+        said(rows$authors[i], rows$journal[i], substr(rows$published_date[i], 1, 4))
+      }, character(1)),
+      facts = lapply(about, function(studies) if (length(studies) > 0) studies else "in no study's list yet")
+    )
+  },
+  fields = function(snap, mode, row, scope) {
+    list(
+      edit_field("title", "Title", "textarea", required = TRUE, rows = 2, placeholder = "The publication's title"),
+      edit_field("authors", "Authors",
+        placeholder = "e.g. Eaves LJ, Silberg JL, Meyer JM", hint = "As the publication lists them, in one line."
+      ),
+      edit_field("journal", "Journal", placeholder = "e.g. Behavior Genetics", hint = "Or the book or series it is in."),
+      edit_field("published_date", "Date published", "date",
+        placeholder = "MM/DD/YYYY", hint = "The first of the month, or of the year, when only that is known."
+      ),
+      edit_field("doi", "DOI",
+        placeholder = "e.g. 10.1007/BF01065905", normalize = normal_doi,
+        hint = "Paste the DOI or its link. It is kept as the DOI alone; the link is https://doi.org/ followed by it.",
+        problem = function(value, values) {
+          if (!has_text(value)) {
+            return(NULL) # a publication needn't have one
+          }
+          doi <- normal_doi(value)
+          if (!grepl(doi_pattern, doi)) {
+            return("A DOI starts with 10. and a slash follows its first number, like 10.1007/BF01065905.")
+          }
+          same <- edit_taken(snap, "publication", "doi", doi, row)
+          if (nrow(same) > 0) sprintf("“%s” already has this DOI.", shorten(same$title[1], 60))
+        }
+      ),
+      edit_field("url", "Link",
+        placeholder = "e.g. https://scholarscompass.vcu.edu/...",
+        hint = "For a publication with no DOI: where it can be read. With a DOI, the DOI's link is the one shown.",
+        problem = function(value, values) {
+          if (has_text(value) && !grepl(link_pattern, trimws(value))) {
+            "A link is a whole address, starting https:// or http://, with no spaces."
+          }
+        }
+      ),
+      edit_field("studies", "Studies it is about", "several",
+        required = TRUE, short = "studies it is about", choices = edit_choices(snap, "study"),
+        hint = "Every study in the database whose data it used."
+      )
+    )
+  },
+  initial = function(snap, row, scope) list(studies = edit_several_text(publication_studies(snap, row$publication_id))),
+  # the publication's own fields, then a row of STUDY_PUBLICATION for each study picked, and none for one unpicked
+  build = function(mode, snap, row, scope, fields, values) {
+    entity <- edit_entities$publication
+    own <- Filter(function(field) field$name != "studies", fields)
+    picked <- edit_several_ids(values[["publication__studies"]])
+    listed <- function(publication, studies, action) {
+      lapply(studies, function(study) {
+        key <- edit_identifier(list(publication_id = publication, study_id = as.numeric(study)))
+        edit_item("study_publication", key, action, NULL, NA, NA)
+      })
+    }
+    items <- if (mode == "add") {
+      c(list(edit_add_items(entity, snap, own, values)), listed("new:publication:1", picked, "Insert"))
+    } else {
+      had <- key_text(publication_studies(snap, row$publication_id))
+      c(
+        list(edit_update_items(entity, snap, row, own, values)),
+        listed(row$publication_id, setdiff(picked, had), "Insert"), listed(row$publication_id, setdiff(had, picked), "Delete")
+      )
+    }
+    items <- Filter(Negate(is.null), items)
+    if (length(items) == 0) NULL else do.call(rbind, items)
+  },
+  duplicates = function(snap, values) {
+    Filter(Negate(is.null), list(
+      edit_duplicate_rows(snap, "publication", "title", values$title, "A publication with this title")
     ))
   }
 )

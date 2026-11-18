@@ -179,6 +179,24 @@ test_that("the cards for what a push adds count each question, answer choice and
   expect_equal(older[[1]][c("title", "facts")], list(title = "2 questions", facts = character()))
 })
 
+test_that("a push that puts questions in a measurement scale says so, with a card that names the scales", {
+  counts <- list(
+    questions = 3L, question_new = 3L, measurement_scale_new = 1L, measurement_scale_reused = 1L, scale_item_new = 3L,
+    names = list(measurement_scale_new = list("XYZ"), measurement_scale_reused = list("EPQ-R"))
+  )
+  expect_match(extraction_service_push_summary(counts), "1 new measurement scale and 3 questions put in a measurement scale\\.$")
+  cards <- extraction_service_what_cards(counts)
+  expect_length(cards, 5)
+  expect_equal(cards[[5]]$kind, "Measurement scales")
+  expect_equal(cards[[5]]$title, "2 measurement scales")
+  expect_equal(cards[[5]]$facts, c("1 new", "1 already in the database"))
+  expect_equal(cards[[5]]$lists, list("1 new" = "XYZ", "1 already in the database" = "EPQ-R"))
+  expect_true(cards[[5]]$is_new)
+  # a questionnaire that names no scale has no such card, and its sentence says nothing of scales
+  expect_length(extraction_service_what_cards(list(questions = 3L, question_new = 3L)), 4)
+  expect_false(grepl("scale", extraction_service_push_summary(list(questions = 3L))))
+})
+
 test_that("the cards for where a push goes name what is picked, and say what isn't picked yet", {
   catalog <- test_catalog()
   where <- extraction_service_where_cards(extraction_service_info(complete_info()), catalog)
@@ -306,6 +324,39 @@ test_that("a push records the questionnaire in its wave, and the extraction is k
   # and can't be pushed twice
   catalog <- questionnaire_service_get_catalog(test_connection)
   expect_match(error_text(extraction_service_push(test_connection, kept, me, catalog)), "pushed already")
+})
+
+test_that("a question whose extraction names a measurement scale is put in it, and a scale the database hasn't got is added", {
+  me <- local_staff()
+  tree <- local_tree()
+  known <- local_row("measurement_scale", list(name = test_name("Mood Scale"), abbreviation = test_abbreviation()), "scale_id")
+  unknown <- test_abbreviation()
+  draft <- test_questionnaire_draft()
+  questions <- draft$components$id[draft$components$component_type == "Question"]
+  draft$components$scale[draft$components$id == questions[1]] <- tolower(known$abbreviation) # found whatever its capitals
+  draft$components$scale[draft$components$id == questions[2]] <- unknown
+  # the items go before the scales and the tree's components can
+  withr::defer({
+    added <- database_model_get(test_connection, "measurement_scale", "scale_id", filters = list(abbreviation = database_eq(unknown)))
+    for (scale in c(known$scale_id, added$scale_id)) test_delete("question_scale", list(scale_id = database_eq(scale)))
+    test_delete("measurement_scale", list(abbreviation = database_eq(unknown)))
+  })
+  pushed <- local_pushed_questionnaire(me, tree, draft)
+  expect_equal(pushed$counts$measurement_scale_reused, 1)
+  expect_equal(pushed$counts$measurement_scale_new, 1)
+  expect_equal(pushed$counts$scale_item_new, 2)
+  expect_equal(unlist(pushed$counts$names$measurement_scale_new), unknown)
+  expect_equal(unlist(pushed$counts$names$measurement_scale_reused), known$abbreviation)
+
+  # each question's wording is an item of its scale, and the new scale is named by its abbreviation for now
+  item_of <- function(scale_id) {
+    items <- database_model_get(test_connection, "question_scale", c("scale_id", "component_id"), filters = list(scale_id = database_eq(scale_id)))
+    database_model_get(test_connection, "component", c("component_id", "text"), filters = list(component_id = database_in(items$component_id)))$text
+  }
+  expect_equal(tolower(item_of(known$scale_id)), tolower(paste(test_marker, "Do you smoke?")))
+  added <- database_model_get(test_connection, "measurement_scale", c("scale_id", "name", "abbreviation"), filters = list(abbreviation = database_eq(unknown)))
+  expect_equal(added$name, unknown)
+  expect_equal(tolower(item_of(added$scale_id)), tolower(paste(test_marker, "How many?")))
 })
 
 test_that("a wave that asks questions already, and a questionnaire with none, are refused with what to do", {

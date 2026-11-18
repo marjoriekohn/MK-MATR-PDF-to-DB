@@ -69,20 +69,17 @@ test_that("deleting a questionnaire takes its waves, blocks, numbers, variables 
   expect_equal(cascade$forgotten, "8")
 })
 
-test_that("a component no questionnaire prints any more stays while a scale lists it", {
+test_that("a component no questionnaire prints any more is forgotten, a scale's item or not", {
   only_kq <- function(snap) {
     # KQ alone prints question 9 (a scale item) and the section Mood
     snap$placement <- snap$placement[snap$placement$questionnaire_id != 3, ]
     snap
   }
   snap <- test_snapshot(change = only_kq)
-  expect_equal(sort(cascade_of(snap, questionnaire = "2")$forgotten), c("10", "8"))
-  unscaled <- test_snapshot(change = function(snap) {
-    snap <- only_kq(snap)
-    snap$question_scale <- snap$question_scale[0, ]
-    snap
-  })
-  expect_equal(sort(cascade_of(unscaled, questionnaire = "2")$forgotten), c("10", "8", "9"))
+  expect_true("9" %in% key_text(snap$question_scale$component_id))
+  expect_equal(sort(cascade_of(snap, questionnaire = "2")$forgotten), c("10", "8", "9")) # its scale item goes with it
+  # while another questionnaire prints it, it stays, and so does its scale item
+  expect_false("9" %in% cascade_of(test_snapshot(), questionnaire = "2")$forgotten)
 })
 
 test_that("a wave takes only its numbers: the questions stay in the questionnaire", {
@@ -139,7 +136,7 @@ test_that("the reach says how many of each kind go, the components the database 
   texts <- vapply(reach$lines, function(line) line$text, character(1))
   expect_equal(texts, c(
     "1 wave", "3 blocks in questionnaires", "1 question in a wave", "1 variable", "4 response options for variables",
-    "1 tag on a question", "2 tags on variables", "1 component no questionnaire prints any more (forgotten by the database)"
+    "1 tag on a question", "2 tags on variables", "1 component no questionnaire prints any more (forgotten by the database, with any scale items)"
   ))
   expect_equal(reach$total, 14)
   expect_equal(reach$lines[[8]]$examples, "the next questions are about your mood.")
@@ -181,7 +178,7 @@ test_that("rows are named in staff's words", {
   expect_equal(edit_label(snap, "tag", snap$tag[snap$tag$tag_id == 17, ]), "past week")
   expect_equal(edit_label(snap, "variable_tag", snap$variable_tag[snap$variable_tag$tag_id == 22, ]), "cigarettes (unit) on AH02CG")
   expect_equal(edit_label(snap, "placement_tag", snap$placement_tag[1, ]), "past week (time frame) on “how often in the past week did you feel sad?”")
-  expect_equal(edit_label(snap, "question_scale", snap$question_scale[1, ]), "Short Mood Scale item 1 · how often in the past week did you feel sad?")
+  expect_equal(edit_label(snap, "question_scale", snap$question_scale[1, ]), "Short Mood Scale item · how often in the past week did you feel sad?")
   expect_equal(edit_label(snap, "pdf_file", snap$pdf_file), c("AHP_Redacted.pdf", "PDF b2b2b2b2b2b2"))
   expect_equal(edit_label(snap, "wave", snap$wave[0, ]), character())
 })

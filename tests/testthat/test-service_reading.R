@@ -234,6 +234,29 @@ test_that("a section or grid recorded twice in a row with the same words is one"
   expect_equal(vapply(alcohol, function(block) block$display_order, integer(1)), 1:3)
 })
 
+test_that("a question's measurement scale is kept as its abbreviation, out of its words and off anything else", {
+  yes_no <- list(list(variable_type = "closed_ended", response_options = list(list(answer_option = "Yes"), list(answer_option = "No"))))
+  tidied <- reading_service_tidy(list(questionnaire = list(name = "Q"), components = list(
+    list(component_type = "Question", text = "Are you a worrier?", scale = " (EPQ-R) ", variables = yes_no),
+    list(component_type = "Question", text = "Do you own a bicycle?", scale = "", variables = yes_no),
+    list(component_type = "Instruction", text = "Do not include your twin.", scale = "EPQ-R")
+  )))
+  expect_equal(tidied$components[[1]]$scale, "EPQ-R") # capitals stay: it is an abbreviation, not the form's words
+  expect_equal(tidied$components[[1]]$text, "are you a worrier?")
+  expect_null(tidied$components[[2]]$scale)
+  expect_null(tidied$components[[3]]$scale) # only a question is an item of a scale
+  expect_equal(
+    normal_scale(c("EPQ-R", "[PHQ-9]", "(SF-36).", "  cfq  11 ", " ", NA, "SF-36 (v2)")),
+    c("EPQ-R", "PHQ-9", "SF-36", "cfq 11", NA, NA, "SF-36 (v2)")
+  )
+  # a question in more than one scale has them all, each once, however they were written
+  expect_equal(
+    normal_scale(c("(FTND) (CDS-12)", "FTND; CDS-12", "(FTND, CDS-12)", " ftnd ,FTND, CDS-12 ", "(FTND)(CDS-12)")),
+    c("FTND, CDS-12", "FTND, CDS-12", "FTND, CDS-12", "ftnd, CDS-12", "FTND, CDS-12")
+  )
+  expect_equal(normal_scale(character()), character())
+})
+
 test_that("the prompt lists what the lookup tables hold", {
   instructions <- reading_service_instructions(test_lookups(), app_file("prompts", "extraction.md"))
   expect_false(grepl("{{", instructions, fixed = TRUE))
@@ -241,6 +264,9 @@ test_that("the prompt lists what the lookup tables hold", {
   expect_match(instructions, '"Grid"', fixed = TRUE)
   expect_match(instructions, '"siblings"', fixed = TRUE)
   expect_match(instructions, '"past month"', fixed = TRUE)
+  expect_match(instructions, "\n  - SMS: Short Mood Scale\n", fixed = TRUE) # a scale by its abbreviation, then what it is short for
+  expect_equal(scale_lines(c("Short Mood Scale" = "SMS", "EPQ-R")), "  - SMS: Short Mood Scale\n  - EPQ-R")
+  expect_equal(scale_lines(character()), "  - (the registry lists none yet)")
   # the lists are shown as the site writes them now, each name once: a tag kept under an older name isn't offered
   expect_equal(as_written(normal_time_frame, c("past 30 days", "past month", "Past 12 months", "lifetime", NA), "none"), c("past month", "past year", "lifetime"))
   expect_equal(as_written(normal_unit, c("cigarettes per day", "cigarettes", "days per week"), "none"), c("cigarettes", "days"))
@@ -487,25 +513,43 @@ test_that("the file of MATR IDs and codes gives the variables their IDs and the 
     list(list(text = jsonlite::toJSON(list(variables = list(
       list(id = "v1", matr_id = "AH01", choices = lapply(seq_len(n_choices), function(i) list(id = paste0("o", i), code = letters[i]))),
       list(id = "v2", matr_id = "AH01"), # an ID already given: neither gets it
-      list(id = "v3", matr_id = "AH03"),
+      list(id = "v3", matr_id = "AH03", scale = " (SMS) "), # the file names its question's scale
       list(id = "v99", matr_id = "nobody") # no such variable
     )), auto_unbox = TRUE)))
   }
-  filled <- reading_service_assign(json, list(name = "codes.csv", text = "AH01,1,yes"), generate = generate, prompt_path = assign_prompt)
+  filled <- reading_service_assign(
+    json, list(name = "codes.csv", text = "AH01,1,yes"),
+    generate = generate, prompt_path = assign_prompt, scales = test_lookups()$scales
+  )
   expect_null(sent$pdf_path) # text goes in the prompt
+  expect_match(sent$prompt, "\n  - SMS: Short Mood Scale\n", fixed = TRUE) # the scales it can name
+  expect_false(any(grepl("{{", sent$prompt, fixed = TRUE)))
   expect_match(sent$prompt, "## The file (codes.csv)", fixed = TRUE)
   expect_match(sent$prompt, '"id":"v1"', fixed = TRUE)
 
-  # only MATR IDs and codes are added: the questionnaire is otherwise exactly as it was read
+  # only MATR IDs, codes and scales are added: the questionnaire is otherwise exactly as it was read
   strip <- function(x) {
     if (!is.list(x)) return(x)
-    if (!is.null(names(x))) x <- x[setdiff(names(x), c("matr_id", "code_value"))]
+    if (!is.null(names(x))) x <- x[setdiff(names(x), c("matr_id", "code_value", "scale"))]
     lapply(x, strip)
   }
   expect_identical(strip(filled), strip(json))
 
   draft <- draft_service_from_json(filled)
   expect_equal(draft$variables$matr_id[1:3], c(NA, NA, "AH03"))
+  # the question of the variable whose entry names a scale is in it, and no other
+  expect_equal(draft$components$scale[draft$components$id == draft$variables$component_id[3]], "SMS")
+  expect_equal(sum(!is.na(draft$components$scale)), 1)
+  # a scale the questionnaire itself printed stands; any of a question's variables' entries can name one
+  tiny <- list(components = list(
+    list(component_type = "Question", text = "a", scale = "PHQ-9", variables = list(list(variable_type = "open_ended"))),
+    list(component_type = "Question", text = "b", variables = list(list(variable_type = "open_ended"), list(variable_type = "open_ended")))
+  ))
+  named <- assign_into(tiny, list(variables = list(
+    list(id = "v1", scale = "EPQ-R"), list(id = "v2", scale = "(FTND) (CDS-12)"), list(id = "v3", scale = "[cds-12]")
+  )))
+  expect_equal(named$components[[1]]$scale, "PHQ-9")
+  expect_equal(named$components[[2]]$scale, "FTND, CDS-12") # every scale its variables' entries name, each once
   first <- draft_service_children(draft, "response_options", draft$variables$id[1])
   expect_equal(first$code_value, letters[seq_len(n_choices)]) # codes can be letters
   # a variable the file didn't code is counted 1, 2, 3... as before
@@ -586,7 +630,7 @@ test_that("the job reads the file of MATR IDs and codes once the questionnaire i
   expect_equal(record$supplement$name, "codes.csv")
   read <- function(pdf_path, lookups, progress) list(json = short_gold_json(), model = "m", prompt_version = "p")
   given <- NULL
-  assign <- function(json, supplement) {
+  assign <- function(json, supplement, ...) {
     given <<- supplement
     json$components[[1]]$variables[[1]]$matr_id <- "AH01"
     json
@@ -598,7 +642,7 @@ test_that("the job reads the file of MATR IDs and codes once the questionnaire i
 
   again <- extraction_service_create(test_connection, fake_upload(), me, supplement = fake_csv_upload("AH01", "codes.csv"))
   messages <- capture_messages(reading_service_run(
-    test_connection, again$id, again$reading_started, read = read, assign = function(json, supplement) stop("Gemini is busy")
+    test_connection, again$id, again$reading_started, read = read, assign = function(json, supplement, ...) stop("Gemini is busy")
   ))
   expect_match(messages, "couldn't be applied: Gemini is busy", all = FALSE)
   read_anyway <- extraction_model_get(test_connection, again$id)

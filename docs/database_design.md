@@ -11,7 +11,7 @@ separate public site, "The Dashboard", reads the catalog and lets researchers se
 PDFs, and collect the MATR IDs (variables) they want. The catalog has to stay clean: one wording per
 component, one row per answer choice, no duplicate questions.
 
-## The model (22 tables)
+## The model (24 tables)
 
 **Catalog, read by the dashboard**
 
@@ -32,7 +32,8 @@ component, one row per answer choice, no duplicate questions.
 | `response_option` | one choice as one variable printed it | `display_order`, `code_value` |
 | `tag` | a subject, time frame or unit | `kind` + `name`, unique per kind |
 | `placement_tag`, `variable_tag`, `response_option_tag` | a tag on a question, a variable, a choice | |
-| `measurement_scale`, `question_scale` | validated scales and their items | |
+| `publication`, `study_publication` | papers that used a study's data, and which studies each is about | `title`, `authors`, `journal`, `published_date`, `doi` (the DOI alone, lower case; the link is https://doi.org/ + it), `url` (a plain link, for one with no DOI) |
+| `measurement_scale`, `question_scale` | validated scales and their items | a scale's `name` and `abbreviation`; an item is a question's wording (`component_id`) in a scale, in no order |
 
 **Private to the site**
 
@@ -78,6 +79,26 @@ then `placement_tag` for the kinds the variable hasn't got). The site keeps this
 saved (`draft_service_place_tags()`), and drops a variable's label that only repeats one of its tags. The
 push writes a question's `subject` and `time_frame` and a variable's `subject`, `time_frame` and `unit`.
 
+**Publications.** A study lists the publications that used its data, and one publication can be about several
+studies, so a publication is a row of its own and `study_publication` says which studies it is about; a link
+goes with its study or its publication. Staff add a publication under Metadata, picking its studies with it;
+the dashboard reads both tables. A DOI is kept once, as the DOI alone in lower case, whatever was pasted; a
+publication with no DOI (an older paper, a report) can have a plain link instead (`url`). The link to show is
+the DOI's when there is one, else the plain link.
+
+**Measurement scales.** A questionnaire can say which published scale a question comes from, usually as the
+scale's abbreviation in brackets right after the question's words ("Are you a worrier? (EPQ-R)"). It is read
+from wherever it is said: the questionnaire's PDF (the reading takes it out of the words) or the file of
+Variable Names and Coding, where it follows the question's wording (the step that gives the variables their
+MATR IDs gives their questions their scale too; one the PDF printed stands). Either way it is the question's
+`scale` (a question in more than one scale has them all, with commas between: "FTND, CDS-12"); staff see and
+change it on Edit Extraction, beside the question's tags. The push finds the scale by its abbreviation or name, ignoring case
+(`private.scale_id()`; one the database hasn't got is added, named by its abbreviation until staff give it its
+full name) and puts the question's wording in each (`question_scale`). The wording is the scale's item wherever
+it is printed, so a push only ever adds an item; staff take one out on Make an edit, and an item goes with its
+question once no questionnaire prints it any more (a wave emptied, a block deleted). An item has no number:
+the order of a scale's questions isn't kept. A wave reopened for editing shows each question's scale again.
+
 **Open-ended variables and `answer_data_type`.** A question with two blanks ("___ feet ___ inches") is two
 MATR IDs, so two variables, each with its own data type and unit tag; that is one row per MATR ID, not a
 duplicate. The data type is a check constraint on `variable`, not a Postgres enum type: a check is easier
@@ -112,8 +133,8 @@ case, so a spelling that slips past the site still finds the one tag.
 
 **Emptying.** `empty_wave`, `empty_questionnaire`, `empty_study`, `empty_registry` remove what the thing
 holds, keep the thing itself, and remove what that leaves owned by nothing: questions no wave asks any
-more, sections left empty, the components they printed that nothing prints any more (unless a scale names
-them). Answer options and tags stay: they are vocabulary. Each writes a history row. Re-extract on a wave = empty it, then start an
+more, sections left empty, the components they printed that nothing prints any more, with the scale
+items that named them. Answer options and tags stay: they are vocabulary. Each writes a history row. Re-extract on a wave = empty it, then start an
 AI-Powered extraction from the wave's PDF.
 
 **Editing a pushed wave again.** `reopen_wave` makes a new Draft extraction holding what the wave asks as the
@@ -142,6 +163,7 @@ question, and only adds `wave_question` rows for the new wave.
 | `empty_wave(p_wave_id, p_staff_id)`, `empty_questionnaire(...)`, `empty_study(...)`, `empty_registry(...)` | see Emptying. Return counts. |
 | `reopen_wave(p_wave_id, p_staff_id)` | see Editing a pushed wave again. Returns the draft's `extraction_id` (the same one while that draft is open). |
 | `upvote_questionnaire(p_questionnaire_id)` | the dashboard's upvote (anon). |
+| `unstar_questionnaire(p_questionnaire_id)` | one upvote fewer, when a dashboard visitor takes back their star (anon); never below zero. |
 
 Everything else is plain REST on the tables: the site inserts, patches and deletes `extraction` rows
 directly (a PATCH filtered on `revision=eq.<n>` is the optimistic lock; the `extraction_touch` trigger bumps
@@ -153,6 +175,7 @@ directly (a PATCH filtered on `revision=eq.<n>` is the optimistic lock; the `ext
 {"questionnaire": {"name", "abbreviation"}, "components": [block, ...]}
 block:    {"component_type", "text", "printed_number", "question_number", "parent_question",
            "subject", "time_frame",                      (a question's own tags)
+           "scale",                                      (a question's measurement scales, by abbreviation: "FTND, CDS-12")
            "variables": [variable, ...], "children": [block, ...], "checked", "ref", "page",
            "component_id", "reword"}                     (a reopened wave's blocks only)
 variable: {"variable_type", "matr_id", "label", "subject", "time_frame", "unit", "answer_data_type",

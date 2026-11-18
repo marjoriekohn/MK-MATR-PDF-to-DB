@@ -264,6 +264,34 @@ time_frame_words <- function(found) {
 # asked about another time or person is the same component, told apart by its tags.
 question_tag_fields <- c("subject", "time_frame")
 
+# ------ A question's measurement scales -------------------------------------------------------------------------
+# A question can be an item of a published measurement scale (the EPQ-R, the PHQ-9), or of more than one (an item
+# the FTND and the CDS-12 share). When the questionnaire or its file of Variable Names and Coding says so,
+# usually with the scale's abbreviation in brackets right after the question's words ("Are you a worrier?
+# (EPQ-R)"), the question's block has it as its `scale`, several separated by commas ("FTND, CDS-12"). The push
+# puts the question's wording in each (question_scale; a scale the database hasn't got is added). It is the
+# question's, never a variable's, and is no part of its words.
+
+# The scales a question names, written one way: each scale's abbreviation as printed, without the brackets round
+# it or a full stop after it, the scales separated by a comma and a space, each once. Capitals stay: an
+# abbreviation isn't the form's words.
+# scales: What was read or typed: "EPQ-R", "(EPQ-R)", "(FTND) (CDS-12)", "FTND; CDS-12".
+# Returns: The scales as text ("FTND, CDS-12"), `NA` for none.
+normal_scale <- function(scales) {
+  one <- function(text) {
+    text <- sub("[.,;:[:space:]]+$", "", squish(text))
+    if (is.na(text) || !nzchar(text)) {
+      return(NA_character_)
+    }
+    if (grepl("^[(\\[].*[)\\]]$", text, perl = TRUE)) text <- substring(text, 2, nchar(text) - 1)
+    # "FTND) (CDS-12" (two bracketed scales, the outer brackets gone) and "FTND; CDS-12" are two scales
+    each <- squish(strsplit(gsub("[)\\]]\\s*[(\\[]", ",", text, perl = TRUE), "[,;]", perl = TRUE)[[1]])
+    each <- each[nzchar(each) & !duplicated(tolower(each))]
+    if (length(each) == 0) NA_character_ else paste(each, collapse = ", ")
+  }
+  vapply(as.character(scales), one, character(1), USE.NAMES = FALSE)
+}
+
 # Put a draft's tags where they belong.
 # Who (or when) each variable is about is its own tag or, when it has none, its question's. When that is the same
 # for every variable of a question, it is the question's tag and no variable has one; when the variables differ,
@@ -359,7 +387,7 @@ new_row_defaults <- list(
     component_type = NA_character_, text = NA_character_,
     question_number = NA_character_, printed_number = NA_character_,
     parent_question_id = NA_character_, checked = FALSE, ref = NA_character_, page = NA_integer_,
-    subject = NA_character_, time_frame = NA_character_,
+    subject = NA_character_, time_frame = NA_character_, scale = NA_character_,
     # for an extraction reopened from the catalog (`extraction_service_reopen_wave()`): the component the block
     # came from (the JSON's `component_id`), and "everywhere" when its new words are to replace that component's
     # wherever it is printed, not only here (see `private.reword_components()` in sql/4_functions.sql)
@@ -462,6 +490,7 @@ draft_service_from_json <- function(json) {
       page = pluck(blocks, "page", NA_integer_),
       subject = normal_subject(pluck(blocks, "subject")),
       time_frame = normal_time_frame(pluck(blocks, "time_frame")),
+      scale = normal_scale(pluck(blocks, "scale")),
       catalog_id = pluck(blocks, "component_id"),
       reword = pluck(blocks, "reword")
     ),
@@ -587,6 +616,7 @@ blocks_json <- function(draft, parent_id) {
       json$parent_question <- question_number_of(draft, block$parent_question_id)
       json$subject <- block$subject
       json$time_frame <- block$time_frame
+      json$scale <- block$scale
       json$variables <- boxes_json(draft, block$id)
     }
     json$checked <- block$checked

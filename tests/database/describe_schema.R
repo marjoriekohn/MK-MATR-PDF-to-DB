@@ -20,7 +20,7 @@ output_file <- "docs/database_tables.md"
 
 # The tables in the order a reader meets them, in groups.
 groups <- list(
-  "Registries and studies" = c("registry", "principal_investigator", "study"),
+  "Registries and studies" = c("registry", "principal_investigator", "study", "publication", "study_publication"),
   "Questionnaires and waves" = c("respondent_type", "questionnaire", "wave", "pdf_file"),
   "What is printed" = c("component", "placement", "wave_question"),
   "Answers" = c("variable", "answer_option", "response_option"),

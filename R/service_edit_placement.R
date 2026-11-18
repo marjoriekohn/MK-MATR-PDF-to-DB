@@ -252,9 +252,9 @@ edit_component_for <- function(snap, kind, text, made = "new:component:1") {
 # ------ Giving one placement other words -------------------------------------------------------------
 # New words at one placement point that placement at the component of the same kind with them: the one the
 # database has, or a new one. What the placement holds (its numbers in each wave, its variables, its tags) is the
-# placement's, so it stays as it is. Measurement scale memberships aren't copied: each item number in a scale
-# belongs to one question, so the scale keeps pointing at the old wording. The old component is forgotten by the
-# database when nothing places it any more.
+# placement's, so it stays as it is. Measurement scale memberships aren't copied: a scale's item is one wording,
+# so the scale keeps pointing at the old one while a questionnaire still prints it. The old component is forgotten
+# by the database, with its scale items, when nothing places it any more.
 # text: The new words, as saved (`edit_service_normalize()`).
 edit_service_swap_items <- function(snap, placement_id, text) {
   placement <- snap$placement[snap$placement$placement_id == placement_id, ]

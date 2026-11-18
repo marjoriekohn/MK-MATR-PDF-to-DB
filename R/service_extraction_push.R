@@ -125,7 +125,9 @@ extraction_service_push_summary <- function(counts) {
     if (n("answer_option_new") > 0) plural(n("answer_option_new"), "new answer choice"),
     if (n("answer_option_reused") > 0) paste0(plural(n("answer_option_reused"), "answer choice"), " already there"),
     if (n("tag_new") > 0) paste(plural(n("tag_new"), "new subject, time frame or unit", plural_form = "new subjects, time frames or units")),
-    if (n("tag_reused") > 0) paste0(plural(n("tag_reused"), "subject, time frame or unit", plural_form = "subjects, time frames or units"), " already there")
+    if (n("tag_reused") > 0) paste0(plural(n("tag_reused"), "subject, time frame or unit", plural_form = "subjects, time frames or units"), " already there"),
+    if (n("measurement_scale_new") > 0) plural(n("measurement_scale_new"), "new measurement scale"),
+    if (n("scale_item_new") > 0) paste0(plural(n("scale_item_new"), "question"), " put in a measurement scale")
   )
   # a draft reopened from the wave takes the place of what the wave asks
   replaces <- if (n("questions_before") > 0) paste0("Replaces the ", plural(n("questions_before"), "question"), " the wave asks now. ") else ""
@@ -237,8 +239,8 @@ extraction_service_where_cards <- function(info, catalog) {
 }
 
 # The cards for what a push adds: the questions, option sets, answer choices and tags (subjects, time frames and
-# units) the questionnaire uses, each counted once however often it is used, as new or as already in the
-# database. A wording, a choice and a tag are each kept once and shared, so "7 already in the database" is seven
+# units) the questionnaire uses, and the measurement scales its questions name, each counted once however often
+# it is used, as new or as already in the database. A wording, a choice and a tag are each kept once and shared, so "7 already in the database" is seven
 # tags the database has, not the places that use them. An option set is the choices one variable offers, whatever
 # their order or codes ("yes | no"); it is already in the database when a variable there offers the same ones.
 # Each chip lists what it counts when pointed at: the option sets by their choices, the answer choices and tags by
@@ -273,11 +275,17 @@ extraction_service_what_cards <- function(counts) {
   if (n("placement_reused") > 0) {
     questions$facts <- c(questions$facts, paste(plural(n("placement_reused"), "block", big_mark = ","), "printed by this questionnaire already"))
   }
-  list(
-    questions,
-    card("Option sets", "option_set", "option set"),
-    card("Answer choices", "answer_option", "different answer choice"),
-    card("Subjects, time frames and units", "tag", "tag")
+  c(
+    list(
+      questions,
+      card("Option sets", "option_set", "option set"),
+      card("Answer choices", "answer_option", "different answer choice"),
+      card("Subjects, time frames and units", "tag", "tag")
+    ),
+    # only when the questionnaire names a scale: most don't
+    if (n("measurement_scale_new") + n("measurement_scale_reused") > 0) {
+      list(card("Measurement scales", "measurement_scale", "measurement scale"))
+    }
   )
 }
 

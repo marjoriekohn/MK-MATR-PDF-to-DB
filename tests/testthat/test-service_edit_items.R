@@ -87,19 +87,22 @@ test_that("a component is added with its kind and words, in lower case; a group 
 })
 
 test_that("a scale item is one row, named by its scale and question", {
-  form <- form_for("question_scale", "add", scope = "1", question_scale__component_id = "7", question_scale__item_number = " 2a ")
+  form <- form_for("question_scale", "add", scope = "1", question_scale__component_id = "7")
   built <- form_items(form)
-  expect_equal(item_lines(built$items), 'Insert question_scale {"component_id":7,"scale_id":1} item_number: - -> 2a')
-  expect_equal(built$summary, "Added “how often do you see a doctor?” to the measurement scale “Short Mood Scale” as item 2a")
+  expect_equal(built$items$entity_name, "question_scale") # the row is its two keys: there is nothing else to say of it
+  expect_equal(built$items$record_identifier, '{"component_id":7,"scale_id":1}')
+  expect_equal(built$items$action, "Insert")
+  expect_true(is.na(built$items$attribute_name))
+  expect_equal(built$summary, "Added “how often do you see a doctor?” to the measurement scale “Short Mood Scale”")
   # only a question can be an item, and once
   choices <- Filter(function(field) field$name == "component_id", form$fields)[[1]]$choices
   expect_setequal(unname(choices), c("", "3", "4", "5", "7", "9", "11", "14"))
-  again <- form_for("question_scale", "add", scope = "1", question_scale__component_id = "9", question_scale__item_number = "1")
+  again <- form_for("question_scale", "add", scope = "1", question_scale__component_id = "9")
   problems <- edit_service_check(again$fields, again$values)$problems
-  expect_equal(problems$question_scale__component_id, "This question is already item 1 of this scale.")
-  expect_equal(problems$question_scale__item_number, "Item 1 of this scale is already “how often in the past week did you feel sad?”.")
-  changed <- form_for("question_scale", "update", "1|9", scope = "1", question_scale__item_number = "3")
-  expect_equal(item_lines(form_items(changed)$items), 'Update question_scale {"component_id":9,"scale_id":1} item_number: 1 -> 3')
+  expect_equal(problems$question_scale__component_id, "This question is already an item of this scale.")
+  # an item has no order or number in its scale, so there is nothing about it to change
+  expect_match(edit_service_can(edit_entities$question_scale, again$snap, "update"), "delete this item and add one")
+  expect_null(edit_service_can(edit_entities$question_scale, again$snap, "delete"))
 })
 
 # ------ Delete ---------------------------------------------------------------------------------------
@@ -452,4 +455,72 @@ test_that("the variable editor offers the tags there are, by kind, and the answe
   expect_equal(options$units, c("cigarettes", "years"))
   expect_equal(options$answer_data_types, c("NUMBER", "TEXT", "DATE", "TIME"))
   expect_true("yes" %in% options$answer_options)
+})
+
+test_that("a publication is added with the studies it is about, and its DOI is kept as the DOI alone", {
+  form <- form_for(
+    "publication", "add",
+    publication__title = "Sleep in twins", publication__authors = "Lee C", publication__published_date = "03/01/1996",
+    publication__doi = " https://doi.org/10.5555/ABC.1 ", publication__studies = "1,3"
+  )
+  expect_length(edit_service_check(form$fields, form$values)$problems, 0)
+  built <- form_items(form)
+  new <- '{"publication_id":"new:publication:1"}'
+  expect_equal(item_lines(built$items), c(
+    paste("Insert publication", new, "title: - -> Sleep in twins"),
+    paste("Insert publication", new, "authors: - -> Lee C"),
+    paste("Insert publication", new, "published_date: - -> 1996-03-01"),
+    paste("Insert publication", new, "doi: - -> 10.5555/abc.1"),
+    # one row for each study it is about, naming the publication by the number the database is to give it
+    'Insert study_publication {"publication_id":"new:publication:1","study_id":1} NA: - -> -',
+    'Insert study_publication {"publication_id":"new:publication:1","study_id":3} NA: - -> -'
+  ))
+  expect_equal(built$summary, "Added the publication “Sleep in twins”")
+  expect_equal(normal_doi(c("doi:10.1007/BF01065905", "http://dx.doi.org/10.1007/BF01065905", "10.1007/bf01065905")), rep("10.1007/bf01065905", 3))
+
+  # it needs a title and at least one study; a DOI has to be one, and one no other publication has
+  empty <- form_for("publication", "add")
+  expect_equal(edit_service_check(empty$fields, empty$values)$missing, c("title", "studies it is about"))
+  expect_length(edit_service_check(empty$fields, empty$values)$problems, 0) # no DOI and no link is no problem
+  not_one <- form_for("publication", "add", publication__title = "x", publication__studies = "1", publication__doi = "see the journal")
+  expect_match(edit_service_check(not_one$fields, not_one$values)$problems$publication__doi, "A DOI starts with 10.")
+  taken <- form_for("publication", "add", publication__title = "x", publication__studies = "1", publication__doi = "https://doi.org/10.1234/JTS.1996.001")
+  expect_equal(edit_service_check(taken$fields, taken$values)$problems$publication__doi, "“Health habits of adult twins” already has this DOI.")
+  # one with no DOI can have a plain link, a whole address
+  linked <- form_for("publication", "add", publication__title = "A report", publication__studies = "1", publication__url = " https://example.org/report.pdf ")
+  expect_length(edit_service_check(linked$fields, linked$values)$problems, 0)
+  expect_equal(item_lines(form_items(linked)$items)[2], paste("Insert publication", new, "url: - -> https://example.org/report.pdf"))
+  not_whole <- form_for("publication", "add", publication__title = "A report", publication__studies = "1", publication__url = "example.org/report")
+  expect_match(edit_service_check(not_whole$fields, not_whole$values)$problems$publication__url, "A link is a whole address")
+})
+
+test_that("a publication's studies are changed with it, and its card names them", {
+  entity <- edit_entities$publication
+  snap <- test_snapshot(edit_service_tables(entity))
+  cards <- edit_service_cards(entity, snap)
+  expect_equal(cards$title, c("Health habits of adult twins", "Notes on a study with nothing in it yet"))
+  expect_equal(cards$subtitle, c("Rivera A, Chen B · Journal of Twin Studies · 1996", ""))
+  expect_equal(cards$facts, list(c("Adult Health Study", "Child Development Study"), "in no study's list yet"))
+  # a study's card counts the publications it lists
+  studies <- edit_service_cards(edit_entities$study, test_snapshot(edit_service_tables(edit_entities$study)))
+  expect_equal(studies$facts[[match("Adult Health Study", studies$title)]][2], "1 publication")
+  expect_length(studies$facts[[match("Example Study", studies$title)]], 1)
+
+  form <- form_for("publication", "update", "1")
+  expect_equal(form$values$publication__studies, "1,2") # the studies it is about now
+  expect_equal(nrow(form_items(form)$items), 0) # nothing typed, nothing changed
+  moved <- form_for("publication", "update", "1", publication__studies = "1,3", publication__journal = "Twin Research")
+  expect_equal(item_lines(form_items(moved)$items), c(
+    'Update publication {"publication_id":1} journal: Journal of Twin Studies -> Twin Research',
+    'Insert study_publication {"publication_id":1,"study_id":3} NA: - -> -',
+    'Delete study_publication {"publication_id":1,"study_id":2} NA: - -> -'
+  ))
+
+  # deleting it takes it off its studies' lists, and nothing is in the way; a study takes only its own list along
+  plan <- edit_service_delete_plan(entity, snap, edit_service_row(entity, snap, "1"))
+  expect_length(plan$blocked, 0)
+  expect_equal(sort(plan$cascade$removed$study_publication), c("1|1", "2|1"))
+  all <- test_snapshot()
+  expect_equal(edit_service_cascade(all, list(study = "1"))$removed$study_publication, "1|1")
+  expect_equal(edit_label(all, "study_publication", all$study_publication[1, ]), "Health habits of adult twins · Adult Health Study")
 })

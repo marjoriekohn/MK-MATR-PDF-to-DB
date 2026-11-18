@@ -7,6 +7,28 @@
 
 begin;
 
+-- ------ A database built before publications ------------------------------------------------------------
+-- A database that keeps its rows is brought up to date by running the scripts from this one on, so the
+-- tables added since it was built are made here, exactly as 1_tables.sql and 2_references.sql make them on
+-- a new database (where these two statements find them there and do nothing).
+create table if not exists public.publication (
+  publication_id bigint primary key default private.random_id('publication', 'publication_id'),
+  title          text   not null constraint publication_title_not_blank check (btrim(title) <> ''),
+  authors        text,
+  journal        text,
+  published_date date,
+  doi            text   constraint publication_doi_unique unique
+                        constraint publication_doi_format check (doi ~ '^10\.[0-9]{4,9}/[^[:space:]]+$' and doi = lower(doi)),
+  url            text   constraint publication_url_format check (url ~ '^https?://[^[:space:]]+$')
+);
+create table if not exists public.study_publication (
+  study_id       bigint not null
+    constraint study_publication_study_id_fkey references public.study (study_id) on delete cascade,
+  publication_id bigint not null
+    constraint study_publication_publication_id_fkey references public.publication (publication_id) on delete cascade,
+  primary key (study_id, publication_id)
+);
+
 -- ------ Uniqueness that ignores case or spaces -------------------------------------------------------
 -- (An index, as a unique constraint can't hold an expression.)
 drop index if exists public.staff_email_unique;
@@ -44,6 +66,7 @@ create unique index measurement_scale_abbreviation_unique      on public.measure
 drop index if exists public.study_registry_id_idx;
 drop index if exists public.study_principal_investigator_id_idx;
 drop index if exists public.study_contact_pi_id_idx;
+drop index if exists public.study_publication_publication_idx;
 drop index if exists public.questionnaire_study_id_idx;
 drop index if exists public.questionnaire_respondent_type_idx;
 drop index if exists public.wave_pdf_sha256_idx;
@@ -51,6 +74,7 @@ drop index if exists public.wave_supplement_sha256_idx;
 drop index if exists public.placement_component_idx;
 drop index if exists public.placement_parent_idx;
 drop index if exists public.placement_depends_on_idx;
+drop index if exists public.wave_question_wave_idx;
 drop index if exists public.wave_question_placement_idx;
 drop index if exists public.variable_placement_idx;
 drop index if exists public.response_option_answer_option_idx;
@@ -69,6 +93,7 @@ drop index if exists public.history_occurred_at_idx;
 create index study_registry_id_idx               on public.study (registry_id);
 create index study_principal_investigator_id_idx on public.study (principal_investigator_id);
 create index study_contact_pi_id_idx             on public.study (contact_principal_investigator_id);
+create index study_publication_publication_idx   on public.study_publication (publication_id);
 create index questionnaire_study_id_idx          on public.questionnaire (study_id);
 create index questionnaire_respondent_type_idx   on public.questionnaire (respondent_type_id);
 create index wave_pdf_sha256_idx                 on public.wave (pdf_sha256);
@@ -76,6 +101,7 @@ create index wave_supplement_sha256_idx          on public.wave (supplement_sha2
 create index placement_component_idx             on public.placement (component_id);
 create index placement_parent_idx                on public.placement (questionnaire_id, parent_placement_id);
 create index placement_depends_on_idx            on public.placement (questionnaire_id, depends_on_placement_id);
+create index wave_question_wave_idx              on public.wave_question (questionnaire_id, wave_id);
 create index wave_question_placement_idx         on public.wave_question (questionnaire_id, placement_id);
 create index variable_placement_idx              on public.variable (questionnaire_id, placement_id);
 create index response_option_answer_option_idx   on public.response_option (answer_option_id);

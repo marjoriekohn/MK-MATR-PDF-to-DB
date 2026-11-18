@@ -109,6 +109,9 @@ join_repeated <- function(draft, joins) {
     numbers <- c(blocks$printed_number[keeper], blocks$printed_number[repeated][kept == keeper])
     numbers <- unique(numbers[!is.na(numbers)])
     if (length(numbers) > 0) blocks$printed_number[keeper] <- paste(numbers, collapse = ", ")
+    # the one question is in the scale either of them was printed with
+    scales <- c(blocks$scale[keeper], blocks$scale[repeated][kept == keeper])
+    if (any(!is.na(scales))) blocks$scale[keeper] <- scales[!is.na(scales)][1]
   }
   follows <- match(blocks$parent_question_id, blocks$id[repeated])
   blocks$parent_question_id[!is.na(follows)] <- joins[repeated][follows[!is.na(follows)]]

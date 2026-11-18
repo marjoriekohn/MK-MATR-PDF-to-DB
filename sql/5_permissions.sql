@@ -9,8 +9,8 @@
 --                         tables.
 --   service_role          the site's server: reads and writes every table and calls the functions. It
 --                         skips Row Level Security, but still needs GRANTs.
--- Supabase grants anon and authenticated everything on new tables and functions in public by default, so
--- this takes all of that away first and then grants only what is meant.
+-- Supabase grants all three everything on new tables and functions in public by default, so this takes all
+-- of that away first and then grants only what is meant: each role can do what it needs and no more.
 
 begin;
 
@@ -18,24 +18,28 @@ begin;
 do $$
 declare
   t text;
+  p text;
 begin
   for t in select c.relname from pg_class c where c.relnamespace = 'public'::regnamespace and c.relkind = 'r' loop
     execute format('alter table public.%I enable row level security', t);
-    execute format('drop policy if exists "Dashboard can read" on public.%I', t);
-    execute format('drop policy if exists "Dashboard can read a wave''s files" on public.%I', t);
-    execute format('drop policy if exists "Staff can read" on public.%I', t);
+  end loop;
+  -- every policy goes, whatever it is called, so the ones below are the only ones
+  for t, p in select tablename, policyname from pg_policies where schemaname = 'public' loop
+    execute format('drop policy %I on public.%I', p, t);
   end loop;
 end;
 $$;
+-- the staff check as it was before it moved to the private schema (4_functions.sql), now that no policy uses it
+drop function if exists public.is_active_staff();
 
--- ------ Nothing for the dashboard roles unless granted below ------------------------------------------
-revoke all on all tables    in schema public from anon, authenticated;
-revoke all on all sequences in schema public from anon, authenticated;
+-- ------ Nothing for any of the three roles unless granted below ---------------------------------------
+revoke all on all tables    in schema public from anon, authenticated, service_role;
+revoke all on all sequences in schema public from anon, authenticated, service_role;
 revoke all on all functions in schema public from public, anon, authenticated;
 revoke all on schema private from public, anon, authenticated;
 revoke all on all functions in schema private from public, anon, authenticated;
-alter default privileges in schema public revoke all on tables    from anon, authenticated;
-alter default privileges in schema public revoke all on sequences from anon, authenticated;
+alter default privileges in schema public revoke all on tables    from anon, authenticated, service_role;
+alter default privileges in schema public revoke all on sequences from anon, authenticated, service_role;
 alter default privileges in schema public revoke execute on functions from anon, authenticated;
 
 -- ------ The public dashboard reads the catalog ---------------------------------------------------------
@@ -43,7 +47,8 @@ do $$
 declare
   t text;
   catalog constant text[] := array[
-    'registry', 'principal_investigator', 'study', 'respondent_type', 'questionnaire', 'wave',
+    'registry', 'principal_investigator', 'study', 'publication', 'study_publication', 'respondent_type',
+    'questionnaire', 'wave',
     'component', 'placement', 'wave_question', 'variable', 'answer_option', 'response_option',
     'tag', 'placement_tag', 'variable_tag', 'response_option_tag', 'measurement_scale', 'question_scale'
   ];
@@ -57,26 +62,36 @@ $$;
 
 -- ...and the PDFs a wave was extracted from, but no others: the bucket is public, so a file is safe from
 -- anyone without its SHA-256 only while nothing lists it. An extraction's PDF stays unlisted until pushed.
-create policy "Dashboard can read a wave's files" on public.pdf_file for select to anon, authenticated
+-- (Someone signed in has one policy of their own on this table, below: a table read through two policies
+-- has both worked out for every row.)
+create policy "Dashboard can read a wave's files" on public.pdf_file for select to anon
   using (exists (select 1 from public.wave w where w.pdf_sha256 = pdf_file.pdf_sha256 or w.supplement_sha256 = pdf_file.pdf_sha256));
 grant select on public.pdf_file to anon, authenticated;
 
 grant execute on function public.upvote_questionnaire(bigint) to anon, authenticated, service_role;
+grant execute on function public.unstar_questionnaire(bigint) to anon, authenticated, service_role;
 
 -- ------ Staff who sign in may read the private tables (the site itself uses service_role) -------------
-revoke all on function public.is_active_staff() from public, anon;
-grant execute on function public.is_active_staff() to authenticated, service_role;
+-- The policies ask private.is_active_staff(), so a signed-in person may use that schema and run that one
+-- function, and nothing else in it. "(select ...)" has it worked out once for a query, not once for each row.
+grant usage on schema private to authenticated;
+grant execute on function private.is_active_staff() to authenticated;
 do $$
 declare
   t text;
 begin
   foreach t in array array['staff', 'extraction', 'history'] loop
     execute format('grant select on public.%I to authenticated', t);
-    execute format('create policy "Staff can read" on public.%I for select to authenticated using (public.is_active_staff())', t);
+    execute format('create policy "Staff can read" on public.%I for select to authenticated using ((select private.is_active_staff()))', t);
   end loop;
 end;
 $$;
-create policy "Staff can read" on public.pdf_file for select to authenticated using (public.is_active_staff());
+-- every PDF for staff; for anyone else signed in, a wave's files, as the dashboard gets
+create policy "Staff can read, others a wave's files" on public.pdf_file for select to authenticated
+  using (
+    (select private.is_active_staff())
+    or exists (select 1 from public.wave w where w.pdf_sha256 = pdf_file.pdf_sha256 or w.supplement_sha256 = pdf_file.pdf_sha256)
+  );
 
 -- ------ The site's server ------------------------------------------------------------------------------
 grant usage on schema private to service_role;

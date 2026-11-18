@@ -20,7 +20,7 @@
 --                               Function calls it, and the dashboard calls that
 --
 -- The Edge Functions are in supabase/functions/. On a new project, before running this:
---   1. deploy them:  supabase functions deploy --project-ref <ref>   (supabase/config.toml turns off the JWT
+--   1. deploy them:  supabase functions deploy --project-ref <ref> --use-api   (supabase/config.toml turns off the JWT
 --      check: the functions check the key themselves)
 --   2. tell the database where the project is, once:
 --        select vault.create_secret('https://<ref>.supabase.co', 'project_url');
@@ -63,6 +63,11 @@ create table if not exists private.question_embedding_calls (
   calls_without_progress integer     not null default 0
 );
 insert into private.question_embedding_calls default values on conflict do nothing;
+
+-- Row Level Security on these two as on every table, with no policy: only the database's own functions,
+-- which run as the tables' owner, read and write them.
+alter table private.question_embedding_stale enable row level security;
+alter table private.question_embedding_calls enable row level security;
 
 -- The token the database sends the embed-questions Edge Function, which checks it against this secret. Made
 -- once per project; nothing outside the database needs to know it.

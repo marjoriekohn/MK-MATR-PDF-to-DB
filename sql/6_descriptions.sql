@@ -9,6 +9,12 @@ begin;
 comment on table public.registry                is 'Outermost container; every study, questionnaire and variable rolls up to one.';
 comment on table public.principal_investigator  is 'A researcher who leads a study or is its contact.';
 comment on table public.study                   is 'One research project run under a registry.';
+comment on table public.publication             is 'A paper, chapter or report that used a study''s data. study_publication says which studies it is about.';
+comment on column public.publication.authors    is 'As the publication lists them, in one line: "Eaves LJ, Silberg JL, Meyer JM".';
+comment on column public.publication.published_date is 'The day it came out; the first of the month, or of the year, when only that is known.';
+comment on column public.publication.doi        is 'Its DOI alone, in lower case ("10.1007/bf01065905"). The link is https://doi.org/ followed by it.';
+comment on column public.publication.url        is 'Where it can be read, for a publication with no DOI: a whole address. With a DOI, the DOI''s link is the one to show.';
+comment on table public.study_publication       is 'That a publication is about a study: one row for each study a publication lists.';
 comment on column public.study.status           is 'Active: the study is ongoing. Ended: all data collections are finished.';
 comment on table public.respondent_type         is 'The population a questionnaire was written for, bounded by age.';
 comment on table public.questionnaire           is 'One form (instrument): what stays true across every wave it was given in.';
@@ -32,7 +38,7 @@ comment on table public.placement_tag           is 'The tags on a question (its 
 comment on table public.variable_tag            is 'The tags on a variable: who its answer is about, when, and what unit its number is in.';
 comment on table public.response_option_tag     is 'The tags on one response option of one variable (a unit or time frame printed by the choice).';
 comment on table public.measurement_scale       is 'A published, validated set of questions scored together.';
-comment on table public.question_scale          is 'A question''s membership and item number in a measurement scale.';
+comment on table public.question_scale          is 'A question''s membership in a measurement scale: its wording is one of the scale''s items.';
 comment on table public.staff                   is 'MATR employee who extracts and edits metadata. Never deleted; marked inactive.';
 comment on table public.extraction              is 'One extraction of a questionnaire: typed by hand (Manual) or read from a PDF by an AI (AI-Powered). A Draft while staff work on it (the questionnaire as JSON); once Pushed, the record of what the AI read and what staff changed (the AI Monitor page).';
 comment on column public.extraction.info        is 'Where it goes: {"registry_id", "study_id", "questionnaire_id", "wave_id"}, each the ID as text, or "" while not picked.';
@@ -50,5 +56,6 @@ comment on function public.empty_questionnaire(bigint, bigint)      is 'Remove e
 comment on function public.empty_study(bigint, bigint)              is 'Empty every questionnaire of a study (the study, questionnaires and waves stay).';
 comment on function public.empty_registry(bigint, bigint)           is 'Empty every questionnaire of a registry (the registry, studies, questionnaires and waves stay).';
 comment on function public.upvote_questionnaire(bigint)             is 'One more upvote for a questionnaire, from the dashboard.';
+comment on function public.unstar_questionnaire(bigint)             is 'One upvote fewer, when a dashboard visitor takes back their star.';
 
 commit;

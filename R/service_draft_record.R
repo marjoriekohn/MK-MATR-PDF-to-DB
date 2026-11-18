@@ -27,7 +27,7 @@
 
 # The fields that are compared, for each table of a draft.
 review_edit_fields <- list(
-  components = c("component_type", "text", "printed_number", "parent_question_id", "subject", "time_frame"),
+  components = c("component_type", "text", "printed_number", "parent_question_id", "subject", "time_frame", "scale"),
   variables = c("variable_type", "label", "subject", "time_frame", "answer_data_type", "unit"),
   response_options = "answer_option"
 )

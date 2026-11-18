@@ -34,6 +34,18 @@ database_tables <- list(
       description = "text", methods = "text", acknowledgements = "text"
     )
   ),
+  # A paper that used a study's data, and (study_publication) each study it is about.
+  publication = list(
+    key = "publication_id", order_by = "title",
+    columns = c(
+      publication_id = "id", title = "text", authors = "text", journal = "text",
+      published_date = "date", doi = "text", url = "text"
+    )
+  ),
+  study_publication = list(
+    key = c("study_id", "publication_id"), order_by = c("study_id", "publication_id"),
+    columns = c(study_id = "id", publication_id = "id")
+  ),
   respondent_type = list(
     key = "respondent_type_id", order_by = c("minimum_age", "name"),
     columns = c(
@@ -125,7 +137,7 @@ database_tables <- list(
   ),
   question_scale = list(
     key = c("scale_id", "component_id"), order_by = c("scale_id", "component_id"),
-    columns = c(scale_id = "id", component_id = "id", item_number = "text")
+    columns = c(scale_id = "id", component_id = "id")
   )
 )
 

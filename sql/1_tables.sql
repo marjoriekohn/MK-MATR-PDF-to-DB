@@ -20,8 +20,8 @@
 -- WHAT THIS SCRIPT DOES FIRST: it removes the schemas public and private with everything in them, so
 -- the build starts clean. EVERY ROW IS LOST, the extracted questionnaires included. Sign-in accounts
 -- (Authentication > Users) and the PDFs in Storage are not touched. To protect a database in use, it
--- refuses to run while a questionnaire has content (placements) unless the next line is uncommented:
-set matr.start_over = 'yes';
+-- refuses to run while a questionnaire has content (placements) unless the line under "begin;" below is
+-- uncommented. It is kept commented here, so running this script by mistake changes nothing.
 --
 -- The data model, in one paragraph. A REGISTRY holds STUDIES; a study holds QUESTIONNAIRES (forms); a
 -- questionnaire was given in WAVES (rounds of data collection). What a questionnaire prints is kept once
@@ -40,6 +40,10 @@ set matr.start_over = 'yes';
 
 begin;
 
+-- To start over a database that holds questionnaire content, take the two dashes off the next line. It
+-- holds for this run alone (set local), so a later run is protected again.
+-- set local matr.start_over = 'yes';
+
 do $$
 declare
   t        text;
@@ -50,7 +54,7 @@ begin
     if to_regclass('public.' || t) is not null then
       execute format('select exists (select 1 from public.%I)', t) into has_rows;
       if has_rows and coalesce(current_setting('matr.start_over', true), '') <> 'yes' then
-        raise exception 'Refusing to start over: this database holds questionnaire content (%). If you mean to lose it, uncomment "set matr.start_over" at the top of 1_tables.sql.', t;
+        raise exception 'Refusing to start over: this database holds questionnaire content (%). If you mean to lose it, uncomment "set local matr.start_over" under "begin;" in 1_tables.sql.', t;
       end if;
     end if;
   end loop;
@@ -59,15 +63,14 @@ $$;
 drop schema if exists private cascade;
 drop schema if exists public cascade;
 
--- public as a new Supabase project has it (5_permissions.sql takes back what the dashboard roles mustn't have)
+-- public, reachable through the REST API. A new Supabase project gives the dashboard's roles (anon,
+-- authenticated) everything on each new table and function in it; here they get nothing, so no table is
+-- open to them between this script and 5_permissions.sql, which grants what each role is meant to have.
 create schema public;
 grant usage on schema public to postgres, anon, authenticated, service_role;
-grant all privileges on all tables    in schema public to postgres, anon, authenticated, service_role;
-grant all privileges on all functions in schema public to postgres, anon, authenticated, service_role;
-grant all privileges on all sequences in schema public to postgres, anon, authenticated, service_role;
-alter default privileges in schema public grant all on tables    to postgres, anon, authenticated, service_role;
-alter default privileges in schema public grant all on functions to postgres, anon, authenticated, service_role;
-alter default privileges in schema public grant all on sequences to postgres, anon, authenticated, service_role;
+alter default privileges in schema public grant all on tables    to postgres, service_role;
+alter default privileges in schema public grant all on functions to postgres, service_role;
+alter default privileges in schema public grant all on sequences to postgres, service_role;
 
 -- Helpers the tables' defaults and checks use. The REST API doesn't expose this schema.
 create schema private;
@@ -155,6 +158,33 @@ create table public.study (
   description       text,
   methods           text,
   acknowledgements  text
+);
+
+-- A paper, chapter or report that used a study's data. One publication can be about several studies, and a
+-- study has many, so which study a publication is about is a table of its own (study_publication).
+--   authors         as the publication lists them, in one line ("Eaves LJ, Silberg JL, Meyer JM")
+--   journal         the journal, or the book or series it is in
+--   published_date  the day it came out; the first of the month, or of the year, when only that is known
+--   doi             its DOI alone, in lower case ("10.1007/bf01065905"), not as a link: the link is
+--                   https://doi.org/ followed by it. One publication for each DOI.
+--   url             where it can be read, for a publication with no DOI (an older paper, a report, a chapter):
+--                   a whole address, starting http:// or https://. With a DOI, the DOI's link is the one shown.
+create table public.publication (
+  publication_id bigint primary key default private.random_id('publication', 'publication_id'),
+  title          text   not null constraint publication_title_not_blank check (btrim(title) <> ''),
+  authors        text,
+  journal        text,
+  published_date date,
+  doi            text   constraint publication_doi_unique unique
+                        constraint publication_doi_format check (doi ~ '^10\.[0-9]{4,9}/[^[:space:]]+$' and doi = lower(doi)),
+  url            text   constraint publication_url_format check (url ~ '^https?://[^[:space:]]+$')
+);
+
+-- That a publication is about a study.
+create table public.study_publication (
+  study_id       bigint not null,
+  publication_id bigint not null,
+  primary key (study_id, publication_id)
 );
 
 -- ------ Questionnaires and waves ---------------------------------------------------------------------
@@ -359,13 +389,14 @@ create table public.measurement_scale (
   citation     text
 );
 
--- A question's membership and item number in a scale (text: published items can be numbered 56a, 56b).
+-- A question's membership in a scale: the question's wording (its component) is one of the scale's items,
+-- wherever it is printed. The items have no order here. A push adds a row for a question whose extraction names
+-- its scale (the scale printed after the question's words); staff add and remove them on Make an edit; and an
+-- item goes with its question once no questionnaire prints it any more (private.forget_components()).
 create table public.question_scale (
   scale_id     bigint not null,
   component_id bigint not null,
-  item_number  text   not null constraint question_scale_item_number_not_blank check (btrim(item_number) <> ''),
-  primary key (scale_id, component_id),
-  constraint question_scale_item_number_unique unique (scale_id, item_number)
+  primary key (scale_id, component_id)
 );
 
 
@@ -374,7 +405,7 @@ create table public.question_scale (
 -- =====================================================================================================
 
 -- MATR employee who extracts and edits metadata. Never deleted; marked inactive. The database knows a
--- signed-in person as staff by the email they sign in with (public.is_active_staff(), 4_functions.sql).
+-- signed-in person as staff by the email they sign in with (private.is_active_staff(), 4_functions.sql).
 create table public.staff (
   staff_id bigint  primary key default private.random_id('staff', 'staff_id'),
   name     text    not null constraint staff_name_not_blank check (btrim(name) <> ''),
@@ -453,5 +484,18 @@ create table public.history (
   summary     text        not null,
   details     jsonb
 );
+
+-- ------ Row Level Security from the start -------------------------------------------------------------
+-- With it on and no policy, the dashboard's roles see no rows of a table, whatever they are granted:
+-- 5_permissions.sql adds the policies.
+do $$
+declare
+  t text;
+begin
+  for t in select c.relname from pg_class c where c.relnamespace = 'public'::regnamespace and c.relkind = 'r' loop
+    execute format('alter table public.%I enable row level security', t);
+  end loop;
+end;
+$$;
 
 commit;

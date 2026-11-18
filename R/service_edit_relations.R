@@ -11,7 +11,7 @@
 #   block   they're in the way: the database refuses the delete until they're dealt with (a component some
 #           questionnaire prints, a tag or answer choice in use, a registry with studies)
 # A component no placement names any more is forgotten by the database itself when a change ends
-# (private.forget_components()), unless a measurement scale names it; the preview says so.
+# (private.forget_components()), with the scale items that named it; the preview says so.
 #
 # A row's identity is its key columns joined with "|" (edit_key()).
 
@@ -43,6 +43,9 @@ edit_relations <- list(
     "clear",
     clears = "contact investigator"
   ),
+  # a publication's place in a study's list goes with the study, and with the publication
+  relation("study_publication", "study", c(study_id = "study_id"), "remove"),
+  relation("study_publication", "publication", c(publication_id = "publication_id"), "remove"),
   relation(
     "questionnaire", "study", c(study_id = "study_id"), "block",
     why = "A study that still holds questionnaires can't be deleted.",
@@ -111,8 +114,8 @@ edit_relations <- list(
 # children first.
 edit_delete_order <- c(
   "response_option_tag", "variable_tag", "placement_tag", "response_option", "variable", "wave_question",
-  "question_scale", "placement", "component", "answer_option", "tag", "wave", "questionnaire", "study", "registry",
-  "principal_investigator", "respondent_type", "measurement_scale", "pdf_file"
+  "question_scale", "placement", "component", "answer_option", "tag", "wave", "questionnaire", "study_publication",
+  "study", "publication", "registry", "principal_investigator", "respondent_type", "measurement_scale", "pdf_file"
 )
 
 # ------ Rows and their identity -------------------------------------------------------
@@ -224,8 +227,8 @@ edit_service_cascade <- function(snap, start) {
   )
 }
 
-# The components left with no placement once `removed` goes, which the database forgets when the change ends
-# (unless a measurement scale names them). Not the components being deleted themselves.
+# The components left with no placement once `removed` goes, which the database forgets when the change ends,
+# with the scale items that name them. Not the components being deleted themselves.
 # Returns: Their keys.
 edit_forgotten_components <- function(snap, removed) {
   placed <- snap$placement
@@ -235,9 +238,7 @@ edit_forgotten_components <- function(snap, removed) {
   going <- edit_key(placed, "placement_id") %in% removed$placement
   lost <- unique(placed$component_id[going])
   still <- unique(placed$component_id[!going])
-  scaled <- if (!is.null(snap$question_scale)) snap$question_scale$component_id else numeric()
-  orphans <- setdiff(lost, c(still, scaled))
-  setdiff(key_text(orphans), removed$component)
+  setdiff(key_text(setdiff(lost, still)), removed$component)
 }
 
 # Rows in the way: pointing at something that's going, but staying.
@@ -269,6 +270,8 @@ edit_nouns <- list(
   registry = c("registry", "registries"),
   principal_investigator = c("investigator", "investigators"),
   study = c("study", "studies"),
+  publication = c("publication", "publications"),
+  study_publication = c("publication in a study's list", "publications in studies' lists"),
   respondent_type = c("respondent type", "respondent types"),
   questionnaire = c("questionnaire", "questionnaires"),
   wave = c("wave", "waves"),
@@ -297,7 +300,8 @@ plural_noun <- function(n, table) {
 
 # The order lists name kinds of rows in: the outermost first.
 edit_display_order <- c(
-  "registry", "study", "questionnaire", "wave", "placement", "wave_question", "variable", "response_option",
+  "registry", "study", "publication", "study_publication", "questionnaire", "wave", "placement", "wave_question", "variable",
+  "response_option",
   "placement_tag", "variable_tag", "response_option_tag", "question_scale", "component", "measurement_scale",
   "answer_option", "tag", "principal_investigator", "respondent_type", "pdf_file"
 )
@@ -305,6 +309,7 @@ edit_display_order <- c(
 # Naming a row can take other tables (a wave's name starts with its questionnaire's), so reading rows to name
 # means reading these too.
 edit_label_needs <- list(
+  study_publication = c("study", "publication"),
   wave = "questionnaire",
   placement = c("questionnaire", "component"),
   wave_question = c("questionnaire", "wave", "placement", "component"),
@@ -321,7 +326,7 @@ edit_label_needs <- list(
 # Returns: Table names.
 edit_tables_to_read <- function(tables) {
   reached <- unique(unlist(lapply(tables, edit_descendant_tables)))
-  # a placement that goes may leave a component nothing prints; whether a scale keeps it
+  # a placement that goes may leave a component nothing prints, which goes too, with its scale items
   if ("placement" %in% reached) reached <- unique(c(reached, "component", "question_scale"))
   named_by <- unique(unlist(edit_label_needs[reached]))
   unique(c(reached, named_by, unlist(edit_label_needs[named_by])))
@@ -386,6 +391,13 @@ edit_labels <- list(
   registry = function(snap, rows) rows$name,
   principal_investigator = function(snap, rows) rows$name,
   study = function(snap, rows) rows$name,
+  publication = function(snap, rows) rows$title,
+  study_publication = function(snap, rows) {
+    paste0(
+      edit_lookup(snap, "publication", "publication_id", rows$publication_id, "title"), " · ",
+      edit_lookup(snap, "study", "study_id", rows$study_id, "name")
+    )
+  },
   respondent_type = function(snap, rows) rows$name,
   questionnaire = function(snap, rows) name_with_abbreviation(rows$name, rows$abbreviation),
   wave = function(snap, rows) paste(edit_questionnaire_short(snap, rows$questionnaire_id), rows$name),
@@ -426,7 +438,7 @@ edit_labels <- list(
   measurement_scale = function(snap, rows) rows$name,
   question_scale = function(snap, rows) {
     scale <- edit_lookup(snap, "measurement_scale", "scale_id", rows$scale_id, "name")
-    paste0(ifelse(is.na(scale), "Scale", scale), " item ", rows$item_number, " · ", edit_component_text(snap, rows$component_id))
+    paste0(ifelse(is.na(scale), "Scale", scale), " item · ", edit_component_text(snap, rows$component_id))
   }
 )
 
@@ -456,7 +468,7 @@ edit_service_reach <- function(snap, cascade, examples = 5) {
     rows <- edit_rows(snap, "component", cascade$forgotten)
     lines <- c(lines, list(list(
       table = "component", n = nrow(rows),
-      text = paste(plural_noun(nrow(rows), "component"), "no questionnaire prints any more (forgotten by the database)"),
+      text = paste(plural_noun(nrow(rows), "component"), "no questionnaire prints any more (forgotten by the database, with any scale items)"),
       examples = utils::head(edit_label(snap, "component", rows), examples), more = max(0, nrow(rows) - examples)
     )))
   }

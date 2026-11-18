@@ -10,7 +10,8 @@ answer_data_types <- c("NUMBER", "TEXT", "DATE", "TIME")
 
 # Returns: A list: `component_types`, `subjects` (who a variable can be about besides the respondent,
 #   who is a blank), `time_frames` (when a variable can be about), `units` (what an open-ended number is
-#   in), `answer_options` and `answer_data_types` (character vectors), and `problems` (sentences).
+#   in), `scales` (the measurement scales' abbreviations, each named by the scale's full name),
+#   `answer_options` and `answer_data_types` (character vectors), and `problems` (sentences).
 lookup_service_get_all <- function(connection) {
   problems <- character()
   rows_of <- function(read, label) {
@@ -23,12 +24,14 @@ lookup_service_get_all <- function(connection) {
   of_kind <- function(kind) as.character(tags$name[tags$kind %in% kind])
   subjects <- of_kind("subject")
   choices <- rows_of(lookup_model_get_answer_options, "answer options")
+  scales <- rows_of(lookup_model_get_scales, "measurement scales")
   list(
     component_types = edit_component_kinds,
     # the respondent is a blank, not a pick
     subjects = subjects[!is.na(normal_subject(subjects))],
     time_frames = of_kind("time frame"),
     units = of_kind("unit"),
+    scales = stats::setNames(as.character(scales$abbreviation), as.character(scales$name)),
     answer_options = as.character(choices$standardized_label),
     answer_data_types = answer_data_types,
     problems = problems

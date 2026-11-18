@@ -738,7 +738,10 @@ test_that("the picked block's details are drawn: its words, its number and what 
     expect_match(html, 'class="variable-cards"')
     expect_lt(regexpr('data-field="printed_number"', html), regexpr('data-field="parent_question_id"', html))
     expect_lt(regexpr("Depends on", html), regexpr("<h3>Variables</h3>", html))
-    expect_false(grepl("Skip Logic|skip|Categories|Measurement Scale|Coming soon", html)) # none is on this page
+    expect_false(grepl("Skip Logic|skip|Categories|Coming soon", html)) # none is on this page
+    # its measurement scale is a field of its own, right beside its tags
+    expect_lt(regexpr("Measurement Scale", html, fixed = TRUE), regexpr("Question Tags", html, fixed = TRUE))
+    expect_match(html, 'data-field="scale"', fixed = TRUE)
     expect_match(html, 'data-action="check" disabled data-id="c3"') # it has no MATR ID yet
     # a question's variables are in its details: its arrow picks it
     page$selected("c5")
@@ -778,9 +781,16 @@ test_that("Depends on lists the questions printed before it; picking one links t
     expect_match(html, 'aria-label="About Depends on"', fixed = TRUE)
     expect_match(html, "<bslib-tooltip[^>]*>.*The earlier question this one only makes sense after")
     expect_false(grepl('class="detail-note"', html))
-    # the question's own tags are beside its number, before Depends on
-    places <- vapply(c('class="detail-row', 'data-field="printed_number"', "Question Tags", 'class="tag-box"', "Depends on"), function(what) regexpr(what, html, fixed = TRUE)[[1]], numeric(1))
+    # the question's measurement scale and its own tags are beside its number, before Depends on
+    in_order <- c('class="detail-row', 'data-field="printed_number"', "Measurement Scale", 'data-field="scale"', "Question Tags", 'class="tag-box"', "Depends on")
+    places <- vapply(in_order, function(what) regexpr(what, html, fixed = TRUE)[[1]], numeric(1))
     expect_true(all(places > 0) && !is.unsorted(places))
+    # the scale is typed, or picked from the database's scales, each offered with what it is short for
+    expect_match(html, '<input[^>]*list="[^"]*scales"[^>]*data-field="scale"|<input[^>]*data-field="scale"[^>]*list="[^"]*scales"')
+    session$setInputs(edit = list(table = "components", id = "c4", field = "scale", value = " (SMS) "))
+    expect_equal(of("c4")$scale, "SMS")
+    session$setInputs(edit = list(table = "components", id = "c4", field = "scale", value = ""))
+    expect_true(is.na(of("c4")$scale))
 
     session$setInputs(edit = list(table = "components", id = "c4", field = "parent_question_id", value = "c3"))
     expect_equal(of("c4")$parent_question_id, "c3")

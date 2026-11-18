@@ -67,6 +67,7 @@ where t.name ilike 'ZZTEST%'
   and not exists (select 1 from public.questionnaire q where q.respondent_type_id = t.respondent_type_id);
 
 -- ------ 3. The tests' vocabulary and scales, where nothing kept points at them -----------------------------------
+delete from public.publication where title ilike 'ZZTEST%';
 delete from public.question_scale where scale_id in (select scale_id from public.measurement_scale where name ilike 'ZZTEST%');
 delete from public.measurement_scale where name ilike 'ZZTEST%';
 delete from public.tag t
@@ -77,10 +78,12 @@ where t.name ilike 'ZZTEST%'
 delete from public.answer_option a
 where a.standardized_label ilike 'ZZTEST%'
   and not exists (select 1 from public.response_option x where x.answer_option_id = a.answer_option_id);
+delete from public.question_scale k using public.component c
+where c.component_id = k.component_id and c.text ilike 'ZZTEST%'
+  and not exists (select 1 from public.placement x where x.component_id = c.component_id);
 delete from public.component c
 where c.text ilike 'ZZTEST%'
-  and not exists (select 1 from public.placement x where x.component_id = c.component_id)
-  and not exists (select 1 from public.question_scale x where x.component_id = c.component_id);
+  and not exists (select 1 from public.placement x where x.component_id = c.component_id);
 
 -- ------ 4. What is left owned by nothing -------------------------------------------------------------------------
 select private.forget_components(array(select component_id from public.component));
@@ -107,5 +110,6 @@ union all select 'answer_option', count(*) from public.answer_option
 union all select 'response_option', count(*) from public.response_option
 union all select 'tag', count(*) from public.tag
 union all select 'measurement_scale', count(*) from public.measurement_scale
+union all select 'publication', count(*) from public.publication
 union all select 'extraction', count(*) from public.extraction
 union all select 'history', count(*) from public.history;

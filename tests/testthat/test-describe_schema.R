@@ -114,7 +114,10 @@ test_that("the functions the database offers are listed with their arguments", {
 test_that("a table the groups expect and the database doesn't have is warned about", {
   writer <- schema_writer()
   httr2::local_mocked_responses(function(req) httr2::response_json(body = small_description()))
-  expect_warning(writer$describe(mocked_connection), "Not in the database: principal_investigator, respondent_type")
+  expect_warning(
+    writer$describe(mocked_connection),
+    "Not in the database: principal_investigator, publication, study_publication, respondent_type"
+  )
 })
 
 # ------ With the database's catalog (SUPABASE_ACCESS_TOKEN) ----------------------------------

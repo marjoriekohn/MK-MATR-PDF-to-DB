@@ -189,10 +189,15 @@ begin
     and not exists (select 1 from public.response_option x where x.answer_option_id = a.answer_option_id);
   get diagnostics v_options = row_count;
 
+  -- a marked publication goes with its place in any study's list
+  delete from public.publication where title ilike p_marker || '%';
+
+  delete from public.question_scale k using public.component c
+  where c.component_id = k.component_id and c.text ilike p_marker || '%'
+    and not exists (select 1 from public.placement x where x.component_id = c.component_id);
   delete from public.component c
   where c.text ilike p_marker || '%'
-    and not exists (select 1 from public.placement x where x.component_id = c.component_id)
-    and not exists (select 1 from public.question_scale x where x.component_id = c.component_id);
+    and not exists (select 1 from public.placement x where x.component_id = c.component_id);
   get diagnostics v_components = row_count;
 
   return jsonb_build_object(

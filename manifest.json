@@ -2526,10 +2526,10 @@
       "checksum": "77391b0a11a0a2acf57f00d85b0f17e0"
     },
     "prompts/assign_codes.md": {
-      "checksum": "876946b728e3cdb8256f6418f2b3b792"
+      "checksum": "d6630e81e7866171e90ae4596330aee9"
     },
     "prompts/extraction.md": {
-      "checksum": "4cb56e515c39bceb5efc99d2658c3282"
+      "checksum": "82e744896a9bf75a3ee819d30766ce91"
     },
     "R/10_home_server.R": {
       "checksum": "5bd14c66f7ee075f3b4fa76c2b1cd2c3"
@@ -2550,10 +2550,10 @@
       "checksum": "f4edddaf2aa62b379913e62719b86391"
     },
     "R/22_extraction_ai_server.R": {
-      "checksum": "d386e77d53f902919592e0e5f6787317"
+      "checksum": "7b6392ba608895c880c896827e308c68"
     },
     "R/22_extraction_ai_ui.R": {
-      "checksum": "cd3d4956592b54da47b913b3684ae642"
+      "checksum": "26ca4853faffcbdf2bd496c217c2e2b8"
     },
     "R/23_extraction_manual_server.R": {
       "checksum": "45aaa74d31f4550af1b6e3f305325598"
@@ -2574,28 +2574,28 @@
       "checksum": "30a7688498f52e326a12c7b0b9695f26"
     },
     "R/31_edit_extraction_server.R": {
-      "checksum": "da02a8b11be020b5c2de9e10120ce3bc"
+      "checksum": "b73ee62d8178029af0e9e5d66368ddd4"
     },
     "R/31_edit_extraction_ui.R": {
-      "checksum": "4e4e57923e583fc9d43c423474e6548a"
+      "checksum": "1a98e7f5773b48b43e516790b740b6c0"
     },
     "R/32_edit_extraction_outline_server.R": {
       "checksum": "935a71558f19f23ec1dce916df98cd2d"
     },
     "R/32_edit_extraction_outline_ui.R": {
-      "checksum": "564baedc4e0373a60f0bc343d8871d18"
+      "checksum": "a9ddb9331d8bc058f1ba3d850c96efe5"
     },
     "R/33_variable_editor_server.R": {
-      "checksum": "bc4136f58ee8f53d2f6b91a7599fd523"
+      "checksum": "d19db7185a7a5ff8783e3162da61711d"
     },
     "R/33_variable_editor_ui.R": {
-      "checksum": "4e54d45063f6e18b18213f8ea7703487"
+      "checksum": "8b03c2f4f322e7782da32e8ca37d5165"
     },
     "R/40_make_edit_server.R": {
-      "checksum": "4775c355e553445e4f403b323051558d"
+      "checksum": "9dacec4fbaf2c67b25729312d7ea9155"
     },
     "R/40_make_edit_ui.R": {
-      "checksum": "c273ad9f62cb6f8addf61d54b789968f"
+      "checksum": "9c9c59dd224c3ff1f486254af80283b1"
     },
     "R/42_edit_change_server.R": {
       "checksum": "38589f635641fb46499f937c21fa95e0"
@@ -2619,25 +2619,25 @@
       "checksum": "d481fbe4d35e6675abf5607c45ddb542"
     },
     "R/helpers_edit.R": {
-      "checksum": "ae320b08cac3347fd734cfb0bf113ed1"
+      "checksum": "6c8bbc5b274e91ebd3c13c039770457b"
     },
     "R/helpers_format.R": {
-      "checksum": "4f32e9fdcb5aeca070b55e0205d1a8e7"
+      "checksum": "b2ad0b32861f06c6c1ee81fe35cebff2"
     },
     "R/helpers_icons.R": {
-      "checksum": "b3131a556f525287132e6b56abf8718b"
+      "checksum": "a8cd9d4dc3aa7cf533ce760ab43abf0e"
     },
     "R/helpers_layout.R": {
-      "checksum": "c75838d85aad06b6e930bb84459db255"
+      "checksum": "41b36d90fdd721fcd914eea81c6e6688"
     },
     "R/helpers_login.R": {
       "checksum": "9384ffb28524ee1cae693765846e7c45"
     },
     "R/helpers_questionnaire.R": {
-      "checksum": "8c7c94788a5562afe69f50a0261954f6"
+      "checksum": "4f683efb38ac61b13f6ae95e653580a4"
     },
     "R/helpers_review.R": {
-      "checksum": "4fc78ba2848c473cc884b4f96ca563bc"
+      "checksum": "df98acee5a79781221931a8d1365c74b"
     },
     "R/model_auth.R": {
       "checksum": "42254f29186a9d874089390a496dc7f3"
@@ -2649,7 +2649,7 @@
       "checksum": "f9f7280973d6dec658c961a5ebd1e42b"
     },
     "R/model_extraction.R": {
-      "checksum": "5ced5325097dd9021f5797de198e468a"
+      "checksum": "d4dc494bff0597d9cc2c1a773ca2ae3a"
     },
     "R/model_gemini.R": {
       "checksum": "a35efe74a2e859eb5b2f604c055452f9"
@@ -2658,13 +2658,13 @@
       "checksum": "194a88de20141c246ab69d28681d1cf0"
     },
     "R/model_lookup.R": {
-      "checksum": "6abf0e413e627267c4bdaaf33c29097a"
+      "checksum": "65ecc9cfacdb5d90ade66c7dc49ea317"
     },
     "R/model_monitor.R": {
       "checksum": "aa60fbdbea5941ee8fc13156c9267b93"
     },
     "R/model_questionnaire.R": {
-      "checksum": "41dd84ae051cadb884e102f1fc028004"
+      "checksum": "91e6f6741148c88a21fa52f4c51ecf08"
     },
     "R/model_reading.R": {
       "checksum": "c2604e6ff4bfb4f05f3dd05f7da71fe9"
@@ -2676,25 +2676,28 @@
       "checksum": "2e924e26272eb9e5c8299deb7a169ffd"
     },
     "R/model_table.R": {
-      "checksum": "0a45e9f93b8cf143d65c4a4acfcbce11"
+      "checksum": "ea603213bcde39229cfa8b559651bbea"
     },
     "R/service_change.R": {
       "checksum": "f5e697f6635a91a05be1a0f15bc324bf"
     },
     "R/service_draft_checks.R": {
-      "checksum": "7103a52fdafa3c11e1246a27290627b0"
+      "checksum": "9e033eb93721d4a2f23757fd72cacaa4"
     },
     "R/service_draft_edit.R": {
-      "checksum": "19a62cffade31f6a1f738f91d17d5782"
+      "checksum": "e447262f8da3cfdb3a608b5cb5f9e45e"
     },
     "R/service_draft_record.R": {
-      "checksum": "749f9ff1d184e9d84d7c7bb754303b79"
+      "checksum": "a04315220977228120b1b4efbcdfab24"
+    },
+    "R/service_draft_repeats.R": {
+      "checksum": "e4af962a632fc3248403c046bbb07fe8"
     },
     "R/service_draft_row.R": {
       "checksum": "6da5f0d3c00711a347d32814ef8d7021"
     },
     "R/service_draft.R": {
-      "checksum": "1f26f91fe48b162cddf28c5ece62be0b"
+      "checksum": "0748c10ed7b1c769af156bfe735d0615"
     },
     "R/service_edit_entities_answers.R": {
       "checksum": "7dd4b8257d5ad8db80b9f5bae999d507"
@@ -2703,67 +2706,64 @@
       "checksum": "264ecd1f637d76d7f358c09881cb8a53"
     },
     "R/service_edit_entities_lists.R": {
-      "checksum": "62905e39a649d732debfaabd6540b782"
+      "checksum": "677430c9a56840a206aed6c9c98f0266"
     },
     "R/service_edit_entities_pdfs.R": {
       "checksum": "44f2e7130d13b857915b1f27f6349917"
     },
     "R/service_edit_entities_placed.R": {
-      "checksum": "5a3525ed6ee7164fcae2d32e38823fdd"
+      "checksum": "df1eb40af958929e87c490a6fec4bf5b"
     },
     "R/service_edit_entities_questionnaires.R": {
-      "checksum": "af1668fe4a33ea7493208630baeb4771"
+      "checksum": "b411ae6ffbab50a11febdb66e2e8d7bc"
     },
     "R/service_edit_entities_studies.R": {
-      "checksum": "a6d1c98bfcd2deaaa173a3d112a6fa1c"
+      "checksum": "cbb064a99a81a72486f388c6eb6075f9"
     },
     "R/service_edit_entities.R": {
       "checksum": "800a7218c8a4b2a1e5067328fcbdfa2e"
     },
     "R/service_edit_kinds.R": {
-      "checksum": "6b4e210d488b2f470a0f20bd74cdd9cd"
+      "checksum": "726ed065a60cbe06ee542b5c118aeb78"
     },
     "R/service_edit_placement.R": {
-      "checksum": "25d17cd795e42684ff7a8a9dc9ba437d"
+      "checksum": "5e1d4a097d80072f1449506cec679f91"
     },
     "R/service_edit_question_add.R": {
-      "checksum": "9445abfa3a4c0db8333870e5beaaafaa"
+      "checksum": "ecc97b25e5fe0c5863aca03cfa57dac1"
     },
     "R/service_edit_quick.R": {
       "checksum": "da2c2bf3111c97866e9257e6eac1597b"
     },
     "R/service_edit_relations.R": {
-      "checksum": "f658f99e569868bdb6f6339bffd0da45"
+      "checksum": "22316199556b4cbd76a4147d929fc1ad"
     },
     "R/service_edit.R": {
-      "checksum": "f271ebb8b3a2168f5fe1c7cfd7527516"
+      "checksum": "0306b4f4cf7963138fe632336f169ebc"
     },
     "R/service_extraction_push.R": {
-      "checksum": "c03099fc418a111e4a28c1c018f0fc20"
+      "checksum": "b3bee9bcc4d815cda0e4c5be701f933a"
     },
     "R/service_extraction.R": {
-      "checksum": "6836737e094327ad745d2ffc10ea50db"
+      "checksum": "ee419f8827c36d1a9dc30b5b66116d4c"
     },
     "R/service_history.R": {
-      "checksum": "ea1ec8c9670197fa094d687185521d1c"
+      "checksum": "3cc67de1dde9805386b32dc756a1fb64"
     },
     "R/service_home.R": {
       "checksum": "06969e695591b655949f58f53cf91d97"
     },
     "R/service_lookup.R": {
-      "checksum": "4ebca77250e101263e74399239a958e4"
+      "checksum": "80eba764a8caf0259ea0f6ee7526a0b2"
     },
     "R/service_monitor.R": {
-      "checksum": "cd7f5df9668ab6bf50250c3bc13f1bd2"
-    },
-    "R/service_normalize.R": {
-      "checksum": "09649af87098681c4dc6bcdba1637b46"
+      "checksum": "87fe0e1f26a9764bf8f1b0ad6dc0b95f"
     },
     "R/service_questionnaire.R": {
       "checksum": "35a033b3bb050306c98373eb7cae8a8b"
     },
     "R/service_reading.R": {
-      "checksum": "4fd5952b7dd4384347b98d0ab7bc732f"
+      "checksum": "2a2f2e24eacb8941aaf40e4e9ac8d806"
     },
     "R/service_staff.R": {
       "checksum": "6d73f7e319f30181f1ac62c0bab95ae2"
@@ -2772,7 +2772,7 @@
       "checksum": "42263eb6a892ea4545d9f6eadf276d6d"
     },
     "server.R": {
-      "checksum": "3c55112e75f8cff2f1cca88070fb8ed2"
+      "checksum": "5aee179809c0f1d62dfe4e7561eab350"
     },
     "ui.R": {
       "checksum": "2c4b695aebcb9317e206659c67cef63a"
@@ -2835,7 +2835,7 @@
       "checksum": "6219fbf92b900150002d7f2c46755dbd"
     },
     "www/sass/components/_outline.scss": {
-      "checksum": "928205d365302305eaba4012fa0ad71f"
+      "checksum": "5f702627c7ce89ad41e43f6a34021089"
     },
     "www/sass/components/_pick-boxes.scss": {
       "checksum": "06c068e230b27db535d93a5af00cd8b7"
@@ -2856,7 +2856,7 @@
       "checksum": "4a1dd1f57708c9a92e62364283ede996"
     },
     "www/sass/components/_variable-editor.scss": {
-      "checksum": "d6d331c02219d825aa659a18e803b377"
+      "checksum": "0b16b85bdd6fd036e1ce7a43f883576b"
     },
     "www/sass/defaults.scss": {
       "checksum": "ba3995463d38e0fbd98b747bbb7ea983"
@@ -2865,13 +2865,13 @@
       "checksum": "40e3489b278b62d682454757b4ae10d8"
     },
     "www/sass/layout/_edit_extraction.scss": {
-      "checksum": "f94301970e8253961659d15753b59bb6"
+      "checksum": "7605aa813e710f8b8c90f25fab9c6cf5"
     },
     "www/sass/layout/_edit.scss": {
       "checksum": "3c6b3839de18b09daa29211c8d381ad1"
     },
     "www/sass/layout/_extraction.scss": {
-      "checksum": "af69a4e030aecffd353eafbfe1cf4d80"
+      "checksum": "194f021382df8ce974fd00ce332a6a7e"
     },
     "www/sass/layout/_footer.scss": {
       "checksum": "0da4ac381672904dca0f4d0c1fdf299b"
@@ -2880,7 +2880,7 @@
       "checksum": "1a1d6653b1ececdcd9fc46059f348c2b"
     },
     "www/sass/layout/_history.scss": {
-      "checksum": "86b1114ee3c8e56905c9df55e0219cfd"
+      "checksum": "48704b668ad2ad50715353f06640cd69"
     },
     "www/sass/layout/_home.scss": {
       "checksum": "4aad85d5a99494f9ffc87d7868d82461"
