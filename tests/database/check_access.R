@@ -11,9 +11,9 @@
 # It exits with an error if
 # - the secret key can't do all four on a table that exists, or can't call a function the site calls;
 # - the publishable key can read staff, extraction or history (they must stay hidden from the dashboard), can't
-#   read a catalog table, reads a pdf_file row no wave names (an extraction's PDF stays unlisted until pushed),
-#   can call push_extraction, apply_change or empty_* (they change the catalog), or can't call
-#   upvote_questionnaire;
+#   read a catalog table, reads a pdf_file row no shown wave names (an extraction's PDF stays unlisted until
+#   pushed), reads a study, questionnaire or wave staff hid, can call push_extraction, apply_change or empty_*
+#   (they change the catalog), or can't call upvote_questionnaire;
 # - the database has a table this script doesn't list, so a new table can't go unchecked.
 
 if (file.exists(".env")) readRenviron(".env")
@@ -116,10 +116,17 @@ listed <- function(connection) {
   rows <- database_rows(database_perform(database_request(connection, "pdf_file") |> httr2::req_url_query(select = "pdf_sha256")))
   sort(vapply(rows, function(row) row$pdf_sha256, character(1)))
 }
-waves <- database_rows(database_perform(database_request(secret, "wave") |> httr2::req_url_query(select = "pdf_sha256,supplement_sha256")))
+# (the waves the publishable key reads, since a hidden wave's PDFs aren't listed)
+waves <- database_rows(database_perform(database_request(publishable, "wave") |> httr2::req_url_query(select = "pdf_sha256,supplement_sha256")))
 named <- sort(unique(unlist(lapply(waves, function(row) c(row$pdf_sha256, row$supplement_sha256)))))
 if (!identical(listed(publishable), as.character(named))) {
-  problems <- c(problems, "The publishable key reads pdf_file rows no wave names, or misses some a wave names")
+  problems <- c(problems, "The publishable key reads pdf_file rows no shown wave names, or misses some a shown wave names")
+}
+
+# Nothing staff hid reaches the dashboard.
+for (table in c("study", "questionnaire", "wave")) {
+  request <- database_request(publishable, table) |> httr2::req_url_query(select = paste0(table, "_id"), hidden = "is.true")
+  if (length(database_rows(database_perform(request))) > 0) problems <- c(problems, paste("The publishable key reads a hidden", table))
 }
 
 cat("\n", sprintf("%-24s %-8s | %s\n", "function", "secret", "publishable"), sep = "")
@@ -147,6 +154,6 @@ if (length(problems) > 0) {
 }
 cat(
   "\nThe secret key can read, update, delete and insert on every table, and call every function the site calls.",
-  "\nThe publishable key reads the catalog and a wave's PDFs, upvotes, and nothing else.\n",
+  "\nThe publishable key reads the catalog but not what staff hid, a shown wave's PDFs, upvotes, and nothing else.\n",
   sep = ""
 )

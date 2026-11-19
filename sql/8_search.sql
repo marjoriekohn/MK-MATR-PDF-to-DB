@@ -302,10 +302,13 @@ $$;
 
 -- ------ Permissions (as in 5_permissions.sql) -------------------------------------------------------------
 -- The dashboard reads the embeddings like the rest of the catalog, and searches them; the site's server
--- reads them; only the database and the embed-questions function (as postgres) write them.
+-- reads them; only the database and the embed-questions function (as postgres) write them. The dashboard gets
+-- only the embeddings of components it gets (5_permissions.sql), and match_questions() runs as the caller, so
+-- a search never finds a question staff hid.
 alter table public.question_embedding enable row level security;
 drop policy if exists "Dashboard can read" on public.question_embedding;
-create policy "Dashboard can read" on public.question_embedding for select to anon, authenticated using (true);
+create policy "Dashboard can read" on public.question_embedding for select to anon, authenticated
+  using (component_id in (select component_id from public.component));
 revoke all on public.question_embedding from anon, authenticated, service_role;
 grant select on public.question_embedding to anon, authenticated, service_role;
 

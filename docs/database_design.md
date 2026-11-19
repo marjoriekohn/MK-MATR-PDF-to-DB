@@ -161,7 +161,9 @@ a reading once, on the extraction it was first pushed from: a reopened one is le
 unless staff say otherwise) say that the row is kept off the dashboard researchers search. This site only
 records it: staff set it on the Metadata page (the row's own form) or in the Push dialog, under the study,
 questionnaire and wave picked, where a press changes it at once through `apply_change` like any edit. The
-row stays in the database and on this site either way; leaving hidden rows out is the dashboard's to do.
+row stays in the database and on this site either way. The database's policies keep a hidden row, and
+everything that is there only because of it (a hidden study's questionnaires, a question only hidden waves
+asked), from the dashboard's keys (`sql/5_permissions.sql`); the site's secret key skips them.
 Variables of a placement another wave still asks are not rewritten by an update (they are that wave's too).
 
 **Merging.** Two rows that are the same thing kept twice (a question worded slightly differently in two

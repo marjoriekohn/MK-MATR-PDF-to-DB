@@ -4,7 +4,8 @@
 -- Run after 4_functions.sql; can be run again at any time, and then run 8_search.sql again too, since this
 -- takes back its grants. Three roles reach the database through the
 -- REST API:
---   anon, authenticated   the public dashboard: reads the catalog, upvotes, nothing else. A signed-in
+--   anon, authenticated   the public dashboard: reads the catalog but not what staff hid, upvotes,
+--                         nothing else. A signed-in
 --                         staff member (authenticated, with an email in staff) may also read the private
 --                         tables.
 --   service_role          the site's server: reads and writes every table and calls the functions. It
@@ -42,19 +43,80 @@ alter default privileges in schema public revoke all on tables    from anon, aut
 alter default privileges in schema public revoke all on sequences from anon, authenticated, service_role;
 alter default privileges in schema public revoke execute on functions from anon, authenticated;
 
--- ------ The public dashboard reads the catalog ---------------------------------------------------------
+-- ------ The public dashboard reads the catalog, but not what staff hid ----------------------------------
+-- Staff can hide a study, a questionnaire or a wave (its `hidden` column): it stays in this database and on the
+-- site, but the dashboard doesn't get it, or anything that is there only because of it. Each table's policy
+-- says which rows the dashboard gets. A policy that looks in another table sees only the rows that table's own
+-- policy lets through, so hiding a study hides its questionnaires, their waves, questions and variables:
+--   study                    not hidden
+--   questionnaire            not hidden, and its study is shown
+--   wave                     not hidden, and its questionnaire is shown
+--   placement                its questionnaire is shown, and it isn't a question that only hidden waves asked
+--                            (sections, grids, notes and the like are in no wave, and go with their questionnaire)
+--   component                a shown placement prints it (one wording can be printed in several questionnaires)
+--   wave_question            its wave is shown
+--   variable, placement_tag  its placement is shown
+--   response_option, variable_tag, response_option_tag
+--                            its variable is shown
+--   question_scale           its component is shown
+--   study_publication        its study is shown
+--   registry, principal_investigator, publication, respondent_type, answer_option, tag, measurement_scale
+--                            every row: lists every study shares, which the dashboard shows only beside a
+--                            study or question it gets
+-- The site's server (service_role) skips policies, so staff still see everything. question_embedding's policy
+-- is in 8_search.sql; pdf_file's, below, looks in wave, so a hidden wave's PDFs aren't listed either.
+
+-- The questions that only hidden waves asked. placement's policy needs these, and can't find them itself: it
+-- sees only shown waves, so a question only hidden waves asked would look like a section no wave asks. This
+-- runs as its owner (postgres), which skips policies, so it sees every wave.
+create or replace function private.asked_only_in_hidden_waves()
+returns setof bigint
+language sql
+stable
+security definer
+set search_path = ''
+as $$
+  select wq.placement_id
+  from public.wave_question wq
+  join public.wave w on w.wave_id = wq.wave_id
+  group by wq.placement_id
+  having bool_and(w.hidden);
+$$;
+revoke all on function private.asked_only_in_hidden_waves() from public, anon, authenticated;
+grant execute on function private.asked_only_in_hidden_waves() to anon, authenticated;
+grant usage on schema private to anon; -- to run that function (authenticated has it below, for the staff check)
+
 do $$
 declare
   t text;
-  catalog constant text[] := array[
-    'registry', 'principal_investigator', 'study', 'publication', 'study_publication', 'respondent_type',
-    'questionnaire', 'wave',
-    'component', 'placement', 'wave_question', 'variable', 'answer_option', 'response_option',
-    'tag', 'placement_tag', 'variable_tag', 'response_option_tag', 'measurement_scale', 'question_scale'
-  ];
+  shown text;
 begin
-  foreach t in array catalog loop
-    execute format('create policy "Dashboard can read" on public.%I for select to anon, authenticated using (true)', t);
+  for t, shown in
+    select * from (values
+      ('study',                  'not hidden'),
+      ('questionnaire',          'not hidden and study_id in (select study_id from public.study)'),
+      ('wave',                   'not hidden and questionnaire_id in (select questionnaire_id from public.questionnaire)'),
+      ('placement',              'questionnaire_id in (select questionnaire_id from public.questionnaire)
+                                  and placement_id not in (select private.asked_only_in_hidden_waves())'),
+      ('component',              'component_id in (select component_id from public.placement)'),
+      ('wave_question',          'wave_id in (select wave_id from public.wave)'),
+      ('variable',               'placement_id in (select placement_id from public.placement)'),
+      ('placement_tag',          'placement_id in (select placement_id from public.placement)'),
+      ('response_option',        'variable_key in (select variable_key from public.variable)'),
+      ('variable_tag',           'variable_key in (select variable_key from public.variable)'),
+      ('response_option_tag',    'variable_key in (select variable_key from public.variable)'),
+      ('question_scale',         'component_id in (select component_id from public.component)'),
+      ('study_publication',      'study_id in (select study_id from public.study)'),
+      ('registry',               'true'),
+      ('principal_investigator', 'true'),
+      ('publication',            'true'),
+      ('respondent_type',        'true'),
+      ('answer_option',          'true'),
+      ('tag',                    'true'),
+      ('measurement_scale',      'true')
+    ) as rules (table_name, shown_when)
+  loop
+    execute format('create policy "Dashboard can read" on public.%I for select to anon, authenticated using (%s)', t, shown);
     execute format('grant select on public.%I to anon, authenticated', t);
   end loop;
 end;
@@ -72,8 +134,8 @@ grant execute on function public.upvote_questionnaire(bigint) to anon, authentic
 grant execute on function public.unstar_questionnaire(bigint) to anon, authenticated, service_role;
 
 -- ------ Staff who sign in may read the private tables (the site itself uses service_role) -------------
--- The policies ask private.is_active_staff(), so a signed-in person may use that schema and run that one
--- function, and nothing else in it. "(select ...)" has it worked out once for a query, not once for each row.
+-- The policies ask private.is_active_staff(), so a signed-in person may use that schema and run that
+-- function (and the dashboard's private.asked_only_in_hidden_waves(), above), and nothing else in it. "(select ...)" has it worked out once for a query, not once for each row.
 grant usage on schema private to authenticated;
 grant execute on function private.is_active_staff() to authenticated;
 do $$
