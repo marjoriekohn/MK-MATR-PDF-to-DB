@@ -507,6 +507,7 @@ extraction_model_pdf_pages <- function(path, from, to) {
 extraction_model_page_count <- function(path) {
   bytes <- readBin(path, "raw", file.size(path))
   counts <- unlist(lapply(c(list(bytes), pdf_object_streams(bytes)), pdf_page_tree_counts))
+  counts <- counts[!is.na(counts)] # a count too big to be one
   if (length(counts) > 0) {
     return(max(counts))
   }
@@ -515,6 +516,7 @@ extraction_model_page_count <- function(path) {
 }
 
 # The page counts of the page trees written in `bytes`: the `/Count` of every dictionary that is a `/Pages`.
+# A dictionary may be written over several lines ("/Type /Pages\n/Count 41"), so the number is read across them.
 pdf_page_tree_counts <- function(bytes) {
   bytes[bytes == as.raw(0)] <- as.raw(32) # a string can't hold a nul
   text <- rawToChar(bytes)
@@ -525,7 +527,7 @@ pdf_page_tree_counts <- function(bytes) {
     sprintf("%s[^<>]{0,400}?%s|%s[^<>]{0,400}?%s", type, count, count, type), text,
     perl = TRUE, useBytes = TRUE
   ))[[1]]
-  as.integer(sub(sprintf(".*%s.*", count), "\\1", found, perl = TRUE, useBytes = TRUE))
+  suppressWarnings(as.integer(sub(sprintf("(?s).*%s.*", count), "\\1", found, perl = TRUE, useBytes = TRUE)))
 }
 
 # The PDF's compressed object streams, unpacked. One that can't be unpacked is left out.

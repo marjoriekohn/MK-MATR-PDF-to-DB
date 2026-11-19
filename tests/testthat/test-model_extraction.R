@@ -271,6 +271,12 @@ test_that("a PDF's pages are counted from its page tree, not from the page objec
   nested <- pdf_of("%PDF-1.4\n<< /Type /Pages /Count 7 >> << /Type /Pages /Count 2 >> << /Type /Pages /Count 5 >>\n", pages)
   expect_equal(extraction_model_page_count(nested), 7)
 
+  # a page tree written one entry to a line, as some PDF makers write it
+  lined <- pdf_of("%PDF-1.4\n1 0 obj\n<<\n/Type /Pages\n/Kids [2 0 R 3 0 R]\n/Count 41\n>>\nendobj\n", pages, "%%EOF\n")
+  expect_equal(extraction_model_page_count(lined), 41)
+  backwards <- pdf_of("%PDF-1.4\n1 0 obj\n<<\n/Count 12\n/Type /Pages\n>>\nendobj\n", pages, "%%EOF\n")
+  expect_equal(extraction_model_page_count(backwards), 12)
+
   # with no page tree to be found, the page objects are counted, as before
   expect_equal(extraction_model_page_count(pdf_of("%PDF-1.4\n", pages)), 3)
 })
