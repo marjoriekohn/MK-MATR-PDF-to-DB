@@ -14,7 +14,10 @@ test_that("a registry, study, questionnaire or wave, and what they need, can be 
   expect_equal(unname(edit_quick_needs$questionnaire), "questionnaire__respondent_type_id")
   expect_equal(edit_service_quick_entity("respondent_type")$table, "respondent_type")
   study <- edit_service_quick_entity("study")
-  expect_length(edit_service_fields(study, test_snapshot(edit_service_tables(study)), "add"), 8)
+  fields <- edit_service_fields(study, test_snapshot(edit_service_tables(study)), "add")
+  expect_length(fields, 9)
+  # the last is whether it shows on the dashboard: a study added from the push dialog can be hidden as it is added
+  expect_equal(fields[[9]]$id, "study__hidden")
 })
 
 test_that("a row in the catalog is found by its key", {

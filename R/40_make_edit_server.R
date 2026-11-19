@@ -469,10 +469,10 @@ make_edit_server <- function(id, connection, me, show_page, active = NULL, open_
     # the address is asked for (Open PDF is pressed), not when the wave is shown: most waves looked at are never
     # opened, and a PDF can be large.
     wave_pdf_url <- function(wave) {
-      session$registerDataObj(
-        name = ns(paste0("wave-pdf-", wave$pdf_sha256)),
-        data = list(sha256 = wave$pdf_sha256, name = if (has_text(wave$pdf_name)) wave$pdf_name else "questionnaire.pdf"),
-        filterFunc = function(data, req) {
+      pdf_address(
+        session, ns(paste0("wave-pdf-", wave$pdf_sha256)),
+        list(sha256 = wave$pdf_sha256, name = if (has_text(wave$pdf_name)) wave$pdf_name else "questionnaire.pdf"),
+        respond = function(data, req) {
           path <- tryCatch(extraction_model_local_pdf(connection, data$sha256), error = function(problem) NULL)
           if (is.null(path)) {
             return(shiny::httpResponse(404L, "text/plain; charset=UTF-8", "This PDF isn't in the site's storage any more."))

@@ -574,23 +574,44 @@ test_that("a pushed wave is reopened as a draft of what it asks, and pushing tha
 
 test_that("a wave the AI read is reopened as an AI-Powered draft with that reading, so a block can still be put back to it", {
   me <- local_staff()
+  # The PDF's row is made first, so it is removed last: once pushed, the tree's wave names it (and so do the two
+  # extractions, which are removed before the tree).
+  pdf <- local_row("pdf_file", list(pdf_sha256 = test_sha256(), pdf_pages = 2, pdf_bytes = 51), "pdf_sha256")
   tree <- local_tree()
-  pushed <- local_pushed_ai_extraction(me, tree) # reviewed before it was pushed: a question reworded, a unit typed
+  read <- extraction_model_create(test_connection, sample_extraction(
+    me, extraction_status = "ready", info = picked_basic_info(tree),
+    pdf = list(name = "AHP_wave3.pdf", path = NULL, pages = 2L, bytes = 51L, sha256 = pdf$pdf_sha256)
+  ))
+  withr::defer(test_delete_extraction(read$id))
+  database_model_update(
+    test_connection, extraction_table, list(ai_original = draft_service_to_json(test_questionnaire_draft())),
+    filters = list(extraction_id = database_eq(read$id)), select = "extraction_id"
+  )
+  # reviewed before it was pushed: the question printed as 1 is reworded
+  first <- extraction_service_open_draft(test_connection, extraction_model_get(test_connection, read$id))
+  asked_first <- function(draft) draft$components$id[draft$components$printed_number %in% "1"]
+  reviewed <- draft_service_update(first$draft, "components", asked_first(first$draft), "text", paste(test_marker, "Do you smoke now?"))
+  extraction_service_save_draft(test_connection, read, reviewed, first$original, me)
+  catalog <- questionnaire_service_get_catalog(test_connection)
+  extraction_service_push(test_connection, extraction_model_get(test_connection, read$id), me, catalog)
+
   reopened <- extraction_service_reopen_wave(test_connection, tree$wave$wave_id, me)
   withr::defer(test_delete_extraction(reopened$id))
   expect_equal(reopened$method, extraction_ai) # not typed by hand
   expect_equal(reopened$extraction_status, "ready") # nothing to read
-  expect_equal(as.character(reopened$info$reopened_from), as.character(pushed$id))
+  expect_equal(as.character(reopened$info$reopened_from), as.character(read$id))
 
   # its questionnaire came back from the database without the rows' refs: they are matched through the pushed copy
   opened <- extraction_service_open_draft(test_connection, reopened)
   expect_false(is.null(opened$original))
   expect_false(anyNA(opened$draft$components$ref))
-  reworded <- opened$draft$components$id[opened$draft$components$text %in% normal_text(paste(test_marker, "Do you smoke now?"))]
+  reworded <- asked_first(opened$draft)
   expect_length(reworded, 1)
+  expect_equal(component(opened$draft, reworded)$text, component(reviewed, asked_first(reviewed))$text)
   expect_true(reworded %in% draft_service_changed_blocks(opened$original, opened$draft)) # as it differed when it was pushed
   back <- suppressMessages(draft_service_revert_block(opened$draft, opened$original, reworded))
   expect_false(reworded %in% draft_service_changed_blocks(opened$original, back))
+  expect_equal(component(back, reworded)$text, component(first$original, asked_first(first$original))$text) # the AI's words
   expect_setequal(stats::na.omit(back$variables$matr_id), stats::na.omit(opened$draft$variables$matr_id)) # MATR IDs aren't the AI's: kept
 
   # saved, its rows say which of the AI's they are, and the corrections are worked out from the same reading
@@ -601,9 +622,11 @@ test_that("a wave the AI read is reopened as an AI-Powered draft with that readi
 
   # it isn't read again from here (that is the wave's own Re-extract), and the AI Monitor counts the reading once
   expect_match(error_text(extraction_service_reextract(test_connection, reopened$id, me)), "Re-extract on the wave")
-  outcome <- extraction_service_push(test_connection, extraction_model_get(test_connection, reopened$id), me, questionnaire_service_get_catalog(test_connection))
+  outcome <- extraction_service_push(
+    test_connection, extraction_model_get(test_connection, reopened$id), me, questionnaire_service_get_catalog(test_connection)
+  )
   expect_equal(outcome$record$status, "Pushed")
   listed <- names(monitor_model_get_pushed(test_connection))
-  expect_true(as.character(pushed$id) %in% listed)
+  expect_true(as.character(read$id) %in% listed)
   expect_false(as.character(reopened$id) %in% listed)
 })

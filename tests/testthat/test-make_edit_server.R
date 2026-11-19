@@ -218,7 +218,8 @@ test_that("a tag in the details opens what it names, and Back returns from it", 
     expect_false(grepl("Back to", text_of(output$detail))) # picked in the list: nothing to go back to
     session$setInputs(`change-action` = list(action = "jump", kind = "study", verb = "view", key = key_text(tree$study$study_id)))
     expect_equal(c(kind(), picked(), verb()), c("study", key_text(tree$study$study_id), "view"))
-    expect_match(text_of(output$detail), paste("Back to", shorten(edit_label(tables_of("questionnaire"), "questionnaire", tree$questionnaire), 40)), fixed = TRUE)
+    came_from <- shorten(name_with_abbreviation(tree$questionnaire$name, tree$questionnaire$abbreviation), 40) # as the questionnaire is named
+    expect_match(text_of(output$detail), paste("Back to", came_from), fixed = TRUE)
     press(session, "trail_back")
     expect_equal(c(kind(), picked(), verb()), c("questionnaire", key_text(tree$questionnaire$questionnaire_id), "view"))
     expect_false(grepl("Back to", text_of(output$detail)))
@@ -309,7 +310,7 @@ test_that("a scale's questions are added from the scale's details, and Back retu
     errors <- collect_errors(session)
     pick(session, "measurement_scale", scale$scale_id)
     shown <- paste(output[["change-main"]]$html, collapse = "")
-    expect_match(text_of(shown), "0 questions")
+    expect_match(text_of(shown), "0 Questions", fixed = TRUE)
     expect_match(shown, sprintf('data-kind="question_scale" data-verb="add" data-scope="%s"', key_text(scale$scale_id)), fixed = TRUE)
     # Add a question, in the scale's details, opens the form for that scale
     session$setInputs(`change-action` = list(action = "jump", kind = "question_scale", verb = "add", scope = key_text(scale$scale_id)))
@@ -323,7 +324,7 @@ test_that("a scale's questions are added from the scale's details, and Back retu
     press(session, "back")
     expect_equal(c(kind(), picked(), verb()), c("measurement_scale", key_text(scale$scale_id), "view"))
     shown <- paste(output[["change-main"]]$html, collapse = "")
-    expect_match(text_of(shown), "1 question")
+    expect_match(text_of(shown), "1 Question ", fixed = TRUE)
     expect_match(shown, sprintf('data-kind="question_scale" data-verb="delete" data-key="%s|%s"', key_text(scale$scale_id), key_text(question$component_id)), fixed = TRUE)
     expect_length(errors(), 0)
   })
@@ -394,12 +395,15 @@ test_that("PDFs have no list: a wave names its PDF, which its own form changes, 
   wave <- local_row("wave", list(
     questionnaire_id = tree$questionnaire$questionnaire_id, name = test_name("Wave"), pdf_sha256 = sha256, pdf_name = "first_name.pdf"
   ), "wave_id")
+  # a test's stand-in session can't serve files (it has no registerDataObj), so the address is made up
+  local_stub("pdf_address", function(session, name, data, ...) paste0("session/pdf/", data$sha256))
   page <- page_args(me)
   shiny::testServer(make_edit_server, args = page$args, {
     errors <- collect_errors(session)
     expect_false("pdf_file" %in% make_edit_listed)
     pick(session, "wave", wave$wave_id)
     expect_match(text_of(output$detail), "Open PDF")
+    expect_match(paste(output$detail$html, collapse = ""), paste0('href="session/pdf/', sha256, '"'), fixed = TRUE)
     shown <- text_of(output[["change-main"]])
     expect_match(shown, "PDF file first_name.pdf", fixed = TRUE)
     expect_match(shown, "3 pages · 2 KB", fixed = TRUE)

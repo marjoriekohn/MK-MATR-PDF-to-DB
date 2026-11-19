@@ -765,10 +765,12 @@ edit_extraction_server <- function(
 # The file is only kept on the server that received it (`uploads/pdfs/`), so it is handed to the
 # browser at an address that works for this session only.
 # name: What to call it, in the module's namespace.
-# data: `path`, `name` and `sha256` of the file; `pdf_response()` is given it.
+# data: `path`, `name` and `sha256` of the file; `respond` is given it.
+# respond: What answers the browser's request, given `data` and the request: by default the file at `data$path`
+#   (`pdf_response()`); a wave's fetches the file first, only once it is asked for (`make_edit_server()`).
 # Returns: The address.
-pdf_address <- function(session, name, data) {
-  session$registerDataObj(name = name, data = data, filterFunc = pdf_response)
+pdf_address <- function(session, name, data, respond = pdf_response) {
+  session$registerDataObj(name = name, data = data, filterFunc = respond)
 }
 
 # How long ago the draft was saved, as the page's header says it.
