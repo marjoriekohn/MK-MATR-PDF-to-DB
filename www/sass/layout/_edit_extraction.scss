@@ -116,6 +116,9 @@
   transform: translateY(-50%);
 }
 .outline-row:has(> .btn-open) > .outline-actions { right: 2.6rem; } // the arrow that opens it stays
+// Put back as the AI read it: only on a block that differs from that (the page script marks the row)
+.outline-actions > .row-revert { display: none; }
+.outline-row.is-changed > .outline-actions > .row-revert { display: inline-flex; }
 .outline-row:hover > .outline-actions,
 .outline-row:focus-within > .outline-actions { display: flex; }
 .kind-menu .dropdown-toggle::after { display: none; }

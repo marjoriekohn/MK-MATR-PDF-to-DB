@@ -151,15 +151,18 @@ edit_service_depends_choices <- function(snap, questionnaire_id, placement_id = 
 # With where, the waves that asked it there (when it is a question) and its variables there.
 # component_id: The component's id.
 # Returns: A list with one list per placement, by questionnaire name and position; empty if none. Each has
-#   `questionnaire_id`, `placement_id`, `component_id`, `kind`, `questionnaire` (its name), `section`, `position`, `numbers`
-#   (the number it was asked as, named by wave), `waves`, `variables` (how many) and `boxes` (each variable:
-#   `matr_id`, `tags` and `coding`, see `edit_use_boxes()`).
+#   `questionnaire_id`, `placement_id`, `component_id`, `kind`, `questionnaire` (its name), `words` (the component's
+#   words as they read there, `edit_placement_words()`), `section`, `position`, `numbers`
+#   (the number it was asked as, named by wave), `waves`, `variables` (how many), `boxes` (each variable:
+#   `matr_id`, `tags` and `coding`, see `edit_use_boxes()`) and, for a section, grid or group, `inside`: the blocks
+#   it holds there in printed order, a data frame of `component_id`, `kind` and `words` (in full, as `words`).
 edit_service_uses <- function(snap, component_id) {
   placed <- snap$placement
   placed <- placed[placed$component_id == component_id, , drop = FALSE]
   if (nrow(placed) == 0) {
     return(list())
   }
+  kind <- edit_lookup(snap, "component", "component_id", component_id, "kind")
   uses <- lapply(seq_len(nrow(placed)), function(i) {
     row <- placed[i, ]
     q_id <- row$questionnaire_id
@@ -168,10 +171,17 @@ edit_service_uses <- function(snap, component_id) {
     waves <- waves[order(edit_lookup(snap, "wave", "wave_id", waves$wave_id, "administered_date"), waves$wave_id), , drop = FALSE]
     wave_names <- edit_lookup(snap, "wave", "wave_id", waves$wave_id, "name")
     boxes <- if (is.null(snap$variable)) NULL else snap$variable[snap$variable$placement_id %in% row$placement_id, , drop = FALSE]
+    inside <- snap$placement[snap$placement$parent_placement_id %in% row$placement_id, , drop = FALSE]
+    inside <- inside[order(inside$display_order), , drop = FALSE]
     list(
       questionnaire_id = q_id, placement_id = row$placement_id, component_id = component_id,
-      kind = edit_lookup(snap, "component", "component_id", component_id, "kind"),
+      inside = data.frame(
+        component_id = inside$component_id, kind = edit_lookup(snap, "component", "component_id", inside$component_id, "kind"),
+        words = edit_placement_words(snap, inside$placement_id), stringsAsFactors = FALSE
+      ),
+      kind = kind,
       questionnaire = edit_label(snap, "questionnaire", snap$questionnaire[snap$questionnaire$questionnaire_id == q_id, ]),
+      words = edit_placement_words(snap, row$placement_id),
       section = if (is.na(row$parent_placement_id)) NA_character_ else section,
       position = row$display_order,
       numbers = stats::setNames(edit_called_number(waves), wave_names),
@@ -208,6 +218,34 @@ edit_use_boxes <- function(snap, boxes) {
     }
     list(matr_id = boxes$matr_id[i], tags = tags[i], coding = coding)
   })
+}
+
+# A block's words as they read where a questionnaire prints it. A question in a grid follows the grid's lead-in,
+# which is part of it ("how often did you and your twin" + "dress alike?"); any other block's words are its own.
+# This is how a question is listed wherever it is listed with others (a wave's questions, what carries a tag, a
+# questionnaire's card). The wording alone, its root, is the title of its own details and its row in the lists.
+# placement_ids: Placement ids.
+# Returns: One string for each.
+edit_placement_words <- function(snap, placement_ids) {
+  placed <- snap$placement[match(placement_ids, snap$placement$placement_id), , drop = FALSE]
+  own <- edit_component_text(snap, placed$component_id)
+  holder <- edit_placement_component(snap, placed$parent_placement_id)
+  lead_in <- edit_lookup(snap, "component", "component_id", holder, "text")
+  follows <- edit_lookup(snap, "component", "component_id", placed$component_id, "kind") %in% "Question" &
+    edit_lookup(snap, "component", "component_id", holder, "kind") %in% "Grid" & !is.na(lead_in) & nzchar(trimws(lead_in))
+  ifelse(follows, paste(lead_in, own), own)
+}
+
+# A wording's words in full, for a row that names the wording and not one place it is printed (a scale's
+# question): as each place prints it (`edit_placement_words()`), once each, " / " between two that differ (the
+# same question after a lead-in here and none there); its own words if nothing prints it.
+# component_ids: Component ids.
+# Returns: One string for each.
+edit_component_words <- function(snap, component_ids) {
+  vapply(component_ids, function(id) {
+    places <- snap$placement$placement_id[snap$placement$component_id %in% id]
+    if (length(places) == 0) edit_component_text(snap, id) else paste(unique(edit_placement_words(snap, places)), collapse = " / ")
+  }, character(1))
 }
 
 # The component each placement prints.

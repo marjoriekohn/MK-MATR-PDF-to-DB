@@ -16,6 +16,9 @@ comment on column public.publication.doi        is 'Its DOI alone, in lower case
 comment on column public.publication.url        is 'Where it can be read, for a publication with no DOI: a whole address. With a DOI, the DOI''s link is the one to show.';
 comment on table public.study_publication       is 'That a publication is about a study: one row for each study a publication lists.';
 comment on column public.study.status           is 'Active: the study is ongoing. Ended: all data collections are finished.';
+comment on column public.study.hidden           is 'True keeps the study off the dashboard researchers search; it stays in the database and on the admin site. Set by staff.';
+comment on column public.questionnaire.hidden   is 'True keeps the questionnaire off the dashboard, as study.hidden does a study.';
+comment on column public.wave.hidden            is 'True keeps the wave off the dashboard, as study.hidden does a study.';
 comment on table public.respondent_type         is 'The population a questionnaire was written for, bounded by age.';
 comment on table public.questionnaire           is 'One form (instrument): what stays true across every wave it was given in.';
 comment on column public.questionnaire.participant_count is 'Across all its waves, for when the waves'' own counts aren''t known.';

@@ -9,7 +9,8 @@
 # emptied first. Each ends with "+ Add new …": picking it opens the pop-up that adds one
 # (`quick_add_server()`), applied at once like any add, and the new row is picked when the pop-up closes.
 # Saving is up to the page. The drop-downs and checks use `catalog`, the live tables as they were when the
-# session started or when something was last added.
+# session started or when something was last added. Under the study, questionnaire and wave picked is whether
+# each shows on the dashboard, which a press changes (`edit_service_hide()`).
 # The form is in the Edit Extraction page's push dialog, and the pop-up takes the dialog's place, so `reopen`
 # is called to put the dialog back, with what was in the form, when the pop-up closes.
 # record_id: A reactive: the draft the form is about, so the wave check doesn't count it as a clash.
@@ -227,6 +228,33 @@ extraction_info_server <- function(
         }
         if (field %in% extraction_service_missing_fields(info())) span(class = "field-missing visually-hidden", "Required")
       })
+    })
+
+    # ------ Hidden from the dashboard ---------------------------------------------
+    # Under the study, the questionnaire and the wave picked: whether it shows on the dashboard, as a button
+    # (`visibility_button()`). Pressing it changes it at once, like any edit, and the catalog is read again so
+    # the button says what it is now.
+    lapply(names(edit_hidden_kinds), function(field) {
+      kind <- edit_hidden_kinds[[field]]
+      output[[paste0(field, "_visibility")]] <- renderUI({
+        hidden <- edit_service_hidden(catalog$get(), kind, picked(input[[field]]))
+        if (!is.null(hidden)) visibility_button(kind, hidden)
+      })
+    })
+
+    observeEvent(input$action, {
+      event <- input$action
+      req(identical(event$action, "visibility"), event$kind %in% edit_hidden_kinds)
+      id <- picked(input[[names(edit_hidden_kinds)[match(event$kind, edit_hidden_kinds)]]])
+      hidden <- edit_service_hidden(now(), event$kind, id)
+      req(!is.null(hidden))
+      change <- try_showing(edit_service_hide(now(), event$kind, id, !hidden), "Couldn't change it")
+      applied <- if (!is.null(change)) try_showing(edit_service_apply(connection, change, me), "Couldn't change it")
+      if (is.null(applied)) {
+        return()
+      }
+      catalog$refresh()
+      showNotification(paste0(change$summary, "."), type = "message")
     })
 
     # ------ RETURN ------------------------------------------------------------

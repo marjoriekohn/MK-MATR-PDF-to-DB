@@ -67,6 +67,7 @@ edit_number_items <- function(items) {
       attribute_name = character(), old_value = character(), new_value = character(), stringsAsFactors = FALSE
     ))
   }
+  items$item_number <- NULL # numbered already (a merge's plan): numbered again, the same
   items <- cbind(item_number = seq_len(nrow(items)), items)
   rownames(items) <- NULL
   items
@@ -257,11 +258,15 @@ edit_service_active <- function(fields, values) {
 # that has only one, which is the details' title already (an answer choice's words). A kind with `details` lists
 # what it belongs to as well (a questionnaire's study), and picks and orders its own fields: `details(snap, row,
 # own)` takes these lines and gives the ones to show.
+# A line is one of two sorts, and the page draws them apart so staff can see what Edit changes. What the row's own
+# form changes is a line of the details. What it can't (`pill`: what the row belongs to, like a questionnaire's
+# study, or a field that is fixed once the row exists) is a tag over them, which opens the thing it names when it
+# names one (`kind` and `key`): that is where it is changed.
 # row: The row.
 # fields: The form's fields, from `edit_service_fields()` (as an update).
 # values: What each starts with, from `edit_service_initial()`.
 # Returns: A data frame of `name` (the field's, `NA` for a line about what the row belongs to), `label`, `value` (as
-#   staff read it; `"(empty)"` for nothing) and `wide`.
+#   staff read it; `"(empty)"` for nothing), `wide`, `locked`, `kind` and `key` (what a tag opens, or `NA`) and `pill`.
 edit_service_details <- function(entity, snap, row, fields, values) {
   shown <- Filter(function(field) field$type != "variables" && edit_service_visible(field, values), fields)
   own <- edit_details_lines(
@@ -271,12 +276,18 @@ edit_service_details <- function(entity, snap, row, fields, values) {
       value <- values[[field$id]]
       edit_display_value(field, if (is.null(value) || !nzchar(value)) NA else value)
     }, character(1)),
-    wide = vapply(shown, function(field) field$type == "textarea", logical(1))
+    wide = vapply(shown, function(field) field$type == "textarea", logical(1)),
+    locked = vapply(shown, function(field) !is.null(field$locked), logical(1))
   )
-  if (!is.null(entity$details)) {
-    return(entity$details(snap, row, own))
+  lines <- if (!is.null(entity$details)) {
+    entity$details(snap, row, own)
+  } else if (nrow(own) == 1) {
+    own[0, ]
+  } else {
+    own
   }
-  if (nrow(own) == 1) own[0, ] else own
+  lines$pill <- is.na(lines$name) | lines$locked
+  lines
 }
 
 # Lines of a row's details.
@@ -284,12 +295,17 @@ edit_service_details <- function(entity, snap, row, fields, values) {
 # label: What each is.
 # value: Each as staff read it; `NA` is shown as `"(empty)"`.
 # wide: Whether each is long text.
-# Returns: A data frame, as `edit_service_details()` gives it.
-edit_details_lines <- function(name, label, value, wide = FALSE) {
+# locked: Whether each is a field that can't change once the row exists.
+# kind,key: What each opens when it is drawn as a tag: a kind (a name of `edit_entities`) and a row's key; `NA` for none.
+# Returns: A data frame, as `edit_service_details()` gives it (without `pill`, which it works out).
+edit_details_lines <- function(name, label, value, wide = FALSE, locked = FALSE, kind = NA, key = NA) {
   value <- as.character(value)
+  n <- length(label)
   data.frame(
     name = as.character(name), label = as.character(label), value = ifelse(is.na(value) | !nzchar(value), "(empty)", value),
-    wide = rep_len(as.logical(wide), length(label)), stringsAsFactors = FALSE
+    wide = rep_len(as.logical(wide), n), locked = rep_len(as.logical(locked), n),
+    kind = rep_len(as.character(kind), n), key = rep_len(ifelse(is.na(key), NA_character_, key_text(key)), n),
+    stringsAsFactors = FALSE
   )
 }
 
@@ -652,14 +668,14 @@ edit_summary_update <- function(entity, snap, row, fields, values) {
   initial <- edit_service_initial(entity, fields, snap, "update", row)
   changes <- edit_service_changes(fields, initial, values)
   title <- shorten(edit_label(snap, entity$table, row), 80) # a summary is a line in a list
-  paste0("Changed the ", word_list(unique(changes$short)), " of the ", entity$noun, " “", title, "”")
+  paste0("Changed the ", word_list(unique(changes$short)), " of the ", edit_noun(entity, row), " “", title, "”")
 }
 
 edit_summary_delete <- function(entity, snap, row, plan) {
   title <- shorten(edit_label(snap, entity$table, row), 80) # a summary is a line in a list
   total <- plan$reach$total
   paste0(
-    "Deleted the ", entity$noun, " “", title, "”",
+    "Deleted the ", edit_noun(entity, row), " “", title, "”",
     if (total > 0) paste0(" and ", edit_count(total, "connected record"))
   )
 }
@@ -669,11 +685,16 @@ edit_summary_delete <- function(entity, snap, row, plan) {
 # For a component, every place a questionnaire prints it; for anything else, the rows that point at it.
 # row: The row being changed.
 # A kind with `usage_rows(snap, row, table, rows)` says how it lists the rows of `table` that point at it: a list of
-# `rows` (the ones to list, in order), `labels` and, if it likes, `text`; or `NULL` for the usual way, by name.
+# `rows` (the ones to list, in order; none to leave the table out), `labels` and, if it likes, `text` (the box's
+# title), `meta` (a few quiet words after each label: a variable's MATR ID and code), `pills` (a list of tags for
+# each: the questionnaires that ask it), `open` (what View opens for each, from `edit_opens()`), `remove` (what its
+# Remove button opens, to take the row itself away) and `add` (a button under the list); or `NULL` for the usual
+# way, by name.
 # Returns: A list: `uses`, `shared` (how many questionnaires print a component) and `pointing`, one list for each
-#   kind of row that points at it: `table`, `n`, `text` ("3 variables"), `labels` (every row's name, in order) and
-#   `groups`, the rows by the questionnaire they are in (see `edit_usage_groups()`), or `NULL` when they are all in
-#   the row's own questionnaire.
+#   kind of row that points at it: `table`, `n`, `text` ("3 variables"), `labels` (every row's name, in order),
+#   `meta`, `pills`, `open`, `remove` and `add` as above (`NULL` where there are none) and `groups`, the rows by
+#   the questionnaire they are in (see `edit_usage_groups()`), or `NULL` when they are all in the row's own
+#   questionnaire.
 edit_service_usage <- function(entity, snap, row) {
   if (entity$table == "component") {
     uses <- edit_service_uses(snap, row$component_id)
@@ -683,7 +704,8 @@ edit_service_usage <- function(entity, snap, row) {
   key <- edit_key(row, edit_table_key(entity$table))
   pointing <- lapply(Filter(function(relation) relation$parent == entity$table, edit_relations), function(relation) {
     hits <- edit_referencing(snap, relation, key)
-    if (length(hits) == 0) {
+    # (a kind lists a table even with nothing in it when that is where one is added: a scale's questions)
+    if (length(hits) == 0 && !relation$child %in% entity$usage_always) {
       return(NULL)
     }
     rows <- edit_rows(snap, relation$child, hits)
@@ -693,18 +715,104 @@ edit_service_usage <- function(entity, snap, row) {
       by_name <- order(tolower(labels), method = "radix")
       listed <- list(rows = rows[by_name, , drop = FALSE], labels = labels[by_name])
     }
-    if (nrow(listed$rows) == 0) {
+    if (nrow(listed$rows) == 0 && is.null(listed$add)) {
       return(NULL)
     }
     groups <- edit_usage_groups(snap, relation$child, listed$rows, listed$labels)
     own <- if (entity$table == "questionnaire") row$questionnaire_id else row$questionnaire_id %||% NA
     if (length(groups) == 1 && length(own) == 1 && !is.na(own) && isTRUE(groups[[1]]$id == own)) groups <- NULL
+    counted <- plural_noun(nrow(listed$rows), relation$child)
     list(
-      table = relation$child, n = nrow(listed$rows), text = listed$text %||% plural_noun(nrow(listed$rows), relation$child),
-      labels = listed$labels, groups = groups
+      table = relation$child, n = nrow(listed$rows),
+      # a link that says what its rows are to the row ("Leads %s") titles the box that way
+      text = listed$text %||% if (is.null(relation$title)) counted else sprintf(relation$title, counted),
+      named = !is.null(listed$text) || !is.null(relation$title), # it says more than how many
+      labels = listed$labels, meta = listed$meta, pills = listed$pills,
+      open = listed$open %||% edit_usage_open(snap, entity$table, relation$child, listed$rows),
+      remove = listed$remove, add = listed$add, groups = groups
     )
   })
   list(uses = list(), shared = 0, pointing = Filter(Negate(is.null), pointing))
+}
+
+# What View on a listed row opens: the row `key` of the kind `kind` (a name of `edit_entities`), in the
+# questionnaire or scale `scope` for a kind that belongs to one.
+# what: What the button calls it ("View Study"): by default what the kind is called (`edit_view_names`).
+# Returns: A data frame with a row for each key: `kind`, `key`, `scope` and `what`.
+edit_opens <- function(kind, key, scope = "", what = edit_view_names[[kind]]) {
+  key <- key_text(key)
+  data.frame(
+    kind = rep_len(kind, length(key)), key = key, scope = rep_len(as.character(scope), length(key)),
+    what = rep_len(as.character(what), length(key)), stringsAsFactors = FALSE
+  )
+}
+
+# What View calls each kind it opens. A wording is listed where it is a question (a wave's questions, what carries
+# a tag, a scale's questions), and a block as one questionnaire prints it is the same thing "in Questionnaire".
+edit_view_names <- c(
+  registry = "Registry", study = "Study", publication = "Publication", questionnaire = "Questionnaire", wave = "Wave",
+  investigator = "Investigator", respondent_type = "Respondent Type", tag = "Tag", answer_option = "Answer Choice",
+  measurement_scale = "Measurement Scale", component = "Question", placement = "in Questionnaire",
+  question_scale = "Scale Question", pdf_file = "PDF File"
+)
+
+# The tables whose rows are a kind of their own on the page, by the kind's name.
+edit_table_kinds <- c(
+  registry = "registry", study = "study", publication = "publication", questionnaire = "questionnaire", wave = "wave",
+  principal_investigator = "investigator", respondent_type = "respondent_type", measurement_scale = "measurement_scale"
+)
+
+# What the rows that point at a row open, unless its kind says (`usage_rows()`): a row that is a kind of its own
+# opens as that; a row about a question (its number in a wave, a tag on it or on its variable, a choice its
+# variable offers) opens the question. A block in one questionnaire lists only what is its own (its variables, its
+# numbers), which has nowhere else to open, but for the blocks inside it or that depend on it.
+# parent: The table of the row they point at.
+# table: Their table.
+# Returns: A data frame from `edit_opens()`, or `NULL` when they open nothing.
+edit_usage_open <- function(snap, parent, table, rows) {
+  if (table %in% names(edit_table_kinds)) {
+    return(edit_opens(edit_table_kinds[[table]], rows[[edit_table_key(table)[1]]]))
+  }
+  if (table == "placement" && parent %in% c("placement", "questionnaire")) {
+    return(edit_opens("placement", rows$placement_id, key_text(rows$questionnaire_id)))
+  }
+  question <- if (!parent %in% c("placement", "component")) edit_question_of(snap, rows)
+  if (!is.null(question)) edit_opens("component", question)
+}
+
+# The question each row is about: the wording itself, the wording of the place it names, or of its variable's place.
+# Returns: Component ids, or `NULL` when the rows name none (or the tables that would say weren't read).
+edit_question_of <- function(snap, rows) {
+  if ("component_id" %in% names(rows)) {
+    return(rows$component_id)
+  }
+  placement <- if ("placement_id" %in% names(rows)) {
+    rows$placement_id
+  } else if ("variable_key" %in% names(rows) && !is.null(snap$variable)) {
+    edit_lookup(snap, "variable", "variable_key", rows$variable_key, "placement_id")
+  }
+  if (!is.null(placement) && !is.null(snap$placement)) edit_placement_component(snap, placement)
+}
+
+# For rows about a question, the question's words and the short name of the questionnaire each is in: what a row
+# is listed by when what it points at (an answer choice, a tag) says nothing about where it is used. The words are
+# the question in full, as the place the row is about prints it (`edit_placement_words()`).
+# Returns: A list of `words` and `questionnaire`, one of each for every row.
+edit_question_context <- function(snap, rows) {
+  ids <- if ("questionnaire_id" %in% names(rows)) {
+    rows$questionnaire_id
+  } else if ("variable_key" %in% names(rows)) {
+    edit_lookup(snap, "variable", "variable_key", rows$variable_key, "questionnaire_id")
+  } else {
+    edit_lookup(snap, "placement", "placement_id", rows$placement_id, "questionnaire_id")
+  }
+  placement <- if ("placement_id" %in% names(rows)) {
+    rows$placement_id
+  } else if ("variable_key" %in% names(rows)) {
+    edit_lookup(snap, "variable", "variable_key", rows$variable_key, "placement_id")
+  }
+  words <- if (is.null(placement)) edit_component_words(snap, edit_question_of(snap, rows)) else edit_placement_words(snap, placement)
+  list(words = words, questionnaire = edit_questionnaire_short(snap, ids))
 }
 
 # Rows that point at something, by the questionnaire each is in.
@@ -713,8 +821,8 @@ edit_service_usage <- function(entity, snap, row) {
 # rows: The rows.
 # labels: Their names, from `edit_label()`.
 # Returns: A list with one list per questionnaire, the most rows first: `id`, `questionnaire` (its name, or "Not in
-#   a questionnaire") and `labels`, in the order given. `NULL` for rows that can't be in a questionnaire, or are
-#   questionnaires.
+#   a questionnaire"), `labels`, in the order given, and `index` (which of the rows they are). `NULL` for rows
+#   that can't be in a questionnaire, or are questionnaires.
 edit_usage_groups <- function(snap, table, rows, labels) {
   ids <- if (table == "questionnaire") {
     NULL
@@ -733,7 +841,7 @@ edit_usage_groups <- function(snap, table, rows, labels) {
   by_name <- split(seq_along(labels), factor(names, unique(names)))
   by_name <- by_name[order(-lengths(by_name), names(by_name))]
   unname(Map(function(name, these) {
-    list(id = named$questionnaire_id[these[1]], questionnaire = name, labels = labels[these])
+    list(id = named$questionnaire_id[these[1]], questionnaire = name, labels = labels[these], index = these)
   }, names(by_name), by_name))
 }
 
@@ -782,12 +890,16 @@ edit_service_blockers <- function(mode, found = NULL, n_changes = 0, shared = 0,
   }
   if (length(found$missing) > 0) out <- c(out, paste0("Fill in the ", word_list(found$missing), "."))
   if (length(found$problems) > 0) out <- c(out, "Fix the fields outlined in red.")
-  if (mode == "update" && n_changes == 0) out <- c(out, "Change something to continue.")
+  if (mode == "update" && n_changes == 0) out <- c(out, edit_nothing_changed)
   if (mode == "update" && shared >= 2 && !isTRUE(confirmed$shared)) {
     out <- c(out, "Tick the box to confirm it changes everywhere it's used.")
   }
   out
 }
+
+# What stops a form nothing was changed in. The form says so itself where the changes are listed ("Nothing yet.
+# Change a field above."), so the page doesn't say it again over the buttons.
+edit_nothing_changed <- "Change something to continue."
 
 # ------ Applying ------------------------------------------------------------------------------------------------------------------
 # Apply a change now. Every change is applied at once, by whoever makes it, and written to the Edit History.

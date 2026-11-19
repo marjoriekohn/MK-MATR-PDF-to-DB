@@ -1,16 +1,20 @@
 # The Metadata page (the module is called make_edit).
-# Everything staff can add, change, empty or delete in the MATR metadata database, laid out as Edit Extraction
-# lays out a questionnaire: an outline on the left and the item picked on the right. Each kind of thing is a
-# section of the outline, closed until it is clicked; open, it lists that kind's items, by name, and + Add. Blocks
-# have a section for each questionnaire, and a scale's items one for each measurement scale. The details show the
-# item picked, with Edit and Delete; Edit and + Add show its form, with Save.
+# Everything staff can add, change, merge, empty or delete in the MATR metadata database, laid out as Edit
+# Extraction lays out a questionnaire: a list on the left and the item picked on the right. Each kind of thing is a
+# section of the list (`make_edit_lists`), closed until it is clicked; open, it lists that kind's items, by name,
+# and + Add. The details show the item picked: what it belongs to as tags that open it, what its own form changes
+# under an Edit button, and what uses it, each with View. Merge, Empty and Delete are along the bottom; Edit and
+# + Add show the form there, with Save.
 make_edit_ui <- function(id) {
   ns <- NS(id)
   as_fill_carrier(div(
     id = ns("main"),
     class = "page edit-page is-wide",
     `data-ns` = ns(""),
-    page_header("Metadata", "View, add, change or delete what is in the MATR metadata database.", eyebrow = "Database", icon_name = "metadata"),
+    page_header(
+      "Metadata", "Pick a list, then an item, to see it. Nothing changes until you press Edit and then Save.",
+      eyebrow = "Database", icon_name = "metadata"
+    ),
     card(
       class = "structure-card",
       card_body(
@@ -22,15 +26,15 @@ make_edit_ui <- function(id) {
             outline_search("Search the lists that are open"),
             review_button(
               icon_label("collapse", "Collapse All"), "collapse_all",
-              class = "btn btn-outline-dark", title = "Close every section", `data-collapse-all` = NA
+              class = "btn btn-outline-dark", title = "Close every list", `data-collapse-all` = NA
             )
           ),
           div(
             class = "outline-split",
             div(
               class = "outline-body",
-              div(class = "outline-tree", div(class = "outline-list", lapply(make_edit_listed, function(kind) {
-                make_edit_section(kind, make_edit_kinds[[kind]][1], uiOutput(ns(paste0("items_", kind)), class = "outline-list"))
+              div(class = "outline-tree", div(class = "outline-list", lapply(make_edit_listed, function(list_id) {
+                make_edit_section(list_id, make_edit_lists[[list_id]]$label, uiOutput(ns(paste0("items_", list_id)), class = "outline-list"))
               }))),
               p(class = "outline-filter-empty", "Nothing in the open lists matches.")
             ),
@@ -46,50 +50,72 @@ make_edit_ui <- function(id) {
   ))
 }
 
-# The kinds of thing, in the order the list has them: what the list calls them, and one of them (for + Add).
-# Blocks are as printed in one questionnaire, a section for each; Components are each wording once, however many
-# questionnaires print it (its details have a card for each, which opens it as it is in that questionnaire alone).
-# Scale Items are as listed in one measurement scale. PDF Files are only shown.
-make_edit_kinds <- list(
-  registry = c("Registries", "Registry"),
-  study = c("Studies", "Study"),
-  publication = c("Publications", "Publication"),
-  questionnaire = c("Questionnaires", "Questionnaire"),
-  wave = c("Waves", "Wave"),
-  placement = c("Blocks", "Block"),
-  component = c("Components", "Component"),
-  investigator = c("Principal Investigators", "Principal Investigator"),
-  respondent_type = c("Respondent Types", "Respondent Type"),
-  tag = c("Tags", "Tag"),
-  answer_option = c("Answer Choices", "Answer Choice"),
-  measurement_scale = c("Measurement Scales", "Measurement Scale"),
-  question_scale = c("Scale Items", "Scale Item"),
-  pdf_file = c("PDF Files", "PDF File")
+# The lists, in the order the page has them: what each is called, one of its items (for + Add), and the kind of
+# thing it lists (`kind`, a name of `edit_entities`).
+# Three of them list printed wordings (the kind "component": each wording once, however many questionnaires print
+# it), told apart by the kinds of block they hold (`blocks`). Staff look for a question or a section, not for a
+# "component", and never needed the page's old list of everything one questionnaire prints ("Blocks"): a wording's
+# details have a card for each place that prints it, which opens it as it is there. + Add in those three adds one
+# to a questionnaire (`adds`: the kind "placement"), since a wording nothing prints is nothing. A measurement
+# scale's questions are added and removed in the scale's details, so they have no list either. Nor have PDFs: the
+# files a wave was extracted from are named, and opened, in the wave's details.
+make_edit_lists <- list(
+  registry = list(label = "Registries", one = "Registry", kind = "registry"),
+  study = list(label = "Studies", one = "Study", kind = "study"),
+  publication = list(label = "Publications", one = "Publication", kind = "publication"),
+  questionnaire = list(label = "Questionnaires", one = "Questionnaire", kind = "questionnaire"),
+  wave = list(label = "Waves", one = "Wave", kind = "wave"),
+  section = list(
+    label = "Sections, Grids & Groups", one = "Section, Grid or Group", kind = "component", adds = "placement",
+    blocks = c("Section", "Grid", "Group")
+  ),
+  question = list(label = "Questions", one = "Question", kind = "component", adds = "placement", blocks = "Question"),
+  note = list(
+    label = "Instructions & Notes", one = "Instruction or Note", kind = "component", adds = "placement",
+    blocks = c("Instruction", "Introduction", "Definition", "Note", "Interviewer Script")
+  ),
+  investigator = list(label = "Investigators", one = "Investigator", kind = "investigator"),
+  respondent_type = list(label = "Respondent Types", one = "Respondent Type", kind = "respondent_type"),
+  tag = list(label = "Tags", one = "Tag", kind = "tag"),
+  answer_option = list(label = "Answer Choices", one = "Answer Choice", kind = "answer_option"),
+  measurement_scale = list(label = "Measurement Scales", one = "Measurement Scale", kind = "measurement_scale")
+)
+make_edit_listed <- names(make_edit_lists)
+
+# What one of a kind is called, for the kinds a list doesn't name: one questionnaire's printing of a wording, and a
+# question's place in a scale. (A wording is called by its kind of block: `make_edit_called()`.)
+make_edit_kinds <- c(
+  unlist(lapply(unname(Filter(function(list) is.null(list$blocks), make_edit_lists)), function(list) stats::setNames(list$one, list$kind))),
+  component = "Wording", placement = "Block", question_scale = "Scale Question", pdf_file = "PDF File"
 )
 
-# The kinds the list has a section for: all of them.
-make_edit_listed <- names(make_edit_kinds)
-
-# A kind's items as the list shows them: in alphabetical order, but blocks in printed order.
+# What an item is called over its details: its kind, and for a wording, or one questionnaire's printing of one,
+# the kind of block it is ("Question", "Section").
 # key: The kind, a name of `edit_entities`.
-# scope: The questionnaire's (or scale's) key, for a kind that has a section for each; otherwise "".
-# Returns: Cards, from `edit_service_cards()`, with `scope` too.
-make_edit_cards <- function(key, snap, scope = "") {
-  entity <- edit_entities[[key]]
-  cards <- edit_service_cards(entity, snap, if (nzchar(scope)) scope)
-  cards$scope <- rep(scope, nrow(cards))
-  if (key == "placement") {
-    return(cards)
-  }
+# row: The item, or `NULL` for one being added.
+make_edit_called <- function(key, snap = NULL, row = NULL) {
+  block <- if (key == "component") row$kind else if (key == "placement" && !is.null(row)) edit_lookup(snap, "component", "component_id", row$component_id, "kind")
+  if (has_text(block)) block else make_edit_kinds[[key]]
+}
+
+# A list's items as it shows them, in alphabetical order.
+# list_id: The list, a name of `make_edit_lists`.
+# Returns: Cards, from `edit_service_cards()`, with `scope` too (none of the kinds listed belongs to a
+#   questionnaire or a scale, so it is "").
+make_edit_cards <- function(list_id, snap) {
+  list <- make_edit_lists[[list_id]]
+  cards <- edit_service_cards(edit_entities[[list$kind]], snap)
+  if (!is.null(list$blocks)) cards <- cards[cards$tag %in% list$blocks, , drop = FALSE]
+  cards$scope <- rep("", nrow(cards))
   cards[order(tolower(cards$title), cards$subtitle, method = "radix"), , drop = FALSE]
 }
 
 # A section of the list: its row, which opens and closes it (the page script does it at once), and what is
 # inside it, drawn only once it is opened (Shiny doesn't draw what is hidden).
-# id: The section's id: a kind, or a kind and a questionnaire or scale ("placement:12").
+# id: The list, a name of `make_edit_lists`.
 # label: What the row says.
 # inside: What is in it.
-# open: Whether it is drawn open: a section inside another is drawn again with it, as staff left it.
+# open: Whether it is drawn open.
 make_edit_section <- function(id, label, inside, open = FALSE) {
   div(
     class = c("outline-node", if (!open) "is-collapsed"), `data-id` = id,
@@ -102,20 +128,21 @@ make_edit_section <- function(id, label, inside, open = FALSE) {
   )
 }
 
-# One item of a kind, in its section: its kind of block (for a block), its name, and the arrow that opens it in
-# the details. Clicking it opens it there too.
+# One item of a list: its kind of block (in a list that holds more than one kind), its name with a line about it,
+# and the arrow that opens it in the details. Clicking it opens it there too.
 # kind: The kind, a name of `edit_entities`.
 # card: One of the kind's cards, from `edit_service_cards()`.
 # scope: The questionnaire's (or scale's) key, for a kind that belongs to one; otherwise "".
 # selected: Whether it is the one in the details.
-make_edit_item <- function(kind, card, scope = "", selected = FALSE) {
+# chip: Whether to say its kind of block: not where every item is the same kind (Questions).
+make_edit_item <- function(kind, card, scope = "", selected = FALSE, chip = TRUE) {
   id <- paste(kind, scope, card$key, sep = "|")
   picks <- list(`data-id` = id, `data-kind` = kind, `data-key` = card$key, `data-scope` = scope)
   div(
     class = "outline-node", `data-id` = id,
     div(
       class = c("outline-row", "edit-item", if (selected) "is-selected"), tabindex = "0", `data-action` = "select", !!!picks,
-      if (!is.na(card$tag)) type_chip(card$tag),
+      if (chip && !is.na(card$tag)) type_chip(card$tag),
       span(class = "outline-text", card$title, if (nzchar(card$subtitle)) span(class = "edit-item-meta", card$subtitle)),
       do.call(review_button, c(
         list(app_icon("open"), "select", class = "btn btn-sm btn-icon btn-open", title = "Open", `aria-label` = paste("Open", card$title)),
@@ -125,13 +152,14 @@ make_edit_item <- function(kind, card, scope = "", selected = FALSE) {
   )
 }
 
-# + Add, at the end of a kind's section (or of a questionnaire's, for a kind that belongs to one).
-# kind: The kind, a name of `edit_entities`.
-# scope: The questionnaire's key, or "".
-make_edit_add_button <- function(kind, scope = "") {
+# + Add, at the end of a list. In a list of wordings it adds one to a questionnaire, and says which list it is in,
+# so the form starts as that kind of block.
+# list_id: The list, a name of `make_edit_lists`.
+make_edit_add_button <- function(list_id) {
+  list <- make_edit_lists[[list_id]]
   review_button(
-    icon_label("add", paste("Add", make_edit_kinds[[kind]][2])), "add",
-    `data-kind` = kind, `data-scope` = scope, class = "btn btn-outline-dark btn-wide edit-add"
+    icon_label("add", paste("Add", list$one)), "add",
+    `data-kind` = list$adds %||% list$kind, `data-list` = list_id, class = "btn btn-outline-dark btn-wide edit-add"
   )
 }
 

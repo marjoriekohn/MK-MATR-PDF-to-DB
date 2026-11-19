@@ -3,7 +3,7 @@
 # block's words in the list, or any block's in its details, change a block's kind, open and close sections and
 # groups (by clicking them), pick the earlier question a question depends on, verify a block, add blocks (from
 # a dialog of the kinds there are), delete them, take a section or group away but keep what is inside, and drag
-# any of them into a new order. A
+# any of them into a new order, duplicate any block, and put one back as the AI read it. A
 # question's variables and choices are the variable editor's (`variable_editor()`), as on Make an edit. Every
 # change goes through `state$change()`.
 # Drawing the whole list takes seconds for a long questionnaire, for the server and again for the
@@ -71,6 +71,13 @@ extraction_outline_server <- function(
              },
              check = toggle_checked(draft, event$id),
              edit_kind = state$change(draft_service_update(draft, "components", event$id, "component_type", event$type)),
+             duplicate = {
+               # the copy is picked, so it can be changed at once
+               copy <- draft_service_next_id(draft, "components")
+               copied <- state$change(draft_service_duplicate(draft, event$id))
+               if (copied) state$selected(copy)
+             },
+             revert = state$change(draft_service_revert_block(draft, original(), event$id)),
              ungroup = {
                inside <- draft_service_children(draft, "components", event$id)$id
                ungrouped <- state$change(draft_service_ungroup(draft, event$id))
@@ -229,7 +236,8 @@ extraction_outline_server <- function(
         list(
           selected = state$selected(), collapsed = collapsed(),
           problems = state$problems(), suggestions = suggestions(),
-          component_types = lookups$component_types
+          component_types = lookups$component_types,
+          revertable = !is.null(original()) # there is what the AI read to put a block back to
         ),
         variables$view()
       )

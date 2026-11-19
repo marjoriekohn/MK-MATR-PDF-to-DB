@@ -92,24 +92,14 @@
 
 // A card that opens a page: the whole card is the link, and it lifts under the pointer
 .action-card {
+  @include card-link; // (components/_list-card.scss)
   display: block;
   height: 100%;
   padding: 1.35rem;
-  border: 1px solid $card-border-color;
-  border-radius: $card-border-radius;
-  background: $vcu-white;
-  color: $vcu-black;
-  text-decoration: none;
-  box-shadow: $shadow-card;
-  transition: border-color 0.15s, box-shadow 0.15s, transform 0.15s;
   // actionLink() puts what is in it in a span of its own
   > .action-label { display: flex; flex-direction: column; gap: 0.4rem; height: 100%; }
   .icon-tile { margin-bottom: 0.6rem; }
   &:hover, &:focus-visible {
-    border-color: $gold-border;
-    color: $vcu-black;
-    box-shadow: $shadow-card-lift;
-    transform: translateY(-2px);
     .icon-tile { border-color: $vcu-gold; background: $vcu-gold; }
     .action-card-go { color: $vcu-black; }
   }

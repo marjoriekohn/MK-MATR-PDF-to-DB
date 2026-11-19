@@ -31,7 +31,35 @@ placement_entity <- list(
     "component", "wave", "wave_question", "variable", "variable_tag", "tag", "answer_option", "response_option",
     "placement_tag", "question_scale"
   ),
+  # the blocks inside it in printed order, or the questions that depend on it, each by its words: View opens it as
+  # this questionnaire prints it
+  usage_rows = function(snap, row, table, rows) {
+    if (table != "placement") {
+      return(NULL)
+    }
+    inside <- all(rows$parent_placement_id %in% row$placement_id)
+    rows <- rows[order(rows$display_order), , drop = FALSE]
+    list(
+      rows = rows, labels = edit_placement_words(snap, rows$placement_id),
+      pills = as.list(edit_lookup(snap, "component", "component_id", rows$component_id, "kind")),
+      text = if (inside) paste("Holds", edit_count(nrow(rows), "block")) else paste(edit_count(nrow(rows), "question"), if (nrow(rows) == 1) "depends" else "depend", "on it")
+    )
+  },
   initial = function(snap, row, scope) edit_placement_initial(snap, row, scope),
+  # the questionnaire it is in, and its wording, which every place that prints it shares: tags that open the
+  # questionnaire and the wording. Its kind is the details' badge.
+  details = function(snap, row, own) {
+    q <- snap$questionnaire[match(row$questionnaire_id, snap$questionnaire$questionnaire_id), , drop = FALSE]
+    elsewhere <- sum(snap$placement$component_id %in% row$component_id) - 1
+    rbind(
+      edit_details_lines(NA, "Questionnaire", edit_label(snap, "questionnaire", q), kind = "questionnaire", key = q$questionnaire_id),
+      edit_details_lines(
+        NA, "Wording", if (elsewhere > 0) paste("wording shared with", edit_count(elsewhere, "other place")) else "wording printed only here",
+        kind = "component", key = row$component_id
+      ),
+      own[!own$name %in% "kind", , drop = FALSE]
+    )
+  },
   build = function(mode, snap, row, scope, fields, values) edit_placement_items(mode, snap, row, scope, fields, values),
   summary_add = function(snap, scope, fields, values) edit_placement_add_summary(snap, scope, fields, values),
   cards = function(snap, scope) {

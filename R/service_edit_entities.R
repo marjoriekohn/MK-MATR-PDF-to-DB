@@ -99,6 +99,17 @@ edit_field <- function(name, label, type = "text", required = FALSE, choices = N
   )
 }
 
+# Whether a study, a questionnaire or a wave is kept off the dashboard researchers search: on its form, a toggle.
+# Everything is shown until staff hide it; hidden, it stays in this database and on this site.
+# what: What it is, for the tooltip ("study").
+edit_hidden_field <- function(what) {
+  edit_field(
+    "hidden", "On the dashboard", "choice",
+    required = TRUE, choices = c("Visible" = "FALSE", "Hidden" = "TRUE"), default = "FALSE", short = "place on the dashboard",
+    hint = paste0("Hidden keeps this ", what, " off the dashboard researchers search. It stays in this database and on this site.")
+  )
+}
+
 # Words as they are compared: capitals and extra spaces (at either end, or doubled inside) don't count.
 edit_same_words <- function(text) tolower(squish(text))
 

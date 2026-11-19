@@ -341,6 +341,7 @@
       if (row.hasAttribute('aria-expanded')) row.setAttribute('aria-expanded', closed ? 'false' : 'true');
     }
     if (marks.checked) row.classList.toggle('is-verified', marks.checked.has(id)); // green once verified
+    row.classList.toggle('is-changed', !!(marks.changed && marks.changed.has(id))); // its Revert button shows
     const count = row.querySelector(':scope > .outline-badges > .outline-count');
     if (count) count.dataset.matr = marks.matr[id] || '';
     const check = row.querySelector(':scope > .outline-actions > .outline-check');
@@ -456,6 +457,9 @@
     }
     const badge = detail.querySelector('.detail-head .outline-problems');
     if (badge) showProblems(badge, problem);
+    // Revert to AI: on only while the block differs from what the AI read
+    const revert = detail.querySelector('.detail-revert');
+    if (revert) revert.disabled = !(marks.changed && marks.changed.has(id));
   }
 
   // Add Parent and Add Child show their field, with the cursor in it.

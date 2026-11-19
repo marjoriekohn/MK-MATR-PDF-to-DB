@@ -89,8 +89,8 @@ test_that("changing something several questionnaires share says so, asks to conf
     expect_match(form, "I understand this changes it in all 2 questionnaires that use it.")
     aside <- text_of(output$impact)
     expect_match(aside, "Shared by 2 questionnaires")
-    expect_match(aside, "Open in this questionnaire")
-    expect_match(paste(output$impact$html, collapse = ""), 'data-kind="placement" data-verb="view" data-scope="1" data-key="104"', fixed = TRUE)
+    expect_match(aside, "press View in Questionnaire on its card below")
+    expect_match(paste(output$impact$html, collapse = ""), 'data-kind="placement" data-verb="view" data-key="104" data-scope="1"', fixed = TRUE)
     expect_match(aside, "AHP|Adult Health and Personality")
     expect_match(aside, "MQ|Mother Questionnaire")
     session$setInputs(component__text = "do you currently smoke cigarettes?")
@@ -145,6 +145,87 @@ test_that("a row in the details is its fields as text, with where it is used, an
   })
 })
 
+test_that("a questionnaire's details are its study as tags, then what its form changes, then its waves with View", {
+  page <- change_page("questionnaire", "view", "1")
+  shiny::testServer(edit_change_server, args = change_args(page), {
+    main <- paste(as.character(output$main$html), collapse = "")
+    shown <- text_of(main)
+    expect_match(shown, "^Mid-Atlantic Twin Registry \\(MATR\\) Adult Health Study Name ") # the tags are the names alone
+    expect_false(grepl("Status|Dana Reyes|Jo Park", shown)) # the study's own: on the study
+    expect_match(main, 'class="edit-context-pill is-link"', fixed = TRUE)
+    # the study isn't said again among the lines Edit changes
+    lines <- sub("^.*edit-view", "", main)
+    expect_false(grepl("Adult Health Study", text_of(lines)))
+    expect_match(text_of(lines), "Name Adult Health and Personality Respondent Type Adult (18+)", fixed = TRUE)
+    expect_match(shown, "On the dashboard Visible AHP Wave 1 AHP Wave 2$") # its waves: cards, each pressed to open it
+    expect_match(main, 'class="edit-use-card" data-action="jump" aria-label="View Wave: AHP Wave 1"', fixed = TRUE)
+    expect_false(grepl("2 waves", shown))
+    expect_false(grepl("blocks", shown)) # not everything it prints
+    # a tag asks the page to open what it names
+    session$setInputs(action = list(action = "jump", kind = "study", verb = "view", key = "1"))
+    expect_equal(jump()[c("kind", "verb", "key")], list(kind = "study", verb = "view", key = "1"))
+  })
+})
+
+test_that("a form only looked at has nothing to lose; one typed in does", {
+  page <- change_page("registry", "update", "1")
+  shiny::testServer(edit_change_server, args = change_args(page), {
+    expect_false(dirty()) # not drawn yet
+    draw()
+    expect_false(dirty())
+    session$setInputs(registry__name = "Mid-Atlantic Twin Registry ") # a space isn't a change
+    expect_false(dirty())
+    session$setInputs(registry__name = "Mid-Atlantic Twins")
+    expect_true(dirty())
+    session$setInputs(registry__name = "Mid-Atlantic Twin Registry")
+    expect_false(dirty()) # put back
+  })
+  # a new one that starts with something (a question, from the Questions list) isn't typed in yet either
+  page <- change_page("placement", "add", scope = "1", prefill = list(placement__kind = "Question"))
+  shiny::testServer(edit_change_server, args = change_args(page), {
+    draw()
+    expect_false(dirty())
+    session$setInputs(placement__text = "How tall are you?")
+    expect_true(dirty())
+  })
+  # and what is only shown has no form
+  page <- change_page("registry", "view", "1")
+  shiny::testServer(edit_change_server, args = change_args(page), expect_false(dirty()))
+})
+
+test_that("a merge waits for the one to keep and for the box to be ticked, then is the plan's items", {
+  page <- change_page("component", "merge", "11")
+  shiny::testServer(edit_change_server, args = change_args(page), {
+    expect_true(active())
+    expect_false(ready()) # not drawn yet
+    draw()
+    expect_match(text_of(output$main), "This question is removed did you smoke during your pregnancy?", fixed = TRUE)
+    expect_equal(blockers(), "Choose the one to keep.")
+    session$setInputs(merge_into = "4")
+    expect_match(text_of(output$merge_preview), "This question stays do you now smoke cigarettes?", fixed = TRUE)
+    expect_equal(blockers(), "Tick the box to confirm the two become one.")
+    expect_false(ready())
+    session$setInputs(confirm_merge_read = TRUE)
+    expect_true(ready())
+    expect_equal(built()$items$action, c("Update", "Delete", "Delete"))
+    expect_match(built()$summary, "^Merged the question")
+    expect_equal(built()$merge$key, "4") # the one the page shows afterwards
+    # something that isn't one of its kind is no plan
+    session$setInputs(merge_into = "1")
+    expect_false(ready())
+    expect_equal(blockers()[1], "Choose the one to keep.")
+  })
+  # two that can't be merged are never ready, whatever is ticked
+  page <- change_page("answer_option", "merge", "14")
+  shiny::testServer(edit_change_server, args = change_args(page), {
+    draw()
+    session$setInputs(merge_into = "13", confirm_merge_read = TRUE)
+    expect_false(ready())
+    expect_equal(blockers(), "These two can't be merged yet: see what's in the way above.")
+    expect_match(text_of(output$merge_preview), "3 variables offer both")
+  })
+})
+
 test_that("new words for a block in one questionnaire say they change that place only", {
   page <- change_page("placement", "update", "404", scope = "4")
   shiny::testServer(edit_change_server, args = change_args(page), {
@@ -183,7 +264,7 @@ test_that("a delete shows what it would take with it, and what to tick and type"
     draw()
     review <- text_of(output$main)
     expect_match(review, "Jo Park")
-    expect_match(review, "1 study will lose their contact investigator")
+    expect_match(review, "1 study will lose their contact Adult Health Study")
     expect_equal(blockers(), c("Tick the box to confirm you've read what will be deleted.", "Type DELETE to be sure."))
     session$setInputs(confirm_read = TRUE, confirm_word = "delete")
     expect_true(ready())

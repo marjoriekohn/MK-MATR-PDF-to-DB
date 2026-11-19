@@ -157,7 +157,9 @@ create table public.study (
   status            text constraint study_status_check check (status in ('Active', 'Ended')),
   description       text,
   methods           text,
-  acknowledgements  text
+  acknowledgements  text,
+  -- kept off the dashboard researchers search (it stays here, and on the admin site); staff set it
+  hidden            boolean not null default false
 );
 
 -- A paper, chapter or report that used a study's data. One publication can be about several studies, and a
@@ -207,7 +209,8 @@ create table public.questionnaire (
   abbreviation       text    not null constraint questionnaire_abbreviation_not_blank check (btrim(abbreviation) <> ''),
   upvote_count       integer not null default 0 constraint questionnaire_upvote_count_nonnegative check (upvote_count >= 0),
   participant_count  integer constraint questionnaire_participant_count_check check (participant_count >= 0),
-  description        text
+  description        text,
+  hidden             boolean not null default false   -- kept off the dashboard, as a study's
 );
 
 -- A wave keeps the files its questions were extracted from: the PDF (by its pdf_file row; the file itself is
@@ -225,6 +228,7 @@ create table public.wave (
   supplement_name   text,
   supplement_sha256 text,
   supplement_text   text,
+  hidden            boolean not null default false,   -- kept off the dashboard, as a study's
   constraint wave_name_unique_in_questionnaire unique (questionnaire_id, name),
   constraint wave_supplement_is_one_file check (supplement_sha256 is null or supplement_text is null),
   -- the target of wave_question's foreign key, so a wave and a question share one questionnaire

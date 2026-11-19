@@ -60,15 +60,29 @@ test_snapshot <- function(tables = names(database_tables), change = identity) {
   change(stats::setNames(lapply(tables, fixture_table), tables))
 }
 
+# A catalog where things carry "past 12 months" (tag 13) and one of them "past year" (tag 12) as well.
+tagged_snapshot <- function(entity = edit_entities$tag) {
+  test_snapshot(edit_service_tables(entity), function(snap) {
+    snap$variable_tag <- rbind(snap$variable_tag, data.frame(variable_key = c(1, 2, 2), tag_id = c(13, 13, 12)))
+    snap$placement_tag <- rbind(snap$placement_tag, data.frame(placement_id = 209, tag_id = 13))
+    snap
+  })
+}
+
 # The catalog the extraction pages pick from, made of the sample tables, in the orders the models read them.
+# (Whether a row is hidden from the dashboard comes from the database as true or false, not as a form's text.)
 test_catalog <- function() {
+  visible <- function(rows) {
+    rows$hidden <- rows$hidden %in% "TRUE"
+    rows
+  }
   by_name <- function(rows) rows[order(rows$name, method = "radix"), , drop = FALSE]
   questionnaire_service_catalog(list(
     registries = by_name(fixture_table("registry")[c("registry_id", "name", "abbreviation")]),
-    studies = by_name(fixture_table("study")[c("study_id", "registry_id", "principal_investigator_id", "name")]),
+    studies = by_name(visible(fixture_table("study")[c("study_id", "registry_id", "principal_investigator_id", "name", "hidden")])),
     investigators = fixture_table("principal_investigator")[c("principal_investigator_id", "name")],
-    questionnaires = fixture_table("questionnaire")[c("questionnaire_id", "study_id", "respondent_type_id", "name", "abbreviation")],
-    waves = fixture_table("wave")[c("wave_id", "questionnaire_id", "name", "administered_date", "respondent_count")],
+    questionnaires = visible(fixture_table("questionnaire")[c("questionnaire_id", "study_id", "respondent_type_id", "name", "abbreviation", "hidden")]),
+    waves = visible(fixture_table("wave")[c("wave_id", "questionnaire_id", "name", "administered_date", "respondent_count", "hidden")]),
     respondent_types = by_name(fixture_table("respondent_type")[c("respondent_type_id", "name", "minimum_age", "maximum_age")])
   ))
 }

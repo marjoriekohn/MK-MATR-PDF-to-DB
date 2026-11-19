@@ -19,10 +19,10 @@ component, one row per answer choice, no duplicate questions.
 | --- | --- | --- |
 | `registry` | a registry (MATR, S4S) | |
 | `principal_investigator` | a researcher | |
-| `study` | a project under a registry | lead and contact investigator |
+| `study` | a project under a registry | lead and contact investigator; `hidden` keeps it off the dashboard (see Hidden from the dashboard) |
 | `respondent_type` | who a questionnaire is for | age range |
-| `questionnaire` | a form | name and abbreviation unique within its study |
-| `wave` | one administration of a form | also keeps the PDF and supplement it was extracted from (`pdf_sha256`, `supplement_*`); kept when emptied so Re-extract can read them again |
+| `questionnaire` | a form | name and abbreviation unique within its study; `hidden` |
+| `wave` | one administration of a form | also keeps the PDF and supplement it was extracted from (`pdf_sha256`, `supplement_*`); kept when emptied so Re-extract can read them again. The files' names (`pdf_name`, `supplement_name`) are the wave's, and staff can correct them on the Metadata page; `hidden` |
 | `pdf_file` | a PDF in Storage, by SHA-256 | pages, bytes |
 | `component` | one printed wording, kept once | `kind` (Section, Group, Grid, Question, Instruction, Introduction, Definition, Note, Interviewer Script), `text` |
 | `placement` | one place a questionnaire prints a component | `parent_placement_id` (the Section/Grid/Group it is in), `display_order`, `depends_on_placement_id` (the earlier question it only makes sense after) |
@@ -148,7 +148,33 @@ places print it too (another questionnaire, or another block of this one), staff
 **only here** (the default) gives this place a new component and leaves the old one to the others;
 **everywhere** (`"reword": "everywhere"`) renames the component itself, or, if the new words are a component
 already, points every place at that one. The extraction the wave was first pushed from is kept as it was.
+When the extraction the wave was last pushed from was read by the AI, the new draft is AI-Powered too and
+carries that reading (`ai_original`, with its model and prompt version; `reading_status` is `ready`, and it is
+not read again from the draft: Re-extract is the wave's own). Its `info.reopened_from` names that extraction.
+The catalog doesn't keep which of the AI's rows each row was, so the site matches the draft's rows to the
+reading through the copy that was pushed (same kind and words for a block, same place for a variable or a
+choice) when the draft is opened, and the draft keeps the matches once it is saved. So the Edit Extraction
+page still shows what differs from the AI's reading, and a block can be put back to it. The AI Monitor counts
+a reading once, on the extraction it was first pushed from: a reopened one is left out.
+
+**Hidden from the dashboard.** `study.hidden`, `questionnaire.hidden` and `wave.hidden` (boolean, false
+unless staff say otherwise) say that the row is kept off the dashboard researchers search. This site only
+records it: staff set it on the Metadata page (the row's own form) or in the Push dialog, under the study,
+questionnaire and wave picked, where a press changes it at once through `apply_change` like any edit. The
+row stays in the database and on this site either way; leaving hidden rows out is the dashboard's to do.
 Variables of a placement another wave still asks are not rewritten by an update (they are that wave's too).
+
+**Merging.** Two rows that are the same thing kept twice (a question worded slightly differently in two
+questionnaires, two headings, two answer choices, two tags, two scales, two investigators or respondent types)
+are made one on the Metadata page: Merge on the one that should go, then the one to keep. It needs nothing new in
+the database: the site works out what points at the row from the same list of links a delete uses
+(`R/service_edit_merge.R`, `edit_relations`) and sends `apply_change()` the items that point each at the other
+row instead, then delete the first. A place that prints a merged question or heading keeps its own position,
+numbers, variables and contents; only the wording it names changes. A row the merged one is part of the key of (a
+tag on a variable, a question in a scale, a choice a variable offers) is taken out and put back under the other,
+or only taken out if the other is there already. Two answer choices that one variable offers both of can't be
+merged until one is taken off that variable, since each has a code of its own there. The history records a merge
+as one change (its action is Deleted, as the merged row goes; the summary says "Merged ... into ...").
 
 **Multiple waves of one questionnaire.** A push into a second wave reuses the placements the questionnaire
 already has (same component under the same parent) and the variables with the same MATR ID on that

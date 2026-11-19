@@ -23,6 +23,13 @@ edit_seen_in <- function(snap, component_id) {
   paste0("seen in ", edit_count(length(q_ids), "questionnaire"), if (length(q_ids) <= 4) paste0(": ", paste(names, collapse = ", ")))
 }
 
+# The questionnaires that print each component, by their short names: "AHP, MQ"; "" for one nothing prints.
+edit_printed_in <- function(snap, component_ids) {
+  vapply(component_ids, function(id) {
+    paste(edit_questionnaire_short(snap, unique(snap$placement$questionnaire_id[snap$placement$component_id %in% id])), collapse = ", ")
+  }, character(1))
+}
+
 # The warning on a card, when changing it would reach more than one questionnaire.
 edit_shared_warning <- function(snap, component_ids) {
   n <- edit_service_questionnaire_count(snap, component_ids)
@@ -73,26 +80,52 @@ edit_same_component <- function(snap, kind, text, row = NULL) {
   same[same$kind %in% kind, , drop = FALSE]
 }
 
+# The page lists them by kind (Questions; Sections, Grids & Groups; Instructions & Notes: `make_edit_lists`), and a
+# sentence about one calls it by its kind (`edit_noun()`: "question", "section"), never "component".
 component_entity <- list(
-  label = "Component", noun = "component", plural = "components", article = "a",
+  label = "Wording", noun = "wording", plural = "wordings", article = "a",
   group = "Printed content", table = "component",
   about = paste0(
-    "A heading, question, instruction, definition or any other block as it is printed. Each wording is kept ",
+    "A question, heading, instruction, definition or note in the registry's words. Each wording is kept ",
     "once, and every questionnaire that prints it uses that one copy."
   ),
-  update_about = "A component is shared. Changing its words changes them in every questionnaire that prints it.",
+  update_about = "These words are shared. Changing them changes them in every questionnaire that prints them.",
   delete_about = paste(
-    "A component can only be deleted once no questionnaire prints it and no measurement scale lists it. One that",
+    "It can only be deleted once no questionnaire prints it and no measurement scale lists it. One that",
     "nothing prints goes on its own when the next change is made."
   ),
+  # the scales it is in: not changed on its own form, so each is a tag that opens the scale. Its words are the
+  # details' title, and the questionnaires that print it are the cards under it, each opening the questionnaire.
+  details = function(snap, row, own) {
+    scales <- snap$measurement_scale[snap$measurement_scale$scale_id %in% snap$question_scale$scale_id[snap$question_scale$component_id %in% row$component_id], , drop = FALSE]
+    edit_details_lines(
+      rep(NA, nrow(scales)), rep("Measurement scale", nrow(scales)), name_with_abbreviation(scales$name, scales$abbreviation),
+      kind = "measurement_scale", key = scales$scale_id
+    )
+  },
   # its card in each questionnaire lists its variables: who each is about, and its choices
   reads = c("variable", "variable_tag", "tag", "answer_option", "response_option", "wave", "wave_question"),
+  # the one group has no words, so its Edit has nothing to change
+  unchangeable = function(snap, row) {
+    if (identical(row$kind, "Group")) {
+      "A group has no words of its own to change. To move or delete one, press View in Questionnaire on its card below."
+    }
+  },
+  # into another wording of its kind: a question into a question, a heading into a heading. There is only one group.
+  alike = function(snap, row) {
+    snap$component[snap$component$kind %in% row$kind & !snap$component$kind %in% "Group", , drop = FALSE]
+  },
+  alike_label = function(snap, rows) {
+    where <- edit_printed_in(snap, rows$component_id)
+    paste0(edit_component_text(snap, rows$component_id), " · ", ifelse(nzchar(where), where, "not printed anywhere"))
+  },
   cards = function(snap, scope) {
     rows <- snap$component
     boxes <- count_in(edit_placement_component(snap, snap$variable$placement_id), rows$component_id)
+    where <- edit_printed_in(snap, rows$component_id)
     edit_cards(
       key_text(rows$component_id), edit_component_text(snap, rows$component_id),
-      subtitle = "",
+      subtitle = ifelse(nzchar(where), where, "not printed anywhere"),
       facts = Map(
         function(id, n) c(edit_seen_in(snap, id), if (n > 0) edit_count(n, "variable", "variables")),
         rows$component_id,
@@ -107,7 +140,7 @@ component_entity <- list(
         "kind", "Kind of block", "select",
         required = TRUE,
         choices = c("Choose a kind" = "", stats::setNames(edit_component_kinds, edit_component_kinds)),
-        locked = if (mode == "update") "A component's kind is fixed. To print a different kind of block, add one."
+        locked = if (mode == "update") "Its kind is fixed. To print a different kind of block, add one."
       ),
       edit_text_field(snap, row, kind_of = function(values) if (has_text(values$kind)) values$kind else if (!is.null(row)) row$kind)
     )

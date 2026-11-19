@@ -962,6 +962,11 @@ $$;
 -- being refused (private.push_run); until then the catalog is as it was. The extraction the wave was first pushed
 -- from stays as the record of what was read and reviewed. Asked for again while that draft is open, it gives
 -- the same draft. Returns the draft's extraction_id.
+-- When the extraction the wave was last pushed from was read by the AI, the draft is AI-Powered too and carries
+-- that reading (ai_original, with its model and prompt version; its reading is 'ready', since there is nothing
+-- to read), and its info names that extraction (`reopened_from`): the site matches the draft's blocks to the
+-- reading through the copy that was pushed, so a block can still be put back as the AI read it. A wave last
+-- pushed from an extraction typed by hand gives a Manual draft, as before.
 create or replace function public.reopen_wave(p_wave_id bigint, p_staff_id bigint)
 returns bigint
 language plpgsql
@@ -970,6 +975,8 @@ as $$
 declare
   w      public.wave;
   q      public.questionnaire;
+  src    public.extraction;   -- the extraction the wave was last pushed from, if there is one
+  by_ai  boolean;
   the_id bigint;
 begin
   perform private.require_staff(p_staff_id);
@@ -988,20 +995,30 @@ begin
   if the_id is not null then
     return the_id;
   end if;
-  insert into public.extraction (method, status, prepared_by, saved_by, info, questionnaire, pdf_sha256, pdf_name)
+  select * into src from public.extraction
+  where status = 'Pushed' and info ->> 'wave_id' = p_wave_id::text
+  order by pushed_at desc, extraction_id desc
+  limit 1;
+  -- (an AI-Powered extraction has a PDF: extraction_ai_has_pdf_and_reading)
+  by_ai := coalesce(src.method = 'AI-Powered' and src.ai_original is not null and w.pdf_sha256 is not null, false);
+  insert into public.extraction (method, status, prepared_by, saved_by, info, questionnaire, pdf_sha256, pdf_name,
+                                 ai_original, reading_status, model, prompt_version)
   values (
-    'Manual', 'Draft', p_staff_id, p_staff_id,
-    jsonb_build_object(
+    case when by_ai then 'AI-Powered' else 'Manual' end, 'Draft', p_staff_id, p_staff_id,
+    jsonb_strip_nulls(jsonb_build_object(
       'registry_id', (select s.registry_id::text from public.study s where s.study_id = q.study_id),
       'study_id', q.study_id::text, 'questionnaire_id', q.questionnaire_id::text, 'wave_id', w.wave_id::text,
-      'updates_wave_id', w.wave_id::text
-    ),
+      'updates_wave_id', w.wave_id::text,
+      'reopened_from', case when by_ai then src.extraction_id::text end
+    )),
     jsonb_build_object(
       'schema_version', 2,
       'questionnaire', jsonb_strip_nulls(jsonb_build_object('name', q.name, 'abbreviation', q.abbreviation)),
       'components', private.wave_blocks(w.wave_id, q.questionnaire_id, null)
     ),
-    w.pdf_sha256, w.pdf_name
+    w.pdf_sha256, w.pdf_name,
+    case when by_ai then src.ai_original end, case when by_ai then 'ready' end,
+    case when by_ai then src.model end, case when by_ai then src.prompt_version end
   )
   returning extraction_id into the_id;
   return the_id;

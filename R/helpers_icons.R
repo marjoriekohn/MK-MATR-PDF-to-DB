@@ -26,6 +26,12 @@ app_icons <- c(
   reextract = "arrows-rotate",
   link = "link",
   unlink = "link-slash",
+  merge = "code-merge", # two of the same thing made one
+  visible = "fas fa-eye", # shown on the dashboard
+  hidden = "fas fa-eye-slash", # kept off the dashboard
+  duplicate = "fas fa-clone", # a copy of a block, right after it (written whole, like `view`: the solid one)
+  revert = "fas fa-backward", # a block put back as the AI read it
+  view = "fas fa-folder-open", # on a tag and after View: opens the thing named (written whole: the short name gives the outlined folder)
   # what something is
   question_number = "hashtag",
   matr_id = "fingerprint",

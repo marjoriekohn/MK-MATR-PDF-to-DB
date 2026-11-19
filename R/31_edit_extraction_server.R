@@ -502,7 +502,8 @@ edit_extraction_server <- function(
     # An AI-Powered draft read again from the start, with the latest extraction prompt. What is on the page is put
     # aside for the new reading, so the page lets the draft go and shows the reading instead; the draft opens here
     # again once it is read.
-    can_reextract <- reactive(identical(req(record())$method, extraction_ai))
+    # (not a draft reopened from a wave: reading that again is the wave's own Re-extract, on the Metadata page)
+    can_reextract <- reactive(identical(req(record())$method, extraction_ai) && !nzchar(extraction_service_updates_wave(record())))
 
     observeEvent(input$reextract, {
       req(can_reextract(), can_change())

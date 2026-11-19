@@ -330,7 +330,8 @@ outline_node <- function(block, draft, view, lookups, ns) {
 # opens it in the details (a question's or text block's). Clicking a section's, grid's or group's row opens or
 # closes it. A section's and a
 # text block's words are typed in the row once its edit button is pressed (a question's in its details), and
-# pointing at the row puts its buttons at its end: edit, change its kind, ungroup, delete. The numbers the
+# pointing at the row puts its buttons at its end: edit, change its kind, ungroup, duplicate, put back as the AI
+# read it, delete (a question's row has the two in the middle; the rest are in its details). The numbers the
 # site works out (display order, place among the questions) order the blocks but aren't shown.
 outline_row <- function(block, draft, view, ns) {
   type <- block$component_type
@@ -347,7 +348,7 @@ outline_row <- function(block, draft, view, ns) {
     # typed in once the row's edit button is pressed (review.js)
     if (type == "Group") span(class = "outline-group-note") else outline_text_field(block, view$problems, ns) |> tagAppendAttributes(readonly = NA),
     outline_badges(block, draft, view$problems),
-    if (type != "Question") row_actions(block, view$component_types),
+    row_actions(block, view$component_types, revertable = isTRUE(view$revertable)),
     if (!is_section) {
       review_button(
         app_icon("open"), "select",
@@ -415,23 +416,27 @@ outline_check_titles <- c(
   unchecked = "Mark as checked and go to the next block. If you change it afterwards, it needs checking again."
 )
 
-# The buttons a section's, group's or text block's row shows when it is pointed at, at its end: edit its words
-# in the list (not a group's, which has none: the page script does it), change its kind (to any kind
-# but a question), ungroup a section or group keeping what's inside, and delete. A block is verified in its
-# details; a section or group is checked once everything in it is (draft_service_check_containers()).
-row_actions <- function(block, component_types = NULL) {
+# The buttons a row shows when it is pointed at, at its end. Every block's: duplicate it (`duplicate_title()`), and
+# put it back as the AI read it (`revert_button()`: only on a block the AI read, and shown only once it differs
+# from that, which the page script marks). A section's, group's or text block's too: edit its words in the list
+# (not a group's, which has none: the page script does it), change its kind (to any kind but a question), ungroup a
+# section or group keeping what's inside, and delete; a question has those in its details. A block is verified
+# in its details; a section or group is checked once everything in it is (draft_service_check_containers()).
+# revertable: Whether the draft has what the AI read to go back to.
+row_actions <- function(block, component_types = NULL, revertable = FALSE) {
   what <- tolower(block$component_type)
+  asked <- block$component_type == "Question"
   ungroup <- if (block$component_type == "Section") "Remove this heading and keep what's inside" else "Ungroup: keep what's inside"
   span(
     class = "outline-actions",
-    if (block$component_type != "Group") {
+    if (!asked && block$component_type != "Group") {
       tags$button(
         type = "button", class = "btn btn-sm btn-icon", `data-edit-words` = NA,
         title = paste("Edit the", what, "words"), `aria-label` = paste("Edit the", what, "words"),
         app_icon("edit")
       )
     },
-    kind_menu(block, component_types),
+    if (!asked) kind_menu(block, component_types),
     if (is_container(block$component_type)) {
       review_button(
         app_icon("ungroup"), "ungroup",
@@ -439,10 +444,38 @@ row_actions <- function(block, component_types = NULL) {
       )
     },
     review_button(
-      app_icon("delete"), "delete",
-      `data-table` = "components", `data-id` = block$id,
-      class = "btn btn-sm btn-icon", title = paste("Delete this", what), `aria-label` = paste("Delete this", what)
-    )
+      app_icon("duplicate"), "duplicate",
+      `data-id` = block$id, class = "btn btn-sm btn-icon", title = duplicate_title(block), `aria-label` = duplicate_title(block)
+    ),
+    if (revertable && !is.na(block$ref)) {
+      review_button(
+        app_icon("revert"), "revert",
+        `data-id` = block$id, class = "btn btn-sm btn-icon row-revert", title = revert_title(block), `aria-label` = revert_title(block)
+      )
+    },
+    if (!asked) {
+      review_button(
+        app_icon("delete"), "delete",
+        `data-table` = "components", `data-id` = block$id,
+        class = "btn btn-sm btn-icon", title = paste("Delete this", what), `aria-label` = paste("Delete this", what)
+      )
+    }
+  )
+}
+
+# What Duplicate says it does: a copy right after the block, with what it holds.
+duplicate_title <- function(block) {
+  paste0(
+    "Duplicate this ", tolower(block$component_type), ": a copy right after it",
+    if (is_container(block$component_type)) ", with everything inside it" else if (block$component_type == "Question") ", with its variables and choices"
+  )
+}
+
+# What Revert says it does: the block as the AI read it again (`draft_service_revert_block()`).
+revert_title <- function(block) {
+  paste0(
+    "Put this ", tolower(block$component_type), " back as the AI read it",
+    if (block$component_type == "Question") ": its words, variables and choices. MATR IDs and codes stay" else ""
   )
 }
 
@@ -538,7 +571,7 @@ block_detail <- function(block, draft, view, lookups, ns) {
         detail_section(NULL, detail_field("Holds", span(class = "detail-value", plural(sum(draft$components$parent_id %in% block$id), "block"))))
       }
     ),
-    detail_actions(block, block_problems)
+    detail_actions(block, block_problems, revertable = isTRUE(view$revertable))
   )
 }
 
@@ -562,14 +595,17 @@ depends_on_help <- "The earlier question this one only makes sense after (a foll
 # Words in curly quotes: “Yes”. None gives none (recycle0), not an empty pair of quotes.
 quoted <- function(words) paste0("“", words, "”", recycle0 = TRUE)
 
-# The details' buttons, along the bottom, the same size and evenly spaced: for a question Verify, + Variable
-# and Delete; for another block Verify and Delete; for a section or group Ungroup and Delete. Verify marks it as
+# The details' buttons, along the bottom, the same size and evenly spaced: for a question Verify, + Variable,
+# Duplicate, Revert to AI and Delete; for another block the same without + Variable; for a section or group Ungroup
+# in place of Verify. Verify marks it as
 # checked and goes to the next block (the page script keeps it up to date as the checks run); it waits until
 # nothing is left to fix (it says so when pointed at). A section or group has no Verify: it is checked once
-# everything in it is. On a phone they are only their icons.
+# everything in it is. Revert to AI is only on a block the AI read, and is off (the page script keeps it up to date)
+# while the block is as the AI read it. On a phone they are only their icons.
 # block: One row of a draft's `components`.
 # block_problems: Its problems, as sentences.
-detail_actions <- function(block, block_problems) {
+# revertable: Whether the draft has what the AI read to go back to.
+detail_actions <- function(block, block_problems, revertable = FALSE) {
   type <- tolower(block$component_type)
   blocked <- !block$checked && length(block_problems) > 0
   button <- function(icon_name, text, action, ..., class = "btn-outline-dark") {
@@ -594,6 +630,11 @@ detail_actions <- function(block, block_problems) {
         "ungroup", if (block$component_type == "Section") "Remove heading, keep contents" else "Ungroup", "ungroup",
         title = "Take it away but keep what's inside"
       )
+    },
+    button("duplicate", "Duplicate", "duplicate", title = duplicate_title(block)),
+    if (revertable && !is.na(block$ref)) {
+      # (off until the page script says the block differs from what the AI read)
+      button("revert", "Revert to AI", "revert", title = revert_title(block), class = "btn-outline-dark detail-revert", disabled = TRUE)
     },
     review_button(
       icon_label("delete", "Delete"), "delete",

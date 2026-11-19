@@ -54,6 +54,7 @@ investigator_entity <- list(
     "An investigator can only be deleted once they lead no study. Where they're a study's ",
     "contact, the contact is simply left empty."
   ),
+  alike = function(snap, row) snap$principal_investigator,
   cards = function(snap, scope) {
     rows <- snap$principal_investigator
     leads <- count_in(snap$study$principal_investigator_id, rows$principal_investigator_id)
@@ -111,9 +112,7 @@ study_entity <- list(
     lead <- edit_lookup(snap, "principal_investigator", "principal_investigator_id", rows$principal_investigator_id, "name")
     edit_cards(
       key_text(rows$study_id), rows$name,
-      subtitle = paste0(
-        registry, ifelse(is.na(lead), "", paste0(" · led by ", lead)), ifelse(is.na(rows$status), "", paste0(" · ", rows$status))
-      ),
+      subtitle = paste0(registry, ifelse(is.na(lead), "", paste0(" · led by ", lead))),
       facts = Map(
         function(questionnaires, publications) {
           c(edit_count(questionnaires, "questionnaire"), if (publications > 0) edit_count(publications, "publication"))
@@ -129,8 +128,8 @@ study_entity <- list(
         required = TRUE,
         choices = edit_choices(snap, "registry", blank = "Choose a registry")
       ),
-      edit_field("principal_investigator_id", "Lead investigator", "select", choices = investigators),
-      edit_field("contact_principal_investigator_id", "Contact investigator", "select",
+      edit_field("principal_investigator_id", "Investigator", "select", choices = investigators, hint = "Who leads this study."),
+      edit_field("contact_principal_investigator_id", "Contact", "select",
         choices = investigators,
         hint = "Who to contact about this study."
       ),
@@ -149,8 +148,19 @@ study_entity <- list(
       ),
       edit_field("description", "Description", "textarea"),
       edit_field("methods", "Methods", "textarea"),
-      edit_field("acknowledgements", "Acknowledgements", "textarea")
+      edit_field("acknowledgements", "Acknowledgements", "textarea"),
+      edit_hidden_field("study")
     )
+  },
+  # its publications by title, each opening the publication
+  usage_rows = function(snap, row, table, rows) {
+    if (table != "study_publication") {
+      return(NULL)
+    }
+    titles <- edit_lookup(snap, "publication", "publication_id", rows$publication_id, "title")
+    by_title <- order(tolower(titles), method = "radix")
+    rows <- rows[by_title, , drop = FALSE]
+    list(rows = rows, labels = titles[by_title], text = edit_count(nrow(rows), "publication"), open = edit_opens("publication", rows$publication_id))
   },
   duplicates = function(snap, values) {
     registry <- if (has_text(values$registry_id)) list(registry_id = as.numeric(values$registry_id))
@@ -255,6 +265,16 @@ publication_entity <- list(
     )
   },
   initial = function(snap, row, scope) list(studies = edit_several_text(publication_studies(snap, row$publication_id))),
+  # the studies it is about by name, each opening the study
+  usage_rows = function(snap, row, table, rows) {
+    if (table != "study_publication") {
+      return(NULL)
+    }
+    names <- edit_lookup(snap, "study", "study_id", rows$study_id, "name")
+    by_name <- order(tolower(names), method = "radix")
+    rows <- rows[by_name, , drop = FALSE]
+    list(rows = rows, labels = names[by_name], text = paste("In the list of", edit_count(nrow(rows), "study", "studies")), open = edit_opens("study", rows$study_id))
+  },
   # the publication's own fields, then a row of STUDY_PUBLICATION for each study picked, and none for one unpicked
   build = function(mode, snap, row, scope, fields, values) {
     entity <- edit_entities$publication

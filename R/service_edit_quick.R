@@ -85,3 +85,44 @@ edit_service_quick_picks <- function(catalog, kind, key, before) {
     wave = list(questionnaire_id = key_text(added$questionnaire_id), wave_id = key)
   ))
 }
+
+# ------ Hiding from the dashboard, from the push dialog --------------------------------------------------
+# A study, a questionnaire and a wave can each be kept off the dashboard researchers search (their `hidden`
+# column; everything is shown until staff hide it). The Basic Info drop-downs of an extraction say whether what
+# is picked is shown, and change it: one field of one row, applied at once like any edit and written to the Edit
+# History. The Metadata page's forms have the same field.
+
+# The kinds that can be hidden, by the Basic Info drop-down that picks one, and where the catalog has their rows.
+edit_hidden_kinds <- c(study_id = "study", questionnaire_id = "questionnaire", wave_id = "wave")
+edit_hidden_rows <- c(study = "studies", questionnaire = "questionnaires", wave = "waves")
+
+# Whether one of them is hidden from the dashboard, as the catalog has it.
+# kind: One of `edit_hidden_kinds`.
+# id: The row's id, as a drop-down holds it.
+# Returns: `TRUE` or `FALSE`; `NULL` when the catalog has no such row (nothing is picked yet).
+edit_service_hidden <- function(catalog, kind, id) {
+  rows <- catalog[[edit_hidden_rows[[kind]]]]
+  at <- match(suppressWarnings(as.numeric(id %||% "")), rows[[paste0(kind, "_id")]])
+  if (length(at) == 1 && !is.na(at)) isTRUE(rows$hidden[at])
+}
+
+# The change that hides one of them from the dashboard, or shows it there again.
+# hide: `TRUE` to hide it, `FALSE` to show it.
+# Returns: A list of `items` and `summary`, for `edit_service_apply()`. An error with a sentence if the catalog
+#   no longer has the row.
+edit_service_hide <- function(catalog, kind, id, hide) {
+  key <- paste0(kind, "_id")
+  rows <- catalog[[edit_hidden_rows[[kind]]]]
+  row <- rows[rows[[key]] %in% suppressWarnings(as.numeric(id)), , drop = FALSE]
+  if (nrow(row) != 1) stop(sprintf("That %s is no longer in the database. Pick another.", kind), call. = FALSE)
+  list(
+    items = edit_number_items(edit_item(
+      kind, edit_identifier(stats::setNames(list(row[[key]]), key)), "Update", "hidden",
+      tolower(isTRUE(row$hidden)), tolower(isTRUE(hide))
+    )),
+    summary = sprintf(
+      if (isTRUE(hide)) "Hid the %s “%s” from the dashboard" else "Showed the %s “%s” on the dashboard again",
+      kind, row$name
+    )
+  )
+}

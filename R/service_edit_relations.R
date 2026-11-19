@@ -21,10 +21,12 @@
 # by: The child's columns, named, each holding the parent's column of that name's value.
 # on_delete: What happens to the child's rows when the parent's go: `"remove"`, `"block"` or `"clear"`.
 # why,fix: For a block: why the child's rows are in the way, and what to do.
-# clears: For a clear: what is emptied, e.g. `"contact investigator"`.
+# clears: For a clear: what is emptied, e.g. `"contact"`.
+# title: What the child's rows are to the parent, where their count alone wouldn't say: `"Leads %s"`, the `%s`
+#   being the count ("2 studies"). The parent's details title the list of them with it.
 # Returns: A list.
-relation <- function(child, parent, by, on_delete, why = NULL, fix = NULL, clears = NULL) {
-  list(child = child, parent = parent, by = by, on_delete = on_delete, why = why, fix = fix, clears = clears)
+relation <- function(child, parent, by, on_delete, why = NULL, fix = NULL, clears = NULL, title = NULL) {
+  list(child = child, parent = parent, by = by, on_delete = on_delete, why = why, fix = fix, clears = clears, title = title)
 }
 
 edit_relations <- list(
@@ -36,12 +38,13 @@ edit_relations <- list(
   relation(
     "study", "principal_investigator", c(principal_investigator_id = "principal_investigator_id"), "block",
     why = "These studies name this investigator as their lead.",
-    fix = "Change those studies to another lead investigator first (Update, then Study), or keep this investigator."
+    fix = "Change those studies to another investigator first (open the study and press Edit), merge this investigator into another, or keep them.",
+    title = "Leads %s"
   ),
   relation(
     "study", "principal_investigator", c(contact_principal_investigator_id = "principal_investigator_id"),
     "clear",
-    clears = "contact investigator"
+    clears = "contact", title = "Contact for %s"
   ),
   # a publication's place in a study's list goes with the study, and with the publication
   relation("study_publication", "study", c(study_id = "study_id"), "remove"),
@@ -54,22 +57,24 @@ edit_relations <- list(
   relation(
     "questionnaire", "respondent_type", c(respondent_type_id = "respondent_type_id"), "block",
     why = "Every questionnaire has a respondent type, so a respondent type can't go while questionnaires use it.",
-    fix = "Change those questionnaires to another respondent type first (Update, then Questionnaire)."
+    fix = "Change those questionnaires to another respondent type first (open the questionnaire and press Edit), or merge this respondent type into another."
   ),
   relation("wave", "questionnaire", c(questionnaire_id = "questionnaire_id"), "remove"),
   relation(
     "wave", "pdf_file", c(pdf_sha256 = "pdf_sha256"), "block",
-    why = "These waves were extracted from it.", fix = "Keep it: it is the record of what they were read from."
+    why = "These waves were extracted from it.", fix = "Keep it: it is the record of what they were read from.",
+    title = "Read for %s"
   ),
   relation(
     "wave", "pdf_file", c(supplement_sha256 = "pdf_sha256"), "block",
-    why = "These waves read their Variable Names and Coding from it.", fix = "Keep it: it is the record of what they were read from."
+    why = "These waves read their Variable Names and Coding from it.", fix = "Keep it: it is the record of what they were read from.",
+    title = "Variable Names and Coding for %s"
   ),
   relation("placement", "questionnaire", c(questionnaire_id = "questionnaire_id"), "remove"),
   relation(
     "placement", "component", c(component_id = "component_id"), "block",
-    why = "Questionnaires still print this block there.",
-    fix = "Delete it from those questionnaires first (Blocks, then the questionnaire). A block no questionnaire prints goes on its own."
+    why = "Questionnaires still print it.",
+    fix = "Delete it from those questionnaires first (Open in this questionnaire, then Delete), or merge it into another. One that no questionnaire prints goes on its own."
   ),
   # What's inside a section, grid or group goes with it; a question whose dependency goes stands on its own.
   relation("placement", "placement", c(parent_placement_id = "placement_id"), "remove"),
@@ -81,32 +86,32 @@ edit_relations <- list(
   relation(
     "response_option", "answer_option", c(answer_option_id = "answer_option_id"), "block",
     why = "Variables already offer this answer choice.",
-    fix = "Take it off those variables first. Until then the choice can be reworded instead."
+    fix = "Take it off those variables first. Until then the choice can be reworded, or merged into another."
   ),
   relation("placement_tag", "placement", c(placement_id = "placement_id"), "remove"),
   relation("variable_tag", "variable", c(variable_key = "variable_key"), "remove"),
   relation("response_option_tag", "response_option", c(variable_key = "variable_key", answer_option_id = "answer_option_id"), "remove"),
   relation(
     "placement_tag", "tag", c(tag_id = "tag_id"), "block",
-    why = "Questions carry this tag.", fix = "Take it off those questions first. Until then the tag can be renamed instead."
+    why = "Questions carry this tag.", fix = "Take it off those questions first. Until then the tag can be renamed, or merged into another."
   ),
   relation(
     "variable_tag", "tag", c(tag_id = "tag_id"), "block",
-    why = "Variables carry this tag.", fix = "Take it off those variables first. Until then the tag can be renamed instead."
+    why = "Variables carry this tag.", fix = "Take it off those variables first. Until then the tag can be renamed, or merged into another."
   ),
   relation(
     "response_option_tag", "tag", c(tag_id = "tag_id"), "block",
-    why = "Answer choices of variables carry this tag.", fix = "Take it off those choices first. Until then the tag can be renamed instead."
+    why = "Answer choices of variables carry this tag.", fix = "Take it off those choices first. Until then the tag can be renamed, or merged into another."
   ),
   relation(
     "question_scale", "measurement_scale", c(scale_id = "scale_id"), "block",
-    why = "A measurement scale that still has items can't be deleted.",
-    fix = "Delete its items first (Scale Items, then the scale)."
+    why = "A measurement scale that still has questions can't be deleted.",
+    fix = "Remove its questions first (Remove, beside each in its details), or merge it into another scale."
   ),
   relation(
     "question_scale", "component", c(component_id = "component_id"), "block",
-    why = "Measurement scales list this question as an item.",
-    fix = "Take it out of those scales first (Scale Items, then the scale)."
+    why = "Measurement scales list this question.",
+    fix = "Take it out of those scales first (open the scale, then Remove beside the question)."
   )
 )
 
@@ -276,7 +281,7 @@ edit_nouns <- list(
   questionnaire = c("questionnaire", "questionnaires"),
   wave = c("wave", "waves"),
   pdf_file = c("PDF", "PDFs"),
-  component = c("component", "components"),
+  component = c("wording", "wordings"),
   placement = c("block in a questionnaire", "blocks in questionnaires"),
   wave_question = c("question in a wave", "questions in waves"),
   variable = c("variable", "variables"),
@@ -468,7 +473,7 @@ edit_service_reach <- function(snap, cascade, examples = 5) {
     rows <- edit_rows(snap, "component", cascade$forgotten)
     lines <- c(lines, list(list(
       table = "component", n = nrow(rows),
-      text = paste(plural_noun(nrow(rows), "component"), "no questionnaire prints any more (forgotten by the database, with any scale items)"),
+      text = paste(plural_noun(nrow(rows), "component"), "no questionnaire prints any more (forgotten by the database, and taken out of any measurement scale)"),
       examples = utils::head(edit_label(snap, "component", rows), examples), more = max(0, nrow(rows) - examples)
     )))
   }

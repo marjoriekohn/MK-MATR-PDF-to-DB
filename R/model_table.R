@@ -31,7 +31,8 @@ database_tables <- list(
     columns = c(
       study_id = "id", registry_id = "id", principal_investigator_id = "id",
       contact_principal_investigator_id = "id", name = "text", status = "text",
-      description = "text", methods = "text", acknowledgements = "text"
+      description = "text", methods = "text", acknowledgements = "text",
+      hidden = "flag" # kept off the dashboard: read as "TRUE" or "FALSE", as a form's toggle holds it
     )
   ),
   # A paper that used a study's data, and (study_publication) each study it is about.
@@ -57,7 +58,7 @@ database_tables <- list(
     key = "questionnaire_id", order_by = "name",
     columns = c(
       questionnaire_id = "id", study_id = "id", respondent_type_id = "id",
-      name = "text", abbreviation = "text", participant_count = "number", description = "text"
+      name = "text", abbreviation = "text", participant_count = "number", description = "text", hidden = "flag"
     )
   ),
   # A wave keeps the files it was extracted from, so Re-extract can read them again (pushed with the extraction;
@@ -67,7 +68,8 @@ database_tables <- list(
     columns = c(
       wave_id = "id", questionnaire_id = "id", name = "text",
       respondent_count = "number", administered_date = "date",
-      pdf_sha256 = "text", pdf_name = "text", supplement_name = "text", supplement_sha256 = "text", supplement_text = "text"
+      pdf_sha256 = "text", pdf_name = "text", supplement_name = "text", supplement_sha256 = "text", supplement_text = "text",
+      hidden = "flag"
     )
   ),
   # The PDFs uploaded to the site, once each by their SHA-256: Make an edit lists them (and only shows them;

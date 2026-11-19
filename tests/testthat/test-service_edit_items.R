@@ -30,13 +30,15 @@ test_that("an update with nothing changed has no items, and one with a problem i
   expect_error(form_items(form_for("registry", "add", registry__name = "Half typed")), "Fill in the abbreviation and participants")
 })
 
-test_that("changing a shared component's words is one item on the component", {
+test_that("changing a shared wording's words is one item on it, and the history calls it by its kind", {
   form <- form_for("component", "update", "4", component__text = "Do you currently smoke cigarettes?")
   expect_equal(
     item_lines(form_items(form)$items),
     'Update component {"component_id":4} text: do you now smoke cigarettes? -> do you currently smoke cigarettes?'
   )
-  expect_equal(form_items(form)$summary, "Changed the words of the component “do you now smoke cigarettes?”")
+  expect_equal(form_items(form)$summary, "Changed the words of the question “do you now smoke cigarettes?”")
+  section <- form_for("component", "update", "1", component__text = "A. About yourself")
+  expect_equal(form_items(section)$summary, "Changed the words of the section “a. about you”")
 })
 
 test_that("a locked field can't be changed, whatever's sent", {
@@ -62,7 +64,8 @@ test_that("a study is added by itself, without a questionnaire or a wave", {
   form <- form_for("study", "add", study__registry_id = "1", study__principal_investigator_id = "2", study__name = "New Study", study__status = "Active")
   items <- form_items(form)$items
   expect_setequal(unique(items$entity_name), "study")
-  expect_equal(items$attribute_name, c("registry_id", "principal_investigator_id", "name", "status"))
+  expect_equal(items$attribute_name, c("registry_id", "principal_investigator_id", "name", "status", "hidden"))
+  expect_equal(items$new_value[items$attribute_name == "hidden"], "false") # shown on the dashboard, unless the form hides it
 })
 
 test_that("a tag is added with its kind, its name written that kind's way", {
@@ -112,8 +115,8 @@ test_that("a delete lists every field of the row deleted, to check them when it 
   row <- edit_service_row(entity, snap, "2")
   built <- edit_service_build(entity, "delete", snap, row)
   expect_setequal(unique(built$items$entity_name), "questionnaire")
-  expect_equal(built$items$action, rep("Delete", 6))
-  expect_equal(built$items$attribute_name, c("study_id", "respondent_type_id", "name", "abbreviation", "participant_count", "description"))
+  expect_equal(built$items$action, rep("Delete", 7))
+  expect_equal(built$items$attribute_name, c("study_id", "respondent_type_id", "name", "abbreviation", "participant_count", "description", "hidden"))
   expect_equal(built$items$old_value[3], "Kid Questionnaire")
   # what goes with it is said, not written: the database takes it along
   expect_equal(built$summary, "Deleted the questionnaire “Kid Questionnaire (KQ)” and 14 connected records")
@@ -523,4 +526,38 @@ test_that("a publication's studies are changed with it, and its card names them"
   all <- test_snapshot()
   expect_equal(edit_service_cascade(all, list(study = "1"))$removed$study_publication, "1|1")
   expect_equal(edit_label(all, "study_publication", all$study_publication[1, ]), "Health habits of adult twins · Adult Health Study")
+})
+
+test_that("a wave's PDF name is changed on the wave's own form, and a wave with no PDF has no such field", {
+  ids <- function(form) vapply(form$fields, function(field) field$id, character(1))
+  form <- form_for("wave", "update", "1", wave__pdf_name = "AHP_2019.pdf")
+  expect_true("wave__pdf_name" %in% ids(form))
+  expect_false("wave__supplement_name" %in% ids(form)) # it has no file of variable names and coding
+  expect_equal(item_lines(form_items(form)$items), 'Update wave {"wave_id":1} pdf_name: AHP_Redacted.pdf -> AHP_2019.pdf')
+  # the name can't be left empty; the file itself (its fingerprint) isn't on the form at all
+  expect_equal(edit_service_check(form$fields, utils::modifyList(form$values, list(wave__pdf_name = "")))$missing, "PDF file")
+  expect_false(any(grepl("sha256", ids(form))))
+  expect_false(any(c("wave__pdf_name", "wave__supplement_name") %in% ids(form_for("wave", "update", "2"))))
+  expect_false(any(c("wave__pdf_name", "wave__supplement_name") %in% ids(form_for("wave", "add"))))
+})
+
+test_that("a study, a questionnaire and a wave are shown on the dashboard until their form hides them", {
+  for (key in c("study", "questionnaire", "wave")) {
+    form <- form_for(key, "update", "1")
+    field <- Filter(function(field) field$name == "hidden", form$fields)[[1]]
+    expect_equal(field$type, "choice", info = key)
+    expect_equal(field$choices, c(Visible = "FALSE", Hidden = "TRUE"), info = key)
+    expect_equal(form$initial[[field$id]], "FALSE", info = key) # as the sample tables have them
+    expect_equal(nrow(edit_service_changes(form$fields, form$initial, form$values)), 0, info = key) # opened, nothing differs
+    expect_equal(form_for(key, "add")$initial[[field$id]], "FALSE", info = key) # a new one is shown
+  }
+  hidden <- form_for("study", "update", "1", study__hidden = "TRUE")
+  expect_equal(item_lines(form_items(hidden)$items), 'Update study {"study_id":1} hidden: false -> true')
+  changes <- edit_service_changes(hidden$fields, hidden$initial, hidden$values)
+  expect_equal(c(changes$label, changes$old, changes$new), c("On the dashboard", "Visible", "Hidden"))
+  # the other kinds have no such field
+  for (key in setdiff(names(edit_entities), c("study", "questionnaire", "wave", "placement", "question_scale"))) {
+    row <- edit_service_cards(edit_entities[[key]], test_snapshot(edit_service_tables(edit_entities[[key]])))$key[1]
+    expect_false("hidden" %in% vapply(form_for(key, "update", row)$fields, function(field) field$name, character(1)), info = key)
+  }
 })

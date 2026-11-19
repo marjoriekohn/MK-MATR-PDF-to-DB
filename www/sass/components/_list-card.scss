@@ -1,3 +1,22 @@
+// ------ A card that is the way to what it names -------------------------------------------------------------
+// A page's card on the home page, a study's in a registry's details: the whole card is pressed. White with a soft
+// shadow, and under the pointer or the keyboard's focus a gold edge and a small lift.
+@mixin card-link {
+  border: 1px solid $card-border-color;
+  border-radius: $card-border-radius;
+  background: $vcu-white;
+  color: $vcu-black;
+  text-decoration: none;
+  box-shadow: $shadow-card;
+  transition: border-color 0.15s, box-shadow 0.15s, transform 0.15s;
+  &:hover, &:focus-visible {
+    border-color: $gold-border;
+    color: $vcu-black;
+    box-shadow: $shadow-card-lift;
+    transform: translateY(-2px);
+  }
+}
+
 // ------ A list of things, a card each --------------------------------------------------------------------
 // Drafts (Extraction Drafts) and changes (Edit History): what it is (a title with its badges, then a line
 // of who and when), and its buttons on the right. On a small tablet or a

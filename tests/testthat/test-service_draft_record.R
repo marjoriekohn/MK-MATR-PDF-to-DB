@@ -209,3 +209,71 @@ test_that("the blocks changed from what the AI read: a field, a variable or choi
   ticked <- draft_service_update(ticked, "variables", box_1b, "matr_id", "GNA_9")
   expect_length(draft_service_changed_blocks(original, ticked), 0)
 })
+
+# ------ A draft reopened from the database --------------------------------------------------------------
+# The questionnaire as the database gives it back for a wave reopened (private.wave_blocks()): the copy that was
+# pushed, without the rows' refs or the pages they were read from.
+from_database <- function(pushed) {
+  without <- function(blocks) lapply(blocks, function(block) {
+    block[c("ref", "page")] <- NULL
+    if (!is.null(block$children)) block$children <- without(block$children)
+    block$variables <- lapply(block$variables, function(box) {
+      box$ref <- NULL
+      box$response_options <- lapply(box$response_options, function(choice) choice[names(choice) != "ref"])
+      if (length(box$response_options) == 0) box$response_options <- NULL
+      box
+    })
+    if (length(block$variables) == 0) block$variables <- NULL
+    block
+  })
+  json <- draft_service_to_json(draft_service_renumber_questions(pushed))
+  json$components <- without(json$components)
+  draft_service_from_json(json)
+}
+
+test_that("a draft reopened from the database is matched to the AI's rows through the copy that was pushed", {
+  ai <- original()
+  q1a <- q(ai, "1a")
+  box <- ai$variables$id[ai$variables$component_id == q(ai, "1b")][1]
+  choice <- ai$response_options$id[ai$response_options$variable_id == ai$variables$id[ai$variables$component_id == q(ai, "1c")][1]][1]
+  pushed <- draft_service_update(ai, "components", q1a, "text", "Reworded before it was pushed")
+  pushed <- draft_service_update(pushed, "variables", box, "label", "a label staff typed")
+  pushed <- draft_service_update(pushed, "response_options", choice, "answer_option", "yes, always")
+  pushed <- draft_service_add_block(pushed, "Note", draft_service_next_id(pushed, "components"), near_id = q1a)
+  pushed <- reopened(draft_service_update(pushed, "components", utils::tail(pushed$components$id, 1), "text", "a note staff added"))
+
+  back <- from_database(pushed)
+  expect_true(all(is.na(back$components$ref)) && all(is.na(back$variables$ref)) && all(is.na(back$response_options$ref)))
+  expect_gt(length(draft_service_review_edits(ai, back)), nrow(ai$components)) # unmatched, everything looks deleted and added
+
+  adopted <- draft_service_adopt_refs(back, pushed)
+  # it differs from the AI's answer exactly where the copy that was pushed did
+  expect_equal(draft_service_review_edits(ai, adopted), draft_service_review_edits(ai, pushed))
+  expect_equal(sum(is.na(adopted$components$ref)), 1) # the note staff added is still staff's
+  expect_equal(adopted$components$text[is.na(adopted$components$ref)], "a note staff added")
+  expect_equal(component(adopted, adopted$components$id[adopted$components$ref %in% q1a])$page, component(ai, q1a)$page) # Open PDF finds its page again
+  # so a block reworded before the push can still be put back as the AI read it
+  mine <- adopted$components$id[adopted$components$ref %in% q1a]
+  again <- suppressMessages(draft_service_revert_block(adopted, ai, mine))
+  expect_equal(component(again, mine)$text, component(ai, q1a)$text)
+})
+
+test_that("a block changed on the Metadata page since the push is one staff added; the rest keep their match", {
+  ai <- original()
+  pushed <- reopened(ai)
+  back <- from_database(pushed)
+  moved <- back$components$id[back$components$text %in% component(ai, q(ai, "1a"))$text]
+  back <- draft_service_update(back, "components", moved, "text", "changed on the metadata page")
+  adopted <- draft_service_adopt_refs(back, pushed)
+  expect_true(is.na(component(adopted, moved)$ref))
+  expect_equal(sum(is.na(adopted$components$ref)), 1)
+  expect_false(anyDuplicated(stats::na.omit(adopted$components$ref)) > 0)
+  # two blocks with the same kind and words are matched in order, each to its own
+  twice <- ai$components$text[duplicated(paste(ai$components$component_type, ai$components$text)) & !is.na(ai$components$text)][1]
+  if (!is.na(twice)) {
+    whole <- draft_service_adopt_refs(from_database(pushed), pushed)
+    same <- whole$components[whole$components$text %in% twice, ]
+    expect_false(anyDuplicated(same$ref) > 0)
+    expect_equal(whole$components$ref, pushed$components$ref[match(whole$components$id, pushed$components$id)])
+  }
+})

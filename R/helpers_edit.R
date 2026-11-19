@@ -23,14 +23,19 @@ edit_callout <- function(kind, ..., title = NULL, icon_name = NULL) {
 
 # ------ The info block ----------------------------------------------------------------------------
 # Everything staff should know about the edit they are making, in one place under the sentence: what the verb
-# involves for the kind of thing. Nothing else on the page says it again. `NULL` when there is nothing to say (a
-# plain add, applied at once).
-# verb: `"add"`, `"update"`, `"delete"`, or `""` while it isn't picked yet.
-edit_info_block <- function(entity, verb) {
-  doing <- c(add = "Adding", update = "Changing", delete = "Deleting")
+# involves for the kind of thing, and that nothing happens until they say so. Nothing else on the page says it
+# again. `NULL` when there is nothing to say (a plain add, applied at once).
+# verb: `"add"`, `"update"`, `"delete"`, `"merge"`, or `""` while it isn't picked yet.
+# row: The row, for a kind whose rows are called by what they are (a wording is a question, a section...).
+edit_info_block <- function(entity, verb, row = NULL) {
+  doing <- c(add = "Adding", update = "Changing", delete = "Deleting", merge = "Merging")
   how <- switch(verb,
-    update = c(entity$update_about, "Pick the one to change, then change it. You'll see everywhere it's used before you save."),
+    update = c(entity$update_about, edit_safe_to_try),
     delete = c(entity$delete_about, "You'll see everything that goes with it, and confirm, before anything is deleted."),
+    merge = c(
+      "Use this when two of them are the same thing kept twice. Everything that uses this one uses the other instead, and this one is removed.",
+      "Nothing happens until you press Merge them. You'll see what moves first."
+    ),
     NULL
   )
   if (length(how) == 0) {
@@ -38,18 +43,23 @@ edit_info_block <- function(entity, verb) {
   }
   edit_callout(
     if (identical(verb, "delete")) "danger" else "info",
-    title = paste(doing[[verb]], entity$article, entity$noun),
+    title = paste(doing[[verb]], edit_a(edit_noun(entity, row))),
     lapply(how, p)
   )
 }
 
+# What a form says before it is filled in: where to look for what it does.
+edit_safe_to_try <- "Under the form you'll see what you changed and everywhere it is used. Every change is kept in the History."
+
+# A noun with its article: "a study", "an answer choice", "an instruction".
+edit_a <- function(noun) paste(if (grepl("^[aeiou]", tolower(noun))) "an" else "a", noun)
+
 # ------ Fields -----------------------------------------------------------------------------------
-# One field of a form.
-# Like every form on the site it has no label above it: what it holds is said inside it (a text box's
-# placeholder, a drop-down's empty choice) and, for screen readers and when pointed at, in its
-# `aria-label` and `title`. A required field that is blank is outlined in red (the note under it marks
-# it; see `edit_change_server()`). A field that is locked shows its value, greyed, with the reason.
-# Fields that only matter while another has a value are wrapped so the page hides them.
+# One field of a form: its name on the left and the field beside it, as the details show the same line, so
+# pressing Edit changes what is on the right and nothing moves. What the field is for, or why it can't be changed,
+# is in a tooltip beside its name (`edit_field_label()`), not in small print under the box. A required field that
+# is blank is outlined in red (the note under it marks it; see `edit_change_server()`). A field that is locked
+# shows its value, greyed. Fields that only matter while another has a value are wrapped so the page hides them.
 # field: One of the form's fields, from `edit_service_fields()`.
 # value: What it starts with.
 # slot: The output that says what is wrong with it.
@@ -57,17 +67,10 @@ edit_field_ui <- function(ns, field, value, slot) {
   id <- ns(field$id)
   inside <- edit_field_placeholder(field)
   named <- function(tag, element) {
-    tag_input_attributes(tag, element, `aria-label` = field$label, title = field$label, `aria-describedby` = slot)
+    tag_input_attributes(tag, element, `aria-label` = field$label, `aria-describedby` = slot)
   }
   control <- if (!is.null(field$locked)) {
-    div(
-      class = "locked-field",
-      div(
-        class = "locked-value", `aria-label` = field$label, title = field$label,
-        edit_display_value(field, edit_service_normalize(field, value))
-      ),
-      div(class = "form-text locked-reason", app_icon("locked"), " ", field$locked)
-    )
+    div(class = "locked-value", `aria-label` = field$label, edit_display_value(field, edit_service_normalize(field, value)))
   } else {
     switch(field$type,
       textarea = named(
@@ -87,7 +90,7 @@ edit_field_ui <- function(ns, field, value, slot) {
         "select"
       ),
       choice = div(
-        role = "group", `aria-label` = field$label, title = field$label,
+        role = "group", `aria-label` = field$label,
         toggle_input(id, field$choices, selected = value, label = field$label)
       ),
       variables = variable_editor_ui(ns("variables"), field$label), # its server is edit_change_server()'s
@@ -98,23 +101,37 @@ edit_field_ui <- function(ns, field, value, slot) {
       }
     )
   }
-  help <- c(field$hint, field$tooltip)
+  titled <- field$type == "variables" # the variable editor has its name over it, and takes the form's whole width
   field_div <- div(
-    class = c("form-field", "edit-field", if (field$type %in% c("textarea", "variables", "several")) "is-wide"),
-    control,
-    if (length(help) > 0 && is.null(field$locked)) div(class = "form-text field-help", paste(help, collapse = " ")),
-    uiOutput(slot, class = "form-text field-note")
+    class = c("form-field", "edit-field", if (titled) "is-wide"),
+    if (!titled) edit_field_label(field, id),
+    div(class = "edit-field-control", control, uiOutput(slot, class = "form-text field-note"))
   )
   if (is.null(field$show_when)) {
     return(field_div)
   }
   conditionalPanel(
     sprintf("input['%s__%s'] == '%s'", field$part, field$show_when$field, field$show_when$value),
-    ns = ns, field_div
+    ns = ns, class = "edit-field-when", field_div
   )
 }
 
-# A drop-down's choices, its empty choice naming the field ("Select lead investigator"), so two
+# A field's name beside it, which stays while the form is open. After it: "optional" for a field that can be left
+# empty, and an icon whose tooltip says what the field is for (its hint), or, for one that is locked, why it can't
+# be changed.
+# id: The input's id, so clicking the name puts the cursor in the field.
+edit_field_label <- function(field, id) {
+  help <- paste(c(field$hint, field$tooltip), collapse = " ")
+  locked <- !is.null(field$locked)
+  div(
+    class = "edit-field-label",
+    tags$label(`for` = if (!locked) id, field$label),
+    if (!locked && !isTRUE(field$required)) span(class = "edit-field-optional", "optional"),
+    if (locked) help_tip(field$label, field$locked, "locked") else if (nzchar(help)) help_tip(field$label, help)
+  )
+}
+
+# A drop-down's choices, its empty choice naming the field ("Select investigator"), so two
 # drop-downs of the same rows can be told apart without labels.
 # field: One of the form's fields, from `edit_service_fields()`, of type `"select"`.
 # Returns: The choices, as `selectInput()` takes them.
@@ -128,19 +145,12 @@ edit_select_choices <- function(field) {
   choices
 }
 
-# What a text box says while it is empty: its name, an example or format if it has one, and whether
-# it can be left empty.
+# What a text box says while it is empty: an example or the format, for a field that has one. Its name and whether
+# it can be left empty are beside it (`edit_field_label()`).
 # field: One of the form's fields, from `edit_service_fields()`.
-# Returns: A string, e.g. `"Name (e.g. Adult Health Study)"` or `"Description (optional)"`.
+# Returns: A string, e.g. `"e.g. Adult Health Study"`, or `NULL` for none.
 edit_field_placeholder <- function(field) {
-  notes <- c(
-    if (!isTRUE(field$required)) "optional",
-    if (has_text(field$placeholder)) trimws(field$placeholder)
-  )
-  if (length(notes) == 0) {
-    return(field$label)
-  }
-  paste0(field$label, " (", paste(notes, collapse = ", "), ")")
+  if (has_text(field$placeholder)) trimws(field$placeholder)
 }
 
 # ------ What changed -------------------------------------------------------------------------------------
@@ -184,64 +194,169 @@ edit_changes_ui <- function(changes) {
 
 # ------ Where this appears ---------------------------------------------------------------------------------
 # What changing a row reaches.
-# For a component: how many questionnaires print it, and a card for each (see `edit_use_card()`). For
-# anything else: the rows that point at it,
-# each kind of row a box saying how many there are, where they are, and every one of them. A few are listed as they
-# are; more are folded away, one fold for each questionnaire they are in (the most first), or one for them all.
-# The row's own name is the details' title, so it isn't said again here.
+# For a wording (a question, a heading): a card for each questionnaire that prints it (see `edit_use_card()`). For
+# anything else: the rows that point at it, each kind of row a drop-down that says how many there are and opens to
+# every one of them (see `edit_pointing_ui()`). The row's own name is the details' title, so it isn't said again.
 # usage: The result of `edit_service_usage()`.
-edit_usage_ui <- function(entity, usage) {
+# open: Whether the drop-downs start open. Under a row's details they do. Under a form, where they are what the
+#   change reaches, they open when they are clicked.
+edit_usage_ui <- function(entity, usage, open = TRUE) {
   local <- !is.null(entity$scope)
+  printed_in <- vapply(usage$uses, function(use) key_text(use$questionnaire_id), character(1))
   div(
     class = "edit-usage",
     if (length(usage$uses) > 0) {
-      n <- length(usage$uses)
-      tagList(
-        p(
-          class = "edit-usage-count",
-          strong(edit_count(n, "questionnaire")),
-          if (n == 1) " prints this" else " print this"
-        ),
-        div(class = "edit-usage-list", lapply(usage$uses, edit_use_card, entity = entity))
-      )
+      div(class = "edit-usage-list", lapply(unname(split(usage$uses, factor(printed_in, unique(printed_in)))), edit_use_card))
     },
     if (entity$table == "component" && length(usage$uses) == 0) {
       p(class = "edit-usage-none", "No questionnaire prints this yet, so changing it affects nothing else.")
     },
-    lapply(usage$pointing, edit_pointing_ui),
+    lapply(usage$pointing, edit_pointing_ui, open = open),
     if (entity$table != "component" && length(usage$pointing) == 0 && !local) {
       p(
         class = "edit-usage-none",
-        if (isTRUE(entity$view_only)) "Nothing else points at this." else "Nothing else points at this yet, so changing it affects nothing else."
+        if (isTRUE(entity$view_only)) "Nothing else uses this." else "Nothing else uses this yet, so changing it affects nothing else."
       )
     }
   )
 }
 
-# How many listed as they are before they're folded away.
-edit_usage_shown <- 6
+# How many rows a drop-down lists before Show all.
+edit_usage_shown <- 8
 
-# One kind of row that points at the row: "867 variables", "in 4 questionnaires", then the rows.
-edit_pointing_ui <- function(line) {
+# The kinds of row drawn as a grid of small cards, not lines: there are few of each, and each is a thing with
+# details of its own. The card is the way to it: the whole card is pressed, and it lifts under the pointer as a
+# card on the home page does.
+edit_usage_as_cards <- c("study", "questionnaire", "wave")
+
+# View on a listed row or card: "View Study" and the open folder, the same everywhere. It opens that thing in the
+# details.
+# what: What it opens, as the button says it ("Study", "Question").
+# name: The thing's name, for screen readers.
+# opens: One row of `edit_opens()`: its `kind`, `key` and `scope`.
+edit_view_button <- function(what, name, opens) {
+  review_button(
+    tagList(paste("View", what), " ", app_icon("view")), "jump",
+    class = "btn btn-sm btn-link edit-use-view", `aria-label` = paste0("View ", what, ": ", name),
+    `data-kind` = opens$kind, `data-verb` = "view", `data-key` = opens$key, `data-scope` = opens$scope
+  )
+}
+
+# One kind of row that points at the row, as a drop-down: "7 studies" opens to the rows. Each row is its name, a few
+# quiet words about it (a variable's MATR ID and code), tags (the questionnaires that ask it), and View, which
+# opens it (and Remove, which takes the row itself away: a question out of a scale). A long list shows its first
+# rows, then Show all; rows in more than one questionnaire are folded by questionnaire, the most first.
+# Studies, questionnaires and waves are a grid of small cards, each pressed to open it. Under a row's details the
+# grid stands alone, with no count over it and nothing to open: the cards are what the row holds. Only when the
+# line says what they are to the row, not just how many (`named`: the studies an investigator leads, and the ones
+# they are the contact for), is that said over them. Under a form the grid is in its drop-down like any other line.
+# line: One of `edit_service_usage()`'s `pointing`.
+# open: Whether it starts open.
+edit_pointing_ui <- function(line, open = TRUE) {
   groups <- line$groups
   where <- if (length(groups) == 1) {
     paste("all in", groups[[1]]$questionnaire)
   } else if (length(groups) > 1) {
     paste("in", edit_count(length(groups), "questionnaire"))
   }
-  rows <- function(labels) tags$ul(class = "edit-use-rows", lapply(labels, tags$li))
-  div(
-    class = "edit-use",
-    div(class = "edit-use-head", strong(line$text), if (!is.null(where)) span(class = "edit-use-where", where)),
-    if (line$n <= edit_usage_shown) {
-      rows(line$labels)
+  view <- function(i) if (!is.null(line$open)) edit_view_button(line$open$what[i], line$labels[i], line$open[i, ])
+  row <- function(i) {
+    tags$li(
+      class = "edit-use-row",
+      span(
+        class = "edit-use-row-text", line$labels[i],
+        if (has_text(line$meta[i])) span(class = "edit-use-meta", line$meta[i]),
+        lapply(line$pills[i][[1]], row_badge)
+      ),
+      view(i),
+      if (!is.null(line$remove)) {
+        review_button(
+          "Remove", "jump",
+          class = "btn btn-sm btn-link edit-use-remove", `aria-label` = paste("Remove", line$labels[i]),
+          `data-kind` = line$remove$kind[i], `data-verb` = "delete", `data-key` = line$remove$key[i], `data-scope` = line$remove$scope[i]
+        )
+      }
+    )
+  }
+  rows <- function(index) tags$ul(class = "edit-use-rows", lapply(index, row))
+  as_cards <- line$table %in% edit_usage_as_cards && !is.null(line$open) && is.null(line$remove) && line$n > 0
+  cards <- function() {
+    div(class = "edit-use-cards", lapply(seq_len(line$n), function(i) {
+      review_button(
+        span(class = "edit-use-card-name", line$labels[i]), "jump",
+        class = "edit-use-card", `aria-label` = paste0("View ", line$open$what[i], ": ", line$labels[i]),
+        title = paste("Open this", tolower(line$open$what[i])),
+        `data-kind` = line$open$kind[i], `data-verb` = "view", `data-key` = line$open$key[i], `data-scope` = line$open$scope[i]
+      )
+    }))
+  }
+  if (as_cards && open) {
+    return(div(class = "edit-use-grid", if (isTRUE(line$named)) p(class = "edit-use-caption", line$text), cards()))
+  }
+  tags$details(
+    class = "edit-use", open = if (open) NA,
+    tags$summary(class = "edit-use-head", strong(line$text), if (!is.null(where)) span(class = "edit-use-where", where)),
+    if (line$n == 0) {
+      NULL
+    } else if (as_cards) {
+      cards()
+    } else if (line$n <= edit_usage_shown) {
+      rows(seq_len(line$n))
     } else if (length(groups) > 1) {
       div(class = "edit-use-groups", lapply(groups, function(group) {
-        edit_use_fold(group$questionnaire, length(group$labels), rows(group$labels))
+        edit_use_fold(group$questionnaire, length(group$index), rows(group$index))
       }))
     } else {
-      edit_use_fold(paste("Show all", format(line$n, big.mark = ",")), NULL, rows(line$labels))
+      tagList(
+        rows(seq_len(edit_usage_shown)),
+        tags$details(
+          class = "edit-use-more",
+          tags$summary(
+            class = "btn btn-sm btn-outline-dark",
+            span(class = "when-closed", paste("Show all", format(line$n, big.mark = ","))), span(class = "when-open", "Show fewer")
+          ),
+          rows(seq(edit_usage_shown + 1, line$n))
+        )
+      )
+    },
+    if (!is.null(line$add)) {
+      review_button(
+        icon_label("add", line$add$label), "jump",
+        `data-kind` = line$add$kind, `data-verb` = "add", `data-scope` = line$add$scope,
+        class = "btn btn-sm btn-outline-dark edit-use-add"
+      )
     }
+  )
+}
+
+# ------ What a row belongs to ---------------------------------------------------------------------------------
+# The tags over a row's details: what isn't changed on its own form (see `edit_service_details()`). Each is the
+# thing's name alone; what it is to the row ("Study") is said when it is pointed at, and to screen readers. One
+# that names something opens it, which is where it is changed; one that is empty isn't drawn.
+# lines: The details' lines that are tags (`pill`).
+edit_context_ui <- function(lines) {
+  lines <- lines[lines$value != "(empty)", , drop = FALSE]
+  if (nrow(lines) == 0) {
+    return(NULL)
+  }
+  div(class = "edit-context", lapply(seq_len(nrow(lines)), function(i) {
+    if (is.na(lines$kind[i]) || is.na(lines$key[i])) {
+      return(span(class = "edit-context-pill", title = lines$label[i], span(class = "visually-hidden", paste0(lines$label[i], ": ")), lines$value[i]))
+    }
+    edit_open_pill(lines$kind[i], lines$key[i], lines$value[i], lines$label[i])
+  }))
+}
+
+# A tag that opens the thing it names: an open folder and the name.
+# kind,key: The kind (a name of `edit_entities`) and the row's key.
+# name: The thing's name.
+# label: What it is to the row it is shown on ("Study", "Scale").
+edit_open_pill <- function(kind, key, name, label) {
+  review_button(
+    tagList(app_icon("view"), span(class = "edit-context-value", name)), "jump",
+    `data-kind` = kind, `data-verb` = "view", `data-key` = key,
+    class = "edit-context-pill is-link",
+    title = paste0(label, ": open it, which is where it is changed"), `aria-label` = paste0(label, ": ", name, ". Open it.")
   )
 }
 
@@ -254,33 +369,46 @@ edit_use_fold <- function(title, n, ...) {
   )
 }
 
-# A questionnaire that prints a component, as its card in the details shows it.
-# Its name, with a button that opens the block as it is in that questionnaire alone; where it sits; for a question
-# each wave that asked it, with the number it had, and each variable, with what it records, who it is about, and its
-# choices.
-# use: One of `edit_service_uses()`.
-# entity: The kind of thing: a component.
-edit_use_card <- function(use, entity) {
+# A questionnaire that prints a component, as its card in the details shows it: the questionnaire, as a tag that
+# opens it, then each place it prints the component there (`edit_use_place()`); a questionnaire that prints it more
+# than once has them all in the one card.
+# uses: The `edit_service_uses()` of one questionnaire.
+edit_use_card <- function(uses) {
+  here <- uses[[1]]
   div(
     class = "edit-use",
+    div(class = "edit-use-head", edit_open_pill("questionnaire", key_text(here$questionnaire_id), here$questionnaire, "Questionnaire")),
+    lapply(uses, edit_use_place)
+  )
+}
+
+# One place a questionnaire prints a component: the words as they read there (a grid's lead-in, then the question),
+# with a button that opens the block as it is in that questionnaire alone; for a section, grid or group every block
+# it holds, each with View; for a question each variable, with what it records, who it is about, and its choices.
+# use: One of `edit_service_uses()`.
+edit_use_place <- function(use) {
+  held <- use$inside
+  div(
+    class = "edit-use-place",
     div(
-      class = "edit-use-head",
-      strong(class = "edit-use-name", use$questionnaire),
-      review_button(
-        "Open in this questionnaire", "jump",
-        `data-kind` = "placement", `data-verb` = "view", `data-scope` = key_text(use$questionnaire_id),
-        `data-key` = key_text(use$placement_id),
-        class = "btn btn-sm btn-outline-dark"
+      class = "edit-use-place-head",
+      span(class = "edit-use-words", use$words),
+      edit_view_button(
+        "in Questionnaire", paste(use$words, "in", use$questionnaire),
+        edit_opens("placement", use$placement_id, key_text(use$questionnaire_id))
       )
     ),
-    p(class = "edit-use-where", edit_use_where(use)),
-    if (length(use$waves) > 0) {
-      tags$ul(class = "edit-use-asked", Map(function(wave, number) {
-        tags$li(span(class = "edit-use-wave", wave), paste0(" · question ", number))
-      }, use$waves, unname(use$numbers)))
-    } else if (identical(use$kind, "Question")) {
-      p(class = "edit-use-detail", "Not asked in any wave yet.")
+    if (is_container(use$kind) && NROW(held) == 0) p(class = "edit-use-detail", "Holds nothing yet."),
+    if (NROW(held) > 0) {
+      tags$ul(class = "edit-use-rows", lapply(seq_len(nrow(held)), function(i) {
+        tags$li(
+          class = "edit-use-row",
+          span(class = "edit-use-row-text", held$words[i]),
+          edit_view_button(held$kind[i], held$words[i], edit_opens("component", held$component_id[i]))
+        )
+      }))
     },
+    if (identical(use$kind, "Question") && length(use$waves) == 0) p(class = "edit-use-detail", "Not asked in any wave yet."),
     if (length(use$boxes) > 0) {
       div(class = "edit-use-boxes", lapply(use$boxes, function(box) {
         div(
@@ -293,20 +421,13 @@ edit_use_card <- function(use, entity) {
   )
 }
 
-# "In section C. Energy · position 3" or "At the top level · position 1".
-edit_use_where <- function(use) {
-  paste0(
-    if (is.na(use$section)) "At the top level" else paste("In", use$section),
-    " · position ", use$position
-  )
-}
-
 # ------ Deleting ------------------------------------------------------------------------------------------------
 # Everything staff should read before something is deleted.
 # What it is, what else goes with it, and what stops it.
 # title: The row's name.
 # plan: The result of `edit_service_delete_plan()`.
-edit_delete_ui <- function(entity, title, plan) {
+# noun: What the row is called ("question", for a wording that is one).
+edit_delete_ui <- function(entity, title, plan, noun = entity$noun) {
   reach <- plan$reach
   blocked <- length(plan$blocked) > 0
   div(
@@ -315,7 +436,7 @@ edit_delete_ui <- function(entity, title, plan) {
       class = "delete-banner",
       app_icon("delete"),
       div(
-        span(class = "delete-banner-label", paste("You're deleting this", entity$noun)),
+        span(class = "delete-banner-label", paste("You're deleting this", noun)),
         strong(class = "delete-banner-title", title)
       )
     ),
@@ -324,10 +445,10 @@ edit_delete_ui <- function(entity, title, plan) {
   )
 }
 
-edit_blocked_ui <- function(blocked) {
+edit_blocked_ui <- function(blocked, title = "This can't be deleted yet") {
   edit_callout(
     "danger",
-    title = "This can't be deleted yet",
+    title = title,
     p("Something is in the way. Sort it out first, then come back to this."),
     tags$ul(class = "blocked-list", lapply(blocked, function(blocker) {
       tags$li(
@@ -417,6 +538,57 @@ edit_delete_confirm_ui <- function(ns, plan) {
     if (plan$far_reaching) {
       textInput(ns("confirm_word"), NULL, width = "20rem", placeholder = "To be sure, type DELETE") |>
         tag_input_attributes("input", `aria-label` = "To be sure, type DELETE")
+    }
+  )
+}
+
+# ------ Merging ------------------------------------------------------------------------------------------------
+# Merge on a row's details: the drop-down of what to merge it into, then (drawn apart, as one is picked) what that
+# would do. The row in the details is the one that goes; the one picked stays.
+# choices: What it can be merged into, from `edit_merge_choices()`.
+edit_merge_ui <- function(ns, entity, row, title, choices) {
+  noun <- edit_noun(entity, row)
+  if (length(choices) < 2) {
+    return(edit_callout("warning", title = "Nothing to merge it into", p(paste0("There is no other ", noun, " of its kind in the database."))))
+  }
+  tagList(
+    div(class = "merge-side is-going", span(class = "merge-side-label", paste("This", noun, "is removed")), strong(title)),
+    div(
+      class = "form-field edit-field is-wide",
+      selectizeInput(
+        ns("merge_into"), NULL, choices,
+        selected = "", width = "100%",
+        options = list(placeholder = paste0("Search for the ", noun, " to keep…"))
+      ) |> tag_input_attributes("select", `aria-label` = paste("The", noun, "to keep"))
+    ),
+    uiOutput(ns("merge_preview"))
+  )
+}
+
+# What merging would do, once the one to keep is picked: the one that stays, what moves to it, and the box to tick;
+# or what stands in the way.
+# plan: The result of `edit_service_merge_plan()`, or `NULL` while none is picked.
+edit_merge_preview_ui <- function(ns, entity, row, plan) {
+  if (is.null(plan)) {
+    return(NULL)
+  }
+  noun <- edit_noun(entity, row)
+  tagList(
+    div(class = "merge-side is-staying", span(class = "merge-side-label", paste("This", noun, "stays")), strong(plan$into_name)),
+    if (length(plan$blocked) > 0) {
+      edit_blocked_ui(plan$blocked, title = "These two can't be merged yet")
+    } else {
+      tagList(
+        edit_callout("info", title = "What merging does", p(plan$sentence)),
+        div(
+          class = "delete-confirm",
+          checkboxInput(
+            ns("confirm_merge_read"),
+            sprintf("I understand the two become one. This can't be undone: afterwards nothing says what used “%s”.", plan$from),
+            value = FALSE, width = "100%"
+          )
+        )
+      )
     }
   )
 }

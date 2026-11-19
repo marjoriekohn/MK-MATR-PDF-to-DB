@@ -183,3 +183,64 @@ test_that("a catalog that is read again is what the drop-downs offer next", {
     expect_equal(names(last_update(seen, "registry_id")$choices)[4], "Zebra Registry")
   })
 })
+
+# ------ Hidden from the dashboard --------------------------------------------------------------------
+test_that("under the study, questionnaire and wave picked is whether each shows on the dashboard, and a press changes it", {
+  seen <- local_browser()
+  applied <- list()
+  local_stub("edit_service_apply", function(connection, built, me) {
+    applied[[length(applied) + 1]] <<- built
+    list(history_id = "1", new_ids = list())
+  })
+  tables <- test_catalog()
+  catalog <- list(get = shiny::reactiveVal(tables), refresh = function() invisible())
+  # as the database would have it once the change is applied
+  catalog$refresh <- function() {
+    now <- catalog$get()
+    now$studies$hidden[now$studies$study_id == 1] <- TRUE
+    catalog$get(now)
+  }
+  shiny::testServer(extraction_info_server, args = info_args(catalog = catalog), {
+    session$setInputs(registry_id = "1", study_id = "", questionnaire_id = "", wave_id = "")
+    expect_equal(text_of(output$study_id_visibility), "") # nothing picked: nothing to say
+    session$setInputs(study_id = "1", questionnaire_id = "1", wave_id = "2")
+    button <- paste(output$study_id_visibility$html, collapse = "")
+    expect_match(text_of(button), "Visible on the dashboard") # shown, until staff hide it
+    expect_match(button, 'data-action="visibility" data-kind="study" aria-pressed="false"', fixed = TRUE)
+    expect_match(button, "fa-eye", fixed = TRUE)
+    expect_false(grepl("fa-eye-slash", button))
+    expect_match(text_of(output$questionnaire_id_visibility), "Visible on the dashboard")
+    expect_match(text_of(output$wave_id_visibility), "Visible on the dashboard")
+    session$setInputs(action = list(action = "visibility", kind = "study"))
+    expect_length(applied, 1)
+    expect_equal(item_lines(applied[[1]]$items), 'Update study {"study_id":1} hidden: false -> true')
+    expect_equal(applied[[1]]$summary, "Hid the study “Adult Health Study” from the dashboard")
+    hidden <- paste(output$study_id_visibility$html, collapse = "")
+    expect_match(text_of(hidden), "Hidden from the dashboard")
+    expect_match(hidden, "fa-eye-slash", fixed = TRUE)
+    expect_match(hidden, 'aria-pressed="true"', fixed = TRUE)
+    expect_match(text_of(output$wave_id_visibility), "Visible on the dashboard") # the others are their own
+    # pressed again, it is shown again
+    session$setInputs(action = list(action = "visibility", kind = "study"))
+    expect_equal(item_lines(applied[[2]]$items), 'Update study {"study_id":1} hidden: true -> false')
+    expect_equal(applied[[2]]$summary, "Showed the study “Adult Health Study” on the dashboard again")
+  })
+  # the registry has none: only a study, a questionnaire and a wave can be hidden
+  form <- as.character(extraction_info_ui("info"))
+  expect_false(grepl("registry_id_visibility", form))
+  expect_equal(lengths(regmatches(form, gregexpr("_visibility", form, fixed = TRUE))), 3)
+  expect_match(form, 'data-ns="info-"', fixed = TRUE)
+})
+
+test_that("hiding is one field of one row, for a study, a questionnaire or a wave the catalog has", {
+  catalog <- test_catalog()
+  expect_false(edit_service_hidden(catalog, "wave", "2"))
+  expect_null(edit_service_hidden(catalog, "wave", ""))
+  expect_null(edit_service_hidden(catalog, "wave", add_new_choice))
+  wave <- edit_service_hide(catalog, "wave", "2", TRUE)
+  expect_equal(item_lines(wave$items), 'Update wave {"wave_id":2} hidden: false -> true')
+  expect_equal(wave$summary, "Hid the wave “Wave 2” from the dashboard")
+  expect_equal(edit_service_hide(catalog, "questionnaire", "1", TRUE)$summary, "Hid the questionnaire “Adult Health and Personality” from the dashboard")
+  expect_error(edit_service_hide(catalog, "study", "999", TRUE), "That study is no longer in the database")
+  expect_equal(unname(edit_hidden_kinds), c("study", "questionnaire", "wave"))
+})

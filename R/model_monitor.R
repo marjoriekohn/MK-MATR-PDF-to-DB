@@ -13,7 +13,7 @@
 #   model, prompt_version   which model and which prompt read it
 #   edits           its corrections: a list, one entry per difference (see the top of service_draft_record.R)
 
-monitor_columns <- c("extraction_id", "summary", "pdf_name", "pushed_at", "prompt_version", "model", "review_edits")
+monitor_columns <- c("extraction_id", "summary", "pdf_name", "pushed_at", "prompt_version", "model", "review_edits", "info")
 
 # Every pushed AI-Powered extraction, oldest pushed first.
 # Returns: A list of records (see the top of this file), named by id; empty if there are none.
@@ -23,6 +23,9 @@ monitor_model_get_pushed <- function(connection) {
     order_by = c("pushed_at.asc", "extraction_id.asc"),
     filters = list(status = database_eq("Pushed"), method = database_eq("AI-Powered"))
   )
+  # A wave reopened and pushed again (`public.reopen_wave()`) carries the reading it was first pushed from, which
+  # is counted there: counted again it would be one reading measured twice.
+  rows <- Filter(function(row) is.null(row$info$updates_wave_id), rows)
   records <- lapply(rows, monitor_model_record)
   stats::setNames(records, vapply(records, function(record) record$id, character(1)))
 }

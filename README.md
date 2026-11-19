@@ -23,18 +23,22 @@ the database and to maintain what is already there.
   REDCap data dictionary does). Staff review and
   correct the whole extraction on the Edit Extraction page (the AI reads
   the number printed beside each question, and the site numbers the
-  questions in order), give the variables their MATR IDs from a CSV (in
-  order, or one by one) or from a recorded questionnaire that asks the
-  same questions, say which registry, study, questionnaire and wave it
-  goes into, and push it. The push is one database function, so the
-  whole questionnaire goes in or none of it does.
+  questions in order; a block can be duplicated, or put back as the AI
+  read it), give the variables their MATR IDs from a CSV (in order, or
+  one by one) or from a recorded questionnaire that asks the same
+  questions, say which registry, study, questionnaire and wave it goes
+  into (and whether each shows on the dashboard or is hidden from it),
+  and push it. The push is one database function, so the whole
+  questionnaire goes in or none of it does.
 - **Drafts**: The extractions not pushed yet, yours and your colleagues’.
-- **Metadata**: Staff use plain language to build a change by filling in
-  the sentence: “I want to add / update / delete a registry, study,
-  questionnaire, wave, question…”. This helps them find the row, change
-  it, see everywhere it reaches, and apply it at once. A wave,
-  questionnaire, study or registry can also be emptied, and a wave
-  extracted again from its PDF.
+- **Metadata**: Staff pick a list (studies, questionnaires, waves,
+  questions, sections, answer choices, tags, measurement scales…) and
+  then an item to see it: what it belongs to, what its Edit button
+  changes, and everything that uses it. Edit, Merge (two of the same
+  thing kept twice become one), Empty and Delete each show what they
+  reach before anything is applied, and each change is applied at once.
+  A wave can also be extracted again from its PDF, or opened on Edit
+  Extraction again with the AI's reading still beside it.
 - **History**: Every change made through this site, newest first: what it
   was, who made it and when, and each field it changed, old and new (or
   what a push or an emptying counted).

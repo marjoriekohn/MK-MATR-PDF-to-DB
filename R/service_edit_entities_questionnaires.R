@@ -10,6 +10,8 @@ respondent_type_entity <- list(
     "A respondent type can only be deleted once no questionnaire is for them. Move those ",
     "questionnaires to another respondent type first."
   ),
+  alike = function(snap, row) snap$respondent_type,
+  alike_label = function(snap, rows) edit_choice_labels$respondent_type(snap, rows),
   cards = function(snap, scope) {
     rows <- snap$respondent_type
     n_q <- count_in(snap$questionnaire$respondent_type_id, rows$respondent_type_id)
@@ -56,7 +58,6 @@ respondent_type_entity <- list(
 questionnaire_entity <- list(
   label = "Questionnaire", noun = "questionnaire", plural = "questionnaires", article = "a",
   group = "Questionnaires", table = "questionnaire",
-  reads = "principal_investigator", # the details name the study's investigators
   about = paste0(
     "What stays true across every time a survey is given: its name, its respondent type and the study it ",
     "belongs to. Each time it's given is a wave."
@@ -121,27 +122,21 @@ questionnaire_entity <- list(
           }
         }
       ),
-      edit_field("description", "Description", "textarea")
+      edit_field("description", "Description", "textarea"),
+      edit_hidden_field("questionnaire")
     )
   },
   # the study it belongs to first, then its own fields (the study is said there already)
   details = function(snap, row, own) {
     rbind(
-      edit_study_lines(snap, row$study_id, status = TRUE),
-      edit_details_pick(own, c("name", "respondent_type_id", "abbreviation", "participant_count", "description"))
+      edit_study_lines(snap, row$study_id),
+      edit_details_pick(own, c("name", "respondent_type_id", "abbreviation", "participant_count", "description", "hidden"))
     )
   },
-  # its blocks in printed order, each with its kind; not its groups, which have no words of their own
+  # its waves are listed, each opening the wave, which lists the questions it asked. Everything it prints isn't:
+  # hundreds of lines nobody reads here (a wave's Edit extraction shows them laid out, to change)
   usage_rows = function(snap, row, table, rows) {
-    if (table != "placement") {
-      return(NULL)
-    }
-    placed <- edit_service_outline(edit_service_placements(snap, row$questionnaire_id))
-    placed <- placed[placed$placement_id %in% rows$placement_id & !placed$kind %in% "Group", , drop = FALSE]
-    list(
-      rows = placed, text = edit_count(nrow(placed), "block"),
-      labels = paste0(ifelse(is.na(placed$kind), "Block", placed$kind), " · ", edit_component_text(snap, placed$component_id))
-    )
+    if (table == "placement") list(rows = rows[0, , drop = FALSE], labels = character())
   },
   duplicates = function(snap, values) {
     study <- if (has_text(values$study_id)) list(study_id = as.numeric(values$study_id))
@@ -158,10 +153,10 @@ questionnaire_entity <- list(
 wave_entity <- list(
   label = "Wave", noun = "wave", plural = "waves", article = "a",
   group = "Questionnaires", table = "wave",
-  # the details name the questionnaire's study, its registry and investigators, and who it is for; the questions it
-  # asked say what their variables record and who they are about
-  reads = c("study", "registry", "principal_investigator", "respondent_type", "variable", "variable_tag", "tag", "placement", "component"),
-  about = "One time a questionnaire was given. It records when, how many people answered, and the PDF it was extracted from.",
+  # the details name the questionnaire's study and its registry, and who it is for; the questions it asked say
+  # what their variables record and who they are about
+  reads = c("study", "registry", "respondent_type", "variable", "variable_tag", "tag", "placement", "component"),
+  about = "One time a questionnaire was given. It records when, how many people answered, and the files it was extracted from.",
   delete_about = paste0(
     "Deleting a wave deletes its record of which questions were asked and the number each had. The questions ",
     "stay in the questionnaire, with their variables, for the other waves."
@@ -226,30 +221,30 @@ wave_entity <- list(
           }
         }
       )
-    )
+    ) |> c(edit_wave_file_fields(row), list(edit_hidden_field("wave")))
   },
-  # the study and questionnaire it belongs to first, then its own fields (the questionnaire is said there already),
-  # then the files it was extracted from
+  # the study and questionnaire it belongs to first, as tags, then its own fields (the questionnaire is said there
+  # already), the names of the files it was extracted from among them, and what is known about the PDF
   details = function(snap, row, own) {
     q <- snap$questionnaire[match(row$questionnaire_id, snap$questionnaire$questionnaire_id), , drop = FALSE]
     who <- snap$respondent_type[match(q$respondent_type_id, snap$respondent_type$respondent_type_id), , drop = FALSE]
+    pdf <- snap$pdf_file[match(row$pdf_sha256, snap$pdf_file$pdf_sha256), , drop = FALSE]
     rbind(
       edit_study_lines(snap, q$study_id),
       edit_details_lines(
         NA, c("Questionnaire", "Respondent Type"),
-        c(edit_label(snap, "questionnaire", q), if (is.na(who$respondent_type_id)) NA else edit_choice_labels$respondent_type(snap, who))
+        c(edit_label(snap, "questionnaire", q), if (is.na(who$respondent_type_id)) NA else edit_choice_labels$respondent_type(snap, who)),
+        kind = c("questionnaire", "respondent_type"), key = c(q$questionnaire_id, who$respondent_type_id)
       ),
-      edit_details_pick(own, c("name", "administered_date", "respondent_count")),
+      edit_details_pick(own, c("name", "administered_date", "respondent_count", "pdf_name", "supplement_name", "hidden")),
       edit_details_lines(
-        NA, c("Extracted from", "Variable Names and Coding"),
-        c(
-          if (has_text(row$pdf_sha256)) row$pdf_name %||% NA else "not extracted from a PDF on this site",
-          if (has_text(row$supplement_name)) row$supplement_name else NA
-        )
+        NA, "PDF",
+        if (!has_text(row$pdf_sha256)) "not extracted from a PDF on this site" else if (NROW(pdf) == 1) edit_pdf_facts(pdf$pdf_pages, pdf$pdf_bytes) else NA
       )
     )
   },
-  # the questions it asked in order, each by its number, with what its variables record and who they are about
+  # the questions it asked in order, each by its number and in full (`edit_placement_words()`), with what its
+  # variables record and who they are about, each said once however many of its variables say it
   usage_rows = function(snap, row, table, rows) {
     if (table != "wave_question") {
       return(NULL)
@@ -259,33 +254,45 @@ wave_entity <- list(
       boxes <- snap$variable[snap$variable$placement_id %in% rows$placement_id[i], , drop = FALSE]
       boxes <- boxes[order(boxes$display_order), , drop = FALSE]
       tags <- edit_variable_tags(snap, boxes)
-      paste(tags[nzchar(tags)], collapse = " · ")
+      paste(unique(tags[nzchar(tags)]), collapse = " · ")
     }, character(1))
     list(
-      rows = rows, text = paste(edit_count(nrow(rows), "question"), "asked"),
-      labels = trimws(paste0(edit_called_number(rows), " · ", edit_component_text(snap, edit_placement_component(snap, rows$placement_id)), " ", tags))
+      rows = rows, text = edit_count(nrow(rows), "Question"),
+      labels = trimws(paste0(edit_called_number(rows), " · ", edit_placement_words(snap, rows$placement_id), " ", tags))
     )
   }
 )
 
-# The lines of a row's details that say which study it belongs to.
-# Its registry, its name and its investigators, and its status if asked for.
+# The lines of a row's details that say which study it belongs to: its registry and the study. Neither is changed on
+# the row's own form, so each is a tag that opens it. What is the study's own (its investigators, its status) is on
+# the study: a tag is a name alone, and two people's names side by side wouldn't say who leads and who is the contact.
 # study_id: The study's id.
-# status: Whether to say the study's status.
 # Returns: Lines, as `edit_details_lines()` makes them.
-edit_study_lines <- function(snap, study_id, status = FALSE) {
+edit_study_lines <- function(snap, study_id) {
   study <- snap$study[match(study_id, snap$study$study_id), , drop = FALSE]
   registry <- snap$registry[match(study$registry_id, snap$registry$registry_id), , drop = FALSE]
-  investigator <- function(id) edit_lookup(snap, "principal_investigator", "principal_investigator_id", id, "name")
-  lines <- edit_details_lines(
-    NA, c("Registry", "Study", "Lead investigator", "Contact investigator"),
-    c(
-      if (is.na(registry$registry_id)) NA else edit_choice_labels$registry(snap, registry),
-      study$name, investigator(study$principal_investigator_id), investigator(study$contact_principal_investigator_id)
-    )
+  edit_details_lines(
+    NA, c("Registry", "Study"),
+    c(if (is.na(registry$registry_id)) NA else edit_choice_labels$registry(snap, registry), study$name),
+    kind = c("registry", "study"), key = c(registry$registry_id, study$study_id)
   )
-  if (status) lines <- rbind(lines, edit_details_lines(NA, "Status", study$status))
-  lines
+}
+
+# The names of the files a wave was extracted from, on its form: the names they were uploaded under, which staff can
+# put right (the files themselves are kept by their contents, and don't change). A wave that has no such file has no
+# such field.
+# row: The wave, or `NULL` for one being added.
+edit_wave_file_fields <- function(row) {
+  if (is.null(row)) {
+    return(list())
+  }
+  renames <- "Changing the name changes what the file is called here. The file itself stays as it was uploaded."
+  Filter(Negate(is.null), list(
+    if (has_text(row$pdf_sha256)) edit_field("pdf_name", "PDF file", required = TRUE, short = "PDF file's name", hint = renames),
+    if (has_text(row$supplement_name)) {
+      edit_field("supplement_name", "Variable names and coding file", required = TRUE, short = "variable names and coding file's name", hint = renames)
+    }
+  ))
 }
 
 # How many respondents a questionnaire's waves have between them, where known (leaving out the wave `except`).

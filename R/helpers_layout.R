@@ -55,11 +55,20 @@ detail_row <- function(...) {
 # label: The field's name.
 # help: What it is for, in a sentence.
 label_with_help <- function(label, help) {
-  tagList(label, " ", bslib::tooltip(
-    tags$button(type = "button", class = "btn btn-link field-help", `aria-label` = paste("About", label), app_icon("help")),
+  tagList(label, " ", help_tip(label, help))
+}
+
+# The small icon after a field's name whose tooltip says something about the field: what it is for ("i"), or why
+# it can't be changed (a lock).
+# label: The field's name, for screen readers.
+# help: What to say, in a sentence or two.
+# icon_name: The icon, by its name in `app_icons`.
+help_tip <- function(label, help, icon_name = "help") {
+  bslib::tooltip(
+    tags$button(type = "button", class = "btn btn-link field-help", `aria-label` = paste("About", label), app_icon(icon_name)),
     help,
     placement = "right" # beside the name, clear of the field under it
-  ))
+  )
 }
 
 # A coloured circle that shows how far something has got.

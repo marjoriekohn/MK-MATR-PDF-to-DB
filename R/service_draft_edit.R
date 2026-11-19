@@ -486,6 +486,118 @@ draft_service_delete <- function(draft, table, id) {
   unlink_followers(drop_orphans(renumber(draft, table)), id)
 }
 
+# ------ Duplicating ------------------------------------------------------------
+# Make a copy of a block, right after it.
+# The copy has everything the block has: a question its variables with their choices, a section, grid or group
+# every block inside it (and theirs). Copies are rows staff added: the AI didn't read them (no `ref`), they aren't
+# checked, and they didn't come from the database (no `catalog_id`: a copy whose words stay the same is the same
+# wording when it is pushed, as any block with those words is). A copied variable has no MATR ID, since a MATR ID
+# names one variable. A copied question that depended on a question copied with it depends on that one's copy;
+# one that depended on a question outside still does.
+# id: The block's id.
+# Returns: The changed draft. The copy of `id` itself has the next id (`draft_service_next_id()`).
+draft_service_duplicate <- function(draft, id) {
+  blocks <- draft$components
+  if (!id %in% blocks$id) stop("That's no longer in the draft.")
+  copied <- c(id, draft_service_printed_order(draft, id))
+  new_id <- stats::setNames(draft_service_next_id(draft, "components", length(copied)), copied)
+  renamed <- function(ids) ifelse(ids %in% copied, unname(new_id[ids]), ids)
+
+  copies <- blocks[match(copied, blocks$id), , drop = FALSE]
+  copies$id <- unname(new_id)
+  copies$parent_id[-1] <- renamed(copies$parent_id[-1]) # the copy of `id` stays where `id` is
+  copies$display_order[1] <- copies$display_order[1] + 0.5 # right after it
+  copies$parent_question_id <- renamed(copies$parent_question_id)
+  copies$checked <- FALSE
+  for (column in c("ref", "catalog_id", "reword")) copies[[column]] <- rep(NA_character_, nrow(copies))
+
+  boxes <- draft$variables[draft$variables$component_id %in% copied, , drop = FALSE]
+  box_id <- stats::setNames(draft_service_next_id(draft, "variables", nrow(boxes)), boxes$id)
+  choices <- draft$response_options[draft$response_options$variable_id %in% boxes$id, , drop = FALSE]
+  choices$id <- draft_service_next_id(draft, "response_options", nrow(choices))
+  choices$variable_id <- unname(box_id[choices$variable_id])
+  choices$ref <- rep(NA_character_, nrow(choices))
+  boxes$component_id <- unname(new_id[boxes$component_id])
+  boxes$id <- unname(box_id)
+  for (column in c("matr_id", "ref")) boxes[[column]] <- rep(NA_character_, nrow(boxes))
+
+  draft$components <- rbind(blocks, copies)
+  draft$variables <- rbind(draft$variables, boxes)
+  draft$response_options <- rbind(draft$response_options, choices)
+  what <- tolower(copies$component_type[1])
+  message(sprintf(
+    "Copied the %s%s. The copy is right after it%s",
+    what, if (length(copied) > 1) paste(" and the", plural(length(copied) - 1, "block"), "inside it") else "",
+    if (nrow(boxes) > 0) ": its variables need MATR IDs of their own." else "."
+  ))
+  renumber(draft, "components")
+}
+
+# ------ Going back to what the AI read ------------------------------------------
+# Put a block back as the AI read it.
+# Its kind, its words, the number printed beside it, its tags and scale, the question it depends on, and for a
+# question its variables and their choices are what the AI returned again: what staff changed in them is taken
+# back, and variables and choices staff added to it go. What isn't the AI's stays: where the block sits (a block
+# moved is the same block somewhere else), a variable's MATR ID and a choice's code, for the ones the AI read. A
+# section, grid or group goes back alone: the blocks inside it are their own.
+# original: The draft as the AI returned it (`extraction_service_open_draft()`'s `original`), whose ids are the
+#   reviewed copy's refs; `NULL` for an extraction the AI didn't read.
+# id: The block's id.
+# Returns: The changed draft. An error with a sentence if there is nothing to go back to, or the blocks inside it
+#   can't be in what it was.
+draft_service_revert_block <- function(draft, original, id) {
+  row <- match(id, draft$components$id)
+  if (is.na(row)) stop("That's no longer in the draft.")
+  if (is.null(original)) stop("The AI didn't read this extraction, so there is nothing to go back to.")
+  ref <- draft$components$ref[row]
+  was <- original$components[original$components$id %in% ref, , drop = FALSE]
+  if (is.na(ref) || nrow(was) != 1) {
+    stop("The AI didn't read this block: it was added afterwards, so there is nothing to go back to.")
+  }
+  if (!id %in% draft_service_changed_blocks(original, draft)) {
+    message("This block is already as the AI read it.")
+    return(draft)
+  }
+  # its words first (a group has none), then its kind, which checks what it holds and where it sits
+  draft$components$text[row] <- was$text
+  if (!identical(draft$components$component_type[row], was$component_type)) {
+    draft <- suppressMessages(set_component_type(draft, row, was$component_type))
+    row <- match(id, draft$components$id)
+  }
+  draft$components[row, c("printed_number", "subject", "time_frame", "scale")] <- was[c("printed_number", "subject", "time_frame", "scale")]
+  # the question it depended on, if the draft still has it
+  depended_on <- if (is.na(was$parent_question_id)) NA_integer_ else match(was$parent_question_id, draft$components$ref)
+  draft$components$parent_question_id[row] <- draft$components$id[depended_on]
+  if (identical(was$component_type, "Question")) draft <- revert_variables(draft, original, id, ref)
+  message("Put back as the AI read it. Undo brings your changes back.")
+  draft
+}
+
+# A question's variables and their choices, as the AI returned them: the question's own go, and the AI's are put
+# in their place, each keeping the MATR ID (a variable) or the code (a choice) the reviewed copy has for it.
+revert_variables <- function(draft, original, id, ref) {
+  now <- draft$variables[draft$variables$component_id %in% id, , drop = FALSE]
+  now_choices <- draft$response_options[draft$response_options$variable_id %in% now$id, , drop = FALSE]
+  draft$variables <- draft$variables[!draft$variables$id %in% now$id, , drop = FALSE]
+  draft$response_options <- draft$response_options[!draft$response_options$id %in% now_choices$id, , drop = FALSE]
+
+  boxes <- original$variables[original$variables$component_id %in% ref, , drop = FALSE]
+  choices <- original$response_options[original$response_options$variable_id %in% boxes$id, , drop = FALSE]
+  box_id <- stats::setNames(draft_service_next_id(draft, "variables", nrow(boxes)), boxes$id)
+  choices$ref <- choices$id
+  choices$id <- draft_service_next_id(draft, "response_options", nrow(choices))
+  choices$variable_id <- unname(box_id[choices$variable_id])
+  kept_code <- now_choices$code_value[match(choices$ref, now_choices$ref)]
+  choices$code_value <- ifelse(is.na(kept_code), choices$code_value, kept_code)
+  boxes$ref <- boxes$id
+  boxes$id <- unname(box_id)
+  boxes$component_id <- rep(id, nrow(boxes))
+  boxes$matr_id <- now$matr_id[match(boxes$ref, now$ref)]
+  draft$variables <- rbind(draft$variables, boxes)
+  draft$response_options <- rbind(draft$response_options, choices)
+  renumber(renumber(draft, "variables"), "response_options")
+}
+
 # ------ Codes ------------------------------------------------------------------
 # Give choices their default codes.
 # Codes count 1, 2, 3... down a variable's choices until staff change them: a choice without a

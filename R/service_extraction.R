@@ -164,7 +164,9 @@ extraction_service_reextract_wave <- function(connection, wave_id, place, me, no
 # ------ Editing a wave's extraction again ------------------------------------------------------------
 # Bring what a wave asks back to the Edit Extraction page (Make an edit > the wave > Edit extraction): a new
 # draft holding the wave's blocks, questions, variables and choices as the catalog has them now, going into the
-# same wave, with the wave's PDF beside it (`public.reopen_wave()`). Nothing in the catalog changes until the
+# same wave, with the wave's PDF beside it (`public.reopen_wave()`). A wave the AI read stays AI-Powered, with the
+# AI's reading beside it, so its blocks can be compared with it and put back to it
+# (`extraction_service_open_draft()`); it isn't read again from here (Re-extract is the wave's own, on Metadata). Nothing in the catalog changes until the
 # draft is pushed; then it replaces what the wave asks, in one step. A block whose words were changed, when
 # other places print the same wording, is changed everywhere or only here as staff choose in the push dialog
 # (`extraction_service_rewordings()`). Asked for again while the draft is open, it is the same draft.
@@ -223,6 +225,9 @@ extraction_service_reextract <- function(connection, id, me, expected_revision =
   record <- extraction_model_get(connection, id)
   if (!identical(record$method, extraction_ai)) {
     stop("Only an AI-Powered extraction is read from its PDF. This one was typed by hand.", call. = FALSE)
+  }
+  if (nzchar(extraction_service_updates_wave(record))) {
+    stop("This draft holds what a wave asks now. To read the wave's PDF again, use Re-extract on the wave, on the Metadata page.", call. = FALSE)
   }
   if (is.null(extraction_service_pdf(connection, record))) {
     stop("Its PDF isn't on this site any more, so it can't be read again.", call. = FALSE)
@@ -304,15 +309,24 @@ extraction_service_load_draft <- function(connection, record) {
 
 # A draft's questionnaire, for the Edit Extraction page, with what the AI returned to compare it with.
 # Both are read at once. What the AI returned is read only when the draft opens, since it never changes.
+# A draft reopened from a wave the AI read (`extraction_service_reopen_wave()`) carries that reading, but its
+# questionnaire came back from the database, which doesn't keep which of the AI's rows each row was. Until its
+# rows say (they do once it is saved), they are matched through the copy the wave was pushed from
+# (`draft_service_adopt_refs()`), so the page can show what differs from the reading and put a block back to it.
 # Returns: A list: `draft` (see `extraction_service_load_draft()`) and `original`, what the AI returned
 #   as a draft (`NULL` for a Manual extraction). An error if reading hasn't finished.
 extraction_service_open_draft <- function(connection, record) {
   json <- extraction_model_questionnaire(connection, record$id)
   if (is.null(json$questionnaire %||% json$original)) stop("This draft hasn't been read yet.", call. = FALSE)
-  list(
-    draft = draft_service_from_json(json$questionnaire %||% json$original),
-    original = if (identical(record$method, extraction_ai) && !is.null(json$original)) draft_service_from_json(json$original)
-  )
+  draft <- draft_service_from_json(json$questionnaire %||% json$original)
+  original <- if (identical(record$method, extraction_ai) && !is.null(json$original)) draft_service_from_json(json$original)
+  pushed_from <- as.character(record$info$reopened_from %||% "")
+  if (!is.null(original) && nzchar(pushed_from) && all(is.na(draft$components$ref))) {
+    pushed <- tryCatch(extraction_model_questionnaire(connection, pushed_from)$questionnaire, error = function(problem) NULL)
+    # (pushed without a reviewed copy of its own, or one that can't be read: matched to the reading itself)
+    draft <- draft_service_adopt_refs(draft, if (is.null(pushed)) original else draft_service_from_json(pushed))
+  }
+  list(draft = draft, original = original)
 }
 
 # Save staff's reviewed copy of the questionnaire.

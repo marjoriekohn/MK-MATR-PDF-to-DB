@@ -69,7 +69,8 @@ draft_service_review_edits <- function(original, reviewed) {
       b <- review_edit_keys(reviewed, table, new_rows, field)
       xor(is.na(a), is.na(b)) | (!is.na(a) & !is.na(b) & a != b)
     }, logical(length(kept)))
-    differs <- matrix(differs, nrow = length(kept), dimnames = list(NULL, fields))
+    # (a matrix whatever its size: with no row in both, or one field, vapply() gives something else)
+    differs <- matrix(differs, nrow = length(kept), ncol = length(fields), dimnames = list(NULL, fields))
     for (i in which(rowSums(differs) > 0)) {
       ref <- kept[i]
       id <- new$id[new_rows[i]]
@@ -132,6 +133,39 @@ draft_service_changed_blocks <- function(original, reviewed) {
     }
   }
   unique(changed[!is.na(changed)])
+}
+
+# Say which of the AI's rows each row of a draft is, for a draft that doesn't say: one reopened from the
+# database (`extraction_service_reopen_wave()`), which keeps the questionnaire but not the rows' refs. The copy
+# the wave was pushed from does say, so each row takes the ref of the row it was there. A block is the block of
+# the same kind and words (the first with them is the first with them, and so on); a variable is its question's
+# variable in the same place, and a choice its variable's choice in the same place. A block that isn't in the
+# pushed copy (added or reworded on the Metadata page since) has no ref: it is one staff added. A block also
+# takes the PDF page it was read from, which the database doesn't keep either.
+# draft: The draft, as the database gave it back.
+# pushed: The reviewed copy that was pushed, as a draft (its refs are the AI's ids; a row staff added has none).
+# Returns: `draft`, with `ref` on its blocks, variables and choices, and `page` on its blocks.
+draft_service_adopt_refs <- function(draft, pushed) {
+  nth <- function(keys) paste(keys, stats::ave(seq_along(keys), keys, FUN = seq_along), sep = "\r")
+  printed <- function(of) of$components[match(draft_service_printed_order(of), of$components$id), , drop = FALSE]
+  words <- function(blocks) nth(paste(blocks$component_type, ifelse(is.na(blocks$text), "", blocks$text), sep = "\r"))
+  mine <- printed(draft)
+  theirs <- printed(pushed)
+  same <- match(words(mine), words(theirs))
+  rows <- match(mine$id, draft$components$id)
+  draft$components$ref[rows] <- theirs$ref[same]
+  draft$components$page[rows] <- ifelse(is.na(draft$components$page[rows]), theirs$page[same], draft$components$page[rows])
+
+  placed <- function(parent, rows) paste(parent, rows$display_order, sep = "\r")
+  their_block <- stats::setNames(theirs$id[same], mine$id)
+  boxes <- draft$variables
+  box <- match(placed(their_block[boxes$component_id], boxes), placed(pushed$variables$component_id, pushed$variables))
+  draft$variables$ref <- pushed$variables$ref[box]
+  their_box <- stats::setNames(pushed$variables$id[box], boxes$id)
+  choices <- draft$response_options
+  choice <- match(placed(their_box[choices$variable_id], choices), placed(pushed$response_options$variable_id, pushed$response_options))
+  draft$response_options$ref <- pushed$response_options$ref[choice]
+  draft
 }
 
 # The questionnaire's own name and abbreviation, as printed.

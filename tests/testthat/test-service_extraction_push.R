@@ -571,3 +571,39 @@ test_that("a pushed wave is reopened as a draft of what it asks, and pushing tha
   database_model_call(test_connection, "empty_wave", list(p_wave_id = database_number(tree$wave$wave_id), p_staff_id = database_number(me$staff_id)))
   expect_match(error_text(extraction_service_reopen_wave(test_connection, tree$wave$wave_id, me)), "asks no questions yet")
 })
+
+test_that("a wave the AI read is reopened as an AI-Powered draft with that reading, so a block can still be put back to it", {
+  me <- local_staff()
+  tree <- local_tree()
+  pushed <- local_pushed_ai_extraction(me, tree) # reviewed before it was pushed: a question reworded, a unit typed
+  reopened <- extraction_service_reopen_wave(test_connection, tree$wave$wave_id, me)
+  withr::defer(test_delete_extraction(reopened$id))
+  expect_equal(reopened$method, extraction_ai) # not typed by hand
+  expect_equal(reopened$extraction_status, "ready") # nothing to read
+  expect_equal(as.character(reopened$info$reopened_from), as.character(pushed$id))
+
+  # its questionnaire came back from the database without the rows' refs: they are matched through the pushed copy
+  opened <- extraction_service_open_draft(test_connection, reopened)
+  expect_false(is.null(opened$original))
+  expect_false(anyNA(opened$draft$components$ref))
+  reworded <- opened$draft$components$id[opened$draft$components$text %in% normal_text(paste(test_marker, "Do you smoke now?"))]
+  expect_length(reworded, 1)
+  expect_true(reworded %in% draft_service_changed_blocks(opened$original, opened$draft)) # as it differed when it was pushed
+  back <- suppressMessages(draft_service_revert_block(opened$draft, opened$original, reworded))
+  expect_false(reworded %in% draft_service_changed_blocks(opened$original, back))
+  expect_setequal(stats::na.omit(back$variables$matr_id), stats::na.omit(opened$draft$variables$matr_id)) # MATR IDs aren't the AI's: kept
+
+  # saved, its rows say which of the AI's they are, and the corrections are worked out from the same reading
+  extraction_service_save_draft(test_connection, reopened, back, opened$original, me)
+  again <- extraction_service_open_draft(test_connection, extraction_model_get(test_connection, reopened$id))
+  expect_false(anyNA(again$draft$components$ref))
+  expect_false(any(vapply(review_edits_of(test_connection, reopened$id), function(edit) identical(edit$field, "text"), logical(1))))
+
+  # it isn't read again from here (that is the wave's own Re-extract), and the AI Monitor counts the reading once
+  expect_match(error_text(extraction_service_reextract(test_connection, reopened$id, me)), "Re-extract on the wave")
+  outcome <- extraction_service_push(test_connection, extraction_model_get(test_connection, reopened$id), me, questionnaire_service_get_catalog(test_connection))
+  expect_equal(outcome$record$status, "Pushed")
+  listed <- names(monitor_model_get_pushed(test_connection))
+  expect_true(as.character(pushed$id) %in% listed)
+  expect_false(as.character(reopened$id) %in% listed)
+})

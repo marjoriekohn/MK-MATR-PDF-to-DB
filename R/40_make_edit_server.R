@@ -5,9 +5,11 @@
 # shared between threads or sessions, and shouldn't be.
 
 # The Metadata page's server (the module is called make_edit).
-# The list on the left has a section for each kind of thing (40_make_edit_ui.R); a section's items are read from
-# the database the first time it is opened. Picking an item shows it in the details (`edit_change_server()`,
-# "view"), with Edit and Delete; Edit, Delete and + Add show the form or what a delete reaches there, with Save.
+# The list on the left has a section for each list of things (`make_edit_lists`, 40_make_edit_ui.R); a list's items
+# are read from the database the first time it is opened. Picking an item shows it in the details
+# (`edit_change_server()`, "view"): Edit is at their top, and Merge, Empty and Delete along the bottom. A tag or a
+# View in the details opens the thing it names, and Back returns from it (`trail`). Edit, Delete, Merge and + Add
+# show the form, what a delete reaches, or what a merge moves, with the button that does it.
 # Every change is applied at once, by the database's apply_change() (`edit_service_apply()`), and written to the
 # Edit History. A registry, study, questionnaire or wave has Empty too: it stays, its contents go
 # (`edit_service_empty()`). A wave extracted from a PDF has Re-extract: it is emptied and a new extraction of it
@@ -26,13 +28,15 @@ make_edit_server <- function(id, connection, me, show_page, active = NULL, open_
     kind <- reactiveVal("") # the kind of the item in the details, a name of edit_entities
     scope <- reactiveVal("") # the questionnaire (or measurement scale), for a kind that belongs to one
     picked <- reactiveVal(NULL) # the key of the item in the details
-    verb <- reactiveVal("") # what the details show: "" (nothing), "view", "add", "update", "delete" or "done"
+    verb <- reactiveVal("") # what the details show: "" (nothing), "view", "add", "update", "delete", "merge" or "done"
     entity <- reactive(if (kind() %in% names(edit_entities)) edit_entities[[kind()]])
 
     done <- reactiveVal(NULL) # what was just done: list(verb, summary, history_id, new_ids)
     duplicates <- reactiveVal(NULL) # the existing rows an add looks like, while staff decide
     leaving_to <- reactiveVal(NULL) # what was picked while a form was open, while staff decide whether to leave it
-    hint <- reactiveVal(NULL) # what the details say while nothing is picked
+    add_list <- reactiveVal("") # the list whose + Add is open, a name of make_edit_lists: what the new thing is called
+    trail <- reactiveVal(list()) # the items a tag or View was followed from, the last one last: Back returns to it
+    entered <- reactiveVal("") # how the item in the details was opened: its verb then ("view", "add", "delete")
 
     # ------ The tables ---------------------------------------------------------
     # Each kind's tables are read the first time its section is opened (or one of its items is), and kept until a
@@ -85,10 +89,16 @@ make_edit_server <- function(id, connection, me, show_page, active = NULL, open_
     if (!is.null(active)) {
       observeEvent(active(),
         {
-          if (isTRUE(active()) && !verb() %in% c("add", "update", "delete")) read_again()
+          if (isTRUE(active()) && !verb() %in% c("add", "update", "delete", "merge")) read_again()
         },
         ignoreInit = TRUE
       )
+    }
+
+    # What stops a row being changed, if anything: its kind can't be, or the row itself has nothing to change (the
+    # one group, which has no words).
+    cant_change <- function(shown) {
+      cant("update") %||% if (is.function(entity()$unchangeable) && !is.null(shown)) entity()$unchangeable(snapshot(), shown)
     }
 
     # What stops a verb for the kind, if anything ("You can't delete a registry yet: …").
@@ -101,32 +111,27 @@ make_edit_server <- function(id, connection, me, show_page, active = NULL, open_
     }
 
     # ------ MODULES -----------------------------------------------------------
-    change <- edit_change_server("change", entity, verb, snapshot, row, scope)
+    # + Add in a list of wordings adds a block to a questionnaire: its form starts as the list's kind of block.
+    add_starts <- reactive({
+      blocks <- if (nzchar(add_list())) make_edit_lists[[add_list()]]$blocks
+      if (identical(kind(), "placement") && identical(verb(), "add") && !is.null(blocks)) list(placement__kind = blocks[1])
+    })
+    change <- edit_change_server("change", entity, verb, snapshot, row, scope, prefill = add_starts)
 
     # ------ The list ------------------------------------------------------------
-    # A section's items: drawn while it is open, and again when the tables are read again. Only what is open is drawn,
-    # so only the kinds staff look at are read from the database. Whether a section is open is kept for each section
-    # (the page script opens and closes it at once, and says so), so opening one doesn't draw the others again: a
-    # section inside one (a questionnaire's, under Blocks) would be drawn closed.
+    # A list's items: drawn while it is open, and again when the tables are read again. Only what is open is drawn,
+    # so only the kinds staff look at are read from the database. Whether a list is open is kept for each (the page
+    # script opens and closes it at once, and says so), so opening one doesn't draw the others again.
     open_sections <- new.env()
     section_open <- function(id) {
       if (!exists(id, envir = open_sections, inherits = FALSE)) assign(id, reactiveVal(FALSE), envir = open_sections)
       get(id, envir = open_sections, inherits = FALSE)
     }
-    registered <- character()
-    items_output <- function(name, section, draw) {
-      if (name %in% registered) {
-        return()
-      }
-      registered <<- c(registered, name)
-      output[[name]] <- renderUI({
-        req(section_open(section)())
-        draw()
-      })
-    }
 
-    lapply(make_edit_listed, function(key) {
-      items_output(paste0("items_", key), key, function() {
+    lapply(make_edit_listed, function(list_id) {
+      output[[paste0("items_", list_id)]] <- renderUI({
+        req(section_open(list_id)())
+        key <- make_edit_lists[[list_id]]$kind
         read <- tables_of(key)
         if (inherits(read, "error")) {
           return(div(
@@ -135,44 +140,21 @@ make_edit_server <- function(id, connection, me, show_page, active = NULL, open_
             review_button("Try again", "retry", `data-kind` = key, class = "btn btn-sm btn-outline-dark")
           ))
         }
-        entity <- edit_entities[[key]]
-        if (!is.null(entity$scope)) {
-          return(scope_sections(key, read))
-        }
-        items_ui(key, read, "")
+        items_ui(list_id, read)
       })
     })
 
-    # A kind that belongs to a questionnaire (or a measurement scale): a section for each, holding its items.
-    scope_sections <- function(key, snap) {
-      table <- edit_entities[[key]]$scope$table
-      owners <- edit_choices(snap, table)
-      owners <- owners[order(tolower(names(owners)), method = "radix")]
-      if (length(owners) == 0) {
-        return(p(class = "edit-list-note", paste0("There are no ", edit_nouns[[table]][2], " in the database yet.")))
-      }
-      Map(function(label, q) {
-        name <- paste0("items_", key, "_", q)
-        items_output(name, paste0(key, ":", q), function() {
-          read <- tables_of(key)
-          if (!inherits(read, "error")) items_ui(key, read, q)
-        })
-        id <- paste0(key, ":", q)
-        make_edit_section(id, label, uiOutput(ns(name), class = "outline-list"), open = isolate(section_open(id)()))
-      }, names(owners), unname(owners))
-    }
-
-    items_ui <- function(key, snap, q) {
-      entity <- edit_entities[[key]]
-      cards <- make_edit_cards(key, snap, q)
-      chosen <- isolate(if (identical(kind(), key)) list(scope = scope(), key = picked()))
+    items_ui <- function(list_id, snap) {
+      list <- make_edit_lists[[list_id]]
+      cards <- make_edit_cards(list_id, snap)
+      chosen <- isolate(if (identical(kind(), list$kind)) picked())
       tagList(
-        if (nrow(cards) == 0) p(class = "edit-list-note", paste0("No ", tolower_words(make_edit_kinds[[key]][1]), " yet.")),
+        if (nrow(cards) == 0) p(class = "edit-list-note", paste0("No ", tolower(list$label), " yet.")),
         lapply(seq_len(nrow(cards)), function(i) {
-          card <- cards[i, , drop = FALSE]
-          make_edit_item(key, card, card$scope, identical(card$scope, chosen$scope) && identical(card$key, chosen$key))
+          # every item of Questions is a question, so its rows don't each say so
+          make_edit_item(list$kind, cards[i, , drop = FALSE], "", identical(cards$key[i], chosen), chip = length(list$blocks) != 1)
         }),
-        if (!isTRUE(entity$view_only)) make_edit_add_button(key, q)
+        if (!isTRUE(edit_entities[[list$kind]]$view_only)) make_edit_add_button(list_id)
       )
     }
 
@@ -187,6 +169,7 @@ make_edit_server <- function(id, connection, me, show_page, active = NULL, open_
     # ------ Picking ------------------------------------------------------------------
     observeEvent(input$action, {
       event <- input$action
+      viewing <- identical(verb(), "view")
       switch(event$action,
         toggle = {
           is_open <- section_open(event$id)
@@ -195,48 +178,41 @@ make_edit_server <- function(id, connection, me, show_page, active = NULL, open_
         },
         collapse_all = for (id in ls(open_sections)) section_open(id)(FALSE), # the page script closes them at once
         select = go_to(list(kind = event$kind, scope = event$scope %||% "", key = event$key, verb = "view")),
-        add = go_to(list(kind = event$kind, scope = event$scope %||% "", key = NULL, verb = "add")),
-        edit = verb("update"),
-        delete = verb("delete"),
+        add = go_to(list(kind = event$kind, scope = "", key = NULL, verb = "add", list = event$list %||% "")),
+        edit = if (viewing && is.null(cant_change(tryCatch(row(), shiny.silent.error = function(problem) NULL)))) verb("update"),
+        merge = if (viewing) verb("merge"),
+        delete = if (viewing) verb("delete"),
         empty = ask_empty(),
         reextract_wave = if (identical(kind(), "wave")) showModal(reextract_wave_dialog(ns, edit_label(snapshot(), "wave", row()))),
         edit_wave_extraction = if (identical(kind(), "wave")) edit_wave_extraction(),
         back = after_done(),
+        trail_back = go_back(),
         retry = read_again()
       )
     })
 
-    # Opening a section shows its first item in the details, while they show nothing or an item: not over a form or
-    # what was just done. Not when they already show one of its items, or when it only holds sections (Blocks holds a
-    # section for each questionnaire).
-    pick_first <- function(section) {
-      if (!verb() %in% c("", "view")) {
+    # Opening a list shows its first item in the details, while they show nothing or an item: not over a form or
+    # what was just done. Not when they already show one of its items.
+    pick_first <- function(list_id) {
+      list <- make_edit_lists[[list_id]]
+      if (!verb() %in% c("", "view") || is.null(list)) {
         return()
       }
-      parts <- strsplit(section, ":", fixed = TRUE)[[1]]
-      key <- parts[1]
-      q <- if (length(parts) > 1) parts[2] else ""
-      entity <- edit_entities[[key]]
-      if (is.null(entity) || (!is.null(entity$scope) && !nzchar(q))) {
-        return()
-      }
-      read <- tables_of(key)
+      read <- tables_of(list$kind)
       if (inherits(read, "error")) {
-        assign(key, read, envir = just_failed) # its list says so, without reading again at once
+        assign(list$kind, read, envir = just_failed) # its list says so, without reading again at once
         return()
       }
-      cards <- make_edit_cards(key, read, q)
-      if (nrow(cards) == 0 || (identical(kind(), key) && any(paste(scope(), picked()) %in% paste(cards$scope, cards$key)))) {
+      cards <- make_edit_cards(list_id, read)
+      if (nrow(cards) == 0 || (identical(kind(), list$kind) && isTRUE(picked() %in% cards$key))) {
         return()
       }
-      show_item(list(kind = key, scope = cards$scope[1], key = cards$key[1], verb = "view"))
-      # the list marks it as it is drawn; the page script unmarks the item picked before, in a section already open
-      session$sendCustomMessage("make-edit-picked", paste(key, cards$scope[1], cards$key[1], sep = "|"))
+      show_item(list(kind = list$kind, scope = "", key = cards$key[1], verb = "view"))
     }
 
     # Going to another item, or to + Add, while a form has something typed in it asks first.
     go_to <- function(where) {
-      if (verb() %in% c("add", "update")) {
+      if (verb() %in% c("add", "update") && change$dirty()) {
         leaving_to(where)
         showModal(unsaved_dialog("Leave this edit?", "confirm_leave", "Leave it"))
         return()
@@ -251,30 +227,53 @@ make_edit_server <- function(id, connection, me, show_page, active = NULL, open_
       if (!is.null(where)) show_item(where)
     })
 
+    # The item in the details, as Back returns to it: with its name, for the button.
+    here <- function() {
+      shown <- if (nzchar(kind()) && !is.null(picked())) tryCatch(row(), error = function(problem) NULL)
+      if (is.null(shown)) {
+        return(NULL)
+      }
+      list(kind = kind(), scope = scope(), key = picked(), verb = "view", label = shorten(edit_label(snapshot(), entity()$table, shown), 40))
+    }
+
+    # Shows an item (or, with no key, the form that adds one). One reached from another (`follows`: a tag or View
+    # in its details) keeps the way back to it; one picked in the list starts afresh. The list marks it, if it is
+    # drawn there (the page script unmarks the one before).
     show_item <- function(where) {
+      if (isTRUE(where$follows)) {
+        trail(c(trail(), if (!is.null(here())) list(here())))
+      } else if (!isTRUE(where$returns)) {
+        trail(list())
+      }
       done(NULL)
-      hint(NULL)
+      add_list(where$list %||% "")
+      entered(where$verb)
       kind(where$kind)
       scope(where$scope)
       picked(where$key)
       verb(where$verb)
+      if (!is.null(where$key)) session$sendCustomMessage("make-edit-picked", paste(where$kind, where$scope, where$key, sep = "|"))
     }
 
-    # A form can ask to go to another kind: to add the registry it needs, or to open a block as it is in one
-    # questionnaire (a card under a shared component has a button for each).
+    # Back, to the item the one in the details was reached from.
+    go_back <- function() {
+      left <- trail()
+      if (length(left) == 0) {
+        return()
+      }
+      trail(left[-length(left)])
+      show_item(c(left[[length(left)]], list(returns = TRUE)))
+    }
+
+    # The details can ask to go to another item: a tag or a View opens the thing it names, a card under a shared
+    # wording opens it as one questionnaire prints it, a scale's question has Remove and the scale Add a question,
+    # and a form whose drop-down has nothing to pick adds what it needs first.
     observeEvent(change$jump(), {
       jump <- change$jump()
-      if (identical(jump$verb, "add")) {
-        go_to(list(kind = jump$kind, scope = scope(), key = NULL, verb = "add"))
-        return()
-      }
-      if (has_text(jump$key)) {
-        go_to(list(kind = jump$kind, scope = jump$scope %||% "", key = jump$key, verb = jump$verb))
-        return()
-      }
-      show_item(list(kind = "", scope = "", key = NULL, verb = ""))
-      owner <- edit_nouns[[edit_entities[[jump$kind]]$scope$table %||% "questionnaire"]][1]
-      hint(paste0("Open ", make_edit_kinds[[jump$kind]][1], " in the list, then the ", owner, ", and pick it there."))
+      go_to(list(
+        kind = jump$kind, scope = jump$scope %||% "", key = if (has_text(jump$key)) jump$key, verb = jump$verb %||% "add",
+        follows = TRUE
+      ))
     })
 
     # ------ The details ------------------------------------------------------------
@@ -284,7 +283,7 @@ make_edit_server <- function(id, connection, me, show_page, active = NULL, open_
     # (`row_gone`, which changes only when that does, so a form being typed in isn't drawn again).
     row_gone <- reactiveVal(FALSE)
     observe({
-      gone <- verb() %in% c("view", "update", "delete") && is.null(tryCatch(row(), shiny.silent.error = function(problem) NULL))
+      gone <- verb() %in% c("view", "update", "delete", "merge") && is.null(tryCatch(row(), shiny.silent.error = function(problem) NULL))
       row_gone(gone)
     })
     output$detail <- renderUI({
@@ -293,14 +292,17 @@ make_edit_server <- function(id, connection, me, show_page, active = NULL, open_
       picked()
       scope()
       done()
-      hint()
       row_gone()
       isolate(detail_ui(mode, key))
     })
 
     detail_ui <- function(mode, key) {
       if (!nzchar(mode) || is.null(entity())) {
-        return(div(class = "detail-empty", hint() %||% "Pick something in the list to see it here, or add one with + Add."))
+        return(div(
+          class = "detail-empty",
+          p("Pick something in the list to see it here."),
+          p("Looking changes nothing: an item is only changed with its Edit button, and then Save.")
+        ))
       }
       if (!is.null(load_problem())) {
         return(div(class = "detail-empty", load_problem()))
@@ -312,35 +314,68 @@ make_edit_server <- function(id, connection, me, show_page, active = NULL, open_
         return(scope_picker_ui(key))
       }
       blocked <- if (mode != "view") cant(mode)
-      if (mode != "add" && is.null(tryCatch(row(), shiny.silent.error = function(problem) NULL))) {
+      shown <- if (mode != "add") tryCatch(row(), shiny.silent.error = function(problem) NULL)
+      if (mode != "add" && is.null(shown)) {
         return(div(class = "detail-empty", "It isn't in the database any more. Pick another."))
       }
+      buttons <- detail_buttons(mode, blocked)
       div(
         class = "block-detail edit-detail",
-        detail_head(span(class = "row-badge", make_edit_kinds[[key]][2]), h2(class = "detail-title", detail_title(mode))),
+        detail_top(mode, shown),
         div(
           class = "detail-content",
           if (mode == "view") {
             NULL
           } else if (!is.null(blocked)) {
-            edit_callout("warning", title = paste("You can't", mode, paste(entity()$article, entity()$noun), "yet"), p(blocked))
+            edit_callout("warning", title = paste("You can't", mode, edit_a(edit_noun(entity(), shown)), "yet"), p(blocked))
           } else {
-            edit_info_block(entity(), mode)
+            edit_info_block(entity(), mode, shown)
           },
           if (is.null(blocked)) edit_change_ui(ns("change")),
           if (mode != "view" && is.null(blocked)) uiOutput(ns("footer_note"), class = "edit-footer-note")
         ),
-        div(class = "detail-actions", detail_buttons(mode, blocked))
+        if (length(buttons) > 0) div(class = "detail-actions", buttons)
       )
     }
 
-    # + Add of a kind listed by questionnaire (Blocks) or by scale (Scale Items) asks which first; the form comes once
-    # one is picked.
+    # The top of the details: Back to the item this one was reached from (a tag or View there), what kind of thing
+    # it is, its name, and Edit (off, saying why, for a kind that can't be changed), where it is seen at once.
+    detail_top <- function(mode, shown = NULL) {
+      left <- trail()
+      no_update <- if (mode == "view") cant_change(shown)
+      detail_head(
+        if (mode == "view" && length(left) > 0) {
+          review_button(
+            tagList(app_icon("back"), " Back to ", left[[length(left)]]$label), "trail_back",
+            class = "btn btn-sm btn-link detail-trail"
+          )
+        },
+        detail_badge(shown),
+        h2(class = "detail-title", detail_title(mode)),
+        if (mode == "view" && !isTRUE(entity()$view_only)) {
+          review_button(
+            icon_label("edit", "Edit"), "edit",
+            class = "btn btn-primary detail-edit", disabled = !is.null(no_update),
+            title = no_update %||% "Change it. Nothing is saved until you press Save"
+          )
+        }
+      )
+    }
+
+    # What kind of thing the details show, in a black tag, the same for every kind: a wording by its kind of block;
+    # a new one by the list its + Add is in.
+    detail_badge <- function(shown) {
+      called <- if (is.null(shown) && nzchar(add_list())) make_edit_lists[[add_list()]]$one else make_edit_called(kind(), snapshot(), shown)
+      span(class = "detail-kind", called)
+    }
+
+    # + Add of a block asks which questionnaire first (and of a scale's question, which scale, though Add a question
+    # in a scale's details says); the form comes once one is picked.
     scope_picker_ui <- function(key) {
       table <- entity()$scope$table
       div(
         class = "block-detail edit-detail",
-        detail_head(span(class = "row-badge", make_edit_kinds[[key]][2]), h2(class = "detail-title", detail_title("add"))),
+        detail_top("add"),
         div(
           class = "detail-content",
           selectInput(
@@ -358,31 +393,40 @@ make_edit_server <- function(id, connection, me, show_page, active = NULL, open_
 
     detail_title <- function(mode) {
       if (mode == "add") {
-        return(paste("New", tolower(make_edit_kinds[[kind()]][2])))
+        return(paste("New", tolower(if (nzchar(add_list())) make_edit_lists[[add_list()]]$one else make_edit_kinds[[kind()]])))
       }
       title <- edit_label(snapshot(), entity()$table, row())
       switch(mode,
         update = paste("Change", title),
         delete = paste("Delete", title),
+        merge = paste("Merge", title),
         title
       )
     }
 
-    # View: Edit and Delete (each off, saying why, when the kind can't be changed that way), Empty for what can be
-    # emptied, Re-extract for a wave, or for a PDF, which is only shown, Open PDF. A form: Cancel and Save. A delete:
-    # Cancel and Delete, or only Back when something stands in its way.
+    # View (Edit is at the top): Merge for a kind that can be merged, Empty for what can be emptied, Delete (off,
+    # saying why, when the kind can't be), and for a wave Re-extract, Edit extraction and Open PDF. A kind that is
+    # only shown has Open PDF alone. A form: Cancel and Save. A delete or a merge: Cancel and the button that does it, or only Back
+    # when something stands in a delete's way.
     detail_buttons <- function(mode, blocked) {
       if (mode == "view" && isTRUE(entity()$view_only)) {
         return(if (kind() == "pdf_file") pdf_open_button(pdf_url(row())))
       }
       if (mode == "view") {
-        no_update <- cant("update")
         no_delete <- cant("delete")
+        alone <- edit_can_merge(entity()) && NROW(edit_merge_candidates(entity(), snapshot(), row())) == 0
         return(tagList(
-          review_button(
-            icon_label("edit", "Edit"), "edit",
-            class = "btn btn-outline-dark", disabled = !is.null(no_update), title = no_update
-          ),
+          if (edit_can_merge(entity())) {
+            review_button(
+              icon_label("merge", "Merge into another"), "merge",
+              class = "btn btn-outline-dark", disabled = alone,
+              title = if (alone) {
+                "There is no other of its kind to merge it into"
+              } else {
+                "For two that are the same thing kept twice: everything that uses this one uses the other instead, and this one is removed"
+              }
+            )
+          },
           if (entity()$table %in% edit_emptiable) {
             review_button(
               icon_label("delete", "Empty"), "empty",
@@ -394,7 +438,8 @@ make_edit_server <- function(id, connection, me, show_page, active = NULL, open_
             class = "btn btn-delete", disabled = !is.null(no_delete), title = no_delete
           ),
           if (kind() == "wave") wave_reextract_button(row()),
-          if (kind() == "wave") wave_edit_extraction_button(any(snapshot()$wave_question$wave_id %in% row()$wave_id))
+          if (kind() == "wave") wave_edit_extraction_button(any(snapshot()$wave_question$wave_id %in% row()$wave_id)),
+          if (kind() == "wave" && has_text(row()$pdf_sha256)) pdf_open_button(wave_pdf_url(row()))
         ))
       }
       stuck <- !is.null(blocked) || change$stuck()
@@ -402,7 +447,7 @@ make_edit_server <- function(id, connection, me, show_page, active = NULL, open_
         actionButton(ns("cancel"), if (stuck) "Back" else "Cancel", class = "btn-outline-dark"),
         if (!stuck) {
           actionButton(
-            ns("submit"), switch(mode, add = "Add it", update = "Save", delete = "Delete it"),
+            ns("submit"), switch(mode, add = "Add it", update = "Save", delete = "Delete it", merge = "Merge them"),
             class = if (mode == "delete") "btn-delete" else "btn-primary", disabled = !change$ready()
           )
         }
@@ -420,20 +465,40 @@ make_edit_server <- function(id, connection, me, show_page, active = NULL, open_
       pdf_address(session, ns(paste0("pdf-", pdf$pdf_sha256)), list(path = path, name = name, sha256 = pdf$pdf_sha256))
     }
 
+    # The address the browser gets a wave's PDF from, for this session only. The file is fetched from Storage when
+    # the address is asked for (Open PDF is pressed), not when the wave is shown: most waves looked at are never
+    # opened, and a PDF can be large.
+    wave_pdf_url <- function(wave) {
+      session$registerDataObj(
+        name = ns(paste0("wave-pdf-", wave$pdf_sha256)),
+        data = list(sha256 = wave$pdf_sha256, name = if (has_text(wave$pdf_name)) wave$pdf_name else "questionnaire.pdf"),
+        filterFunc = function(data, req) {
+          path <- tryCatch(extraction_model_local_pdf(connection, data$sha256), error = function(problem) NULL)
+          if (is.null(path)) {
+            return(shiny::httpResponse(404L, "text/plain; charset=UTF-8", "This PDF isn't in the site's storage any more."))
+          }
+          pdf_response(c(data, list(path = path)), req)
+        }
+      )
+    }
+
     # ------ The details' buttons ---------------------------------------------
     observe({
-      req(verb() %in% c("add", "update", "delete"))
+      req(verb() %in% c("add", "update", "delete", "merge"))
       updateActionButton(session, "submit", disabled = !change$ready())
     })
 
-    # What is left to do before it can be applied.
+    # What is left to do before it can be applied (that nothing was changed yet is said where the changes are
+    # listed, so not again here).
     output$footer_note <- renderUI({
-      if (!change$ready()) change$blockers()[1]
+      left <- if (!change$ready()) setdiff(change$blockers(), edit_nothing_changed)
+      if (length(left) > 0) left[1]
     })
 
-    # Cancel: a form with something typed in it asks first; it goes back to the item (or to nothing, for an add).
+    # Cancel: a form with something typed in it asks first; it goes back to the item (or to nothing, for an add), or,
+    # if the form was opened from another item's details (Add a question, Remove), back to that item.
     observeEvent(input$cancel, {
-      if (verb() %in% c("add", "update") && !change$stuck()) {
+      if (verb() %in% c("add", "update") && !change$stuck() && change$dirty()) {
         showModal(unsaved_dialog("Cancel this edit?", "confirm_cancel", "Cancel the edit"))
         return()
       }
@@ -446,6 +511,9 @@ make_edit_server <- function(id, connection, me, show_page, active = NULL, open_
     })
 
     back_to_item <- function() {
+      if (length(trail()) > 0 && !identical(entered(), "view")) {
+        return(go_back())
+      }
       verb(if (is.null(picked())) "" else "view")
     }
 
@@ -507,7 +575,8 @@ make_edit_server <- function(id, connection, me, show_page, active = NULL, open_
           class = "detail-content edit-sent",
           h2(span(class = "edit-sent-mark", app_icon("done")), "Done"),
           p(strong(outcome$summary)),
-          p(if (identical(outcome$verb, "delete")) "Successfully deleted from the database." else "Successfully saved to the database.")
+          p(if (identical(outcome$verb, "delete")) "Successfully deleted from the database." else "Successfully saved to the database."),
+          p(class = "form-text", "It is in the History, with what was there before.")
         ),
         div(
           class = "detail-actions",
@@ -517,15 +586,20 @@ make_edit_server <- function(id, connection, me, show_page, active = NULL, open_
       )
     }
 
-    # After a change: back to the item changed (the one it was merged into, if it was), or (an add or a delete) to
-    # nothing picked.
+    # After a change: back to the item changed (the one it was merged into, if it was); after an add or a delete, to
+    # the item it was reached from (a scale, after a question was added to it or removed), or to nothing picked.
     after_done <- function() {
       outcome <- done()
       done(NULL)
       if (!is.null(outcome$shows)) picked(outcome$shows)
-      changed_still_there <- identical(outcome$verb, "update") && !is.null(picked())
-      if (!changed_still_there) picked(NULL)
-      verb(if (changed_still_there) "view" else "")
+      if (isTRUE(outcome$verb %in% c("update", "merge")) && !is.null(picked())) {
+        return(verb("view"))
+      }
+      if (length(trail()) > 0) {
+        return(go_back())
+      }
+      picked(NULL)
+      verb("")
     }
 
     # ------ Emptying ---------------------------------------------------------------------------

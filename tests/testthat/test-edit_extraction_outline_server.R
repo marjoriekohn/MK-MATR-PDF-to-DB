@@ -928,3 +928,71 @@ test_that("the editor's header is the block's words, typed there; its buttons ar
   html <- htmltools::renderTags(block_detail(component(fixed, "c3"), fixed, list(problems = draft_service_check(fixed, test_lookups())), test_lookups(), shiny::NS("x")))$html
   expect_false(grepl('data-action="check" disabled', html))
 })
+
+# ------ Duplicate, and Revert to AI ------------------------------------------------------------------------
+test_that("Duplicate copies the block right after it and picks the copy; every row and the details have the button", {
+  page <- short_page()
+  shiny::testServer(extraction_outline_server, args = outline_args(page), {
+    before <- page$draft()
+    session$setInputs(action = list(action = "duplicate", id = "c3"))
+    after <- page$draft()
+    copy <- setdiff(after$components$id, before$components$id)
+    expect_length(copy, 1)
+    expect_equal(page$selected(), copy) # so its words can be changed at once
+    beside <- draft_service_children(after, "components", component(after, "c3")$parent_id)$id
+    expect_equal(beside[match("c3", beside) + 1], copy)
+    expect_equal(component(after, copy)$text, component(after, "c3")$text)
+    expect_equal(nrow(draft_service_children(after, "variables", copy)), nrow(draft_service_children(after, "variables", "c3")))
+    # a block that is gone can't be copied: a sentence, and nothing changes
+    session$setInputs(action = list(action = "duplicate", id = "c9999"))
+    expect_match(utils::tail(page$log$errors, 1), "no longer in the draft")
+    expect_identical(page$draft(), after)
+  })
+  draft <- short_gold_draft()
+  view <- list(problems = draft_service_check(draft, test_lookups()), selected = NULL, collapsed = character(), opened = character())
+  question <- as.character(outline_row(component(draft, "c3"), draft, view, shiny::NS("x")))
+  expect_match(question, 'data-action="duplicate" data-id="c3"', fixed = TRUE)
+  expect_match(question, "fa-clone", fixed = TRUE)
+  expect_match(question, "Duplicate this question: a copy right after it, with its variables and choices", fixed = TRUE)
+  expect_false(grepl('data-action="delete"|data-edit-words', question)) # a question's other buttons are in its details
+  group <- as.character(outline_row(component(draft, "c1"), draft, view, shiny::NS("x")))
+  expect_match(group, 'data-action="duplicate" data-id="c1"', fixed = TRUE)
+  expect_match(group, "with everything inside it", fixed = TRUE)
+  foot <- htmltools::renderTags(detail_actions(component(draft, "c3"), character()))$html
+  expect_match(foot, '<span class="btn-text">Duplicate</span>', fixed = TRUE)
+  expect_false(grepl("Revert to AI", foot)) # nothing to go back to without what the AI read
+})
+
+test_that("Revert to AI puts the block back as the AI read it, and is only on a block the AI read", {
+  ai_read <- short_gold_draft()
+  page <- short_page()
+  page$state$original <- function() ai_read
+  shiny::testServer(extraction_outline_server, args = outline_args(page), {
+    page$state$change(draft_service_update(page$draft(), "components", "c4", "text", "Something else"))
+    expect_equal(draft_service_changed_blocks(original(), page$draft()), "c4")
+    session$setInputs(action = list(action = "revert", id = "c4"))
+    expect_length(draft_service_changed_blocks(original(), page$draft()), 0)
+    expect_equal(component(page$draft(), "c4")$text, component(ai_read, "c4")$text)
+    # the rows and the details are drawn with the button, since there is something to go back to
+    expect_true(current_view()$revertable)
+    expect_match(tree_html(output), 'data-action="revert" data-id="c4"', fixed = TRUE)
+    # a block staff added has none: a sentence if it is asked for anyway
+    added <- draft_service_next_id(page$draft(), "components")
+    page$state$change(draft_service_add_block(page$draft(), "Note", added, near_id = "c4"))
+    session$setInputs(action = list(action = "revert", id = added))
+    expect_match(utils::tail(page$log$errors, 1), "The AI didn't read this block")
+  })
+  draft <- draft_service_add_block(ai_read, "Note", "c900", near_id = "c4")
+  view <- list(problems = draft_service_check(draft, test_lookups()), selected = NULL, collapsed = character(), opened = character(), revertable = TRUE)
+  row <- as.character(outline_row(component(draft, "c4"), draft, view, shiny::NS("x")))
+  expect_match(row, 'class="btn btn-sm btn-icon row-revert" data-action="revert" data-id="c4"', fixed = TRUE) # shown once it differs (the page script)
+  expect_match(row, "fa-backward", fixed = TRUE)
+  expect_false(grepl('data-action="revert"', as.character(outline_row(component(draft, "c900"), draft, view, shiny::NS("x")))))
+  foot <- htmltools::renderTags(detail_actions(component(draft, "c4"), character(), revertable = TRUE))$html
+  expect_match(foot, 'data-action="revert" disabled data-id="c4"', fixed = TRUE) # off until the page script says it differs
+  expect_match(foot, '<span class="btn-text">Revert to AI</span>', fixed = TRUE)
+  expect_false(grepl("Revert to AI", htmltools::renderTags(detail_actions(component(draft, "c900"), character(), revertable = TRUE))$html))
+  # a draft typed by hand has no such button anywhere
+  typed <- utils::modifyList(view, list(revertable = FALSE))
+  expect_false(grepl('data-action="revert"', as.character(outline_row(component(draft, "c4"), draft, typed, shiny::NS("x")))))
+})

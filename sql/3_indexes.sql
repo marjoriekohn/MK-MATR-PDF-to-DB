@@ -29,6 +29,12 @@ create table if not exists public.study_publication (
   primary key (study_id, publication_id)
 );
 
+-- ------ A database built before a study, a questionnaire or a wave could be hidden ------------------------
+-- Whether each is kept off the dashboard researchers search (1_tables.sql): shown, until staff say otherwise.
+alter table public.study         add column if not exists hidden boolean not null default false;
+alter table public.questionnaire add column if not exists hidden boolean not null default false;
+alter table public.wave          add column if not exists hidden boolean not null default false;
+
 -- ------ Uniqueness that ignores case or spaces -------------------------------------------------------
 -- (An index, as a unique constraint can't hold an expression.)
 drop index if exists public.staff_email_unique;

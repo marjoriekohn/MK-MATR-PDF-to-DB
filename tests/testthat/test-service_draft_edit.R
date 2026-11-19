@@ -693,3 +693,133 @@ test_that("a question's measurement scale is its abbreviation, kept through a sa
   other <- suppressMessages(draft_service_update(scaled, "components", question, "component_type", "Instruction"))
   expect_true(is.na(component(other, question)$scale)) # only a question is an item of a scale
 })
+
+# ------ Duplicating ------------------------------------------------------------------
+test_that("a duplicated question is a new block right after it, with copies of its variables and choices", {
+  draft <- with_matr_ids(gold_draft())
+  q1a <- block_numbered(draft, "1a")$id
+  draft <- with_checked(draft, q1a)
+  expect_message(copied <- draft_service_duplicate(draft, q1a), "Copied the question. The copy is right after it: its variables need MATR IDs of their own.", fixed = TRUE)
+  new_id <- setdiff(copied$components$id, draft$components$id)
+  expect_equal(new_id, draft_service_next_id(draft, "components")) # so the page can pick it
+  beside <- draft_service_children(copied, "components", component(draft, q1a)$parent_id)$id
+  expect_equal(beside[match(q1a, beside) + 1], new_id)
+  same <- c("component_type", "text", "printed_number", "parent_id", "subject", "time_frame", "scale", "page")
+  expect_equal(component(copied, new_id)[same], component(copied, q1a)[same], ignore_attr = TRUE)
+  # the copy is staff's own: not checked, and not a row the AI read
+  expect_false(component(copied, new_id)$checked)
+  expect_true(is.na(component(copied, new_id)$ref))
+  expect_true(component(copied, q1a)$checked) # the one copied is left as it was
+  boxes <- draft_service_children(copied, "variables", new_id)
+  was <- draft_service_children(copied, "variables", q1a)
+  expect_gt(nrow(was), 0)
+  expect_equal(boxes[c("variable_type", "label", "subject", "answer_data_type", "display_order")], was[c("variable_type", "label", "subject", "answer_data_type", "display_order")], ignore_attr = TRUE)
+  expect_true(all(is.na(boxes$matr_id)) && all(is.na(boxes$ref))) # a MATR ID names one variable
+  expect_false(anyNA(was$matr_id))
+  choices <- function(ids) do.call(rbind, lapply(ids, function(id) draft_service_children(copied, "response_options", id)[c("answer_option", "code_value")]))
+  expect_equal(choices(boxes$id), choices(was$id), ignore_attr = TRUE)
+  expect_false(anyDuplicated(copied$variables$id) > 0 || anyDuplicated(copied$response_options$id) > 0)
+  # the AI's record counts the copy as a block staff added, and nothing else as changed
+  expect_equal(draft_service_changed_blocks(gold_draft(), copied), new_id)
+  expect_error(draft_service_duplicate(draft, "c9999"), "no longer in the draft")
+})
+
+test_that("a duplicated section or group brings everything inside it, in order, and a text block is copied alone", {
+  draft <- gold_draft()
+  inside <- draft_service_printed_order(draft, "c1")
+  expect_message(
+    copied <- draft_service_duplicate(draft, "c1"),
+    sprintf("Copied the %s and the %d blocks inside it.", tolower(component(draft, "c1")$component_type), length(inside)),
+    fixed = TRUE
+  )
+  section <- draft_service_next_id(draft, "components")
+  top <- draft_service_children(copied, "components", NA)$id
+  expect_equal(top[match("c1", top) + 1], section)
+  copies <- draft_service_printed_order(copied, section)
+  expect_length(copies, length(inside))
+  expect_false(any(copies %in% draft$components$id))
+  words <- function(of, ids) of$components$text[match(ids, of$components$id)]
+  expect_equal(words(copied, copies), words(draft, inside))
+  expect_equal(nrow(copied$variables), nrow(draft$variables) + sum(draft$variables$component_id %in% inside))
+  expect_equal(draft_service_printed_order(copied, "c1"), inside) # the section copied still holds its own
+  # a question that depended on one copied with it depends on that one's copy
+  depending <- draft
+  follower <- inside[draft$components$component_type[match(inside, draft$components$id)] == "Question"][2:1]
+  depending$components$parent_question_id[depending$components$id == follower[1]] <- follower[2]
+  twice <- suppressMessages(draft_service_duplicate(depending, "c1"))
+  copy_of <- function(id) draft_service_printed_order(twice, section)[match(id, inside)]
+  expect_equal(component(twice, copy_of(follower[1]))$parent_question_id, copy_of(follower[2]))
+  note <- draft$components$id[draft$components$component_type %in% c("Instruction", "Introduction", "Note", "Definition")][1]
+  expect_message(alone <- draft_service_duplicate(draft, note), "The copy is right after it.", fixed = TRUE)
+  expect_equal(nrow(alone$components), nrow(draft$components) + 1)
+})
+
+# ------ Going back to what the AI read ------------------------------------------------
+test_that("a block put back is as the AI read it: its words, its variables and their choices, keeping MATR IDs and codes", {
+  original <- gold_draft()
+  q1a <- block_numbered(original, "1a")$id
+  q1b <- block_numbered(original, "1b")$id
+  box <- original$variables$id[original$variables$component_id == q1a][1]
+  choice <- original$response_options$id[original$response_options$variable_id == box][1]
+  reviewed <- draft_service_update(original, "components", q1a, "text", "Reworded by staff")
+  reviewed <- draft_service_update(reviewed, "components", q1a, "printed_number", "99")
+  reviewed <- draft_service_update(reviewed, "variables", box, "label", "a label staff typed")
+  reviewed <- draft_service_update(reviewed, "variables", box, "matr_id", "GNA_1A")
+  reviewed <- draft_service_update(reviewed, "response_options", choice, "answer_option", "yes, always")
+  reviewed <- draft_service_update(reviewed, "response_options", choice, "code_value", "7")
+  reviewed <- draft_service_add_choice(reviewed, box)
+  reviewed <- draft_service_add_box(reviewed, q1a)
+  reviewed <- draft_service_update(reviewed, "components", q1b, "text", "Another question reworded")
+  expect_setequal(draft_service_changed_blocks(original, reviewed), c(q1a, q1b))
+
+  expect_message(back <- draft_service_revert_block(reviewed, original, q1a), "Put back as the AI read it. Undo brings your changes back.", fixed = TRUE)
+  expect_equal(draft_service_changed_blocks(original, back), q1b) # only the other one differs now
+  expect_equal(component(back, q1a)$text, component(original, q1a)$text)
+  expect_equal(component(back, q1a)$printed_number, component(original, q1a)$printed_number)
+  boxes <- draft_service_children(back, "variables", q1a)
+  expect_equal(boxes$ref, draft_service_children(original, "variables", q1a)$id) # the AI's variables, and no other
+  expect_equal(boxes$matr_id[1], "GNA_1A") # a MATR ID isn't the AI's: it stays
+  choices <- draft_service_children(back, "response_options", boxes$id[1])
+  was <- draft_service_children(original, "response_options", box)
+  expect_equal(choices$answer_option, was$answer_option)
+  expect_equal(choices$code_value[1], "7") # nor is a code
+  # what the record of corrections says about it is nothing, however it is saved and opened
+  about <- function(draft, number) Filter(function(edit) grepl(paste("Question", number), edit$where), draft_service_review_edits(original, draft))
+  expect_gt(length(about(reviewed, "99")), 4)
+  expect_length(about(back, "1a"), 0)
+  expect_length(about(draft_service_from_json(draft_service_to_json(draft_service_renumber_questions(back))), "1a"), 0)
+})
+
+test_that("a block the AI didn't read, or one that is as it read it, has nothing to go back to", {
+  original <- gold_draft()
+  q1a <- block_numbered(original, "1a")$id
+  added <- draft_service_next_id(original, "components")
+  reviewed <- draft_service_add_block(original, "Note", added, near_id = q1a)
+  expect_error(draft_service_revert_block(reviewed, original, added), "The AI didn't read this block")
+  expect_error(draft_service_revert_block(reviewed, NULL, q1a), "The AI didn't read this extraction")
+  expect_error(draft_service_revert_block(reviewed, original, "c9999"), "no longer in the draft")
+  expect_message(same <- draft_service_revert_block(reviewed, original, q1a), "already as the AI read it")
+  expect_identical(same, reviewed)
+  # moving it, checking it and giving its variables MATR IDs aren't changes to what the AI read
+  ticked <- draft_service_update(original, "components", q1a, "checked", TRUE)
+  expect_message(kept <- draft_service_revert_block(ticked, original, q1a), "already as the AI read it")
+  expect_true(component(kept, q1a)$checked)
+})
+
+test_that("a block changed to another kind goes back to its kind, unless what it holds now can't be in it", {
+  original <- gold_draft()
+  note <- original$components$id[original$components$component_type == "Instruction"][1]
+  reviewed <- draft_service_update(original, "components", note, "component_type", "Note")
+  back <- suppressMessages(draft_service_revert_block(reviewed, original, note))
+  expect_equal(component(back, note)$component_type, "Instruction")
+  # a question made a grid, with a block moved into it, can't be a question again until the block is moved out
+  q1a <- block_numbered(original, "1a")$id
+  as_grid <- suppressMessages(draft_service_update(original, "components", q1a, "component_type", "Grid"))
+  expect_equal(nrow(draft_service_children(as_grid, "variables", q1a)), 0) # only a question has variables
+  holding <- as_grid
+  holding$components$parent_id[holding$components$id == note] <- q1a
+  expect_error(draft_service_revert_block(holding, original, q1a), "Move the blocks out of it first")
+  again <- suppressMessages(draft_service_revert_block(as_grid, original, q1a))
+  expect_equal(component(again, q1a)$component_type, "Question")
+  expect_equal(draft_service_children(again, "variables", q1a)$ref, draft_service_children(original, "variables", q1a)$id)
+})

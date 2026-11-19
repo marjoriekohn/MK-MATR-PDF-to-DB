@@ -1,15 +1,53 @@
 # ------ The kinds and their cards ----------------------------------------------------------
-test_that("the Metadata page's list has a section for every kind there is, each named for staff", {
-  expect_setequal(names(make_edit_kinds), names(edit_entities))
-  expect_setequal(make_edit_listed, names(edit_entities))
-  for (key in names(make_edit_kinds)) {
-    expect_length(make_edit_kinds[[key]], 2) # the section's name, and one of them (for + Add)
-    expect_true(all(nzchar(make_edit_kinds[[key]])), info = key)
+test_that("the Metadata page's lists are named for staff, and every kind there is has a name", {
+  expect_equal(
+    unname(vapply(make_edit_lists, function(list) list$label, character(1))),
+    c(
+      "Registries", "Studies", "Publications", "Questionnaires", "Waves", "Sections, Grids & Groups", "Questions",
+      "Instructions & Notes", "Investigators", "Respondent Types", "Tags", "Answer Choices", "Measurement Scales"
+    )
+  )
+  expect_equal(make_edit_listed, names(make_edit_lists))
+  for (list in make_edit_lists) {
+    expect_true(nzchar(list$one), info = list$label) # one of them, for + Add
+    expect_true(list$kind %in% names(edit_entities), info = list$label)
   }
-  expect_equal(unname(make_edit_kinds$placement), c("Blocks", "Block"))
-  expect_equal(unname(make_edit_kinds$tag), c("Tags", "Tag"))
+  # every kind is in a list, but one questionnaire's printing of a wording and a question's place in a scale,
+  # which are reached from the wording's and the scale's details, and a PDF, whose name and Open PDF are its wave's
+  listed <- unique(vapply(make_edit_lists, function(list) list$kind, character(1)))
+  expect_setequal(setdiff(names(edit_entities), listed), c("placement", "question_scale", "pdf_file"))
+  expect_setequal(names(make_edit_kinds), names(edit_entities))
+  expect_equal(make_edit_kinds[["tag"]], "Tag")
+  expect_equal(make_edit_kinds[["investigator"]], "Investigator")
+  # the three lists of wordings hold every kind of block between them, each once; + Add there adds one to a questionnaire
+  wordings <- Filter(function(list) list$kind == "component", make_edit_lists)
+  expect_setequal(unlist(lapply(wordings, function(list) list$blocks)), edit_component_kinds)
+  expect_false(anyDuplicated(unlist(lapply(wordings, function(list) list$blocks))) > 0)
+  expect_true(all(vapply(wordings, function(list) identical(list$adds, "placement"), logical(1))))
+  # the database's own words for them aren't the lists'
+  expect_false(any(grepl("Block|Component|Scale Item|Principal|PDF", vapply(make_edit_lists, function(list) list$label, character(1)))))
   # the kinds of the old schema are gone
   expect_false(any(c("component_type", "question", "option_set", "category", "subject", "time_frame", "questionnaire_question") %in% names(edit_entities)))
+})
+
+test_that("a list of wordings holds the ones of its kinds, by name, each with the questionnaires that print it", {
+  snap <- test_snapshot(edit_service_tables(edit_entities$component))
+  questions <- make_edit_cards("question", snap)
+  expect_equal(questions$key, c("11", "4", "14", "5", "7", "9", "3")) # alphabetical
+  expect_true(all(questions$tag == "Question"))
+  expect_equal(questions$subtitle[questions$key == "4"], "AHP, MQ")
+  sections <- make_edit_cards("section", snap)
+  expect_setequal(sections$tag, c("Section", "Group"))
+  expect_equal(sections$title[sections$tag == "Group"], "(group)")
+  notes <- make_edit_cards("note", snap)
+  expect_setequal(notes$key, c("2", "8", "13", "15"))
+  expect_equal(notes$subtitle[notes$key == "15"], "not printed anywhere")
+  # what one is called over its details: its kind of block, in a questionnaire or not
+  expect_equal(make_edit_called("component", snap, snap$component[snap$component$component_id == 4, ]), "Question")
+  placed <- test_snapshot(edit_service_tables(edit_entities$placement))
+  expect_equal(make_edit_called("placement", placed, placed$placement[placed$placement$placement_id == 101, ]), "Section")
+  expect_equal(make_edit_called("placement"), "Block") # one being added, before its kind is picked
+  expect_equal(make_edit_called("study", snap, NULL), "Study")
 })
 
 test_that("every kind has what the page needs, and reads only tables the database has", {
@@ -59,6 +97,7 @@ test_that("a component's card says its kind, how many questionnaires print it, a
   expect_equal(smoke$title, "do you now smoke cigarettes?")
   expect_equal(smoke$tag, "Question")
   expect_equal(smoke$facts[[1]], c("seen in 2 questionnaires: AHP, MQ", "2 variables"))
+  expect_equal(smoke$subtitle, "AHP, MQ") # what its row in the list says under its words
   expect_equal(smoke$warn, "Shared: changes show in 2 questionnaires")
   section <- cards[cards$key == "1", ]
   expect_equal(section$tag, "Section")
@@ -237,15 +276,6 @@ test_that("a tag's name is written its kind's way, and is in its kind's list onc
   same <- form_for("tag", "update", "1", tag__name = "RESPONDENT")
   expect_length(edit_service_check(same$fields, same$values)$problems, 0)
 })
-
-# A catalog where things carry "past 12 months" (tag 13) and one of them "past year" (tag 12) as well.
-tagged_snapshot <- function(entity = edit_entities$tag) {
-  test_snapshot(edit_service_tables(entity), function(snap) {
-    snap$variable_tag <- rbind(snap$variable_tag, data.frame(variable_key = c(1, 2, 2), tag_id = c(13, 13, 12)))
-    snap$placement_tag <- rbind(snap$placement_tag, data.frame(placement_id = 209, tag_id = 13))
-    snap
-  })
-}
 
 test_that("renaming a tag to the name of another of its kind merges it into that one", {
   form <- form_for("tag", "update", "13", snap = tagged_snapshot(), tag__name = "Past Year")

@@ -136,7 +136,7 @@ test_that("the reach says how many of each kind go, the components the database 
   texts <- vapply(reach$lines, function(line) line$text, character(1))
   expect_equal(texts, c(
     "1 wave", "3 blocks in questionnaires", "1 question in a wave", "1 variable", "4 response options for variables",
-    "1 tag on a question", "2 tags on variables", "1 component no questionnaire prints any more (forgotten by the database, with any scale items)"
+    "1 tag on a question", "2 tags on variables", "1 wording no questionnaire prints any more (forgotten by the database, and taken out of any measurement scale)"
   ))
   expect_equal(reach$total, 14)
   expect_equal(reach$lines[[8]]$examples, "the next questions are about your mood.")
@@ -156,7 +156,7 @@ test_that("the starting rows aren't counted among what goes with them", {
 test_that("what's emptied rather than removed is listed apart", {
   snap <- test_snapshot()
   reach <- edit_service_reach(snap, cascade_of(snap, principal_investigator = "4"))
-  expect_equal(reach$changed[[1]]$text, "1 study will lose their contact investigator")
+  expect_equal(reach$changed[[1]]$text, "1 study will lose their contact")
   reach <- edit_service_reach(snap, cascade_of(snap, placement = "104"))
   expect_equal(reach$changed[[1]]$text, "1 block in a questionnaire will lose their question they depend on")
   expect_equal(reach$changed[[1]]$examples, "AHP · how many cigarettes do you smoke on a typical day?")

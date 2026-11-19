@@ -21,15 +21,16 @@ wave_question_model_get <- function(connection, questionnaire_id) {
 # Every study, with its lead investigator's name, its questionnaires and their waves, in one request.
 # Every questionnaire is in a study and every wave in a questionnaire, so this is all of each, without a
 # request for each table.
-# Returns: A list of data frames: `studies` (`study_id`, `registry_id`, `principal_investigator_id` and `name`,
-#   by name), `investigators` (`principal_investigator_id` and `name`, only those who lead a study),
-#   `questionnaires` (`questionnaire_id`, `study_id`, `respondent_type_id`, `name` and `abbreviation`) and
-#   `waves` (`wave_id`, `questionnaire_id`, `name`, `administered_date` and `respondent_count`), each by id.
+# Returns: A list of data frames: `studies` (`study_id`, `registry_id`, `principal_investigator_id`, `name` and
+#   `hidden`, by name), `investigators` (`principal_investigator_id` and `name`, only those who lead a study),
+#   `questionnaires` (`questionnaire_id`, `study_id`, `respondent_type_id`, `name`, `abbreviation` and `hidden`)
+#   and `waves` (`wave_id`, `questionnaire_id`, `name`, `administered_date`, `respondent_count` and `hidden`),
+#   each by id. `hidden` is whether it is kept off the dashboard.
 study_model_get_tree <- function(connection) {
   columns <- list(
-    studies = c("study_id", "registry_id", "principal_investigator_id", "name"),
-    questionnaires = c("questionnaire_id", "study_id", "respondent_type_id", "name", "abbreviation"),
-    waves = c("wave_id", "questionnaire_id", "name", "administered_date", "respondent_count")
+    studies = c("study_id", "registry_id", "principal_investigator_id", "name", "hidden"),
+    questionnaires = c("questionnaire_id", "study_id", "respondent_type_id", "name", "abbreviation", "hidden"),
+    waves = c("wave_id", "questionnaire_id", "name", "administered_date", "respondent_count", "hidden")
   )
   select <- sprintf(
     # a study names two investigators (who leads it, and who to contact), so its foreign key says which
