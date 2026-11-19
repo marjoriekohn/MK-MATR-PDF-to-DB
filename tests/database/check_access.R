@@ -7,9 +7,11 @@
 #
 #   secret key       read / update / delete / insert on every table, and every function   what the site needs
 #   publishable key  read on the catalog tables, upvote_questionnaire, and nothing else   what the dashboard gets
+#   both keys        read only on question_embedding                                      the database writes it
 #
 # It exits with an error if
-# - the secret key can't do all four on a table that exists, or can't call a function the site calls;
+# - the secret key can't do all four on a table that exists (only read, on question_embedding), or can't call a
+#   function the site calls;
 # - the publishable key can read staff, extraction or history (they must stay hidden from the dashboard), can't
 #   read a catalog table, reads a pdf_file row no shown wave names (an extraction's PDF stays unlisted until
 #   pushed), reads a study, questionnaire or wave staff hid, can call push_extraction, apply_change or empty_*
@@ -37,7 +39,9 @@ catalog_tables <- list(
   question_scale = c("scale_id", "component_id")
 )
 private_tables <- list(staff = c("staff_id", "name"), extraction = c("extraction_id", "summary"), history = c("history_id", "summary"))
-tables <- c(catalog_tables, private_tables)
+# Written only by the database itself (sql/8_search.sql): both keys read them, and nothing more.
+search_tables <- list(question_embedding = c("component_id", "content"))
+tables <- c(catalog_tables, private_tables, search_tables)
 
 # The functions the site calls, with arguments that can't change anything: no such row, or no staff member.
 site_functions <- list(
@@ -106,9 +110,13 @@ for (table in names(tables)) {
   dashboard <- probe_read(publishable, table, columns[1])
   cat(sprintf("%-24s %-6s %-8s %-8s %-8s | %s\n", table, results[["read"]], results[["update"]], results[["delete"]], results[["insert"]], dashboard))
   if ("missing" %in% results) next
-  if (any(results != "ok")) problems <- c(problems, paste("The secret key can't do everything on", table))
+  if (table %in% names(search_tables)) {
+    if (!identical(unname(results), c("ok", "denied", "denied", "denied"))) problems <- c(problems, paste("The secret key should only read", table))
+  } else if (any(results != "ok")) {
+    problems <- c(problems, paste("The secret key can't do everything on", table))
+  }
   if (table %in% names(private_tables) && identical(dashboard, "ok")) problems <- c(problems, paste("The publishable key can read, and must not:", table))
-  if (table %in% names(catalog_tables) && !identical(dashboard, "ok")) problems <- c(problems, paste("The publishable key can't read, and the dashboard needs to:", table))
+  if (!table %in% names(private_tables) && !identical(dashboard, "ok")) problems <- c(problems, paste("The publishable key can't read, and the dashboard needs to:", table))
 }
 
 # The dashboard sees only the PDFs waves were extracted from: what it reads from pdf_file is what the waves name.
@@ -150,10 +158,12 @@ if (length(unlisted) > 0) problems <- c(problems, paste("Tables in the database 
 
 if (length(problems) > 0) {
   cat("\n", paste(problems, collapse = "\n"), "\n", sep = "")
+  # quit() would end the whole R session in RStudio's Console, so there it stops with an error instead
+  if (interactive()) stop("The access check found the problems above.", call. = FALSE)
   quit(status = 1)
 }
 cat(
-  "\nThe secret key can read, update, delete and insert on every table, and call every function the site calls.",
+  "\nThe secret key can read, update, delete and insert on every table the site writes, and call every function the site calls.",
   "\nThe publishable key reads the catalog but not what staff hid, a shown wave's PDFs, upvotes, and nothing else.\n",
   sep = ""
 )
