@@ -1,7 +1,8 @@
 # The AI Monitor page: how often staff correct what the AI read from a questionnaire's PDF, counted on the
 # extractions that were pushed (service_monitor.R). Its headline numbers, a chart of the corrections over time,
-# the prompts that read them, and the kinds of correction, the commonest first, each with the corrections that
-# come up again and again.
+# the prompts that read them, and the kinds of correction, the commonest first, each a card that opens to its
+# corrections, the ones that come up most first. Expand All opens every card, and Collapse All shuts them
+# (www/js/monitor.js).
 ai_monitor_ui <- function(id) {
   ns <- NS(id)
   div(
@@ -33,14 +34,22 @@ ai_monitor_ui <- function(id) {
       class = "monitor-section-head",
       div(
         h2(class = "section-title", "Most common corrections"),
-        p(class = "section-text", "What staff changed in the AI's reading, the commonest kind first. Under each, the same change made again and again.")
+        p(class = "section-text", "What staff changed in the AI's reading, the commonest kind first.")
       ),
-      toggle_input(
-        ns("item"), c("All" = "all", "Blocks" = "block", "Variables" = "variable", "Choices" = "choice"),
-        selected = "all", label = "What was corrected"
+      div(
+        class = "monitor-section-tools",
+        tags$button(
+          type = "button", class = "btn btn-outline-dark monitor-expand-all", `aria-expanded` = "false",
+          span(class = "when-shut", icon_label("expand", "Expand All")),
+          span(class = "when-open", icon_label("collapse", "Collapse All"))
+        ),
+        toggle_input(
+          ns("item"), c("All" = "all", "Blocks" = "block", "Variables" = "variable", "Choices" = "choice"),
+          selected = "all", label = "What was corrected"
+        )
       )
     ),
-    uiOutput(ns("common"))
+    uiOutput(ns("common"), class = "monitor-common")
   )
 }
 
@@ -135,54 +144,49 @@ monitor_by_prompt_ui <- function(rows) {
 
 # ------ The commonest corrections -----------------------------------------------------------------
 # kinds: From `monitor_service_common()`.
-# open: How many of the commonest kinds start open.
-monitor_common_ui <- function(kinds, open = 3) {
+monitor_common_ui <- function(kinds) {
   if (length(kinds) == 0) {
     return(div(class = "list-card is-empty", p("No pushed extraction has a correction of that kind yet.")))
   }
-  lapply(seq_along(kinds), function(i) monitor_kind_ui(kinds[[i]], open = i <= open))
+  lapply(kinds, monitor_kind_ui)
 }
 
-# One kind of correction: its name and how often it comes up, then its repeated corrections.
-monitor_kind_ui <- function(kind, open = FALSE) {
+# One kind of correction: its name and how often it comes up, a card that opens to its corrections, the commonest
+# first. It starts shut (Expand All opens them all, www/js/monitor.js). The count is a plain gray pill: it says
+# how many, not how bad (the before and after are coloured).
+monitor_kind_ui <- function(kind) {
   tags$details(
-    class = "monitor-kind", open = if (open) NA,
+    class = "monitor-kind",
     tags$summary(
       class = "monitor-kind-head",
       span(class = "monitor-kind-label", kind$label),
-      row_badge(plural(kind$count, "correction"), class = paste0("is-", kind$change)),
+      row_badge(plural(kind$count, "correction"), class = "is-count"),
       span(class = "monitor-kind-reach", sprintf("in %s (%d%% of pushed)", plural(kind$extractions, "extraction"), round(100 * kind$share)))
     ),
     div(class = "monitor-examples", lapply(seq_len(nrow(kind$examples)), function(i) monitor_example_ui(kind, kind$examples[i, ])))
   )
 }
 
-# A correction as it was made: what the AI wrote, what staff made it, how often, and where first.
+# A correction as it was made: what the AI wrote, what staff made it, and how often, in which questionnaires: "2
+# times in MQ". A row removed or added is said by its words (`monitor_said()`).
 monitor_example_ui <- function(kind, example) {
   value <- function(text, class) {
+    if (kind$change %in% c("added", "deleted")) text <- monitor_said(kind$item, text)
     if (is.na(text)) span(class = c("monitor-value", class, "is-none"), "(nothing)") else span(class = c("monitor-value", class), text)
   }
+  times <- if (example$count == 1) "Once" else plural(example$count, "time")
   div(
     class = "monitor-example",
     div(
-      class = "monitor-example-body",
-      div(
-        class = "monitor-example-change",
-        if (identical(kind$change, "added")) {
-          value(example$after, "is-after")
-        } else if (identical(kind$change, "deleted")) {
-          value(example$before, "is-before")
-        } else {
-          tagList(value(example$before, "is-before"), span(class = "monitor-arrow", `aria-label` = "changed to", "→"), value(example$after, "is-after"))
-        }
-      ),
-      p(
-        class = "list-card-meta",
-        paste0(
-          if (example$count > 1) paste0(plural(example$count, "time"), " in ", plural(example$extractions, "extraction"), " · first at ") else "At ",
-          example$where, " in ", example$extraction
-        )
-      )
-    )
+      class = "monitor-example-change",
+      if (identical(kind$change, "added")) {
+        value(example$after, "is-after")
+      } else if (identical(kind$change, "deleted")) {
+        value(example$before, "is-before")
+      } else {
+        tagList(value(example$before, "is-before"), span(class = "monitor-arrow", `aria-label` = "changed to", "→"), value(example$after, "is-after"))
+      }
+    ),
+    span(class = "monitor-example-reach", paste(times, "in", example$questionnaires))
   )
 }

@@ -8,7 +8,7 @@ monitor_page_records <- function() {
   record <- function(id, applied, edits, prompt_version = "abc123") {
     list(
       id = id, summary = paste("Add Questionnaire", id), pdf_name = "q.pdf", applied = applied,
-      model = "gemini-3.8-flash", prompt_version = prompt_version, edits = edits
+      model = "gemini-3.8-flash", prompt_version = prompt_version, edits = edits, questionnaire = "KQ"
     )
   }
   list(
@@ -39,10 +39,19 @@ test_that("the page shows the numbers, a bar for the corrections, each prompt, a
     expect_lt(regexpr("def456", prompts), regexpr("abc123", prompts)) # the one used last first
     listed <- text_of(output$common)
     expect_match(listed, "Changed a variable's unit 2 corrections in 1 extraction \\(50% of pushed\\)")
-    expect_match(listed, "years old → years 2 times in 1 extraction · first at Question 26 > variable 1 in Add Questionnaire 1", fixed = TRUE)
+    expect_match(listed, "years old → years 2 times in KQ", fixed = TRUE)
+    expect_no_match(listed, "Question 26", fixed = TRUE) # where it was made isn't said
     expect_lt(regexpr("variable's unit", listed), regexpr("choice's wording", listed))
     expect_length(errors(), 0)
   })
+})
+
+test_that("one button opens or shuts every kind of correction, beside the choice of blocks, variables or choices", {
+  page <- as.character(ai_monitor_ui("monitor"))
+  expect_match(page, 'class="btn btn-outline-dark monitor-expand-all" aria-expanded="false"', fixed = TRUE)
+  expect_match(page, "Expand All", fixed = TRUE)
+  expect_match(page, "Collapse All", fixed = TRUE)
+  expect_lt(regexpr("monitor-expand-all", page), regexpr('name="monitor-item"', page))
 })
 
 test_that("picking blocks, variables or choices narrows the corrections, and none of one sort says so", {

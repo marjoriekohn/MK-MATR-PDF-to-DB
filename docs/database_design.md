@@ -153,9 +153,16 @@ carries that reading (`ai_original`, with its model and prompt version; `reading
 not read again from the draft: Re-extract is the wave's own). Its `info.reopened_from` names that extraction.
 The catalog doesn't keep which of the AI's rows each row was, so the site matches the draft's rows to the
 reading through the copy that was pushed (same kind and words for a block, same place for a variable or a
-choice) when the draft is opened, and the draft keeps the matches once it is saved. So the Edit Extraction
-page still shows what differs from the AI's reading, and a block can be put back to it. The AI Monitor counts
-a reading once, on the extraction it was first pushed from: a reopened one is left out.
+choice) when the draft is opened, and the draft keeps the matches once it is saved (the site saves it before
+it is pushed, changed or not, so its `review_edits` are worked out). So the Edit Extraction page still shows
+what differs from the AI's reading, and a block can be put back to it. The AI Monitor counts a reading once,
+under the extraction it was first pushed from (its date, model and prompt), with the `review_edits` of its
+latest push: a correction put back as the AI read it no longer counts. Corrections to the questionnaire's name
+and abbreviation stay the first push's, since a reopened draft takes those from the catalog. `review_edits` list
+every row on its own; the AI Monitor counts the least staff changed (`monitor_counted_edits()` in
+R/service_monitor.R): what is in a question or variable removed or added goes with it, and a row removed and one
+added in the same place (a row its match was lost for, or one staff deleted and made again) count only as the
+fields that differ.
 
 **Hidden from the dashboard.** `study.hidden`, `questionnaire.hidden` and `wave.hidden` (boolean, false
 unless staff say otherwise) say that the row is kept off the dashboard researchers search. This site only

@@ -8,10 +8,10 @@ monitor_edit <- function(change, item, field = NULL, before = NULL, after = NULL
 }
 
 # A pushed extraction's record.
-monitor_record <- function(id, applied, edits = list(), prompt_version = "aaa111", summary = paste("Add Questionnaire", id)) {
+monitor_record <- function(id, applied, edits = list(), prompt_version = "aaa111", summary = paste("Add Questionnaire", id), questionnaire = "") {
   list(
     id = id, summary = summary, pdf_name = paste0(id, ".pdf"), applied = applied,
-    model = "gemini-3.8-flash", prompt_version = prompt_version, edits = edits
+    model = "gemini-3.8-flash", prompt_version = prompt_version, edits = edits, questionnaire = questionnaire
   )
 }
 
@@ -22,12 +22,12 @@ monitor_records <- function() {
       years,
       monitor_edit("edited", "variable", "unit", "years old", "years", where = "Question 31 > variable 1"),
       monitor_edit("deleted", "block", before = "component_type: Instruction; text: please answer.")
-    ), prompt_version = "old000"),
+    ), prompt_version = "old000", questionnaire = "MQ"),
     "2" = monitor_record("2", "2026-10-03T12:00:00Z", list(
       years,
       monitor_edit("edited", "block", "component_type", "Group", "Grid"),
       monitor_edit("edited", "questionnaire", "name", NULL, "Kid Questionnaire", where = "The questionnaire")
-    )),
+    ), questionnaire = "KQ"),
     "3" = monitor_record("3", "2026-10-20T12:00:00Z")
   )
 }
@@ -38,8 +38,9 @@ test_that("every correction is a row, with its kind in words and the extraction 
   expect_equal(rows$extraction_id, c("1", "1", "1", "2", "2", "2"))
   expect_equal(rows$extraction[1], "Add Questionnaire 1")
   expect_equal(unique(rows$label), c(
-    "Changed a variable's unit", "Removed a block", "Changed a block's kind", "Changed the questionnaire's name"
+    "Changed a variable's unit", "Removed an instruction", "Changed the kind of block", "Changed the questionnaire's name"
   ))
+  expect_equal(unique(rows$questionnaire), c("MQ", "KQ"))
   expect_true(is.na(rows$field[3])) # a removal is of the whole block
   expect_true(is.na(rows$after[3]))
   expect_true(is.na(rows$before[6])) # the AI read no name
@@ -55,9 +56,76 @@ test_that("with no corrections there are no rows, but the columns are there", {
 
 test_that("a kind of correction in words, for each change", {
   expect_equal(
-    monitor_kind_label(c("edited", "added", "deleted", "moved", "edited"), c("variable", "choice", "block", "block", "choice"), c("time_frame", NA, NA, "position", "answer_option")),
-    c("Changed a variable's time frame", "Added a choice", "Removed a block", "Moved a block", "Changed a choice's wording")
+    monitor_kind_label(
+      c("edited", "added", "deleted", "moved", "edited", "edited", "edited", "edited", "edited"),
+      c("variable", "choice", "instruction", "question", "choice", "question", "block", "questionnaire", "question"),
+      c("time_frame", NA, NA, "position", "answer_option", "parent_question_id", "component_type", "name", "text")
+    ),
+    c(
+      "Changed a variable's time frame", "Added a choice", "Removed an instruction", "Moved a question",
+      "Changed a choice's wording", "Changed the question a question depends on", "Changed the kind of block",
+      "Changed the questionnaire's name", "Changed a question's wording"
+    )
   )
+})
+
+test_that("a correction to a block is named by the kind of block, as far as the correction says", {
+  records <- list(monitor_record("1", "2026-10-01T12:00:00Z", list(
+    monitor_edit("edited", "block", "subject", "twin a", "twin b", where = "Question 23g, 39i"),
+    monitor_edit("edited", "block", "text", "Health", "Your health", where = 'Section "Your health"'),
+    monitor_edit("deleted", "block", before = "component_type: Interviewer Script; text: read this aloud", where = 'Interviewer Script "read this aloud"'),
+    monitor_edit("added", "block", after = "component_type: Question; text: how old are you?", where = "Question 4"),
+    monitor_edit("moved", "block", "position", "at the top level, position 2", "inside A group, position 1", where = "A group"),
+    monitor_edit("edited", "block", "text", NULL, "see the back", where = "A note with no heading"),
+    monitor_edit("edited", "block", "component_type", "Question", "Instruction", where = 'Instruction "please answer"'),
+    monitor_edit("edited", "block", "text", "a", "b", where = "(a block that is gone)")
+  )))
+  expect_equal(monitor_service_corrections(records)$label, c(
+    "Changed a question's subject", "Changed a section's wording", "Removed an interviewer script", "Added a question",
+    "Moved a group", "Changed a note's wording", "Changed the kind of block", "Changed a block's wording"
+  ))
+})
+
+test_that("a row removed or added is said by its words, not by the names of its fields", {
+  expect_equal(monitor_said("choice", "answer_option: certainly applies"), "certainly applies")
+  expect_equal(monitor_said("block", "component_type: Question; text: how many cigarettes; subject: twin a"), "how many cigarettes · subject: twin a")
+  expect_equal(monitor_said("variable", "variable_type: closed_ended; subject: twin b"), "closed ended · subject: twin b")
+  expect_equal(monitor_said("block", "component_type: Group"), "(no words)")
+  expect_true(is.na(monitor_said("choice", NA)))
+})
+
+test_that("what's in a question removed or added counts as part of it, and a row made again in its place counts as what changed", {
+  edit <- function(change, item, where, said) {
+    list(change = change, item = item, where = where, before = if (change == "deleted") said, after = if (change == "added") said)
+  }
+  # Question 35 deleted and made again with new words: its variable and a choice made again as they were, a choice reworded
+  remade <- list(
+    edit("deleted", "block", "Question 35", "component_type: Question; text: about how many"),
+    edit("deleted", "variable", "Question 35 > variable 1", "variable_type: closed_ended"),
+    edit("deleted", "choice", "Question 35 > variable 1 > choice “none”", "answer_option: none"),
+    edit("deleted", "choice", "Question 35 > variable 1 > choice “1-2”", "answer_option: 1-2"),
+    edit("added", "block", "Question 35", "component_type: Question; text: how many"),
+    edit("added", "variable", "Question 35 > variable 1", "variable_type: closed_ended"),
+    edit("added", "choice", "Question 35 > variable 1 > choice “none”", "answer_option: none"),
+    edit("added", "choice", "Question 35 > variable 1 > choice “1 or 2”", "answer_option: 1 or 2")
+  )
+  counted <- monitor_counted_edits(remade)
+  said <- vapply(counted, function(edit) paste(edit$change, edit$item, edit$field %||% "", edit$before %||% "", edit$after %||% ""), character(1))
+  expect_equal(said, c("edited block text about how many how many", "deleted choice  answer_option: 1-2 ", "added choice   answer_option: 1 or 2"))
+  expect_equal(counted[[1]]$where, "Question 35")
+
+  # a question that shouldn't be there, and one the AI missed: what's in them goes with them
+  whole <- list(
+    edit("deleted", "block", "Question 23g", "component_type: Question; text: comforts"),
+    edit("deleted", "variable", "Question 23g > variable 1", "variable_type: closed_ended; subject: twin a"),
+    edit("deleted", "choice", "Question 23g > variable 1 > choice “rarely”", "answer_option: rarely"),
+    edit("added", "variable", "Question 23i > variable 2", "variable_type: closed_ended; subject: twin b"),
+    edit("added", "choice", "Question 23i > variable 2 > choice “rarely”", "answer_option: rarely"),
+    edit("deleted", "choice", "Question 2 > variable 1 > choice “none”", "answer_option: none"), # its question is still there
+    edit("deleted", "choice", "Question 23 > variable 1 > choice “no”", "answer_option: no") # "Question 23g" isn't Question 23
+  )
+  expect_equal(monitor_counted_edits(whole), whole[c(1, 4, 6, 7)])
+  expect_equal(monitor_counted_edits(list()), list())
 })
 
 test_that("the commonest kind comes first, with how many extractions have it, and the same change made again counts together", {
@@ -73,23 +141,43 @@ test_that("the commonest kind comes first, with how many extractions have it, an
   expect_equal(examples$before, "years old")
   expect_equal(examples$after, "years")
   expect_equal(examples$count, 3)
-  expect_equal(examples$extractions, 2)
+  expect_equal(examples$questionnaires, "KQ, MQ")
   expect_equal(examples$where, "Question 26 > variable 1")
-  expect_equal(examples$extraction_id, "1")
   # the rest, one each, in the order of their names
   expect_equal(vapply(common[-1], function(kind) kind$label, character(1)), c(
-    "Changed a block's kind", "Changed the questionnaire's name", "Removed a block"
+    "Changed the kind of block", "Changed the questionnaire's name", "Removed an instruction"
   ))
 })
 
-test_that("only the commonest few of a kind's corrections are kept", {
+test_that("a kind keeps every one of its corrections, the commonest first, each saying which questionnaires it was in", {
   edits <- lapply(1:8, function(i) monitor_edit("edited", "block", "text", paste("was", i), paste("now", i)))
   edits <- c(edits, list(monitor_edit("edited", "block", "text", "was 8", "now 8")))
-  rows <- monitor_service_corrections(list(monitor_record("1", "2026-10-01T12:00:00Z", edits)))
-  examples <- monitor_service_common(rows, 1, shown = 3)[[1]]$examples
-  expect_equal(nrow(examples), 3)
+  rows <- monitor_service_corrections(list(monitor_record("1", "2026-10-01T12:00:00Z", edits, summary = "", questionnaire = "")))
+  examples <- monitor_service_common(rows, 1)[[1]]$examples
+  expect_equal(nrow(examples), 8)
   expect_equal(examples$before[1], "was 8")
   expect_equal(examples$count[1], 2)
+  expect_equal(examples$questionnaires[1], "1.pdf") # with no questionnaire known, the extraction's name
+})
+
+test_that("a kind's card starts shut, holds every correction, and says how often and in which questionnaire", {
+  edits <- c(
+    lapply(1:7, function(i) monitor_edit("edited", "block", "text", paste("was", i), paste("now", i))),
+    list(monitor_edit("edited", "block", "text", "was 1", "now 1")),
+    list(monitor_edit("deleted", "choice", before = "answer_option: certainly applies"))
+  )
+  rows <- monitor_service_corrections(list(monitor_record("1", "2026-10-01T12:00:00Z", edits, questionnaire = "MQ")))
+  kinds <- monitor_service_common(rows, 1)
+  html <- as.character(monitor_kind_ui(kinds[[1]]))
+  expect_no_match(html, "<details[^>]* open", perl = TRUE)
+  expect_equal(lengths(regmatches(html, gregexpr('class="monitor-example"', html, fixed = TRUE))), 7)
+  expect_no_match(html, "Show all", fixed = TRUE)
+  expect_match(html, "2 times in MQ", fixed = TRUE)
+  expect_match(html, "Once in MQ", fixed = TRUE)
+  expect_match(html, "row-badge is-count", fixed = TRUE) # the count is one colour for every kind of change
+  removed <- as.character(monitor_kind_ui(kinds[[2]]))
+  expect_match(removed, ">certainly applies<", fixed = TRUE)
+  expect_no_match(removed, "answer_option", fixed = TRUE)
 })
 
 test_that("the headline numbers count the extractions, their corrections, and those pushed as read", {
