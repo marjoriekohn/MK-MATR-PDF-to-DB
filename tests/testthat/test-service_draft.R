@@ -106,10 +106,23 @@ test_that("a draft opens as the AI read it, then as staff last saved it", {
   expect_identical(draft_service_from_json(extraction_model_questionnaire(test_connection, record$id)$original), short_gold_draft())
 })
 
+test_that("a field the AI answered with an empty list is blank, not a reading that can't be loaded", {
+  json <- list(questionnaire = list(), components = list(list(
+    component_type = "Question", text = "How old are you?", printed_number = list(), subject = list(),
+    variables = list(list(variable_type = "open_ended", answer_data_type = "NUMBER", unit = list()))
+  )))
+  draft <- draft_service_from_json(json)
+  expect_equal(draft$components$text, "How old are you?")
+  expect_true(is.na(draft$components$printed_number))
+  expect_true(is.na(draft$components$subject))
+  expect_true(is.na(draft$variables$unit))
+  expect_equal(draft$components$question_number, "1")
+})
+
 test_that("a draft that isn't in the database is a sentence", {
   me <- local_staff()
-  expect_error(draft_service_load(test_connection, "0"))
-  expect_error(draft_service_save(test_connection, "0", short_gold_draft(), me$staff_id))
+  expect_error(draft_service_load(test_connection, "0"), extraction_gone, fixed = TRUE)
+  expect_error(draft_service_save(test_connection, "0", short_gold_draft(), me$staff_id), extraction_gone, fixed = TRUE)
 })
 
 test_that("a draft typed by hand starts empty and can be saved and opened again", {
@@ -194,9 +207,18 @@ test_that("a save is refused if someone saved the draft after the person opened 
   me <- local_staff()
   record <- local_read_extraction(me)
   opened <- record$revision
-  expect_equal(draft_service_save(test_connection, record$id, short_gold_draft(), me$staff_id, expected_revision = opened), opened + 1)
-  # the model says so in a sentence
-  expect_error(draft_service_save(test_connection, record$id, short_gold_draft(), me$staff_id, expected_revision = opened))
+  first <- short_gold_draft()
+  first$components$checked[3] <- TRUE
+  expect_equal(draft_service_save(test_connection, record$id, first, me$staff_id, expected_revision = opened), opened + 1)
+  # the model says so in a sentence, and the first save stands
+  stale <- draft_service_update(short_gold_draft(), "components", block_numbered(short_gold_draft(), "1a")$id, "text", "Overwritten?")
+  expect_error(
+    draft_service_save(test_connection, record$id, stale, me$staff_id, expected_revision = opened),
+    "This draft was changed after you opened it. Open it again to see the new version.",
+    fixed = TRUE
+  )
+  expect_identical(draft_service_load(test_connection, record$id), first)
+  expect_equal(extraction_model_get(test_connection, record$id)$revision, opened + 1)
 })
 
 test_that("a draft saved before skips, conditions and respondent counts went opens without them", {

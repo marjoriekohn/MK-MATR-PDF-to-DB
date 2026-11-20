@@ -234,15 +234,40 @@ test_that("only a group has no words, and it has none", {
   expect_match(edit_service_check(form$fields, form$values)$problems$placement__text, "A group has no words")
 })
 
-test_that("wording that exists already is a warning, not a problem", {
+test_that("a block placed with wording that exists already uses it, with a warning; the wording itself is kept once", {
+  form <- form_for("placement", "add", scope = "2", placement__kind = "Question", placement__text = "Do you now smoke cigarettes?")
+  found <- edit_service_check(form$fields, form$values)
+  expect_null(found$problems$placement__text)
+  expect_match(found$warnings$placement__text, "A question with exactly these words is in the database already")
+  expect_match(found$warnings$placement__text, "seen in 2 questionnaires: AHP, MQ")
+
+  # a wording added, or changed, to words another of its kind has would be a second copy, which the database refuses
   form <- form_for("component", "add", component__kind = "Question", component__text = "Do you now smoke cigarettes?")
   found <- edit_service_check(form$fields, form$values)
-  expect_length(found$problems, 0)
-  expect_match(found$warnings$component__text, "A question with exactly these words is in the database already")
-  expect_match(found$warnings$component__text, "seen in 2 questionnaires: AHP, MQ")
+  expect_equal(
+    found$problems$component__text,
+    "A question with exactly these words is in the database already (seen in 2 questionnaires: AHP, MQ), so there is nothing to add."
+  )
+  form <- form_for("component", "update", "4", component__text = "How often do you see a doctor?")
+  expect_equal(
+    edit_service_check(form$fields, form$values)$problems$component__text,
+    "A question with exactly these words is in the database already (seen in 1 questionnaire: AHP). Merge this wording into that one instead."
+  )
   # another kind with the same words is another component
   form <- form_for("component", "add", component__kind = "Note", component__text = "Do you now smoke cigarettes?")
-  expect_length(edit_service_check(form$fields, form$values)$warnings, 0)
+  found <- edit_service_check(form$fields, form$values)
+  expect_length(found$problems, 0)
+  expect_length(found$warnings, 0)
+})
+
+test_that("a name that is nothing once written the database's way is a problem, not an empty name the database refuses", {
+  nothing_left <- "Once written the way the database keeps it, nothing is left of this. Type it in full."
+  form <- form_for("tag", "update", "21", tag__name = "per day") # a unit's "per day" is left out
+  expect_equal(edit_service_check(form$fields, form$values)$problems$tag__name, nothing_left)
+  form <- form_for("answer_option", "update", "19", answer_option__standardized_label = ".")
+  expect_equal(edit_service_check(form$fields, form$values)$problems$answer_option__standardized_label, nothing_left)
+  form <- form_for("tag", "update", "21", tag__name = "cigarettes per day")
+  expect_length(edit_service_check(form$fields, form$values)$problems, 0)
 })
 
 test_that("a questionnaire with the same name or abbreviation in its study can't be added", {
@@ -447,6 +472,8 @@ test_that("every kind builds its forms from the tables it reads, whatever it's a
           initial <- edit_service_initial(entity, fields, snap, mode, row, scope)
           expect_no_error(edit_service_check(fields, initial), message = paste(entity$key, mode, key))
           if (mode == "update") {
+            # a row as the database has it passes its own form's checks: opened and saved unchanged, nothing is refused
+            expect_length(edit_service_check(fields, initial)$problems, 0)
             expect_equal(nrow(form_items(list(entity = entity, snap = snap, row = row, scope = scope, fields = fields, values = initial, mode = mode))$items), 0, info = paste(entity$key, key))
             expect_no_error(edit_service_details(entity, snap, row, fields, initial), message = paste(entity$key, key))
             expect_no_error(edit_service_usage(entity, snap, row), message = paste(entity$key, key))

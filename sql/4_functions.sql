@@ -376,8 +376,13 @@ end;
 $$;
 
 -- A question's variables, from its block's `variables`. A variable whose MATR ID the questionnaire records
--- already (from an earlier wave) is reused if it is this question's; a new one is added after them.
-create or replace function private.push_variables(p_block jsonb, p_questionnaire_id bigint, p_placement_id bigint)
+-- already (from an earlier wave) is reused if it is this question's; a new one is added after them. A reused
+-- variable keeps what it has, unless the push updates a wave reopened for editing (p_update): a variable is the
+-- questionnaire's, not a wave's, so staff's corrections to it (its kind, label, kind of answer, tags and choices
+-- with their codes) go in for every wave that asks its question, and a variable staff took out of the question goes.
+drop function if exists private.push_variables(jsonb, bigint, bigint);
+create or replace function private.push_variables(p_block jsonb, p_questionnaire_id bigint, p_placement_id bigint,
+                                                  p_update boolean default false)
 returns void
 language plpgsql
 set search_path = public, pg_temp
@@ -413,17 +418,27 @@ begin
         raise exception 'The MATR ID % is already used by another question of this questionnaire. Give the variable a MATR ID of its own.', the_matr;
       end if;
       perform private.push_note('variable', true, the_key);
-      continue;
+      if not p_update then
+        continue;
+      end if;
     end if;
     the_data := case when the_type = 'open_ended' then nullif(btrim(v ->> 'answer_data_type'), '') end;
     if the_type = 'open_ended' and the_data is null then
       raise exception 'The open-ended variable % of the question "%" doesn''t say what kind of answer it takes (NUMBER, TEXT, DATE or TIME).', the_matr, words;
     end if;
-    next_order := next_order + 1;
-    insert into public.variable (questionnaire_id, placement_id, matr_id, display_order, label, variable_type, answer_data_type)
-    values (p_questionnaire_id, p_placement_id, the_matr, next_order, nullif(private.squish(v ->> 'label'), ''), the_type, the_data)
-    returning variable_key into the_key;
-    perform private.push_note('variable', false, the_key);
+    if the_key is null then
+      next_order := next_order + 1;
+      insert into public.variable (questionnaire_id, placement_id, matr_id, display_order, label, variable_type, answer_data_type)
+      values (p_questionnaire_id, p_placement_id, the_matr, next_order, nullif(private.squish(v ->> 'label'), ''), the_type, the_data)
+      returning variable_key into the_key;
+      perform private.push_note('variable', false, the_key);
+    else
+      -- the update of a reopened wave: the variable as staff left it, its tags and choices put in again below
+      update public.variable set label = nullif(private.squish(v ->> 'label'), ''), variable_type = the_type, answer_data_type = the_data
+      where variable_key = the_key;
+      delete from public.variable_tag where variable_key = the_key;
+      delete from public.response_option where variable_key = the_key;
+    end if;
     perform private.push_tags(v, null, the_key, null);
 
     if the_type = 'closed_ended' then
@@ -448,6 +463,14 @@ begin
       end if;
     end if;
   end loop;
+  if p_update then
+    -- a variable staff took out of the question goes, for every wave that asks it
+    delete from public.variable
+    where placement_id = p_placement_id
+      and matr_id <> all (array(
+        select btrim(x ->> 'matr_id') from jsonb_array_elements(coalesce(p_block -> 'variables', '[]'::jsonb)) as x
+      ));
+  end if;
 end;
 $$;
 
@@ -459,7 +482,9 @@ $$;
 -- whose block names a measurement scale (`scale`: one, or several with commas between) has its wording put in
 -- each (question_scale): the wording is the scale's item wherever it is printed, so a push only ever adds one;
 -- staff take one out on Make an edit.
-create or replace function private.push_block(p_block jsonb, p_questionnaire_id bigint, p_wave_id bigint, p_parent_id bigint)
+drop function if exists private.push_block(jsonb, bigint, bigint, bigint);
+create or replace function private.push_block(p_block jsonb, p_questionnaire_id bigint, p_wave_id bigint, p_parent_id bigint,
+                                              p_update boolean default false)
 returns void
 language plpgsql
 set search_path = public, pg_temp
@@ -529,13 +554,18 @@ begin
         update public.placement set depends_on_placement_id = depends_on where placement_id = the_placement;
       end if;
     end if;
+    if reused and p_update then
+      -- a question another wave asks too, updated: the question it depends on, and its tags, are as staff left them
+      update public.placement set depends_on_placement_id = depends_on where placement_id = the_placement;
+      delete from public.placement_tag where placement_id = the_placement;
+    end if;
     if nullif(btrim(p_block ->> 'question_number'), '') is null then
       raise exception 'The question "%" has no question number.', the_words;
     end if;
     insert into public.wave_question (questionnaire_id, wave_id, placement_id, question_number, printed_number)
     values (p_questionnaire_id, p_wave_id, the_placement, btrim(p_block ->> 'question_number'), nullif(btrim(p_block ->> 'printed_number'), ''));
     perform private.push_note('wave_question', false);
-    perform private.push_variables(p_block, p_questionnaire_id, the_placement);
+    perform private.push_variables(p_block, p_questionnaire_id, the_placement, p_update);
     perform private.push_tags(p_block, the_placement, null, null);
     -- its measurement scales: one, or several with commas between ("FTND, CDS-12")
     for a_scale in
@@ -549,7 +579,7 @@ begin
   end if;
 
   for child in select value from jsonb_array_elements(coalesce(p_block -> 'children', '[]'::jsonb)) loop
-    perform private.push_block(child, p_questionnaire_id, p_wave_id, the_placement);
+    perform private.push_block(child, p_questionnaire_id, p_wave_id, the_placement, p_update);
   end loop;
 end;
 $$;
@@ -568,6 +598,7 @@ declare
   asked    integer;
   updating boolean;
   printed  bigint[];
+  asked_here bigint[]; -- the placements of the questions the wave asked, for an update
 begin
   if e.questionnaire is null then
     raise exception 'Nothing has been saved for this extraction yet.';
@@ -600,8 +631,9 @@ begin
     -- otherwise only here, as a wording of its own, which the push below finds or adds
     perform private.reword_components(e.questionnaire -> 'components');
     printed := array(select component_id from public.placement where questionnaire_id = q.questionnaire_id);
+    asked_here := array(select placement_id from public.wave_question where wave_id = w.wave_id);
     delete from public.wave_question where wave_id = w.wave_id;
-    perform private.tidy_placements(q.questionnaire_id);
+    perform private.tidy_placements(q.questionnaire_id, asked_here);
   end if;
 
   create temp table if not exists push_placed (seq serial, placement_id bigint, kind text, question_number text) on commit drop;
@@ -610,7 +642,7 @@ begin
   truncate pg_temp.push_placed;
 
   for block in select value from jsonb_array_elements(coalesce(e.questionnaire -> 'components', '[]'::jsonb)) loop
-    perform private.push_block(block, q.questionnaire_id, w.wave_id, null);
+    perform private.push_block(block, q.questionnaire_id, w.wave_id, null, updating);
   end loop;
   if not exists (select 1 from public.wave_question where wave_id = w.wave_id) then
     raise exception 'This extraction has no questions to push.';
@@ -718,10 +750,13 @@ begin
 end;
 $$;
 
--- What emptying a wave leaves in its questionnaire: the questions no wave asks any more go, then if no wave
--- asks it anything at all, everything else it printed (its instructions and notes), then the sections, grids
--- and groups left with nothing inside.
-create or replace function private.tidy_placements(p_questionnaire_id bigint)
+-- What emptying a wave leaves in its questionnaire: the questions it asked (p_asked, its placements; every question
+-- of the questionnaire when not given) that no wave asks any more go; then, once no wave asks the questionnaire
+-- anything and it prints no question at all, everything else it printed (its instructions and notes); then the
+-- sections, grids and groups left with nothing inside. A question no wave asks that the wave never asked (one kept
+-- when its own wave was deleted) stays, with what it is in.
+drop function if exists private.tidy_placements(bigint);
+create or replace function private.tidy_placements(p_questionnaire_id bigint, p_asked bigint[] default null)
 returns void
 language plpgsql
 set search_path = public, pg_temp
@@ -732,10 +767,15 @@ begin
   delete from public.placement p
   using public.component c
   where c.component_id = p.component_id and c.kind = 'Question' and p.questionnaire_id = p_questionnaire_id
+    and (p_asked is null or p.placement_id = any (p_asked))
     and not exists (select 1 from public.wave_question wq where wq.placement_id = p.placement_id);
   delete from public.placement p
   where p.questionnaire_id = p_questionnaire_id
-    and not exists (select 1 from public.wave_question wq where wq.questionnaire_id = p.questionnaire_id);
+    and not exists (select 1 from public.wave_question wq where wq.questionnaire_id = p.questionnaire_id)
+    and not exists (
+      select 1 from public.placement x join public.component c on c.component_id = x.component_id
+      where x.questionnaire_id = p_questionnaire_id and c.kind = 'Question'
+    );
   loop
     delete from public.placement p
     using public.component c
@@ -1073,6 +1113,7 @@ declare
   the_history  bigint;
   unplaced     bigint[] := array[]::bigint[];   -- the components of placements this change deletes or changes
   old_component bigint;
+  taken        bigint[];                         -- the components of the placements a delete takes with it
 begin
   perform private.require_staff(p_staff_id);
   if jsonb_typeof(p_items) is distinct from 'array' or jsonb_array_length(p_items) = 0 then
@@ -1210,6 +1251,18 @@ begin
         execute format('select component_id from public.%I where %s', grp.entity_name, where_sql) into old_component;
         unplaced := unplaced || old_component;
       end if;
+      -- and so may what a delete takes with it: the blocks inside a deleted section, every block of a deleted questionnaire
+      if grp.action = 'Delete' and grp.entity_name in ('placement', 'questionnaire') then
+        execute format(
+          'with recursive inside as (
+             select p.placement_id, p.component_id from public.placement p where p.%1$I in (select %1$I from public.%2$I where %3$s)
+             union all
+             select p.placement_id, p.component_id from public.placement p join inside i on p.parent_placement_id = i.placement_id
+           ) select array_agg(component_id) from inside',
+          case grp.entity_name when 'placement' then 'placement_id' else 'questionnaire_id' end, grp.entity_name, where_sql
+        ) into taken;
+        unplaced := unplaced || coalesce(taken, array[]::bigint[]);
+      end if;
       for attr in select value from jsonb_array_elements(grp.attrs) loop
         key := attr ->> 'attribute';
         if key is null then
@@ -1295,6 +1348,7 @@ declare
   w       public.wave;
   q       public.questionnaire;
   printed bigint[];
+  asked   bigint[];   -- the placements of the questions it asked
   before  jsonb;
   gone    jsonb;
 begin
@@ -1306,8 +1360,9 @@ begin
   select * into q from public.questionnaire where questionnaire_id = w.questionnaire_id;
   before := private.content_counts(array[q.questionnaire_id]);
   printed := array(select component_id from public.placement where questionnaire_id = q.questionnaire_id);
+  asked := array(select placement_id from public.wave_question where wave_id = p_wave_id);
   delete from public.wave_question where wave_id = p_wave_id;
-  perform private.tidy_placements(q.questionnaire_id);
+  perform private.tidy_placements(q.questionnaire_id, asked);
   perform private.forget_components(printed);
   gone := private.removed(before, private.content_counts(array[q.questionnaire_id]));
   insert into public.history (staff_id, action, entity, record_id, summary, details)

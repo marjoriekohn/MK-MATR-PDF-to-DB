@@ -44,7 +44,15 @@ edit_words <- function(value) {
 
 # A block's words. Every kind has words but a Group, which has none of its own. `kind_of(values)` says which kind
 # the form's other fields make it, so a Group is checked for having none.
-edit_text_field <- function(snap, row, kind_of = function(values) values$kind, label = "Printed words") {
+# Words another component of the kind has already: a block placed with them uses that component (a warning), but
+# the form for a wording itself (`one_wording`) would make a second copy, which the database refuses: a problem.
+edit_text_field <- function(snap, row, kind_of = function(values) values$kind, label = "Printed words", one_wording = FALSE) {
+  same_words <- function(value, values) {
+    if (has_text(value)) edit_same_component(snap, kind_of(values), value, row) else data.frame()
+  }
+  already <- function(values, same) {
+    paste0("A ", tolower(kind_of(values) %||% "block"), " with exactly these words is in the database already (", edit_seen_in(snap, same$component_id[1]), ")")
+  }
   edit_field(
     "text", label, "textarea",
     rows = 3, short = "words", normalize = edit_words,
@@ -54,20 +62,16 @@ edit_text_field <- function(snap, row, kind_of = function(values) values$kind, l
         return("Add the printed words. Only a group has none.")
       }
       if (has_text(value) && identical(kind, "Group")) {
-        "A group has no words of its own. Put them in an Instruction inside it."
+        return("A group has no words of its own. Put them in an Instruction inside it.")
+      }
+      same <- if (one_wording) same_words(value, values) else data.frame()
+      if (nrow(same) > 0) {
+        paste0(already(values, same), if (is.null(row)) ", so there is nothing to add." else ". Merge this wording into that one instead.")
       }
     },
     warn = function(value, values) {
-      if (!has_text(value)) {
-        return(NULL)
-      }
-      same <- edit_same_component(snap, kind_of(values), value, row)
-      if (nrow(same) > 0) {
-        paste0(
-          "A ", tolower(kind_of(values) %||% "block"), " with exactly these words is in the database already (",
-          edit_seen_in(snap, same$component_id[1]), "): it is used, so the wording stays shared."
-        )
-      }
+      same <- same_words(value, values)
+      if (nrow(same) > 0) paste0(already(values, same), ": it is used, so the wording stays shared.")
     }
   )
 }
@@ -142,7 +146,9 @@ component_entity <- list(
         choices = c("Choose a kind" = "", stats::setNames(edit_component_kinds, edit_component_kinds)),
         locked = if (mode == "update") "Its kind is fixed. To print a different kind of block, add one."
       ),
-      edit_text_field(snap, row, kind_of = function(values) if (has_text(values$kind)) values$kind else if (!is.null(row)) row$kind)
+      edit_text_field(
+        snap, row, kind_of = function(values) if (has_text(values$kind)) values$kind else if (!is.null(row)) row$kind, one_wording = TRUE
+      )
     )
   },
   duplicates = function(snap, values) {

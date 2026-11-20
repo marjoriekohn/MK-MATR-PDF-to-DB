@@ -26,7 +26,12 @@ test_that("a change is applied in one go, numbered by the database, and written 
   expect_equal(entry$staff_id, me$staff_id)
   expect_equal(entry$summary, paste0("Added the respondent type “", name, "”"))
   expect_equal(entry$record_id, sprintf('{"respondent_type_id":%s}', key_text(applied$new_ids[[1]])))
-  expect_equal(length(entry$details), 2) # the items as applied
+  expect_equal(length(entry$details), 2) # the items as applied, with the number the database gave in place of the token
+  detail <- function(key) vapply(entry$details, function(item) as.character(item[[key]] %||% NA), "")
+  expect_equal(detail("attribute_name"), c("name", "minimum_age"))
+  expect_equal(detail("new_value"), c(name, "5"))
+  expect_equal(unique(detail("record_identifier")), sprintf('{"respondent_type_id":%s}', key_text(applied$new_ids[[1]])))
+  expect_equal(unique(detail("action")), "Insert")
 })
 
 test_that("an update whose old value is stale is refused with a sentence, and nothing changes", {

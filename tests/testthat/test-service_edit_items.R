@@ -269,6 +269,25 @@ test_that("changing a block's words in one place points that place at a new comp
   expect_equal(form_items(form)$summary, "Changed the words of the block “AHP · do you now smoke cigarettes?”")
 })
 
+test_that("a question reworded where nothing else prints its old words keeps its place in a measurement scale", {
+  # wording 9 is an item of scale 1, printed by questionnaire 2 (placement 209) and questionnaire 3 (309)
+  reword_209 <- function(snap) form_items(form_for("placement", "update", "209", scope = "2", snap = snap, placement__text = "How sad were you?"))
+  # printed elsewhere too: the scale keeps the old wording, which questionnaire 3 still prints
+  shared <- reword_209(test_snapshot(edit_service_tables(edit_entities$placement)))
+  expect_false(any(grepl("question_scale", item_lines(shared$items))))
+  # printed nowhere else: the new wording takes its place in the scale, or the database would forget it with the old one
+  alone <- test_snapshot(edit_service_tables(edit_entities$placement), function(snap) {
+    snap$placement <- snap$placement[snap$placement$placement_id != 309, ]
+    snap
+  })
+  expect_equal(item_lines(reword_209(alone)$items), c(
+    'Insert component {"component_id":"new:component:1"} kind: - -> Question',
+    'Insert component {"component_id":"new:component:1"} text: - -> how sad were you?',
+    'Insert question_scale {"component_id":"new:component:1","scale_id":1} NA: - -> -',
+    'Update placement {"placement_id":209} component_id: 9 -> new:component:1'
+  ))
+})
+
 test_that("words another component of that kind has already are that component, not a copy", {
   form <- form_for("placement", "update", "104", scope = "1", placement__text = "How often do you see a doctor?")
   expect_equal(item_lines(form_items(form)$items), 'Update placement {"placement_id":104} component_id: 4 -> 7')
@@ -303,6 +322,21 @@ test_that("a block that's new is added as a component and placed, at the end unl
     'Insert placement {"placement_id":"new:placement:1"} display_order: - -> 2'
   ))
   expect_equal(form_items(form)$summary, "Added the note “Thank you!” to AHP")
+
+  # a block deleted from a section leaves a gap in its order (deleting closes none): one added without a position
+  # still goes after the last block there, and moves none of them
+  without_104 <- test_snapshot(edit_service_tables(edit_entities$placement), function(snap) {
+    snap$placement <- snap$placement[snap$placement$placement_id != 104, ]
+    snap$wave_question <- snap$wave_question[snap$wave_question$placement_id != 104, ]
+    snap
+  })
+  after_a_delete <- form_for(
+    "placement", "add", scope = "1", snap = without_104,
+    placement__kind = "Note", placement__text = "Thank you!", placement__parent_placement_id = "101"
+  )
+  lines <- item_lines(form_items(after_a_delete)$items)
+  expect_false(any(startsWith(lines, "Update placement")))
+  expect_equal(utils::tail(lines, 1), 'Insert placement {"placement_id":"new:placement:1"} display_order: - -> 5')
 })
 
 test_that("a block with words a component of that kind has prints that component, and a group the one group", {

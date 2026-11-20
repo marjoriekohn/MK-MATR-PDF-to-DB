@@ -134,7 +134,9 @@ case, so a spelling that slips past the site still finds the one tag.
 **Emptying.** `empty_wave`, `empty_questionnaire`, `empty_study`, `empty_registry` remove what the thing
 holds, keep the thing itself, and remove what that leaves owned by nothing: questions no wave asks any
 more, sections left empty, the components they printed that nothing prints any more, with the scale
-items that named them. Answer options and tags stay: they are vocabulary. Each writes a history row. Re-extract on a wave = empty it, then start an
+items that named them. Emptying a wave takes only the questions it asked: a question no wave asks that it never
+asked (kept when its own wave was deleted) stays, and so does the rest of the questionnaire while it prints any
+question (`private.tidy_placements`). Answer options and tags stay: they are vocabulary. Each writes a history row. Re-extract on a wave = empty it, then start an
 AI-Powered extraction from the wave's PDF.
 
 **Editing a pushed wave again.** `reopen_wave` makes a new Draft extraction holding what the wave asks as the
@@ -142,7 +144,10 @@ catalog has it now (so edits made on Make an edit since the push are in it), goi
 `info.updates_wave_id` names the wave. Nothing changes until it is pushed: then `push_extraction` replaces
 what the wave asks in one transaction (the wave's questions go, the placements no wave asks any more go, the
 draft is pushed, and components nothing prints any more are forgotten afterwards, so a wording the update
-still prints keeps its component). Each block of such a draft names the component it came from
+still prints keeps its component). A question another wave asks too keeps its placement and variables, which are
+the questionnaire's, so staff's corrections go into them for every wave that asks it: a variable's kind, label,
+kind of answer, tags and choices with their codes, the question's tags and the question it depends on; a variable
+staff took out of it goes. Each block of such a draft names the component it came from
 (`component_id`). A block reworded when nothing else prints its component renames the component. When other
 places print it too (another questionnaire, or another block of this one), staff choose in the Push dialog:
 **only here** (the default) gives this place a new component and leaves the old one to the others;
@@ -193,7 +198,7 @@ question, and only adds `wave_question` rows for the new wave.
 | Function | Does |
 | --- | --- |
 | `push_extraction(p_extraction_id, p_staff_id, p_dry_run default false)` | writes an extraction's JSON into the catalog; the wave must ask nothing yet, unless the extraction was reopened from it (then it replaces what the wave asks); marks the extraction Pushed; writes history. Returns counts, each row counted once however often the extraction uses it (`tag_reused` is how many different tags were already there), with the `names` of the tags, answer choices and option sets it adds and finds and of the questions the database had already. An option set is the choices one variable offers, whatever their order or codes; there is no table of them, so the push works them out from `response_option`. With `p_dry_run`, does it and undoes it, returning the same (the preview). |
-| `apply_change(p_staff_id, p_items, p_summary)` | applies a Make-an-edit item list (Insert/Update/Delete with `new:<table>:<n>` tokens, old-value checks) in one transaction; writes one history row. Returns `{history_id, new_ids}`. |
+| `apply_change(p_staff_id, p_items, p_summary)` | applies a Make-an-edit item list (Insert/Update/Delete with `new:<table>:<n>` tokens, old-value checks) in one transaction; writes one history row. Components a change leaves printed nowhere are forgotten, including those of the blocks a delete takes with it (inside a deleted section; all of a deleted questionnaire). Returns `{history_id, new_ids}`. |
 | `empty_wave(p_wave_id, p_staff_id)`, `empty_questionnaire(...)`, `empty_study(...)`, `empty_registry(...)` | see Emptying. Return counts. |
 | `reopen_wave(p_wave_id, p_staff_id)` | see Editing a pushed wave again. Returns the draft's `extraction_id` (the same one while that draft is open). |
 | `upvote_questionnaire(p_questionnaire_id)` | the dashboard's upvote (anon). |

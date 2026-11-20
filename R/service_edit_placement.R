@@ -290,17 +290,26 @@ edit_component_for <- function(snap, kind, text, made = "new:component:1") {
 # ------ Giving one placement other words -------------------------------------------------------------
 # New words at one placement point that placement at the component of the same kind with them: the one the
 # database has, or a new one. What the placement holds (its numbers in each wave, its variables, its tags) is the
-# placement's, so it stays as it is. Measurement scale memberships aren't copied: a scale's item is one wording,
-# so the scale keeps pointing at the old one while a questionnaire still prints it. The old component is forgotten
-# by the database, with its scale items, when nothing places it any more.
+# placement's, so it stays as it is. A scale's item is one wording, so the scale keeps pointing at the old one
+# while another place still prints it. When this was the only place, the database forgets the old component with
+# its scale items, so the new wording takes its place in those scales instead.
 # text: The new words, as saved (`edit_service_normalize()`).
 edit_service_swap_items <- function(snap, placement_id, text) {
   placement <- snap$placement[snap$placement$placement_id == placement_id, ]
-  kind <- edit_lookup(snap, "component", "component_id", placement$component_id, "kind")
+  old <- placement$component_id
+  kind <- edit_lookup(snap, "component", "component_id", old, "kind")
   target <- edit_component_for(snap, kind, text)
+  items_of <- snap$question_scale %||% data.frame(scale_id = numeric(), component_id = numeric())
+  printed_elsewhere <- any(snap$placement$component_id %in% old & snap$placement$placement_id != placement_id)
+  scales <- if (!printed_elsewhere) {
+    setdiff(items_of$scale_id[items_of$component_id %in% old], items_of$scale_id[items_of$component_id %in% target$component])
+  }
   rbind(
     target$items,
-    edit_item("placement", edit_identifier(list(placement_id = placement_id)), "Update", "component_id", placement$component_id, target$component)
+    do.call(rbind, lapply(scales, function(scale) {
+      edit_item("question_scale", edit_identifier(list(component_id = target$component, scale_id = scale)), "Insert", NULL, NA, NA)
+    })),
+    edit_item("placement", edit_identifier(list(placement_id = placement_id)), "Update", "component_id", old, target$component)
   )
 }
 
@@ -397,7 +406,9 @@ edit_placement_add_items <- function(snap, q, fields, values) {
   parent <- if (has_text(value_of("parent_placement_id"))) as.numeric(value_of("parent_placement_id")) else NA_real_
   room <- edit_service_room(placed, parent)
   position <- edit_whole_number(value_of("display_order"))
-  position <- if (is.na(position)) room + 1 else max(1, min(position, room + 1))
+  # none given: after the last block there, whose order is past the count when a delete left a gap
+  last <- max(c(0, placed$display_order[same_parent(placed$parent_placement_id, parent)]))
+  position <- if (is.na(position)) last + 1 else max(1, min(position, room + 1))
   later <- placed[same_parent(placed$parent_placement_id, parent) & placed$display_order >= position, , drop = FALSE]
   for (i in seq_len(nrow(later))) {
     add(edit_item(

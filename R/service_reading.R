@@ -93,7 +93,10 @@ reading_service_read <- function(pdf_path, lookups, progress = function(status) 
         NULL
       }
     )
-    if (!is.null(reading) && (is.null(best) || length(reading$problems) < length(best$problems))) {
+    # a reading again is kept for fewer problems, but not one that has fewer questions: leaving a question out does
+    # away with its problems, and loses it without a word (the problems kept are said, for staff to fix)
+    if (!is.null(reading) && (is.null(best) || (length(reading$problems) < length(best$problems) &&
+      reading_question_count(reading$json) >= reading_question_count(best$json)))) {
       best <- reading
     }
     if (!is.null(best) && length(best$problems) == 0) break
@@ -113,7 +116,9 @@ reading_service_read <- function(pdf_path, lookups, progress = function(status) 
 
 # The JSON object in Gemini's answer, which may come wrapped in a ```json fence. Closing a deep nest written on
 # one line, Gemini sometimes writes a bracket too many at the very end; what follows the object's own last
-# brace is left off, so that one slip doesn't lose the whole reading.
+# brace is left off, so that one slip doesn't lose the whole reading. Not when what follows goes on with the
+# object (a comma, then more of it): a brace too many in the middle closed it early, and leaving the rest off
+# would lose its blocks without a word, so the answer is refused and read again.
 json_in <- function(text) {
   start <- regexpr("{", text, fixed = TRUE)
   ends <- gregexpr("}", text, fixed = TRUE)[[1]]
@@ -121,7 +126,7 @@ json_in <- function(text) {
   json <- substr(text, start, max(ends))
   tryCatch(jsonlite::fromJSON(json, simplifyVector = FALSE), error = function(problem) {
     end <- json_object_end(json)
-    if (is.na(end) || end == nchar(json)) stop(problem)
+    if (is.na(end) || end == nchar(json) || grepl("^[[:space:]]*,", substring(json, end + 1))) stop(problem)
     jsonlite::fromJSON(substr(json, 1, end), simplifyVector = FALSE)
   })
 }
@@ -229,12 +234,17 @@ join_page_ranges <- function(parts) {
   list(questionnaire = list(name = given("name"), abbreviation = given("abbreviation")), components = components)
 }
 
+# A block carried on joins the last block if it is of its kind; otherwise it goes inside the last block, if that
+# can hold it, to join a block of its kind there or start one (a grid carried on whose section wasn't started again
+# keeps its lead-in, in that section).
 carry_on <- function(blocks, more) {
   last <- length(blocks)
-  continues_section <- length(more) > 0 && isTRUE(more[[1]]$continued) && last > 0 &&
-    is_container(blocks[[last]]$component_type)
-  if (continues_section) {
+  carried <- length(more) > 0 && isTRUE(more[[1]]$continued) && last > 0 && is_container(blocks[[last]]$component_type)
+  if (carried && identical(blocks[[last]]$component_type, more[[1]]$component_type)) {
     blocks[[last]]$children <- carry_on(blocks[[last]]$children, more[[1]]$children)
+    more <- more[-1]
+  } else if (carried && can_hold(blocks[[last]]$component_type, more[[1]]$component_type %||% NA_character_)) {
+    blocks[[last]]$children <- carry_on(blocks[[last]]$children, more[1])
     more <- more[-1]
   }
   c(blocks, more)
@@ -441,6 +451,11 @@ clean_number <- function(number) {
 # ------ Checking a reading ------------------------------------------------------------
 # What the Edit Extraction page's checks would flag, worded for Gemini: each names its
 # block ("Question 4: Add at least one variable.").
+# How many questions a reading recorded, wherever they sit.
+reading_question_count <- function(json) {
+  sum(pluck(flatten_blocks(json$components), "component_type") %in% "Question")
+}
+
 reading_service_problems <- function(json, lookups) {
   draft <- draft_service_from_json(json)
   blocks <- draft$components
@@ -803,9 +818,11 @@ reading_service_watch <- function(records, connection) {
       "Reading stopped before it finished."
     }
     if (!is.null(stopped)) {
+      # only while it is still being read: a job that saved its reading and ended since `records` were read has
+      # finished, not stopped
       extraction_service_reading_update(connection, record$id, record$reading_started, list(
         extraction_status = "failed", error = stopped
-      ))
+      ), where = list(reading_status = database_in(reading_statuses)))
     }
   }
   reading

@@ -126,6 +126,38 @@ test_that("what's in a question removed or added counts as part of it, and a row
   )
   expect_equal(monitor_counted_edits(whole), whole[c(1, 4, 6, 7)])
   expect_equal(monitor_counted_edits(list()), list())
+
+  # a choice added where a removed question's choice of the same words was (questions renumbered after the removal):
+  # the removed one goes with its question, and the added one still counts
+  renumbered <- list(
+    edit("deleted", "block", "Question 2", "component_type: Question; text: do you smoke"),
+    edit("deleted", "variable", "Question 2 > variable 1", "variable_type: closed_ended"),
+    edit("deleted", "choice", "Question 2 > variable 1 > choice “yes”", "answer_option: yes"),
+    edit("added", "choice", "Question 2 > variable 1 > choice “yes”", "answer_option: yes")
+  )
+  expect_equal(monitor_counted_edits(renumbered), renumbered[c(1, 4)])
+})
+
+test_that("the pushed extractions are counted by their corrections, not by every row their differences list", {
+  edit <- function(change, item, where, said) {
+    list(change = change, item = item, where = where, before = if (change == "deleted") said, after = if (change == "added") said)
+  }
+  # as the database keeps them: a question that shouldn't be there lists its variable and choices too
+  as_kept <- list(
+    "7" = list(id = "7", applied = "2026-10-01T12:00:00Z", prompt_version = "abc", edits = list(
+      edit("deleted", "block", "Question 23g", "component_type: Question; text: comforts"),
+      edit("deleted", "variable", "Question 23g > variable 1", "variable_type: closed_ended"),
+      edit("deleted", "choice", "Question 23g > variable 1 > choice “rarely”", "answer_option: rarely"),
+      edit("deleted", "choice", "Question 23g > variable 1 > choice “often”", "answer_option: often")
+    )),
+    "8" = list(id = "8", applied = "2026-10-02T12:00:00Z", prompt_version = "abc", edits = list())
+  )
+  local_stub("monitor_model_get_pushed", function(connection) as_kept)
+  records <- monitor_service_get_all(NULL)
+  expect_equal(names(records), c("7", "8"))
+  expect_equal(records[["7"]]$edits, as_kept[["7"]]$edits[1])
+  totals <- monitor_service_totals(records)
+  expect_equal(totals[c("extractions", "corrections", "per_extraction", "untouched")], list(extractions = 2L, corrections = 1, per_extraction = 0.5, untouched = 1L))
 })
 
 test_that("the commonest kind comes first, with how many extractions have it, and the same change made again counts together", {
@@ -197,6 +229,14 @@ test_that("each prompt's extractions and corrections, the prompt used last first
   expect_equal(rows$per_extraction, c(1.5, 3))
   expect_equal(rows$model[1], "gemini-3.8-flash")
   expect_equal(nrow(monitor_service_by_prompt(list())), 0)
+})
+
+test_that("a push is counted on the day it was in the site's own time zone, not the day it was in UTC", {
+  # 10 pm in New York on Oct 1 is 2 am on Oct 2 in UTC
+  late <- list("1" = monitor_record("1", "2026-10-02T02:00:00Z"), "2" = monitor_record("2", "2026-10-03T15:00:00Z"))
+  expect_equal(monitor_service_over_time(late)$label, c("Oct 1", "Oct 2", "Oct 3")) # the site's: America/New_York
+  expect_equal(monitor_service_over_time(late)$extractions, c(1, 0, 1))
+  expect_equal(monitor_service_over_time(late, tz = "UTC")$label, c("Oct 2", "Oct 3"))
 })
 
 test_that("over time: a bar per day while the extractions span a month, every day in between counted, none as nought", {

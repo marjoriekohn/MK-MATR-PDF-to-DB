@@ -127,3 +127,94 @@ test_that("a block reworded in one place prints the component with the new words
   expect_equal(nrow(questionnaire_rows("placement", tree)), 0) # the question no wave asks goes, and the section left empty
   expect_equal(nrow(table_model_get(test_connection, "wave", list(wave_id = database_eq(tree$wave$wave_id)))), 1)
 })
+
+# A question added to the tree's questionnaire with one write-in variable, asked in the waves given (their ids), inside
+# the block `inside` names, if it names one.
+add_question <- function(me, tree, words, waves, inside = NULL, env = parent.frame()) {
+  apply_block(
+    me, tree, "add", env = env,
+    placement__kind = "Question", placement__text = tolower(test_name(words)),
+    placement__parent_placement_id = if (is.null(inside)) "" else key_text(inside),
+    placement__asked_in = paste(key_text(waves), collapse = ","),
+    placement__variables = variables_json(list(variable_type = "open_ended", matr_id = test_name("V"), answer_data_type = "TEXT"))
+  )
+}
+placed_id <- function(applied) applied$new_ids[["new:placement:1"]]
+variables_at <- function(applied) nrow(table_model_get(test_connection, "variable", list(placement_id = database_eq(placed_id(applied)))))
+
+test_that("deleting a section forgets the wordings of the blocks inside it, as it does its own, when nothing else prints them", {
+  me <- local_staff()
+  tree <- local_tree()
+  section <- apply_block(me, tree, "add", placement__kind = "Section", placement__text = tolower(test_name("a. inside")))
+  question <- add_question(me, tree, "inside", tree$wave$wave_id, inside = placed_id(section))
+  apply_block(me, tree, "delete", placed_id(section))
+  expect_equal(nrow(questionnaire_rows("placement", tree)), 0)
+  kept <- function(applied) nrow(table_model_get(test_connection, "component", list(component_id = database_eq(applied$new_ids[["new:component:1"]]))))
+  expect_equal(kept(section), 0)
+  expect_equal(kept(question), 0) # taken with the section, and printed nowhere else
+})
+
+test_that("emptying a wave takes the questions it asked, and leaves a question no wave asks that it never asked", {
+  me <- local_staff()
+  tree <- local_tree()
+  other <- local_wave(tree$questionnaire)
+  add_question(me, tree, "asked here", tree$wave$wave_id)
+  kept <- add_question(me, tree, "asked there", other$wave_id)
+  test_delete("wave_question", list(wave_id = database_eq(other$wave_id))) # as when its own wave is deleted: it stays
+  edit_service_empty(test_connection, "wave", tree$wave$wave_id, me)
+  expect_equal(questionnaire_rows("placement", tree)$placement_id, placed_id(kept))
+  expect_equal(variables_at(kept), 1)
+})
+
+test_that("emptying a wave leaves what another wave asks as it was, and emptying a study or registry leaves the others alone", {
+  me <- local_staff()
+  tree <- local_tree()
+  other <- local_wave(tree$questionnaire)
+  both <- add_question(me, tree, "both", c(tree$wave$wave_id, other$wave_id))
+  add_question(me, tree, "only here", tree$wave$wave_id)
+  edit_service_empty(test_connection, "wave", tree$wave$wave_id, me)
+  expect_equal(questionnaire_rows("placement", tree)$placement_id, placed_id(both))
+  expect_equal(variables_at(both), 1)
+  expect_equal(table_model_get(test_connection, "wave_question", list(wave_id = database_eq(other$wave_id)))$question_number, "1")
+  expect_equal(nrow(table_model_get(test_connection, "wave_question", list(wave_id = database_eq(tree$wave$wave_id)))), 0)
+
+  elsewhere <- local_tree()
+  theirs <- add_question(me, elsewhere, "theirs", elsewhere$wave$wave_id)
+  edit_service_empty(test_connection, "study", tree$study$study_id, me)
+  expect_equal(nrow(questionnaire_rows("placement", tree)), 0)
+  expect_equal(questionnaire_rows("placement", elsewhere)$placement_id, placed_id(theirs))
+  add_question(me, tree, "again", tree$wave$wave_id)
+  edit_service_empty(test_connection, "registry", tree$registry$registry_id, me)
+  expect_equal(nrow(questionnaire_rows("placement", tree)), 0)
+  expect_equal(questionnaire_rows("placement", elsewhere)$placement_id, placed_id(theirs))
+  expect_equal(variables_at(theirs), 1)
+})
+
+test_that("an answer choice merged into another keeps each variable's code and order for it, and its other choices as they were", {
+  me <- local_staff()
+  # made before the tree, so it is removed after the variable that will offer it
+  into <- local_row("answer_option", list(standardized_label = normal_answer(test_name("certainly"))), "answer_option_id")
+  tree <- local_tree()
+  draft <- test_questionnaire_draft()
+  draft$response_options$answer_option <- normal_answer(paste(test_name("merged"), c("yes", "no")))
+  local_pushed_questionnaire(me, tree, draft)
+  variables <- table_model_get(test_connection, "variable", list(questionnaire_id = database_eq(tree$questionnaire$questionnaire_id)))
+  key <- variables$variable_key[variables$variable_type == "closed_ended"]
+  offered <- function() {
+    rows <- table_model_get(test_connection, "response_option", list(variable_key = database_eq(key)))
+    rows[order(rows$display_order), c("answer_option_id", "display_order", "code_value")]
+  }
+  before <- offered()
+
+  entity <- edit_entities$answer_option
+  snap <- edit_service_load(test_connection, entity)
+  plan <- edit_service_merge_plan(entity, snap, edit_service_row(entity, snap, key_text(before$answer_option_id[1])), key_text(into$answer_option_id))
+  expect_length(plan$blocked, 0)
+  edit_service_apply(test_connection, plan, me)
+
+  after <- offered()
+  expect_equal(after$answer_option_id, c(into$answer_option_id, before$answer_option_id[2]))
+  expect_equal(after$code_value, before$code_value)
+  expect_equal(after$display_order, c(1, 2))
+  expect_equal(nrow(table_model_get(test_connection, "answer_option", list(answer_option_id = database_eq(before$answer_option_id[1])))), 0)
+})

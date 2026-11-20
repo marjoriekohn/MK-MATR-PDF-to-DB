@@ -65,6 +65,17 @@ test_that("deleting a section takes its blocks, variables and choices with it, a
   expect_false(any(deleted$variables$component_id %in% gone))
   expect_true(all(deleted$response_options$variable_id %in% deleted$variables$id))
   expect_equal(draft_service_children(deleted, "components", NA)$display_order, 1:16)
+
+  # everything outside the section is still there, as it was: the blocks (but for their places at the top
+  # level), their variables and their choices
+  kept <- function(rows, keep) `rownames<-`(rows[keep, , drop = FALSE], NULL)
+  unplaced <- function(blocks) blocks[setdiff(names(blocks), "display_order")]
+  expect_identical(unplaced(kept(deleted$components, TRUE)), unplaced(kept(draft$components, !draft$components$id %in% gone)))
+  expect_identical(kept(deleted$variables, TRUE), kept(draft$variables, !draft$variables$component_id %in% gone))
+  expect_identical(
+    kept(deleted$response_options, TRUE),
+    kept(draft$response_options, draft$response_options$variable_id %in% deleted$variables$id)
+  )
 })
 
 test_that("questions that depended on a deleted question lose the link", {
@@ -72,6 +83,13 @@ test_that("questions that depended on a deleted question lose the link", {
   q7 <- block_numbered(draft, "7")$id
   deleted <- suppressMessages(draft_service_delete(draft, "components", q7))
   expect_false(any(deleted$components$parent_question_id %in% q7))
+  # the questions that depended on it are still there, standing on their own...
+  expect_true(is.na(block_numbered(deleted, "8a")$parent_question_id))
+  expect_true(is.na(block_numbered(deleted, "9")$parent_question_id))
+  # ...and every other question still depends on the one it did
+  expect_equal(block_numbered(deleted, "11a")$parent_question_id, block_numbered(draft, "10")$id)
+  expect_equal(block_numbered(deleted, "14k")$parent_question_id, block_numbered(draft, "13")$id)
+  expect_equal(sum(!is.na(deleted$components$parent_question_id)), sum(!is.na(draft$components$parent_question_id)) - 5)
 })
 
 test_that("a new variable copies the question's last variable", {

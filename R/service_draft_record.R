@@ -65,9 +65,7 @@ draft_service_review_edits <- function(original, reviewed) {
     new_rows <- match(kept, new$ref)
     fields <- review_edit_fields[[table]]
     differs <- vapply(fields, function(field) {
-      a <- review_edit_keys(original, table, old_rows, field)
-      b <- review_edit_keys(reviewed, table, new_rows, field)
-      xor(is.na(a), is.na(b)) | (!is.na(a) & !is.na(b) & a != b)
+      review_edit_differs(original, reviewed, table, old_rows, new_rows, field)
     }, logical(length(kept)))
     # (a matrix whatever its size: with no row in both, or one field, vapply() gives something else)
     differs <- matrix(differs, nrow = length(kept), ncol = length(fields), dimnames = list(NULL, fields))
@@ -121,9 +119,7 @@ draft_service_changed_blocks <- function(original, reviewed) {
     old_rows <- match(new$ref[kept], old$id)
     differs <- rep(FALSE, length(kept))
     for (field in review_edit_fields[[table]]) {
-      a <- review_edit_keys(original, table, old_rows, field)
-      b <- review_edit_keys(reviewed, table, kept, field)
-      differs <- differs | xor(is.na(a), is.na(b)) | (!is.na(a) & !is.na(b) & a != b)
+      differs <- differs | review_edit_differs(original, reviewed, table, old_rows, kept, field)
     }
     changed <- c(changed, block_of[[table]](reviewed, new$id[c(which(added), kept[differs])]))
     if (table != "components") {
@@ -213,6 +209,27 @@ review_edit_keys <- function(draft, table, rows, field) {
   value <- trimws(as.character(value))
   value[!is.na(value) & !nzchar(value)] <- NA
   value
+}
+
+# Whether a field differs, row by row, between rows `old_rows` of the AI's answer and `new_rows` of the reviewed copy
+# (the same rows of the AI's, matched by ref), as `review_edit_keys()` puts them. The question a question depends on
+# is compared by which of the AI's questions it is, except a question the AI didn't read (no ref: staff made it again,
+# or it was reworded on the Metadata page since the push) with the number the AI's had: it is the question it
+# depended on, made again, not a change to every question that depends on it ("7" to "7").
+review_edit_differs <- function(original, reviewed, table, old_rows, new_rows, field) {
+  a <- review_edit_keys(original, table, old_rows, field)
+  b <- review_edit_keys(reviewed, table, new_rows, field)
+  differs <- xor(is.na(a), is.na(b)) | (!is.na(a) & !is.na(b) & a != b)
+  if (field != "parent_question_id") {
+    return(differs)
+  }
+  number <- function(draft, rows) {
+    parents <- draft$components$parent_question_id[rows]
+    draft_service_question_number(draft$components[match(parents, draft$components$id), , drop = FALSE])
+  }
+  then <- number(original, old_rows)
+  now <- number(reviewed, new_rows)
+  differs & !(b %in% "new" & !is.na(then) & !is.na(now) & then == now)
 }
 
 # `value`, or `otherwise` when it is missing.

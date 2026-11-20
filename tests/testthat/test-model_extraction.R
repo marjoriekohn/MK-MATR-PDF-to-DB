@@ -245,6 +245,7 @@ test_that("an upload is kept in Storage and on this server, named by its hash, a
 })
 
 test_that("a PDF's pages are counted from its page tree, not from the page objects an edit leaves behind", {
+  # (what qpdf can't read, as these pieces of PDFs: qpdf is asked first, below, and these are the scan it falls back on)
   # A PDF saved again after an edit (a redaction) keeps the old copies of the pages it changed, so it holds more
   # page objects than pages; and most PDFs pack the page tree into a compressed object stream.
   pdf_of <- function(...) {
@@ -258,27 +259,56 @@ test_that("a PDF's pages are counted from its page tree, not from the page objec
   pages <- paste(vapply(2:4, page, ""), collapse = "") # three page objects: one is an old copy
 
   in_plain_view <- pdf_of("%PDF-1.4\n1 0 obj\n<< /Type /Pages /Kids [2 0 R 3 0 R] /Count 2 >>\nendobj\n", pages, "%%EOF\n")
-  expect_equal(extraction_model_page_count(in_plain_view), 2)
+  expect_equal(pdf_scanned_page_count(in_plain_view), 2)
 
   tree <- memCompress(charToRaw("1 0 5 60 << /Type /Catalog /Pages 5 0 R >> << /Count 2 /Kids [2 0 R 3 0 R] /Type /Pages >>"), "gzip")
   packed <- pdf_of(
     "%PDF-1.6\n", pages, sprintf("9 0 obj\n<< /Type /ObjStm /N 2 /First 8 /Filter /FlateDecode /Length %d >>\nstream\r\n", length(tree)),
     tree, "\r\nendstream\nendobj\n%%EOF\n"
   )
-  expect_equal(extraction_model_page_count(packed), 2)
+  expect_equal(pdf_scanned_page_count(packed), 2)
 
   # a tree of trees: the whole is the largest count
   nested <- pdf_of("%PDF-1.4\n<< /Type /Pages /Count 7 >> << /Type /Pages /Count 2 >> << /Type /Pages /Count 5 >>\n", pages)
-  expect_equal(extraction_model_page_count(nested), 7)
+  expect_equal(pdf_scanned_page_count(nested), 7)
 
   # a page tree written one entry to a line, as some PDF makers write it
   lined <- pdf_of("%PDF-1.4\n1 0 obj\n<<\n/Type /Pages\n/Kids [2 0 R 3 0 R]\n/Count 41\n>>\nendobj\n", pages, "%%EOF\n")
-  expect_equal(extraction_model_page_count(lined), 41)
+  expect_equal(pdf_scanned_page_count(lined), 41)
   backwards <- pdf_of("%PDF-1.4\n1 0 obj\n<<\n/Count 12\n/Type /Pages\n>>\nendobj\n", pages, "%%EOF\n")
-  expect_equal(extraction_model_page_count(backwards), 12)
+  expect_equal(pdf_scanned_page_count(backwards), 12)
 
   # with no page tree to be found, the page objects are counted, as before
-  expect_equal(extraction_model_page_count(pdf_of("%PDF-1.4\n", pages)), 3)
+  expect_equal(pdf_scanned_page_count(pdf_of("%PDF-1.4\n", pages)), 3)
+  # a piece of a PDF, with no index for qpdf to read, is counted by the scan
+  expect_equal(extraction_model_page_count(lined), 41)
+})
+
+test_that("a PDF saved again after pages were taken out is counted as it is now, not as it was", {
+  skip_if_not_installed("qpdf")
+  # a real PDF of 3 pages, then saved again the way PDF editors save a change: the new page tree, of 1 page, is
+  # added at the end, and the old one, of 3, is still in the file
+  path <- withr::local_tempfile(fileext = ".pdf")
+  grDevices::pdf(path, compress = FALSE)
+  for (i in 1:3) graphics::plot.new()
+  invisible(grDevices::dev.off())
+  text <- rawToChar(readBin(path, "raw", file.size(path)))
+  Encoding(text) <- "bytes"
+  found <- function(pattern) regmatches(text, regexec(pattern, text, perl = TRUE, useBytes = TRUE))[[1]][-1]
+  tree <- found("([0-9]+) 0 obj\\s*<< /Type /Pages /Kids \\[ ([0-9]+ 0 R) .*?(/MediaBox \\[[^]]*\\])")
+  saved_at <- found("startxref\\s+([0-9]+)")
+  trailer <- found("/Size ([0-9]+) /Info ([0-9]+ 0 R) /Root ([0-9]+ 0 R)")
+  again <- sprintf("%s 0 obj\n<< /Type /Pages /Kids [ %s ] /Count 1 %s >>\nendobj\n", tree[1], tree[2], tree[3])
+  at <- file.size(path)
+  update <- sprintf(
+    "xref\n%s 1\n%010d 00000 n \ntrailer\n<< /Size %s /Info %s /Root %s /Prev %s >>\nstartxref\n%d\n%%%%EOF\n",
+    tree[1], at, trailer[1], trailer[2], trailer[3], saved_at, at + nchar(again, type = "bytes")
+  )
+  con <- file(path, "ab")
+  writeBin(charToRaw(paste0(again, update)), con)
+  close(con)
+
+  expect_equal(extraction_model_page_count(path), 1)
 })
 
 test_that("a file that isn't a PDF is recognised, and a CSV is read as text", {

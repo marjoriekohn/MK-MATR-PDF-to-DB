@@ -249,6 +249,8 @@ test_that("a draft reopened from the database is matched to the AI's rows throug
   adopted <- draft_service_adopt_refs(back, pushed)
   # it differs from the AI's answer exactly where the copy that was pushed did
   expect_equal(draft_service_review_edits(ai, adopted), draft_service_review_edits(ai, pushed))
+  said <- vapply(draft_service_review_edits(ai, adopted), function(edit) paste(edit$change, edit$item, edit$field %||% ""), character(1))
+  expect_setequal(said, c("added block ", "edited block text", "edited variable label", "edited choice answer_option"))
   expect_equal(sum(is.na(adopted$components$ref)), 1) # the note staff added is still staff's
   expect_equal(adopted$components$text[is.na(adopted$components$ref)], "a note staff added")
   expect_equal(component(adopted, adopted$components$id[adopted$components$ref %in% q1a])$page, component(ai, q1a)$page) # Open PDF finds its page again
@@ -256,6 +258,25 @@ test_that("a draft reopened from the database is matched to the AI's rows throug
   mine <- adopted$components$id[adopted$components$ref %in% q1a]
   again <- suppressMessages(draft_service_revert_block(adopted, ai, mine))
   expect_equal(component(again, mine)$text, component(ai, q1a)$text)
+})
+
+test_that("a question reworded on the Metadata page since the push is one correction, not one more for each question that depends on it", {
+  ai <- original()
+  pushed <- reopened(ai)
+  back <- from_database(pushed)
+  q7 <- back$components$id[back$components$text %in% component(ai, q(ai, "7"))$text]
+  back <- draft_service_update(back, "components", q7, "text", "changed on the metadata page")
+  edits <- monitor_counted_edits(draft_service_review_edits(ai, draft_service_adopt_refs(back, pushed)))
+  said <- vapply(edits, function(edit) paste(edit$change, edit$where, edit$field), character(1))
+  expect_equal(said, "edited Question 7 text")
+  # and the outline's "Changed from AI" marks that question alone
+  expect_equal(draft_service_changed_blocks(ai, draft_service_adopt_refs(back, pushed)), q7)
+
+  # a follow-up staff point at another question still counts, whether the AI read that question or staff added it
+  moved_on <- draft_service_update(back, "components", block_numbered(back, "8a")$id, "parent_question_id", block_numbered(back, "10")$id)
+  edits <- draft_service_review_edits(ai, draft_service_adopt_refs(moved_on, pushed))
+  relinked <- Filter(function(edit) identical(edit$field, "parent_question_id"), edits)
+  expect_equal(vapply(relinked, function(edit) paste(edit$where, edit$before, edit$after), character(1)), "Question 8a 7 10")
 })
 
 test_that("a block changed on the Metadata page since the push is one staff added; the rest keep their match", {
@@ -268,12 +289,11 @@ test_that("a block changed on the Metadata page since the push is one staff adde
   expect_true(is.na(component(adopted, moved)$ref))
   expect_equal(sum(is.na(adopted$components$ref)), 1)
   expect_false(anyDuplicated(stats::na.omit(adopted$components$ref)) > 0)
-  # two blocks with the same kind and words are matched in order, each to its own
-  twice <- ai$components$text[duplicated(paste(ai$components$component_type, ai$components$text)) & !is.na(ai$components$text)][1]
-  if (!is.na(twice)) {
-    whole <- draft_service_adopt_refs(from_database(pushed), pushed)
-    same <- whole$components[whole$components$text %in% twice, ]
-    expect_false(anyDuplicated(same$ref) > 0)
-    expect_equal(whole$components$ref, pushed$components$ref[match(whole$components$id, pushed$components$id)])
-  }
+  # two blocks with the same kind and words are matched in order, each to its own: a question, and a copy staff made
+  twice <- reopened(suppressMessages(draft_service_duplicate(ai, q(ai, "1a"))))
+  whole <- draft_service_adopt_refs(from_database(twice), twice)
+  in_order <- function(draft) draft$components[match(draft_service_printed_order(draft), draft$components$id), ]
+  same <- in_order(whole)[in_order(whole)$text %in% component(ai, q(ai, "1a"))$text, ]
+  expect_equal(same$ref, c(q(ai, "1a"), NA))
+  expect_equal(in_order(whole)$ref, in_order(twice)$ref)
 })

@@ -256,13 +256,14 @@ extraction_service_reextract <- function(connection, id, me, expected_revision =
 # If reading has started again since the job began ("Try reading again"),
 # its news is stale and nothing is saved.
 # changes: A named list of record fields to their new values.
+# where: More filters the row must match (see `extraction_model_update_reading()`).
 # Returns: Whether it was saved.
-extraction_service_reading_update <- function(connection, id, reading_started, changes) {
+extraction_service_reading_update <- function(connection, id, reading_started, changes, where = list()) {
   record <- extraction_model_get(connection, id)
   if (!identical(record$reading_started, reading_started)) {
     return(FALSE)
   }
-  extraction_model_save_reading(connection, id, changes, reading_started)
+  extraction_model_save_reading(connection, id, changes, reading_started, where)
 }
 
 # Discard a draft: it is deleted from the database, with its PDF when nothing else uses the file.

@@ -289,6 +289,14 @@ test_that("the JSON is found in Gemini's answer, fenced or not", {
   expect_equal(json_in('{"a": [{"b": "1 } or \\"2\\""}]}]}'), list(a = list(list(b = '1 } or "2"'))))
   expect_error(json_in('{"a": [{"b": 1}'), "parse error|premature") # cut short: nothing to recover
   expect_error(json_in("I couldn't read it."), "no JSON object")
+  # words after the fence that happen to hold a brace aren't the questionnaire's
+  expect_equal(json_in('```json\n{"components": []}\n```\nSee {note}.'), list(components = list()))
+  # a brace too many in the middle closes the object early: what comes after it is the questionnaire's too, so the
+  # answer isn't taken without it (its blocks would be lost with no problem said); it is read again instead
+  expect_error(
+    json_in('{"questionnaire": {"name": "x"}}, "components": [{"component_type": "Note", "text": "a"}]}'),
+    "parse error|trailing"
+  )
 })
 
 test_that("a reading with problems is read again, told what they were", {
@@ -319,6 +327,14 @@ test_that("the reading with fewer problems is kept, and a good first reading is 
   busy <- function() stop("Gemini is busy right now. Try reading again in a few minutes.")
   expect_equal(read_with(stand_in_gemini(better, busy))$problems, "Question 2: Add at least one variable.")
   expect_error(read_with(stand_in_gemini(busy)), "Gemini is busy")
+})
+
+test_that("a reading again that does away with a problem by leaving its question out isn't kept: the question is", {
+  first <- answer_with(question("1"), question("2", boxes = list()))
+  without_2 <- answer_with(question("1"))
+  reading <- read_with(stand_in_gemini(first, without_2))
+  expect_length(reading$json$components, 2)
+  expect_equal(reading$problems, "Question 2: Add at least one variable.") # said, for staff to fix
 })
 
 test_that("a section heading with its blocks after it, not inside it, is a problem", {
@@ -416,6 +432,29 @@ test_that("a section carried on inside a carried-on section joins its first part
   expect_length(joined, 1)
   expect_equal(vapply(outer, function(block) block$component_type, ""), c("Question", "Group", "Question"))
   expect_equal(vapply(outer[[2]]$children, function(block) block$printed_number, ""), c("2a", "2b"))
+})
+
+test_that("a grid carried on joins the grid it carries on, not the section around it, so its questions keep its lead-in", {
+  grid_of <- function(..., continued = NULL) list(component_type = "Grid", continued = continued, text = "how often", children = list(...))
+  kinds <- function(blocks) vapply(blocks, function(block) block$component_type, "")
+  numbers <- function(blocks) vapply(blocks, function(block) block$printed_number, "")
+  # the pages before ended in a grid inside a section; these pages start the grid again, but not the section
+  earlier <- list(section_of(question("1"), grid_of(question("2"))))
+  joined <- join_page_ranges(list(list(components = earlier), list(components = list(grid_of(question("3"), continued = TRUE)))))$components
+  expect_length(joined, 1)
+  expect_equal(kinds(joined[[1]]$children), c("Question", "Grid"))
+  expect_equal(numbers(joined[[1]]$children[[2]]$children), c("2", "3"))
+  # a grid carried on where none was open goes in the section as a grid of its own, its lead-in kept
+  joined <- join_page_ranges(list(
+    list(components = list(section_of(question("1")))), list(components = list(grid_of(question("3"), continued = TRUE)))
+  ))$components
+  expect_equal(kinds(joined[[1]]$children), c("Question", "Grid"))
+  expect_equal(joined[[1]]$children[[2]]$text, "how often")
+  # a section carried on after a group isn't put inside it: a group can't hold a section
+  joined <- join_page_ranges(list(
+    list(components = list(group_of(question("1")))), list(components = list(section_of(question("2"), continued = TRUE)))
+  ))$components
+  expect_equal(kinds(joined), c("Group", "Section"))
 })
 
 test_that("Gemini counts the pages of a PDF that doesn't say how many it has", {
@@ -1070,6 +1109,21 @@ test_that("a job that has stopped running marks its draft failed", {
   saved <- extraction_model_get(test_connection, record$id)
   expect_equal(saved$extraction_status, "failed")
   expect_equal(saved$error, "Reading stopped before it finished.")
+})
+
+test_that("a job that saved its reading and ended just as the watcher looked isn't marked failed: its reading stands", {
+  me <- local_staff()
+  local_pdf_cache()
+  jobs <- local_jobs()
+  record <- extraction_service_create(test_connection, fake_upload(), me)
+  watch(me)
+  stale <- my_drafts(me) # read while the draft was being read
+  extraction_service_reading_update(test_connection, record$id, record$reading_started, list(extraction_status = "ready"))
+  jobs$running <- FALSE # and then its process ended, as a job does when it has finished
+  reading_service_watch(stale, test_connection)
+  saved <- extraction_model_get(test_connection, record$id)
+  expect_equal(saved$extraction_status, "ready")
+  expect_null(saved$error)
 })
 
 test_that("the job of a draft that was discarded is stopped, and forgotten", {

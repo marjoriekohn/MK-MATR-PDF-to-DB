@@ -72,3 +72,14 @@ test_that("a development sign-in is only for a site served on this computer", {
   expect_false(site_is_local(NULL))
 })
 
+test_that("a site running on Posit Connect is never local, whatever hostname the browser says", {
+  session <- function(host) list(clientData = list(url_hostname = host))
+  withr::local_envvar(POSIT_PRODUCT = NA, RSTUDIO_PRODUCT = NA)
+  expect_true(site_is_local(session("localhost")))
+  withr::local_envvar(POSIT_PRODUCT = "CONNECT") # what Connect sets for its content
+  expect_false(site_is_local(session("localhost")))
+  expect_false(site_is_local(session("mocksession")))
+  withr::local_envvar(POSIT_PRODUCT = NA, RSTUDIO_PRODUCT = "CONNECT") # its name before Connect 2025.02
+  expect_false(site_is_local(session("127.0.0.1")))
+})
+

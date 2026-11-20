@@ -547,12 +547,16 @@ flatten_children <- function(rows, field) {
 # One field from every row.
 # rows: A list of rows (lists).
 # field: The field's name.
-# missing: What fills in for a row without the field; its type is the result's type.
+# missing: What fills in for a row without the field, or with an empty one (`[]` in the AI's JSON); its type is
+#   the result's type.
 # Returns: A vector with one value for each row.
 pluck <- function(rows, field, missing = NA_character_) {
   vapply(
     rows,
-    function(row) as.vector(row[[field]] %||% missing, typeof(missing)),
+    function(row) {
+      value <- row[[field]]
+      if (length(value) == 0) missing else as.vector(value, typeof(missing))
+    },
     missing
   )
 }

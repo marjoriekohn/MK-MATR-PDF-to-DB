@@ -330,6 +330,10 @@ edit_service_check <- function(fields, values) {
     blank <- !has_text(value)
     if (blank && field$required) missing[[length(missing) + 1]] <- field
     problem <- if (!blank) edit_type_problem(field, value)
+    # a name the database keeps written its own way may come to nothing ("per day" in a unit), which it refuses
+    if (is.null(problem) && !blank && field$required && !is.null(field$normalize) && !has_text(field$normalize(value))) {
+      problem <- "Once written the way the database keeps it, nothing is left of this. Type it in full."
+    }
     problem <- problem %||% if (!is.null(field$problem)) field$problem(value, part_values)
     if (!is.null(problem)) problems[[field$id]] <- problem
     warning <- if (!is.null(field$warn) && is.null(problem)) field$warn(value, part_values)

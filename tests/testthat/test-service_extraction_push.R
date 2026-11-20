@@ -357,6 +357,180 @@ test_that("a second wave of the same questionnaire reuses its blocks and variabl
   expect_equal(database_model_count(test_connection, "wave_question", list(wave_id = database_eq(later$wave_id))), 2)
 })
 
+# A questionnaire whose rows are told apart only by what they hold: a group in a section, question numbers printed
+# otherwise than their places (Q5, Q5a), a follow-up, letter codes listed out of order, two variables in one
+# question told apart by their labels and who they are about, and a tag on the question and on each variable. Every
+# word starts with the run's marker, so what the push adds is removed when the run ends.
+told_apart_draft <- function() {
+  own <- test_name("apart")
+  words <- function(text) paste(own, text)
+  draft_service_from_json(list(schema_version = 2L, questionnaire = list(), components = list(list(
+    component_type = "Section", text = words("Part B"), children = list(list(component_type = "Group", children = list(
+      list(component_type = "Instruction", text = words("Think of the past year.")),
+      list(
+        component_type = "Question", text = words("How often do you drink?"), question_number = "1", printed_number = "Q5",
+        time_frame = words("lately"),
+        variables = list(list(variable_type = "closed_ended", matr_id = paste0("zz5-", own), response_options = list(
+          list(answer_option = words("Never"), code_value = "b"), list(answer_option = words("Often"), code_value = "a")
+        )))
+      ),
+      list(
+        component_type = "Question", text = words("How many drinks?"), question_number = "2", printed_number = "Q5a",
+        parent_question = "1",
+        variables = list(
+          list(variable_type = "open_ended", answer_data_type = "NUMBER", matr_id = paste0("zz5a1-", own), label = words("weekdays"), unit = words("drinks")),
+          list(
+            variable_type = "open_ended", answer_data_type = "TEXT", matr_id = paste0("zz5a2-", own), label = words("weekends"),
+            unit = words("drinks"), subject = words("twin")
+          )
+        )
+      )
+    ))))
+  )))
+}
+
+test_that("a push puts each row where the questionnaire has it: nesting, numbers, follow-ups, codes, labels and tags", {
+  me <- local_staff()
+  tree <- local_tree()
+  draft <- told_apart_draft()
+  expect_equal(nrow(draft_service_check(draft, test_lookups())), 0) # a draft the page would push
+  pushed <- local_pushed_questionnaire(me, tree, draft)
+  expect_equal(pushed$record$status, "Pushed")
+  text_of <- function(kind) draft$components$text[draft$components$component_type == kind]
+  questions <- text_of("Question")
+
+  # where each block is printed: the group in the section, the instruction and the two questions in the group, in order
+  here <- list(questionnaire_id = database_eq(tree$questionnaire$questionnaire_id))
+  placed <- database_model_get(
+    test_connection, "placement", c("placement_id", "component_id", "parent_placement_id", "display_order", "depends_on_placement_id"),
+    filters = here
+  )
+  components <- database_model_get(
+    test_connection, "component", c("component_id", "kind", "text"), filters = list(component_id = database_in(placed$component_id))
+  )
+  placed$kind <- components$kind[match(placed$component_id, components$component_id)]
+  placed$text <- components$text[match(placed$component_id, components$component_id)]
+  id_of <- function(text) as.character(placed$placement_id[placed$text %in% text])
+  group <- as.character(placed$placement_id[placed$kind == "Group"])
+  expect_length(group, 1)
+  expect_true(is.na(placed$text[placed$kind == "Group"])) # a group has no words
+  expect_true(is.na(placed$parent_placement_id[placed$text %in% text_of("Section")]))
+  expect_equal(as.character(placed$parent_placement_id[placed$kind == "Group"]), id_of(text_of("Section")))
+  in_group <- placed[as.character(placed$parent_placement_id) %in% group, ]
+  expect_equal(in_group$text[order(in_group$display_order)], c(text_of("Instruction"), questions))
+  # the follow-up depends on the question it follows, and nothing else depends on anything
+  expect_equal(as.character(placed$depends_on_placement_id[placed$text %in% questions[2]]), id_of(questions[1]))
+  expect_equal(sum(!is.na(placed$depends_on_placement_id)), 1)
+
+  # the wave numbers each question by its place, and keeps the number printed beside it
+  asked <- database_model_get(
+    test_connection, "wave_question", c("placement_id", "question_number", "printed_number"),
+    filters = list(wave_id = database_eq(tree$wave$wave_id))
+  )
+  asked <- asked[match(c(id_of(questions[1]), id_of(questions[2])), as.character(asked$placement_id)), ]
+  expect_equal(asked$question_number, c("1", "2"))
+  expect_equal(asked$printed_number, c("Q5", "Q5a"))
+
+  # each variable is its question's, in order, with its label and the kind of answer it takes
+  variables <- database_model_get(
+    test_connection, "variable", c("variable_key", "placement_id", "matr_id", "display_order", "label", "variable_type", "answer_data_type"),
+    filters = here
+  )
+  variables <- variables[match(draft$variables$matr_id, variables$matr_id), ]
+  expect_equal(as.character(variables$placement_id), c(id_of(questions[1]), id_of(questions[2]), id_of(questions[2])))
+  expect_equal(variables$display_order, c(1, 1, 2))
+  expect_equal(variables$label, c(NA, draft$variables$label[2:3]))
+  expect_equal(variables$answer_data_type, c(NA, "NUMBER", "TEXT"))
+
+  # the choices keep their order and the codes staff gave them, letters out of order as printed
+  choices <- database_model_get(
+    test_connection, "response_option", c("answer_option_id", "display_order", "code_value"),
+    filters = list(variable_key = database_eq(variables$variable_key[1]))
+  )
+  labels <- database_model_get(
+    test_connection, "answer_option", c("answer_option_id", "standardized_label"),
+    filters = list(answer_option_id = database_in(choices$answer_option_id))
+  )
+  choices <- choices[order(choices$display_order), ]
+  expect_equal(labels$standardized_label[match(choices$answer_option_id, labels$answer_option_id)], draft$response_options$answer_option)
+  expect_equal(choices$code_value, c("b", "a"))
+
+  # a tag about the whole question is on the question; one that tells the variables apart is on its variable
+  tag_names <- function(link, key, value) {
+    linked <- database_model_get(test_connection, link, c(key, "tag_id"), filters = stats::setNames(list(database_eq(value)), key))
+    if (nrow(linked) == 0) {
+      return(character())
+    }
+    tags <- database_model_get(test_connection, "tag", c("tag_id", "kind", "name"), filters = list(tag_id = database_in(linked$tag_id)))
+    sort(paste(tags$kind, tags$name, sep = ": "))
+  }
+  expect_equal(tag_names("placement_tag", "placement_id", id_of(questions[1])), paste("time frame:", draft$components$time_frame[draft$components$text %in% questions[1]]))
+  expect_equal(tag_names("placement_tag", "placement_id", id_of(questions[2])), character())
+  unit <- paste("unit:", draft$variables$unit[2])
+  expect_equal(tag_names("variable_tag", "variable_key", variables$variable_key[1]), character())
+  expect_equal(tag_names("variable_tag", "variable_key", variables$variable_key[2]), unit)
+  expect_equal(tag_names("variable_tag", "variable_key", variables$variable_key[3]), sort(c(paste("subject:", draft$variables$subject[3]), unit)))
+  expect_equal(pushed$counts$tag_new, 3) # the time frame, the unit (once, though two variables have it) and the subject
+})
+
+test_that("a pushed extraction is kept as it was pushed: a late save from a page still open is refused", {
+  me <- local_staff()
+  tree <- local_tree()
+  pushed <- local_pushed_questionnaire(me, tree, marked_draft())
+  kept <- extraction_model_questionnaire(test_connection, pushed$id)
+
+  # a page opened before the push, saving with no revision to check (or one that matches what it read later)
+  late <- draft_service_update(marked_draft(), "components", "c3", "text", "Changed after the push")
+  expect_error(
+    draft_service_save(test_connection, pushed$id, late, me$staff_id),
+    "A pushed extraction can't be changed: it is the record of what was read and reviewed.",
+    fixed = TRUE
+  )
+  expect_error(
+    draft_service_save(test_connection, pushed$id, late, me$staff_id, expected_revision = pushed$record$revision),
+    "can't be changed", fixed = TRUE
+  )
+  expect_identical(extraction_model_questionnaire(test_connection, pushed$id), kept)
+  expect_equal(extraction_model_get(test_connection, pushed$id)$status, "Pushed")
+})
+
+test_that("a reopened wave's corrections to a question another wave asks too go into the variables both waves share", {
+  me <- local_staff()
+  tree <- local_tree()
+  draft <- marked_draft()
+  local_pushed_questionnaire(me, tree, draft)
+  later <- local_wave(tree$questionnaire) # asks the same two questions
+  extraction_service_push(test_connection, saved_draft(me, tree, draft, wave_id = later$wave_id), me, questionnaire_service_get_catalog(test_connection))
+
+  reopened <- extraction_service_reopen_wave(test_connection, tree$wave$wave_id, me)
+  copy <- draft_service_load(test_connection, reopened$id)
+  closed <- copy$variables$id[copy$variables$variable_type == "closed_ended"]
+  written <- copy$variables$id[copy$variables$variable_type == "open_ended"]
+  copy <- draft_service_update(copy, "response_options", copy$response_options$id[copy$response_options$variable_id == closed][1], "code_value", "y")
+  copy <- draft_service_update(copy, "variables", written, "label", "on a weekday")
+  draft_service_save(test_connection, reopened$id, copy, me$staff_id)
+  outcome <- extraction_service_push(
+    test_connection, extraction_model_get(test_connection, reopened$id), me, questionnaire_service_get_catalog(test_connection)
+  )
+  expect_equal(outcome$record$status, "Pushed")
+
+  variables <- database_model_get(
+    test_connection, "variable", c("variable_key", "matr_id", "label"),
+    filters = list(questionnaire_id = database_eq(tree$questionnaire$questionnaire_id))
+  )
+  matr_of <- function(id) copy$variables$matr_id[copy$variables$id == id]
+  expect_setequal(variables$matr_id, draft$variables$matr_id) # still the two, which both waves ask
+  choices <- database_model_get(
+    test_connection, "response_option", c("display_order", "code_value"),
+    filters = list(variable_key = database_eq(variables$variable_key[variables$matr_id == matr_of(closed)]))
+  )
+  expect_equal(choices$code_value[order(choices$display_order)], c("y", "2"))
+  expect_equal(variables$label[variables$matr_id == matr_of(written)], "on a weekday")
+  for (wave in c(tree$wave$wave_id, later$wave_id)) {
+    expect_equal(database_model_count(test_connection, "wave_question", list(wave_id = database_eq(wave))), 2)
+  }
+})
+
 test_that("saving the Basic Info writes where the extraction goes and what it is called, and nothing when nothing changed", {
   me <- local_staff()
   tree <- local_tree()

@@ -221,11 +221,11 @@ extraction_model_row <- function(record, changed) {
 # changes: A named list of record fields (`extraction_status`, `error`, `model`,
 #   `prompt_version`, `reading_pid`) to their new values.
 # Returns: `TRUE` if saved, `FALSE` if the draft no longer matches and nothing was.
-extraction_model_save_reading <- function(connection, id, changes, reading_started) {
+extraction_model_save_reading <- function(connection, id, changes, reading_started, where = list()) {
   not_its_own <- setdiff(names(changes), extraction_reading_fields)
   if (length(not_its_own) > 0) stop("The reading job can't save ", paste(not_its_own, collapse = ", "), ".", call. = FALSE)
   columns <- unname(extraction_columns[names(changes)])
-  extraction_model_update_reading(connection, id, stats::setNames(changes, columns), reading_started)
+  extraction_model_update_reading(connection, id, stats::setNames(changes, columns), reading_started, where = where)
 }
 
 # Save what the reading job returned.
@@ -502,9 +502,38 @@ extraction_model_pdf_pages <- function(path, from, to) {
 # unpacked and looked through as well. Counting the page objects themselves is only the fallback: a PDF saved
 # again after an edit (a redaction) keeps the old copies of the pages it changed, so it holds more page objects
 # than pages, and Gemini, asked for pages that aren't there, records the last ones a second time.
+# qpdf, which reads the PDF as a PDF reader does, is asked first: a PDF saved again after pages were taken out still
+# holds the old page tree, with the old count, and only the PDF's index says which tree is the one in use. The
+# page tree is looked through only when qpdf isn't installed, or can't read the file.
 # path: The PDF.
 # Returns: The count, or `NULL` (unknown, not 0) if none were found.
 extraction_model_page_count <- function(path) {
+  if (requireNamespace("qpdf", quietly = TRUE) && pdf_has_index(path)) {
+    pages <- tryCatch(suppressWarnings(qpdf::pdf_length(path)), error = function(problem) NA)
+    if (isTRUE(pages > 0)) {
+      return(as.integer(pages))
+    }
+  }
+  pdf_scanned_page_count(path)
+}
+
+# Whether a file ends as a whole PDF does, with the place of its index (`startxref`): a piece of one (as the tests
+# make) is left to the scan, which qpdf would only call damaged.
+pdf_has_index <- function(path) {
+  size <- file.size(path)
+  if (is.na(size) || size == 0) {
+    return(FALSE)
+  }
+  con <- file(path, "rb")
+  on.exit(close(con))
+  if (size > 2048) seek(con, size - 2048)
+  length(grepRaw("startxref", readBin(con, "raw", 2048), fixed = TRUE)) > 0
+}
+
+# The page count read off the PDF's bytes, for when qpdf can't say: the largest page tree, or failing that the page
+# objects (see `extraction_model_page_count()`).
+# Returns: The count, or `NULL` if none were found.
+pdf_scanned_page_count <- function(path) {
   bytes <- readBin(path, "raw", file.size(path))
   counts <- unlist(lapply(c(list(bytes), pdf_object_streams(bytes)), pdf_page_tree_counts))
   counts <- counts[!is.na(counts)] # a count too big to be one

@@ -72,6 +72,8 @@ monitor_counted_edits <- function(edits) {
   inside <- whole & vapply(seq_along(edits), function(at) {
     any(alone & change == change[at] & startsWith(where[at], paste0(where, " > ")))
   }, logical(1))
+  # a removed row that goes with its removed question isn't made again: the added one it was paired with counts alone
+  twin[!is.na(twin) & change == "added" & inside[twin]] <- NA
   counted <- lapply(seq_along(edits), function(at) {
     if (inside[at] || (!is.na(twin[at]) && change[at] == "added")) {
       list()

@@ -134,8 +134,14 @@ user_menu <- function(me, development = FALSE) {
 
 # Whether the browser reached the site on this computer, as while developing: a development sign-in
 # (`STAFF_EMAIL`) only works then, so a deployed site that has it set still asks everyone to sign in.
+# The hostname is what the browser says, which a client could make up, so a site the server knows is running on
+# Posit Connect (which sets POSIT_PRODUCT, or RSTUDIO_PRODUCT before its 2025.02 version, for its content) is never local.
 # Returns: `TRUE` for localhost (or Shiny's test session, `testServer()`'s), `FALSE` otherwise.
 site_is_local <- function(session) {
+  on_connect <- toupper(c(Sys.getenv("POSIT_PRODUCT"), Sys.getenv("RSTUDIO_PRODUCT"))) %in% "CONNECT"
+  if (any(on_connect)) {
+    return(FALSE)
+  }
   # isolate(): it is read as the session starts, outside anything reactive
   host <- tryCatch(isolate(session$clientData$url_hostname), error = function(problem) NULL)
   isTRUE(host %in% c("localhost", "127.0.0.1", "::1", "[::1]", "mocksession"))
