@@ -1,6 +1,6 @@
 # Questionnaires and the tables around them: the registries that hold everything
 # and the studies in them, who leads each study, each questionnaire's respondent type,
-# and its waves. `connection` is the MATR database (model_database.R).
+# and its waves. `connection` is the CARA database (model_database.R).
 
 # Every registry.
 # The outermost container; every study rolls up to a registry.

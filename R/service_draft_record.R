@@ -21,7 +21,7 @@
 #
 # Only what the AI reads is compared. Not compared: what the site works out (each question's place
 # among the questions, display orders, the choices' codes), the reviewer's own bookkeeping (the
-# "checked" mark) and MATR IDs, which the AI doesn't read (they come from a CSV or are typed in).
+# "checked" mark) and Variable IDs, which the AI doesn't read (they come from a CSV or are typed in).
 # Values are compared exactly, capitals, punctuation and spaces inside included; only a blank and a
 # missing value are the same, and a variable about the respondent is blank however it was written.
 

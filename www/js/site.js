@@ -74,7 +74,7 @@
 
   // The sign-in's refresh token, kept so a reload doesn't sign the person out. sessionStorage lasts
   // while this tab is open; localStorage would also keep it across tabs and after the browser closes.
-  const keptKey = 'matr-refresh-token';
+  const keptKey = 'cara-refresh-token';
   function kept() { try { return sessionStorage.getItem(keptKey); } catch (e) { return null; } }
   function keep(token) { try { if (token) sessionStorage.setItem(keptKey, token); } catch (e) {} }
   function forget() { try { sessionStorage.removeItem(keptKey); } catch (e) {} }

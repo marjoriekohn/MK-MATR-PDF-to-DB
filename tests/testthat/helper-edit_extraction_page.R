@@ -22,7 +22,7 @@ reworded <- function(draft, words = "do you worry a lot?", id = "c3") {
 # The draft read_draft() makes as the page shows it: its questions numbered by their place.
 numbered_gold <- function() draft_service_renumber_questions(short_gold_draft())
 
-# Fills in the MATR IDs of the draft on the page, as staff would type them, so nothing is left to fix. Called
+# Fills in the Variable IDs of the draft on the page, as staff would type them, so nothing is left to fix. Called
 # inside testServer(), where `draft` and `change_draft` are the page's.
 fill_all_matr_ids <- function(draft, change_draft) {
   filled <- draft()

@@ -58,7 +58,7 @@ test_that("a test file's first test makes the staff it asks for, one for each ti
 })
 
 test_that("the file's next test is given the same staff, in the same order, with what they did forgotten", {
-  withr::defer(rm(list = ".matr_shared_staff", envir = parent.env(environment()))) # the stand-ins go with this test
+  withr::defer(rm(list = ".cara_shared_staff", envir = parent.env(environment()))) # the stand-ins go with this test
   expect_setequal(pool_log$cleared, 9001:9003) # when the last test ended
   shared_staff_stubs(pool_log)
   expect_equal(local_staff()$staff_id, 9001L)

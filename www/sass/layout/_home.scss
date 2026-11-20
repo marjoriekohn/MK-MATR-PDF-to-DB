@@ -2,7 +2,7 @@
 
 // ------ The banner ------------------------------------------------------------------------------
 // Dark and rounded, with a gold glow: what the site is for and the two ways in on the left, and how much this
-// person has waiting under them; the MATR logo on a lit panel on the right of a wide window.
+// person has waiting under them; the logo on a lit panel on the right of a wide window.
 .home-hero {
   position: relative;
   display: grid;
@@ -39,7 +39,7 @@
 .home-stat-value { color: $vcu-gold; font-family: $font-family-serif; font-size: $section-title-font-size; font-weight: 700; line-height: 1.2; }
 .home-stat-label { color: rgba($vcu-white, 0.65); font-size: $font-size-xs; }
 
-// The MATR logo on a soft white panel that catches the glow, with a caption across its foot (not on a tablet
+// The logo on a soft white panel that catches the glow, with a caption across its foot (not on a tablet
 // or a phone, where the room is the words')
 .home-hero-art {
   position: relative;

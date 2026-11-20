@@ -53,7 +53,7 @@ local_manual_extraction <- function(staff, ..., env = parent.frame()) {
 # A small questionnaire for the test: a section holding an instruction, a question with two choices and a
 # write-in question whose number is in a unit. Every block's words, answer choice and tag carry the run's
 # marker, so what a push adds can be told from real data and is removed when the run ends
-# (test_forget_marked()). `matr` are the two variables' MATR IDs (marked too); NA leaves them blank.
+# (test_forget_marked()). `matr` are the two variables' Variable IDs (marked too); NA leaves them blank.
 test_questionnaire_draft <- function(matr = c("zz1", "zz2")) {
   draft <- draft_service_from_json(list(
     questionnaire = list(name = "Small", abbreviation = "SM"),
@@ -92,7 +92,7 @@ picked_basic_info <- function(tree, questionnaire_id = tree$questionnaire$questi
   )
 }
 
-# A questionnaire pushed into the database, so it is recorded with its blocks and MATR IDs.
+# A questionnaire pushed into the database, so it is recorded with its blocks and Variable IDs.
 # What the push added into the tree goes with the tree when the test ends; the extraction with its staff.
 # staff: Who pushes it, from `local_staff()`.
 # tree: The registry and study it goes in, from `local_tree()`.

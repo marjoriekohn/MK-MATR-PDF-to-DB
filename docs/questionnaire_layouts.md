@@ -211,7 +211,7 @@ kept as an Instruction block where they are printed.
 ## 10. Decisions, in the order they unblock work
 
 1. **Grid** as defined in section 3: always with a lead-in, with rows (or roster columns) as Questions. Reverses
-   the AHP/KQ battery convention (questions count goes up; MATR IDs unchanged).
+   the AHP/KQ battery convention (questions count goes up; Variable IDs unchanged).
 2. **Group** only for instruction / definition scope and shared routing; follow-ups via `parent_question` alone. Done.
 3. **`recorded_by`** (respondent / interviewer) on questions instead of a Checkpoint type.
 4. D-1 elided items written whole; D-2 person fill-ins as `[subject]`. Done.

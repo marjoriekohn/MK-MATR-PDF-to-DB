@@ -1,5 +1,5 @@
 // ------ The menu bar --------------------------------------------------------------------------------
-// A light bar across the top: the MATR logo and the site's name on the left (the way home), the pages' links
+// A light bar across the top: the logo and the site's name on the left (the way home), the pages' links
 // after it, each with its icon, and the signed-in name on the right. The page open is a tinted pill. On a
 // narrower window the links and the name fold into the menu button (☰) and open as a list under the bar. A
 // title too long for a phone ends with "…". The signed-in name and its menu are in _login.scss.
@@ -35,7 +35,7 @@
   }
 }
 
-// The logo, and the site's name over the registry's
+// The logo, and the site's name over what CARA stands for
 .brand-logo { flex-shrink: 0; width: auto; height: 2.25rem; }
 .brand-text { display: flex; flex-direction: column; min-width: 0; line-height: 1.15; }
 .brand-name { overflow: hidden; font-family: $font-family-serif; font-size: $font-size-base; font-weight: 700; text-overflow: ellipsis; }

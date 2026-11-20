@@ -251,7 +251,7 @@ test_that("a question's fields on a block's add form are read once Question is t
     expect_equal(blockers()[1], "Fill in the waves that ask it.")
     session$setInputs(placement__asked_in = "1")
     expect_equal(blockers()[1], "Fix the fields outlined in red.")
-    expect_equal(text_of(output$note_9), "Variable 1: fill in its MATR ID.") # the variables field is the ninth
+    expect_equal(text_of(output$note_9), "Variable 1: fill in its Variable ID.") # the variables field is the ninth
     expect_length(edit_variables_parse(values()$placement__variables), 1)
   })
 })

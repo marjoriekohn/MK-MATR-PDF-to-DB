@@ -1,4 +1,4 @@
-# ------ The MATR database ----------------------------------------------------------
+# ------ The CARA database ----------------------------------------------------------
 # The catalog (registry, study, questionnaire, wave, component, variable...) and the
 # tables private to the site (staff, extraction, history) are in a PostgreSQL database
 # that Supabase hosts (docs/database_design.md; built by sql/). The site talks to it
@@ -22,9 +22,9 @@ database_page_size <- 1000
 
 # ------ Which database -----------------------------------------------------------
 # .env holds two projects' addresses and keys: the live one as SUPABASE_URL, SUPABASE_SECRET_KEY and
-# SUPABASE_PUBLISHABLE_KEY, and the test one as the same names starting TEST_. MATR_DATABASE in .env
+# SUPABASE_PUBLISHABLE_KEY, and the test one as the same names starting TEST_. CARA_DATABASE in .env
 # picks which the site uses when it runs on your own computer: live (the default) or test. The site
-# online has no MATR_DATABASE, so it uses the live one.
+# online has no CARA_DATABASE, so it uses the live one.
 database_test_names <- c(
   SUPABASE_URL = "TEST_SUPABASE_URL",
   SUPABASE_SECRET_KEY = "TEST_SUPABASE_SECRET_KEY",
@@ -34,19 +34,19 @@ database_test_names <- c(
 # Point the site at the live or the test database.
 # For `"test"`, `SUPABASE_URL` and its keys get the `TEST_SUPABASE_*` values, so everything that reads
 # them (the connection made in global.R, signing in, the reading jobs) uses the test project.
-# which: `"live"` or `"test"`, from `MATR_DATABASE`; a blank is `"live"`.
+# which: `"live"` or `"test"`, from `CARA_DATABASE`; a blank is `"live"`.
 # Returns: `"live"` or `"test"`. An error with a sentence for anything else, or for `"test"` without
 #   the test project's address and secret key in .env.
-database_model_choose <- function(which = Sys.getenv("MATR_DATABASE")) {
+database_model_choose <- function(which = Sys.getenv("CARA_DATABASE")) {
   which <- tolower(trimws(which %||% ""))
   if (!nzchar(which)) which <- "live"
   if (!which %in% c("live", "test")) {
-    stop("MATR_DATABASE in the .env file should be live or test, not ", which, ".", call. = FALSE)
+    stop("CARA_DATABASE in the .env file should be live or test, not ", which, ".", call. = FALSE)
   }
   if (which == "test") {
     values <- Sys.getenv(unname(database_test_names), unset = "")
     if (!all(nzchar(values[1:2]))) {
-      stop("MATR_DATABASE is test, but TEST_SUPABASE_URL or TEST_SUPABASE_SECRET_KEY isn't in the .env file.", call. = FALSE)
+      stop("CARA_DATABASE is test, but TEST_SUPABASE_URL or TEST_SUPABASE_SECRET_KEY isn't in the .env file.", call. = FALSE)
     }
     do.call(Sys.setenv, as.list(stats::setNames(values, names(database_test_names))))
   }
@@ -59,7 +59,7 @@ database_timeout_seconds <- 20
 database_max_tries <- 3
 
 # ------ Reading ------------------------------------------------------------------
-# Read a table of the MATR database.
+# Read a table of the CARA database.
 # Every row of `table`, with only `columns`, sorted by `order_by`.
 # columns: The columns to read, as a character vector.
 # order_by: The columns to sort by; each can end in `.desc`. Defaults to the first column.
@@ -112,7 +112,7 @@ database_fetch <- function(connection, table, select, order_by, filters, page_si
       ),
       max_reqs = if (one_page) 1 else Inf, progress = FALSE
     ),
-    error = function(problem) stop("Couldn't reach the MATR database: ", conditionMessage(problem), call. = FALSE)
+    error = function(problem) stop("Couldn't reach the CARA database: ", conditionMessage(problem), call. = FALSE)
   )
   pages <- lapply(responses, function(response) {
     if (httr2::resp_status(response) >= 400) stop(database_problem(response), call. = FALSE)
@@ -260,7 +260,7 @@ database_filter <- function(request, filters) {
 database_request <- function(connection, table) {
   if (!nzchar(connection$url %||% "") || !nzchar(connection$key %||% "")) {
     stop(
-      "The site doesn't know where the MATR database is. Add SUPABASE_URL and ",
+      "The site doesn't know where the CARA database is. Add SUPABASE_URL and ",
       "SUPABASE_SECRET_KEY to the .env file and restart the site.",
       call. = FALSE
     )
@@ -286,7 +286,7 @@ database_perform <- function(request) {
     request <- httr2::req_retry(request, max_tries = database_max_tries, retry_on_failure = TRUE)
   }
   response <- tryCatch(httr2::req_perform(request), error = function(problem) {
-    stop("Couldn't reach the MATR database: ", conditionMessage(problem), call. = FALSE)
+    stop("Couldn't reach the CARA database: ", conditionMessage(problem), call. = FALSE)
   })
   if (httr2::resp_status(response) >= 400) stop(database_problem(response), call. = FALSE)
   response
@@ -308,7 +308,7 @@ database_problem <- function(response) {
   # hasn't been granted to it (sql/5_permissions.sql grants each table).
   if (identical(body$code, "42501")) {
     return(paste0(
-      "The MATR database won't let the site use this table (", message, "). ",
+      "The CARA database won't let the site use this table (", message, "). ",
       "The table needs granting to the service_role; see the grants in sql/5_permissions.sql."
     ))
   }
@@ -316,16 +316,16 @@ database_problem <- function(response) {
   # most often one another change added after this one was worked out, which doing it again finds and uses.
   if (identical(body$code, "23505")) {
     return(paste0(
-      "The MATR database already has one with the same name or words, so nothing was changed (", message, "). ",
+      "The CARA database already has one with the same name or words, so nothing was changed (", message, "). ",
       "If it wasn't there when you started, someone added it meanwhile: try again."
     ))
   }
   switch(as.character(status),
     "401" = ,
-    "403" = "The MATR database turned down the key. Check SUPABASE_SECRET_KEY in the .env file.",
-    "404" = paste("The MATR database doesn't have that table:", message),
-    "409" = paste("The MATR database wouldn't save that:", message),
-    sprintf("The MATR database had a problem (%s): %s", status, message)
+    "403" = "The CARA database turned down the key. Check SUPABASE_SECRET_KEY in the .env file.",
+    "404" = paste("The CARA database doesn't have that table:", message),
+    "409" = paste("The CARA database wouldn't save that:", message),
+    sprintf("The CARA database had a problem (%s): %s", status, message)
   )
 }
 

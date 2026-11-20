@@ -1,5 +1,5 @@
 # Only what `supabase functions deploy` needs: the database itself is built by the scripts in sql/.
-project_id = "MATR-PDF-to-DB"
+project_id = "CARA-PDF-to-DB"
 
 # Both functions check who calls them themselves (see each index.ts): the platform's JWT check doesn't
 # understand publishable keys, and the database calls embed-questions with its own token.

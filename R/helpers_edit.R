@@ -243,7 +243,7 @@ edit_view_button <- function(what, name, opens) {
 }
 
 # One kind of row that points at the row, as a drop-down: "7 studies" opens to the rows. Each row is its name, a few
-# quiet words about it (a variable's MATR ID and code), tags (the questionnaires that ask it), and View, which
+# quiet words about it (a variable's Variable ID and code), tags (the questionnaires that ask it), and View, which
 # opens it (and Remove, which takes the row itself away: a question out of a scale). A long list shows its first
 # rows, then Show all; rows in more than one questionnaire are folded by questionnaire, the most first.
 # Studies, questionnaires and waves are a grid of small cards, each pressed to open it. Under a row's details the
@@ -413,7 +413,7 @@ edit_use_place <- function(use) {
       div(class = "edit-use-boxes", lapply(use$boxes, function(box) {
         div(
           class = "edit-use-box",
-          div(span(class = "edit-use-matr", box$matr_id), if (nzchar(box$tags)) span(class = "edit-use-tags", box$tags)),
+          div(span(class = "edit-use-variable", box$matr_id), if (nzchar(box$tags)) span(class = "edit-use-tags", box$tags)),
           if (length(box$coding) > 0) tags$ul(class = "edit-use-coding", lapply(box$coding, tags$li))
         )
       }))

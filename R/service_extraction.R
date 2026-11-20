@@ -5,7 +5,7 @@
 # and saves the questionnaire it read. Manual: staff type the questionnaire themselves, with or
 # without a PDF to look at, and there is no reading. Either way staff edit a copy on the Edit
 # Extraction page (see draft_service_load()), say where it goes (its Basic Info) and push it into the
-# MATR metadata database from there (service_extraction_push.R). `status` is Draft until then, and
+# CARA metadata database from there (service_extraction_push.R). `status` is Draft until then, and
 # Pushed after: a pushed extraction is kept whole, with its PDF and reading (what the AI read and how
 # staff changed it: the AI Monitor reads those), and leaves the Drafts page. A draft that is discarded
 # is deleted.
@@ -97,7 +97,7 @@ extraction_service_is_read <- function(record) {
 # Reading starts at once. A file that isn't a PDF is turned away with a sentence.
 # upload: One row of a `fileInput`'s value: `name`, `size`, `datapath`.
 # staff: Who is preparing it: `list(staff_id, name, role)`.
-# supplement: The optional file of MATR IDs and codes, as `upload`; or `NULL`.
+# supplement: The optional file of Variable IDs and codes, as `upload`; or `NULL`.
 extraction_service_create <- function(connection, upload, staff,
                                       info = extraction_service_info(), now = Sys.time(), supplement = NULL) {
   pdf <- store_pdf(connection, upload)
@@ -290,16 +290,16 @@ extraction_service_forget_pdf <- function(connection, record) {
   invisible()
 }
 
-# ------ The file of MATR IDs and codes --------------------------------------------------
+# ------ The file of Variable IDs and codes --------------------------------------------------
 # An AI-Powered draft can have a second, optional file: a codebook or list that gives each variable its
-# MATR ID and each choice its code. Once Gemini has read the questionnaire, it reads this file in a
+# Variable ID and each choice its code. Once Gemini has read the questionnaire, it reads this file in a
 # separate request and fills them in (reading_service_assign()). A PDF is kept like the questionnaire's
 # (Storage and this server, by its SHA-256); a CSV or text file is kept as its text, on the draft.
 
 # What the file can be, by its name's ending: a PDF, or text.
 supplement_text_types <- c("csv", "tsv", "txt")
 
-# A draft's file of MATR IDs and codes, ready to send to Gemini.
+# A draft's file of Variable IDs and codes, ready to send to Gemini.
 # Returns: `list(name, path)` for a PDF (on this server, fetched from Storage if need be), `list(name, text)`
 #   for text, or `NULL` for none. An error with a sentence if the PDF can't be found.
 extraction_service_supplement_file <- function(connection, id) {
@@ -372,7 +372,7 @@ reading_steps <- data.frame(
   label = c("Uploaded", "Sent to Gemini", "Reading pages", "Checking the result", "Saved as a draft"),
   detail = c(
     "Stored with this draft so reviewers can see it later",
-    "With MATR's standard extraction instructions",
+    "With CARA's standard extraction instructions",
     "Gemini reads every page of the PDF",
     "Makes sure every question has at least one variable",
     "Ready for you to review"
@@ -412,7 +412,7 @@ extraction_service_reading_steps <- function(record) {
   # read, but the Variable Names and Coding couldn't be applied: the draft is ready without them
   if (status == "ready" && !is.null(record$error)) {
     steps$state[5] <- "attention"
-    steps$detail[5] <- paste0("Couldn't apply them (", record$error, "). Type the MATR IDs on the Edit Extraction page.")
+    steps$detail[5] <- paste0("Couldn't apply them (", record$error, "). Type the Variable IDs on the Edit Extraction page.")
   }
   steps
 }
@@ -565,10 +565,10 @@ extraction_service_recorded_wave_problem <- function(info, catalog, question_cou
 }
 
 # ------ What a recorded questionnaire prints already ----------------------------------------
-# The blocks a recorded questionnaire prints, and its questions' MATR IDs.
+# The blocks a recorded questionnaire prints, and its questions' Variable IDs.
 # For the questionnaire an extraction goes into, the Edit Extraction page offers the blocks it already
 # prints as suggestions while a block's words are typed, and a question with the same words as one the
-# questionnaire already asks keeps its variables' MATR IDs (a MATR ID names the variable within its
+# questionnaire already asks keeps its variables' Variable IDs (a Variable ID names the variable within its
 # questionnaire), so they are filled in instead of asked for. Until a questionnaire is picked there is
 # nothing.
 # Returns: A list of two data frames: `texts` (`component_type`, `text`: one row per block the questionnaire
@@ -589,7 +589,7 @@ extraction_service_recorded <- function(connection, record) {
   extraction_service_printed(placements, variables)
 }
 
-# What a recorded questionnaire prints: its blocks' words, and its variables' MATR IDs by question.
+# What a recorded questionnaire prints: its blocks' words, and its variables' Variable IDs by question.
 # placements: The questionnaire's placements, each with its `component` (`kind`, `text`), as
 #   `extraction_service_recorded()` reads them; or `NULL` for none.
 # variables: Its variables (`placement_id`, `matr_id`, `display_order`), as a data frame.
@@ -651,7 +651,7 @@ restart_reading <- function(record) {
   record
 }
 
-# A file of MATR IDs and codes: a PDF is kept like the questionnaire's, text as its text.
+# A file of Variable IDs and codes: a PDF is kept like the questionnaire's, text as its text.
 store_supplement <- function(connection, upload) {
   ending <- tolower(tools::file_ext(upload$name))
   if (extraction_model_is_pdf(upload$datapath)) {

@@ -18,7 +18,7 @@ staff_service_for_email <- function(connection, email) {
   staff <- if (nzchar(email)) staff_model_find_by_email(connection, email)
   if (is.null(staff)) {
     stop(
-      sprintf("There's no staff member with the email %s in the MATR database. ", email),
+      sprintf("There's no staff member with the email %s in the CARA database. ", email),
       "Ask an administrator to add you to the staff table.",
       call. = FALSE
     )

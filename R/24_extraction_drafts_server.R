@@ -85,7 +85,7 @@ extraction_drafts_server <- function(
       showModal(confirm_dialog(
         "Discard this draft?",
         p(strong(extraction_service_title(record, catalog$get()))),
-        p("It's deleted, with its PDF, and can't be got back. Nothing has been added to the MATR metadata database."),
+        p("It's deleted, with its PDF, and can't be got back. Nothing has been added to the CARA metadata database."),
         confirm_id = ns("confirm_discard"), confirm_label = "Discard"
       ))
     }

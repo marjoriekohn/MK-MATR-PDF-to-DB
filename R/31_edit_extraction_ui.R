@@ -122,7 +122,7 @@ reextract_dialog <- function(ns) {
 # Basic Info form (where the extraction goes), why the database would refuse it if it would, and the
 # questionnaire laid out as a table, with NEW beside what the push adds. The form is drawn once, here, so its
 # picks stay while the parts around it are drawn again by the page (`push_blockers`, `push_what`,
-# `preview_table`). Push adds it all to the MATR metadata database at once; Cancel closes the dialog with
+# `preview_table`). Push adds it all to the CARA metadata database at once; Cancel closes the dialog with
 # nothing added. A draft reopened from a wave (Edit extraction on the Metadata page) goes back into that wave
 # and nowhere else (`extraction_service_reopened_info()`), so its dialog says which wave it updates instead.
 # draft: The questionnaire on screen, for how many of its blocks haven't been marked as checked.

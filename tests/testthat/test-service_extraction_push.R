@@ -1,4 +1,4 @@
-# Pushing an extraction into the MATR metadata database: what stops it, what the push comes to in words and
+# Pushing an extraction into the CARA metadata database: what stops it, what the push comes to in words and
 # cards, and the push itself. The database does the push (push_extraction in sql/4_functions.sql), so it is
 # tested with a real one, into a tree of the test's own that is removed again when the test ends; what stops a
 # push and how it is described are pure functions, tested with data given to them.
@@ -22,7 +22,7 @@ test_that("what stops a push is said in the order to do it", {
   no_question$response_options <- no_question$response_options[0, ]
   expect_equal(extraction_service_draft_blockers(no_question, lookups), "Add at least one question.")
 
-  # the blocks the checks mark to fix are counted, a blank MATR ID among them
+  # the blocks the checks mark to fix are counted, a blank Variable ID among them
   missing_id <- test_questionnaire_draft(matr = c(NA, "zz2"))
   expect_equal(length(unique(draft_service_check(missing_id, lookups)$id)), 1)
   expect_equal(extraction_service_draft_blockers(missing_id, lookups), "Fix the 1 block marked to fix.")
@@ -220,7 +220,7 @@ test_that("a push records the questionnaire in its wave, and the extraction is k
   asked <- database_model_get(test_connection, "wave_question", c("question_number", "printed_number"), filters = wave)
   expect_equal(asked$question_number, c("1", "2"))
   expect_equal(asked$printed_number, c("1", "2"))
-  # the questionnaire records the variables by their MATR IDs
+  # the questionnaire records the variables by their Variable IDs
   variables <- database_model_get(
     test_connection, "variable", c("matr_id", "variable_type"),
     filters = list(questionnaire_id = database_eq(tree$questionnaire$questionnaire_id))
@@ -325,7 +325,7 @@ test_that("the preview says what the push would do, and writes nothing", {
 test_that("a second wave of the same questionnaire reuses its blocks and variables, and only asks the questions anew", {
   me <- local_staff()
   tree <- local_tree()
-  draft <- marked_draft() # the same words and MATR IDs both times
+  draft <- marked_draft() # the same words and Variable IDs both times
   local_pushed_questionnaire(me, tree, draft)
   later <- local_wave(tree$questionnaire)
   again <- saved_draft(me, tree, draft, wave_id = later$wave_id)
@@ -527,7 +527,7 @@ test_that("a wave the AI read is reopened as an AI-Powered draft with that readi
   back <- suppressMessages(draft_service_revert_block(opened$draft, opened$original, reworded))
   expect_false(reworded %in% draft_service_changed_blocks(opened$original, back))
   expect_equal(component(back, reworded)$text, component(first$original, asked_first(first$original))$text) # the AI's words
-  expect_setequal(stats::na.omit(back$variables$matr_id), stats::na.omit(opened$draft$variables$matr_id)) # MATR IDs aren't the AI's: kept
+  expect_setequal(stats::na.omit(back$variables$matr_id), stats::na.omit(opened$draft$variables$matr_id)) # Variable IDs aren't the AI's: kept
 
   # saved, its rows say which of the AI's they are, and the corrections are worked out from the same reading
   extraction_service_save_draft(test_connection, reopened, back, opened$original, me)

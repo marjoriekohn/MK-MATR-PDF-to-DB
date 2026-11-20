@@ -174,7 +174,7 @@ set_variable_type <- function(draft, row, type) {
   add_blank_choices(draft, box$id, 1)
 }
 
-# A MATR ID names one variable of the questionnaire (BR93). One typed or picked that another variable has moves
+# A Variable ID names one variable of the questionnaire (BR93). One typed or picked that another variable has moves
 # here: the other is left without one, and staff are told which (Undo puts it back).
 set_matr_id <- function(draft, row, matr_id) {
   boxes <- draft$variables
@@ -183,7 +183,7 @@ set_matr_id <- function(draft, row, matr_id) {
     other <- boxes[taken_by[1], ]
     draft$variables$matr_id[taken_by] <- NA
     message(sprintf(
-      "%s moved here from variable %d of %s, which has no MATR ID now.",
+      "%s moved here from variable %d of %s, which has no Variable ID now.",
       matr_id, as.integer(other$display_order), draft_service_question_name(draft, other$component_id)
     ))
   }
@@ -491,7 +491,7 @@ draft_service_delete <- function(draft, table, id) {
 # The copy has everything the block has: a question its variables with their choices, a section, grid or group
 # every block inside it (and theirs). Copies are rows staff added: the AI didn't read them (no `ref`), they aren't
 # checked, and they didn't come from the database (no `catalog_id`: a copy whose words stay the same is the same
-# wording when it is pushed, as any block with those words is). A copied variable has no MATR ID, since a MATR ID
+# wording when it is pushed, as any block with those words is). A copied variable has no Variable ID, since a Variable ID
 # names one variable. A copied question that depended on a question copied with it depends on that one's copy;
 # one that depended on a question outside still does.
 # id: The block's id.
@@ -528,7 +528,7 @@ draft_service_duplicate <- function(draft, id) {
   message(sprintf(
     "Copied the %s%s. The copy is right after it%s",
     what, if (length(copied) > 1) paste(" and the", plural(length(copied) - 1, "block"), "inside it") else "",
-    if (nrow(boxes) > 0) ": its variables need MATR IDs of their own." else "."
+    if (nrow(boxes) > 0) ": its variables need Variable IDs of their own." else "."
   ))
   renumber(draft, "components")
 }
@@ -538,7 +538,7 @@ draft_service_duplicate <- function(draft, id) {
 # Its kind, its words, the number printed beside it, its tags and scale, the question it depends on, and for a
 # question its variables and their choices are what the AI returned again: what staff changed in them is taken
 # back, and variables and choices staff added to it go. What isn't the AI's stays: where the block sits (a block
-# moved is the same block somewhere else), a variable's MATR ID and a choice's code, for the ones the AI read. A
+# moved is the same block somewhere else), a variable's Variable ID and a choice's code, for the ones the AI read. A
 # section, grid or group goes back alone: the blocks inside it are their own.
 # original: The draft as the AI returned it (`extraction_service_open_draft()`'s `original`), whose ids are the
 #   reviewed copy's refs; `NULL` for an extraction the AI didn't read.
@@ -574,7 +574,7 @@ draft_service_revert_block <- function(draft, original, id) {
 }
 
 # A question's variables and their choices, as the AI returned them: the question's own go, and the AI's are put
-# in their place, each keeping the MATR ID (a variable) or the code (a choice) the reviewed copy has for it.
+# in their place, each keeping the Variable ID (a variable) or the code (a choice) the reviewed copy has for it.
 revert_variables <- function(draft, original, id, ref) {
   now <- draft$variables[draft$variables$component_id %in% id, , drop = FALSE]
   now_choices <- draft$response_options[draft$response_options$variable_id %in% now$id, , drop = FALSE]
@@ -685,18 +685,18 @@ same_choice_variables <- function(draft, variable_id) {
   names(choice_lists)[choice_lists == choice_lists[[variable_id]]]
 }
 
-# ------ MATR IDs ---------------------------------------------------------------
-# Reading gives the variables their MATR IDs from the file of Variable Names and Coding; staff type the rest.
+# ------ Variable IDs ---------------------------------------------------------------
+# Reading gives the variables their Variable IDs from the file of Variable Names and Coding; staff type the rest.
 # A draft going into a recorded questionnaire takes the ones its questions have already. An ID goes to one
 # variable only (set_matr_id()).
 
-# Fill the variables' MATR IDs from a recorded questionnaire's questions.
+# Fill the variables' Variable IDs from a recorded questionnaire's questions.
 # A question with the same words as one the questionnaire asks (ignoring capitals and extra spaces) gets
-# its variables' MATR IDs, first variable to first variable and so on. Used for the questionnaire the
-# extraction goes into (its earlier waves). Only blank MATR IDs are filled, so nothing typed or read is
+# its variables' Variable IDs, first variable to first variable and so on. Used for the questionnaire the
+# extraction goes into (its earlier waves). Only blank Variable IDs are filled, so nothing typed or read is
 # lost. Says how many were filled with
-# `message()`; a MATR ID already used by another variable of the draft isn't used again.
-# recorded: The recorded questions' MATR IDs: a data frame with `text`, `matr_id` and `display_order`
+# `message()`; a Variable ID already used by another variable of the draft isn't used again.
+# recorded: The recorded questions' Variable IDs: a data frame with `text`, `matr_id` and `display_order`
 #   (`extraction_service_recorded()$matr_ids`).
 # from: Where they come from, for the message: e.g. `"the questionnaire's earlier waves"`.
 # Returns: The changed draft; the same draft if nothing matched.
@@ -720,7 +720,7 @@ draft_service_fill_recorded_matr_ids <- function(draft, recorded, from = "the qu
   }
   if (n_filled > 0) {
     message(sprintf(
-      "Filled in the MATR IDs of %s from %s, where the question is worded the same.",
+      "Filled in the Variable IDs of %s from %s, where the question is worded the same.",
       plural(n_filled, "variable"), from
     ))
   }

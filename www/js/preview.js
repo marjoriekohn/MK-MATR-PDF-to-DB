@@ -5,7 +5,7 @@
 //     question when the catalog's couldn't be read, which only All shows)
 //   * Search narrows the rows to those with the words typed
 //   * Download CSV presses DataTables' own CSV button, which is hidden
-// The table calls matrPreviewTable() once it is drawn (its `callback`); it is drawn again whenever the push is
+// The table calls caraPreviewTable() once it is drawn (its `callback`); it is drawn again whenever the push is
 // tried again, and the toolbar with it, so each drawing is wired anew and starts with every row.
 (function () {
   'use strict';
@@ -25,7 +25,7 @@
     });
   }
 
-  window.matrPreviewTable = function (table) {
+  window.caraPreviewTable = function (table) {
     addFilter();
     const node = table.table().node();
     const box = node.closest('.questionnaire-preview');

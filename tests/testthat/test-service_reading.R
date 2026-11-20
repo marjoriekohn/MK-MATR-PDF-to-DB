@@ -497,7 +497,7 @@ test_that("a request about a file given as text sends the prompt alone", {
   expect_equal(parts[[1]]$text, "the prompt and the file")
 })
 
-# ------ MATR IDs and codes from a second file ---------------------------------------------
+# ------ Variable IDs and codes from a second file ---------------------------------------------
 test_that("a variable is described to the code file's reader with who and when it is about, its own or its question's", {
   described <- assign_variables(list(components = list(list(
     component_type = "Question", text = "on how many occasions have the twins smoked?", printed_number = "49", subject = "twins",
@@ -528,7 +528,7 @@ test_that("a reading's problems name the right blocks when questions about each 
 
 assign_prompt <- app_file("prompts", "assign_codes.md")
 
-test_that("the file of MATR IDs and codes gives the variables their IDs and the choices their codes", {
+test_that("the file of Variable IDs and codes gives the variables their IDs and the choices their codes", {
   json <- reading_service_tidy(gold_json())
   variables <- assign_variables(json)
   expect_equal(variables[[1]]$id, "v1")
@@ -556,7 +556,7 @@ test_that("the file of MATR IDs and codes gives the variables their IDs and the 
   expect_match(sent$prompt, "## The file (codes.csv)", fixed = TRUE)
   expect_match(sent$prompt, '"id":"v1"', fixed = TRUE)
 
-  # only MATR IDs, codes and scales are added: the questionnaire is otherwise exactly as it was read
+  # only Variable IDs, codes and scales are added: the questionnaire is otherwise exactly as it was read
   strip <- function(x) {
     if (!is.list(x)) return(x)
     if (!is.null(names(x))) x <- x[setdiff(names(x), c("matr_id", "code_value", "scale"))]
@@ -608,7 +608,7 @@ test_that("a long questionnaire's variables go in several requests, each with th
   expect_equal(filled$variables$matr_id[c(1, 3, 5)], c("ID1", "ID3", "ID5"))
 })
 
-test_that("a PDF of MATR IDs and codes is sent as the request's file, and codes that repeat are left out", {
+test_that("a PDF of Variable IDs and codes is sent as the request's file, and codes that repeat are left out", {
   json <- reading_service_tidy(gold_json())
   sent <- NULL
   generate <- function(pdf_path, prompts, model) {
@@ -730,7 +730,7 @@ test_that("the questionnaire PDF as the file is named as such, and a long one is
 })
 
 # ------ The job ------------------------------------------------------------------------
-# Every reading ends by looking for MATR IDs and codes (in the draft's file of them, or else its PDF), which would
+# Every reading ends by looking for Variable IDs and codes (in the draft's file of them, or else its PDF), which would
 # call Gemini: jobs whose tests aren't about that get none.
 no_codes <- function(json, ...) json
 
@@ -763,7 +763,7 @@ test_that("the job saves what Gemini read and marks the draft ready", {
   expect_equal(nrow(extraction_service_load_draft(test_connection, saved)$components), nrow(short_gold_draft()$components))
 })
 
-test_that("the job reads the file of MATR IDs and codes once the questionnaire is read, and carries on without it if it fails", {
+test_that("the job reads the file of Variable IDs and codes once the questionnaire is read, and carries on without it if it fails", {
   me <- local_staff()
   local_pdf_cache()
   record <- extraction_service_create(test_connection, fake_upload(), me, supplement = fake_csv_upload(c("AH01", "AH02"), "codes.csv"))
@@ -790,7 +790,7 @@ test_that("the job reads the file of MATR IDs and codes once the questionnaire i
   expect_equal(read_anyway$error, "Gemini is busy") # shown on the step, which says to type the IDs on Edit Extraction
 })
 
-test_that("without a file of MATR IDs and codes, the job looks for them in the questionnaire PDF itself", {
+test_that("without a file of Variable IDs and codes, the job looks for them in the questionnaire PDF itself", {
   me <- local_staff()
   local_pdf_cache()
   record <- extraction_service_create(test_connection, fake_upload(), me)
@@ -835,7 +835,7 @@ test_that("Re-extract reads a draft's PDF again, putting aside the questionnaire
   expect_error(extraction_service_reextract(test_connection, typed$id, me), "typed by hand")
 })
 
-test_that("a file of MATR IDs and codes that isn't a PDF, CSV or text is turned away", {
+test_that("a file of Variable IDs and codes that isn't a PDF, CSV or text is turned away", {
   path <- withr::local_tempfile(fileext = ".xlsx")
   writeLines("not really", path)
   expect_error(store_supplement(NULL, data.frame(name = "codes.xlsx", size = 10, datapath = path)), "Save a spreadsheet as CSV")

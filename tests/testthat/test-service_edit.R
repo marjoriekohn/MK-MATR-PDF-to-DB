@@ -357,7 +357,7 @@ test_that("a question's fields on a block's add form show only once Question is 
   question <- form_for("placement", "add", scope = "1", placement__kind = "Question", placement__text = "How tall are you?")
   found <- edit_service_check(question$fields, question$values)
   expect_equal(found$missing, "waves that ask it")
-  expect_equal(found$problems$placement__variables, "Variable 1: fill in its MATR ID.")
+  expect_equal(found$problems$placement__variables, "Variable 1: fill in its Variable ID.")
 })
 
 test_that("a block's update form has a question's fields only for a question, without hiding them", {

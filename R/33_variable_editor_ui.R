@@ -53,7 +53,7 @@ list_sortable_options <- function(handle) {
 }
 
 # A question's variables, as a table: one line for each, in printed order.
-# A line has the variable's MATR ID and its response: for a write-in the kind of answer, for a variable with
+# A line has the variable's Variable ID and its response: for a write-in the kind of answer, for a variable with
 # choices the choices in short ("1 Yes · 2 No"), which are open under the line (their editor) until the line is clicked to close them. Its tags
 # (who it's about, when it's about, and a write-in's unit: `variable_tags()`) are pills in a box of their own, with
 # + Tag to add one; its label has a column, there once a variable of the question has one, which a line's "+"
@@ -79,7 +79,7 @@ variable_cards <- function(block, draft, view, lookups, ns) {
     if (nrow(boxes) > 0) {
       div(
         class = "variable-line variable-head", `aria-hidden` = "true",
-        span(), span("MATR ID"), span("Response Option Set"), span("Variable Tags"), lapply(optional_variable_fields[columns], span), span(), span()
+        span(), span("Variable ID"), span("Response Option Set"), span("Variable Tags"), lapply(optional_variable_fields[columns], span), span(), span()
       )
     },
     div(
@@ -111,9 +111,9 @@ variable_line <- function(box, draft, view, lookups, ns, shared = character(), c
     div(
       class = "variable-line",
       span(class = "box-handle", title = "Drag to reorder", app_icon("drag")),
-      variable_cell("MATR ID", field_text(
+      variable_cell("Variable ID", field_text(
         "variables", box, "matr_id",
-        placeholder = "MATR ID", label = "MATR ID", problems = problems
+        placeholder = "Variable ID", label = "Variable ID", problems = problems
       ), class = "is-id"),
       variable_cell(
         "Response Option Set",

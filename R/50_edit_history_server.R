@@ -1,5 +1,5 @@
 # The Edit History page's server.
-# The changes made to the MATR metadata database, newest first, filtered by kind and by words typed.
+# The changes made to the CARA metadata database, newest first, filtered by kind and by words typed.
 # "See what changed" opens what a change did: the fields it changed, old and new, or the counts of what a push
 # or an emptying did.
 # active: A reactive that says whether this page is the one on screen, or `NULL`. Opening

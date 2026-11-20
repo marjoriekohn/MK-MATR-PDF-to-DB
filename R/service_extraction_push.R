@@ -1,11 +1,11 @@
 # ------ Pushing an extraction into the database --------------------------------------------
-# An extraction becomes rows of the MATR metadata database, in a recorded questionnaire's wave that
+# An extraction becomes rows of the CARA metadata database, in a recorded questionnaire's wave that
 # asks no questions yet: its blocks as components placed in the questionnaire, its questions and
 # their numbers in the wave, each question's variables with their choices, and the subjects, time
 # frames and units as tags. The database does all of it in one function, push_extraction()
 # (sql/4_functions.sql), from the questionnaire as saved and its Basic Info (`info`): what is there
 # already (a wording, an answer choice, a tag, a placement of an earlier wave, a variable with the
-# same MATR ID) is used again, the rest is added, and the extraction is marked Pushed. The function
+# same Variable ID) is used again, the rest is added, and the extraction is marked Pushed. The function
 # answers with counts of what it did (`component_new`, `component_reused`, `placement_new`,
 # `wave_question_new`, `variable_new`, `variable_reused`, `answer_option_new`, `tag_new`... and
 # `questions`), and refuses with a sentence when it can't: a wave that asks questions already
@@ -21,7 +21,7 @@
 # draft: The questionnaire, as on the Edit Extraction page.
 # Returns: A character vector of sentences, in the order to do them; empty when it can be pushed.
 extraction_service_draft_blockers <- function(draft, lookups) {
-  n_blocks_to_fix <- length(unique(draft_service_check(draft, lookups)$id)) # a blank MATR ID is among them
+  n_blocks_to_fix <- length(unique(draft_service_check(draft, lookups)$id)) # a blank Variable ID is among them
   as.character(c(
     if (nrow(draft$components) == 0) "Add the questionnaire's blocks and questions first.",
     if (nrow(draft$components) > 0 && !"Question" %in% draft$components$component_type) "Add at least one question.",
@@ -65,7 +65,7 @@ extraction_service_unchecked <- function(draft) {
 }
 
 # ------ The push and its preview ------------------------------------------------------------
-# Push an extraction into the MATR metadata database.
+# Push an extraction into the CARA metadata database.
 # The questionnaire has to be saved first (the page saves it); what is pushed is the saved copy, into
 # the wave its Basic Info names. Afterwards the extraction is Pushed and leaves the Drafts page.
 # me: Who is pushing: `list(staff_id, name, role)`.

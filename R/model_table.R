@@ -2,13 +2,13 @@
 # The Metadata page needs to see what a change reaches, so it reads whole tables
 # rather than the few columns the extraction pages pick. Each table is listed
 # here with its columns and what kind of value each holds, and the columns
-# that identify a row (`key`). `connection` is the MATR database
+# that identify a row (`key`). `connection` is the CARA database
 # (model_database.R).
 #
 # Column kinds:
 #   id      a row's ID, or a reference to another row's: a whole number
 #   number  any other number (ages, counts, display order)
-#   text    words; question numbers and MATR IDs are text too, since they can
+#   text    words; question numbers and Variable IDs are text too, since they can
 #           hold letters (2a, AH25LF)
 #   date    a day, as YYYY-MM-DD
 #

@@ -105,7 +105,7 @@ tolower_first <- function(text) paste0(tolower(substr(text, 1, 1)), substring(te
 
 # Lower-case a label for the middle of a sentence.
 # A word that starts with a capital and goes on in lower case (Respondent Type) is lower-cased; an
-# acronym (MATR ID) is left as it is.
+# acronym (the ID of Variable ID) is left as it is.
 # text: A string, e.g. a field's label.
 # Returns: `text`, e.g. `"respondent type"`.
 tolower_words <- function(text) {
@@ -686,7 +686,7 @@ edit_summary_delete <- function(entity, snap, row, plan) {
 # row: The row being changed.
 # A kind with `usage_rows(snap, row, table, rows)` says how it lists the rows of `table` that point at it: a list of
 # `rows` (the ones to list, in order; none to leave the table out), `labels` and, if it likes, `text` (the box's
-# title), `meta` (a few quiet words after each label: a variable's MATR ID and code), `pills` (a list of tags for
+# title), `meta` (a few quiet words after each label: a variable's Variable ID and code), `pills` (a list of tags for
 # each: the questionnaires that ask it), `open` (what View opens for each, from `edit_opens()`), `remove` (what its
 # Remove button opens, to take the row itself away) and `add` (a button under the list); or `NULL` for the usual
 # way, by name.

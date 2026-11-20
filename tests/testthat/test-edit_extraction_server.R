@@ -141,7 +141,7 @@ test_that("Save writes the draft to the database (numbers included), and a save 
     expect_identical(stored, draft())
     expect_equal(component(stored, "c3")$text, "do you worry a lot?")
     expect_equal(component(stored, "c3")$question_number, component(numbered_gold(), "c3")$question_number)
-    expect_equal(notice_texts(seen), "Saved. Nothing is added to the MATR metadata database until you push it.")
+    expect_equal(notice_texts(seen), "Saved. Nothing is added to the CARA metadata database until you push it.")
     session$flushReact()
     expect_true(last_update(seen, "save")$disabled)
 
@@ -240,13 +240,13 @@ test_that("a draft that can't be opened is a sentence, and what was on screen st
   })
 })
 
-test_that("a new wave of a recorded questionnaire gets the MATR IDs its questions have", {
+test_that("a new wave of a recorded questionnaire gets the Variable IDs its questions have", {
   me <- local_staff()
   admin <- local_staff("ADMIN")
   tree <- local_tree()
   seen <- local_browser()
   pushed <- local_pushed_questionnaire(admin, tree)
-  # the same questionnaire typed again for its second wave, without MATR IDs
+  # the same questionnaire typed again for its second wave, without Variable IDs
   second_wave <- do.call(local_manual_extraction, c(list(me), picked_basic_info(tree, pushed$questionnaire_id), list(env = environment())))
   draft_service_save(test_connection, second_wave$id, test_questionnaire_draft(matr = c(NA, NA)), me$staff_id)
   second_wave <- extraction_model_get(test_connection, second_wave$id)
@@ -254,7 +254,7 @@ test_that("a new wave of a recorded questionnaire gets the MATR IDs its question
     errors <- collect_errors(session)
     expect_true(open(second_wave))
     expect_setequal(draft()$variables$matr_id, pushed$draft$variables$matr_id)
-    expect_match(notice_texts(seen), "Filled in the MATR IDs of 2 variables from the questionnaire's earlier waves", all = FALSE)
+    expect_match(notice_texts(seen), "Filled in the Variable IDs of 2 variables from the questionnaire's earlier waves", all = FALSE)
     expect_true(has_unsaved_changes()) # Save keeps them
     expect_length(undo_stack(), 1)
     # the recorded blocks' words are offered while typing
@@ -303,7 +303,7 @@ test_that("Preview and push saves what is unsaved, and lists what is in the way:
     expect_true(last_update(seen, "push")$disabled)
     expect_null(dry_run())
 
-    # the MATR IDs filled in, and the tree's wave picked, which asks questions since the push into it
+    # the Variable IDs filled in, and the tree's wave picked, which asks questions since the push into it
     fill_all_matr_ids(draft, change_draft)
     pick_basic_info(session, picked_basic_info(tree))
     blockers <- text_of(output$push_blockers)
@@ -409,7 +409,7 @@ test_that("editing a checked block takes the check off, and Undo brings it back"
   shiny::testServer(edit_extraction_server, args = edit_page(me), {
     errors <- collect_errors(session)
     open(first)
-    change_draft(with_checked(draft(), "c3"), keep_checked = TRUE) # its missing MATR IDs keep Verify off
+    change_draft(with_checked(draft(), "c3"), keep_checked = TRUE) # its missing Variable IDs keep Verify off
     expect_equal(checked_blocks(draft()), "c3")
     session$flushReact()
     one_checked <- sprintf("%d%% human-reviewed", floor(100 / nrow(draft()$components)))
@@ -428,7 +428,7 @@ test_that("editing a checked block takes the check off, and Undo brings it back"
   })
 })
 
-test_that("a change to a checked block's variable or choices takes its check off; marking and filling MATR IDs don't", {
+test_that("a change to a checked block's variable or choices takes its check off; marking and filling Variable IDs don't", {
   me <- local_staff()
   tree <- shared_tree()
   seen <- local_browser()
@@ -443,7 +443,7 @@ test_that("a change to a checked block's variable or choices takes its check off
     suppressMessages(session$setInputs(`outline-action` = list(action = "delete", table = "response_options", id = "o5")))
     expect_length(checked_blocks(draft()), 0)
 
-    session$setInputs(`outline-action` = list(action = "check", id = "c3")) # it has no MATR ID yet: refused
+    session$setInputs(`outline-action` = list(action = "check", id = "c3")) # it has no Variable ID yet: refused
     expect_length(checked_blocks(draft()), 0)
 
     change_draft(with_checked(draft(), c("c3", "c4")), keep_checked = TRUE)

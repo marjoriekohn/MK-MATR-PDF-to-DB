@@ -29,7 +29,7 @@
 # ------ The "steps" reporter ------------------------------------------------------------------------------
 # How many requests the tests have made so far (counted by helper-00_realdb.R; 0 before it is loaded).
 requests_made <- function() {
-  counter <- getOption("matr.test_requests")
+  counter <- getOption("cara.test_requests")
   if (is.null(counter)) 0L else counter$count
 }
 
@@ -188,7 +188,7 @@ StepsReporter <- R6::R6Class("StepsReporter", # nolint: object_name_linter. (tes
 serial_files <- c("model_history", "service_home", "zz_leftovers")
 
 # How long each file took last time, in seconds, by name: what the files are shared out by.
-timing_file <- file.path(tools::R_user_dir("matr_tests", "cache"), "file_seconds.rds")
+timing_file <- file.path(tools::R_user_dir("cara_tests", "cache"), "file_seconds.rds")
 
 # A file's name as TEST_FILTER is matched against it, as testthat does: "test-home_server.R" is "home_server".
 test_file_name <- function(file) sub("^test[-_]?", "", sub("\\.[rR]$", "", basename(file)))

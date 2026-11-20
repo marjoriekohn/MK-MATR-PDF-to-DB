@@ -129,7 +129,7 @@ test_that("blocks left where a deleted group was haven't moved: the deleted grou
   expect_equal(edits[[1]]$ref, group)
 })
 
-test_that("what the site works out isn't a difference: codes, places, the checked mark and MATR IDs", {
+test_that("what the site works out isn't a difference: codes, places, the checked mark and Variable IDs", {
   reviewed <- original()
   reviewed$components$checked[1:5] <- TRUE
   reviewed$variables$matr_id[1:3] <- c("a", "b", "c")
@@ -204,7 +204,7 @@ test_that("the blocks changed from what the AI read: a field, a variable or choi
   added <- draft_service_next_id(reviewed, "components")
   reviewed <- draft_service_add_block(reviewed, "Instruction", added, near_id = q1a)
   expect_setequal(draft_service_changed_blocks(original, reviewed), c(q1a, q1b, q1c, q1d, added))
-  # the checked mark and a MATR ID aren't what the AI reads
+  # the checked mark and a Variable ID aren't what the AI reads
   ticked <- draft_service_update(original, "components", q1a, "checked", TRUE)
   ticked <- draft_service_update(ticked, "variables", box_1b, "matr_id", "GNA_9")
   expect_length(draft_service_changed_blocks(original, ticked), 0)

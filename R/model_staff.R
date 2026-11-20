@@ -1,5 +1,5 @@
 # ------ Staff ---------------------------------------------------------------------
-# Who may use the site: the staff table of the MATR database (`connection`, as in model_database.R).
+# Who may use the site: the staff table of the CARA database (`connection`, as in model_database.R).
 # Each is a STAFF or an ADMIN (`role`, kept for the site's own use: nothing needs an ADMIN). Staff
 # are never deleted, only marked inactive (the history names them).
 

@@ -3,7 +3,7 @@
 # watch it being read, in the background. The draft starts then, with both files, which can't be changed
 # after: to read other files, cancel the extraction and begin again. Once reading has finished
 # the draft opens on the Edit Extraction page. Where it goes in the database (its Basic Info) is filled in
-# there, when the extraction is pushed. Drafts are kept in the database but nothing here adds to the MATR
+# there, when the extraction is pushed. Drafts are kept in the database but nothing here adds to the CARA
 # metadata database itself.
 # switch_mode: A function taking a mode of the Extraction page (`"manual"` or `"ai"`), or `"drafts"`
 #   for the Extraction Drafts page, and showing it.
@@ -23,7 +23,7 @@ extraction_ai_server <- function(
     # ------ REACTIVE ----------------------------------------------------------
     current_id <- reactiveVal(NULL) # the draft on this page, once the extraction has begun
     pdf_upload <- reactiveVal(NULL) # the PDF chosen, until the extraction begins
-    supplement_upload <- reactiveVal(NULL) # the file of MATR IDs and codes chosen, until the extraction begins
+    supplement_upload <- reactiveVal(NULL) # the file of Variable IDs and codes chosen, until the extraction begins
 
     record <- reactive({
       if (!is.null(current_id())) extractions$all()[[current_id()]]
@@ -71,7 +71,7 @@ extraction_ai_server <- function(
     observeEvent(input$cancel, {
       showModal(confirm_dialog(
         "Cancel this extraction?",
-        "The draft is deleted, with its PDF. Nothing has been added to the MATR metadata database.",
+        "The draft is deleted, with its PDF. Nothing has been added to the CARA metadata database.",
         confirm_id = ns("confirm_cancel"), confirm_label = "Cancel extraction"
       ))
     })

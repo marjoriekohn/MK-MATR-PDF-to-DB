@@ -83,7 +83,7 @@ pdf_file <- function(pdf, ns, begun = TRUE) {
 }
 
 # ------ The file of Variable Names and Coding (optional) ---------------------------------
-# Somewhere to give the file of Variable Names and Coding (MATR IDs and codes), or the file given.
+# Somewhere to give the file of Variable Names and Coding (Variable IDs and codes), or the file given.
 # Optional. Gemini applies it once the questionnaire is read and checked, as a step of its own. It can be
 # given, changed or taken away until the extraction begins; after that the page only shows which file it is, as
 # it shows the PDF.
@@ -97,7 +97,7 @@ supplement_card <- function(file, begun, ns) {
       file_box(
         fileInput(ns("supplement"), NULL, accept = accept, buttonLabel = "Choose file"),
         strong("Optional: Variable Names and Coding"),
-        div("A codebook or list (PDF, CSV or text) giving each variable its name (MATR ID) and each answer its code.
+        div("A codebook or list (PDF, CSV or text) giving each variable its name (Variable ID) and each answer its code.
           They're applied once the questionnaire is read. Not needed when the questionnaire PDF prints them itself
           (as a REDCap data dictionary does)."),
         icon = "matr_id"

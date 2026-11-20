@@ -116,7 +116,7 @@
   .input-group > .form-control, .shiny-file-input-progress { display: none; }
 }
 
-// The PDF and the optional file of MATR IDs and codes, side by side (layout_columns() in 22_extraction_ai_ui.R).
+// The PDF and the optional file of Variable IDs and codes, side by side (layout_columns() in 22_extraction_ai_ui.R).
 // A box with nothing in it (no file once reading has begun) takes no room, and the other has the whole row; it
 // isn't hidden, since Shiny doesn't fill in a hidden output.
 .upload-pair {

@@ -56,7 +56,7 @@ test_that("the same questions asked about one twin and then the other are one qu
   expect_equal(nrow(why), 1)
   expect_equal(why$parent_question_id, blocks$id[blocks$text %in% "been to a neurologist?"])
   expect_equal(draft_service_children(draft, "variables", why$id)$subject, c("twin a", "twin b"))
-  # the questions are numbered by their place, and the draft has nothing to fix but its MATR IDs
+  # the questions are numbered by their place, and the draft has nothing to fix but its Variable IDs
   expect_equal(blocks$question_number[blocks$component_type == "Question"], as.character(1:5))
   expect_equal(nrow(draft_service_check(draft, test_lookups(), matr_ids = FALSE)), 0)
   # joining again changes nothing

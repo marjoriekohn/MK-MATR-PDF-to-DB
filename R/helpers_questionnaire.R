@@ -1,6 +1,6 @@
 # ------ A questionnaire, laid out to read -----------------------------------------------------
 # A draft's questionnaire drawn as a table to read, with nothing to edit, the way a codebook lists it: one
-# row for each variable, with its MATR ID (Variable ID), the words of its question with the variable's label in
+# row for each variable, with its Variable ID, the words of its question with the variable's label in
 # square brackets (Question Text), its subjects, time frames and units (Tags), and its codes and choices, or a
 # write-in's kind of answer (Variable Coding). Blocks that aren't questions (an instruction, a note) have a row
 # each, in printed order. The rows are grouped under the section (and group) they are printed in. It is a
@@ -40,7 +40,7 @@ questionnaire_preview_ui <- function(draft, known = NULL) {
       class = "compact questionnaire-table", rownames = FALSE, escape = FALSE,
       extensions = c("Buttons", "RowGroup"),
       # the toolbar above works the table (www/js/preview.js)
-      callback = DT::JS("if (window.matrPreviewTable) window.matrPreviewTable(table);"),
+      callback = DT::JS("if (window.caraPreviewTable) window.caraPreviewTable(table);"),
       options = list(
         # the CSV button is DataTables' own, pressed by the toolbar's (its own is hidden: _history.scss)
         dom = "Brtip", ordering = FALSE, pageLength = 50, autoWidth = FALSE,
@@ -135,7 +135,7 @@ preview_coding_html <- function(lines, new, set_new) {
   paste(lines, collapse = "<br>")
 }
 
-# "no MATR ID" or "no variables", in italics.
+# "no Variable ID" or "no variables", in italics.
 preview_blank <- function(missing) ifelse(nzchar(missing), paste0("<em>", missing, "</em>"), "")
 
 # The CSV's name: the questionnaire's abbreviation or name, or "questionnaire".
@@ -151,7 +151,7 @@ preview_file_name <- function(draft) {
 # section or group has one row. Each row names the sections and groups it is in.
 # known: What the database has already (`extraction_service_known()`), to say what each row adds, or `NULL`.
 # Returns: A data frame: `section` (e.g. "PART B. YOUR HABITS › Group 1", or "" at the top level),
-#   `kind`, `matr_id` (NA when there is none), `missing` ("no MATR ID", "no variables" or ""), `text`,
+#   `kind`, `matr_id` (NA when there is none), `missing` ("no Variable ID", "no variables" or ""), `text`,
 #   `label` (the variable's, or ""), `tags` ("[past 30 days] [siblings]", or ""), `tag_names` (a list of the
 #   tags), `coding` (a list of lines: "1 = Yes", or the write-in's kind of answer), and what the push adds:
 #   `text_new` (the question's wording, or another block's words), `tag_new` and `coding_new` (a list, a TRUE or
@@ -202,7 +202,7 @@ questionnaire_preview_rows <- function(draft, known = NULL) {
         answers <- if (NROW(choices) > 0) choices$answer_option[!is.na(choices$answer_option)] else character()
         add(
           section, "Question",
-          matr_id = box$matr_id, missing = if (is.na(box$matr_id)) "no MATR ID" else "",
+          matr_id = box$matr_id, missing = if (is.na(box$matr_id)) "no Variable ID" else "",
           text = words, label = if (is.na(box$label)) "" else trimws(box$label), tag_names = tag_names, coding = coding,
           text_new = text_new,
           tag_new = !is.null(known) & extraction_service_tag_key(tag_names) %in% known$tag_new,

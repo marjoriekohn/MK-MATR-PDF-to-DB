@@ -10,7 +10,7 @@
 
 <!-- badges: end -->
 
-A R Shiny website for staff of MATR (the Mid-Atlantic Twin Registry at
+A R Shiny website for staff of CARA (the Cohort and Registry Administration Core at
 Virginia Commonwealth University) to bring questionnaire metadata into
 the database and to maintain what is already there.
 
@@ -18,13 +18,13 @@ the database and to maintain what is already there.
   how many changes have been made, and a card for each page.
 - **New Extraction**: Staff upload a questionnaire PDF. Gemini reads it
   into blocks, questions, variables and choices, then gives the
-  variables their MATR IDs and the choices their codes from a codebook
+  variables their Variable IDs and the choices their codes from a codebook
   uploaded with it, or from the PDF itself when it prints them (as a
   REDCap data dictionary does). Staff review and
   correct the whole extraction on the Edit Extraction page (the AI reads
   the number printed beside each question, and the site numbers the
   questions in order; a block can be duplicated, or put back as the AI
-  read it), give the variables their MATR IDs from a CSV (in order, or
+  read it), give the variables their Variable IDs from a CSV (in order, or
   one by one) or from a recorded questionnaire that asks the same
   questions, say which registry, study, questionnaire and wave it goes
   into (and whether each shows on the dashboard or is hidden from it),

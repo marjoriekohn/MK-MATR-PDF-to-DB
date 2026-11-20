@@ -324,7 +324,7 @@ test_that("each row that uses something has View, which opens it where it is cha
   expect_false(grepl("edit-use-view", paste(as.character(edit_pointing_ui(Filter(function(line) line$table == "variable", placement)[[1]])), collapse = "")))
 })
 
-test_that("an answer choice lists the variables that offer it by their question, with the MATR ID, its code and the questionnaire", {
+test_that("an answer choice lists the variables that offer it by their question, with the Variable ID, its code and the questionnaire", {
   entity <- edit_entities$answer_option
   snap <- test_snapshot(edit_service_tables(entity))
   offered <- edit_service_usage(entity, snap, edit_service_row(entity, snap, "1"))$pointing[[1]]
@@ -376,7 +376,7 @@ test_that("a tag lists what carries it by its question", {
   expect_equal(lines[[1]]$pills, list("KQ"))
   expect_equal(lines[[2]]$meta, c("AH02SM", "AH01DB"))
   expect_equal(lines[[2]]$open$kind, c("component", "component"))
-  # one on several questions lists each (a question has no MATR ID to say beside it)
+  # one on several questions lists each (a question has no Variable ID to say beside it)
   snap$placement_tag <- rbind(snap$placement_tag, data.frame(placement_id = 104, tag_id = 13))
   on_questions <- edit_service_usage(entity, snap, edit_service_row(entity, snap, "13"))$pointing[[1]]
   expect_equal(on_questions$text, "On 2 questions")

@@ -1,5 +1,5 @@
 # Words, times and sizes written the way staff read them. Nothing here knows
-# about MATR's data or about Shiny.
+# about CARA's data or about Shiny.
 
 # ------ Times, sizes and lists -----------------------------------------------------
 # The time zone every time on the site is said in. The registry's staff are in Virginia, so it is Eastern time

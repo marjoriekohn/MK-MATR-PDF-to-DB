@@ -1,4 +1,4 @@
-# Where an extraction goes in the MATR metadata database (its Basic Info): its registry, study,
+# Where an extraction goes in the CARA metadata database (its Basic Info): its registry, study,
 # questionnaire and wave.
 # Filled in on the Edit Extraction page, in the dialog that pushes the extraction into the database.
 # Four drop-downs in one row, each holding what is in the one before it. The extraction always goes

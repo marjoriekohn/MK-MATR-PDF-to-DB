@@ -1,15 +1,15 @@
 page_navbar(
   id = "nav",
-  # The title, the MATR logo beside the site's name, is the way back to the home page.
+  # The title, the logo beside the site's name, is the way back to the home page.
   title = actionLink(
     "to_home",
     tagList(
       tags$img(src = "img/logo_sm_transparent.png", class = "brand-logo", alt = ""),
-      span(class = "brand-text", span(class = "brand-name", "MATR Metadata Database"), span(class = "brand-tagline", "Mid-Atlantic Twin Registry"))
+      span(class = "brand-text", span(class = "brand-name", "CARA Metadata Database"), span(class = "brand-tagline", "Cohort and Registry Administration Core"))
     ),
-    `aria-label` = "MATR Metadata Database: home"
+    `aria-label` = "CARA Metadata Database: home"
   ),
-  window_title = "MATR Metadata Database",
+  window_title = "CARA Metadata Database",
   theme = vcu_theme,
   fillable = c("edit_extraction", "make_edit"), # an outline beside its details, filling the window
   # The pages' links, in the bar; on a narrow window they fold into a menu button (☰)
@@ -46,8 +46,8 @@ page_navbar(
   nav_panel("AI Monitor", ai_monitor_ui("ai_monitor"), value = "ai_monitor", icon = app_icon("ai_monitor")),
   nav_spacer(),
 
-  # Running on the test database (MATR_DATABASE=test in .env; global.R) says so, so nobody mistakes it for live.
-  if (identical(matr_database, "test")) nav_item(span(class = "badge navbar-test-database", "Test database")),
+  # Running on the test database (CARA_DATABASE=test in .env; global.R) says so, so nobody mistakes it for live.
+  if (identical(cara_database, "test")) nav_item(span(class = "badge navbar-test-database", "Test database")),
 
   # The signed-in name, with the menu that reports a problem and logs out, drawn once someone has signed in.
   nav_item(uiOutput("navbar_user", inline = TRUE))

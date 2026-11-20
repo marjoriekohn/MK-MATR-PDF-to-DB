@@ -40,7 +40,7 @@ test_that("a list that can't be read is empty, with the reason", {
   expect_length(lookups$scales, 0)
   expect_equal(lookups$answer_data_types, c("NUMBER", "TEXT", "DATE", "TIME"))
   expect_length(lookups$problems, 3)
-  expect_match(lookups$problems[1], "^The list of subjects, time frames and units couldn't be read. The MATR database turned down the key")
+  expect_match(lookups$problems[1], "^The list of subjects, time frames and units couldn't be read. The CARA database turned down the key")
   expect_match(lookups$problems[2], "^The list of answer options couldn't be read")
   expect_match(lookups$problems[3], "^The list of measurement scales couldn't be read")
 })

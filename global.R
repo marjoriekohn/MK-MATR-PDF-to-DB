@@ -15,7 +15,7 @@ library(sass)
 # from the default 5 MB to 50 MB.
 options(shiny.maxRequestSize = 50 * 1024^2)
 
-# The Gemini API key (GEMINI_KEY) that reads PDFs, the MATR database's address
+# The Gemini API key (GEMINI_KEY) that reads PDFs, the CARA database's address
 # and keys (SUPABASE_URL, SUPABASE_SECRET_KEY, and SUPABASE_PUBLISHABLE_KEY for
 # signing in) and, while developing, who is using the site (STAFF_EMAIL) live
 # in .env, which git ignores. Reading jobs inherit them.
@@ -46,17 +46,17 @@ merriweather_link <- tags$link(
   href = "https://fonts.googleapis.com/css2?family=Merriweather:wght@400;700&display=swap"
 )
 
-# ------ The MATR database -----------------------------------------------------
-# Everything the site shows and saves is in the MATR database on Supabase: the
+# ------ The CARA database -----------------------------------------------------
+# Everything the site shows and saves is in the CARA database on Supabase: the
 # catalog (registries, studies, questionnaires, waves...), the extractions staff
 # are working on or have pushed, and the history of what they changed. The server
 # talks to it through Supabase REST API (R/model_database.R). `database` is made once here and
 # passed to the modules as `connection`. If the two variables below are missing
-# the site says so when it starts. MATR_DATABASE=test in .env uses the test
+# the site says so when it starts. CARA_DATABASE=test in .env uses the test
 # project instead of the live one (R/model_database.R); the navbar says so.
 source("R/model_database.R", local = TRUE)
-matr_database <- database_model_choose()
-if (matr_database == "test") message("MATR_DATABASE is test: the site is using the TEST database.")
+cara_database <- database_model_choose()
+if (cara_database == "test") message("CARA_DATABASE is test: the site is using the TEST database.")
 database <- list(url = Sys.getenv("SUPABASE_URL"),
                  key = Sys.getenv("SUPABASE_SECRET_KEY"))
 

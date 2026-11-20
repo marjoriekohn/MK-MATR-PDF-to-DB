@@ -39,9 +39,9 @@ options(
     test_requests$log[test_requests$count] <- paste(req$method %||% "GET", req$url)
     NULL
   },
-  matr.test_requests = test_requests
+  cara.test_requests = test_requests
 )
-if (testthat::is_testing()) withr::defer(options(httr2_mock = NULL, matr.test_requests = NULL), envir = testthat::teardown_env())
+if (testthat::is_testing()) withr::defer(options(httr2_mock = NULL, cara.test_requests = NULL), envir = testthat::teardown_env())
 
 # The requests made so far, their addresses decoded, e.g. `"GET https://….supabase.co/rest/v1/wave?select=wave_id,name"`.
 # since: Only those after the first `since` requests: `test_requests$count` before what to look at.
@@ -82,7 +82,7 @@ project_file <- function(...) {
 }
 
 # The Supabase projects' references: the part of their addresses before .supabase.co. The tests run
-# against the test project, and must never run against the real one, which MATR staff and clients use.
+# against the test project, and must never run against the real one, which CARA staff and clients use.
 test_project_ref <- "rqygcjgftmtatzrzcwcf"
 real_project_ref <- "nvjyiaehomrysoprfuyl"
 
@@ -308,7 +308,7 @@ is_test_body <- function(env) {
 # What the file keeps between its tests: in the file's environment, the parent of each test's.
 file_shared <- function(test_env, name, make) {
   file_env <- parent.env(test_env)
-  key <- paste0(".matr_shared_", name)
+  key <- paste0(".cara_shared_", name)
   if (!exists(key, envir = file_env, inherits = FALSE)) assign(key, make(file_env), envir = file_env)
   get(key, envir = file_env, inherits = FALSE)
 }
@@ -323,7 +323,7 @@ pooled_staff <- function(role, test_env) {
     pool$file_env <- file_env
     pool
   })
-  used_key <- paste0(".matr_staff_used_", role)
+  used_key <- paste0(".cara_staff_used_", role)
   n <- if (exists(used_key, envir = test_env, inherits = FALSE)) get(used_key, envir = test_env) + 1L else 1L
   assign(used_key, n, envir = test_env)
   people <- pool[[role]] %||% list()
@@ -333,7 +333,7 @@ pooled_staff <- function(role, test_env) {
   }
   person <- people[[n]]
   # one request when the test ends removes what all the staff it was given did
-  used_ids <- ".matr_staff_used_ids"
+  used_ids <- ".cara_staff_used_ids"
   if (!exists(used_ids, envir = test_env, inherits = FALSE)) {
     assign(used_ids, integer(), envir = test_env)
     withr::defer(test_forget_work(get(used_ids, envir = test_env)), envir = test_env)

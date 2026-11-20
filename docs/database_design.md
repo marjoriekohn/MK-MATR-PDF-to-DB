@@ -1,4 +1,4 @@
-# The MATR metadata database: design
+# The CARA metadata database: design
 
 _The schema the scripts in [sql/](../sql) build, why it looks the way it does, and the contract the site's code
 follows. Rewritten 2026-11-08 to simplify the earlier design (33 tables, 8 of them draft bookkeeping)._
@@ -8,7 +8,7 @@ follows. Rewritten 2026-11-08 to simplify the earlier design (33 tables, 8 of th
 A normalized catalog of every question the registry has asked in 50 years, so researchers can find what we
 have. Staff extract each questionnaire PDF on this site (an AI reads it, staff review it, then push it); a
 separate public site, "The Dashboard", reads the catalog and lets researchers search questions, see the
-PDFs, and collect the MATR IDs (variables) they want. The catalog has to stay clean: one wording per
+PDFs, and collect the Variable IDs (variables) they want. The catalog has to stay clean: one wording per
 component, one row per answer choice, no duplicate questions.
 
 ## The model (24 tables)
@@ -27,7 +27,7 @@ component, one row per answer choice, no duplicate questions.
 | `component` | one printed wording, kept once | `kind` (Section, Group, Grid, Question, Instruction, Introduction, Definition, Note, Interviewer Script), `text` |
 | `placement` | one place a questionnaire prints a component | `parent_placement_id` (the Section/Grid/Group it is in), `display_order`, `depends_on_placement_id` (the earlier question it only makes sense after) |
 | `wave_question` | that a wave asked a question | `question_number` (its place, 1, 2, 3...), `printed_number` (as printed) |
-| `variable` | one MATR ID | `variable_type` (`open_ended`/`closed_ended`), `answer_data_type` (NUMBER/TEXT/DATE/TIME, open-ended only), `label` |
+| `variable` | one Variable ID | `variable_type` (`open_ended`/`closed_ended`), `answer_data_type` (NUMBER/TEXT/DATE/TIME, open-ended only), `label` |
 | `answer_option` | one answer choice, kept once | `standardized_label` in its normal form |
 | `response_option` | one choice as one variable printed it | `display_order`, `code_value` |
 | `tag` | a subject, time frame or unit | `kind` + `name`, unique per kind |
@@ -90,7 +90,7 @@ the DOI's when there is one, else the plain link.
 scale's abbreviation in brackets right after the question's words ("Are you a worrier? (EPQ-R)"). It is read
 from wherever it is said: the questionnaire's PDF (the reading takes it out of the words) or the file of
 Variable Names and Coding, where it follows the question's wording (the step that gives the variables their
-MATR IDs gives their questions their scale too; one the PDF printed stands). Either way it is the question's
+Variable IDs gives their questions their scale too; one the PDF printed stands). Either way it is the question's
 `scale` (a question in more than one scale has them all, with commas between: "FTND, CDS-12"); staff see and
 change it on Edit Extraction, beside the question's tags. The push finds the scale by its abbreviation or name, ignoring case
 (`private.scale_id()`; one the database hasn't got is added, named by its abbreviation until staff give it its
@@ -100,7 +100,7 @@ question once no questionnaire prints it any more (a wave emptied, a block delet
 the order of a scale's questions isn't kept. A wave reopened for editing shows each question's scale again.
 
 **Open-ended variables and `answer_data_type`.** A question with two blanks ("___ feet ___ inches") is two
-MATR IDs, so two variables, each with its own data type and unit tag; that is one row per MATR ID, not a
+Variable IDs, so two variables, each with its own data type and unit tag; that is one row per Variable ID, not a
 duplicate. The data type is a check constraint on `variable`, not a Postgres enum type: a check is easier
 to change and shows up in the table editor; an enum type buys nothing here.
 
@@ -185,7 +185,7 @@ merged until one is taken off that variable, since each has a code of its own th
 as one change (its action is Deleted, as the merged row goes; the summary says "Merged ... into ...").
 
 **Multiple waves of one questionnaire.** A push into a second wave reuses the placements the questionnaire
-already has (same component under the same parent) and the variables with the same MATR ID on that
+already has (same component under the same parent) and the variables with the same Variable ID on that
 question, and only adds `wave_question` rows for the new wave.
 
 ## The functions the site calls (through `/rpc/`, as `service_role`)

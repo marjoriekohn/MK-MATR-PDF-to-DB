@@ -22,7 +22,7 @@ answer_option_entity <- list(
     )
   },
   # the variables that offer it, by their question: a choice like "k" only makes sense beside what was asked
-  # ("what grade is your child in?"). Each says its MATR ID and the code the choice has there, and opens the question.
+  # ("what grade is your child in?"). Each says its Variable ID and the code the choice has there, and opens the question.
   usage_rows = function(snap, row, table, rows) {
     if (table != "response_option") {
       return(NULL)

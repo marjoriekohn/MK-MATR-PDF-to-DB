@@ -5,8 +5,8 @@
 # one field is at fault, which (table, row, field), so the page can outline it.
 
 # Check a draft against the rules a questionnaire has to meet.
-# matr_ids: Whether a variable without a MATR ID is a problem. It is for staff reviewing a
-#   draft; not for the reading job, since Gemini never reads MATR IDs.
+# matr_ids: Whether a variable without a Variable ID is a problem. It is for staff reviewing a
+#   draft; not for the reading job, since Gemini never reads Variable IDs.
 # Returns: A data frame of `id` (the block to fix), `message` (what to do), and `table`, `row` and
 #   `field` (the field at fault: `NA` for a problem with the block as a whole, and `field` `NA` for
 #   one with a whole variable), in printed order; no rows if all is well.
@@ -114,7 +114,7 @@ variable_problems <- function(draft, matr_ids = TRUE) {
       table = "response_options", rows = choices$id, field = field
     )
   }
-  # A question's variables aren't asked for labels, or for labels that differ: each is one MATR ID, which is what
+  # A question's variables aren't asked for labels, or for labels that differ: each is one Variable ID, which is what
   # tells it from every other variable (checked below), and its tags say who and when it is about. A label is
   # only there when it says something the question's words and the tags don't.
   rbind(
@@ -128,10 +128,10 @@ variable_problems <- function(draft, matr_ids = TRUE) {
     box_problem(!is_choice_box & is.na(boxes$answer_data_type), "pick the kind of answer it takes.", "answer_data_type"),
     # The subject, time frame and unit aren't checked: blank is the respondent, and a new tag is added when the
     # extraction is pushed
-    if (matr_ids) box_problem(is.na(boxes$matr_id), "fill in its MATR ID.", "matr_id"), # every variable needs one before it is pushed
+    if (matr_ids) box_problem(is.na(boxes$matr_id), "fill in its Variable ID.", "matr_id"), # every variable needs one before it is pushed
     box_problem(
       duplicated_within(boxes$matr_id, "questionnaire"),
-      "give it a MATR ID no other variable has.", "matr_id"
+      "give it a Variable ID no other variable has.", "matr_id"
     )
   )
 }

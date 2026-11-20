@@ -79,5 +79,5 @@ test_that("only digits ask for a change, and one that isn't there says so", {
 })
 
 test_that("a database that can't be reached gives a sentence", {
-  expect_error(history_model_get_all(list(url = "http://127.0.0.1:1", key = "sb_secret_x")), "Couldn't reach the MATR database")
+  expect_error(history_model_get_all(list(url = "http://127.0.0.1:1", key = "sb_secret_x")), "Couldn't reach the CARA database")
 })

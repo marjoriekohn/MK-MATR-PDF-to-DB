@@ -22,7 +22,7 @@ test_that("a job runs in its own R process that loads the site's code and logs w
   expect_true(is.numeric(reading_model_pid(process)))
   process$wait(60000)
   expect_false(reading_model_is_running(process))
-  expect_match(paste(readLines(log), collapse = "\n"), "doesn't know where the MATR database is")
+  expect_match(paste(readLines(log), collapse = "\n"), "doesn't know where the CARA database is")
 })
 
 test_that("a job that is still running can be stopped", {

@@ -20,7 +20,7 @@
 #   model, prompt_version                          reading_status, reading_*, reading_error, model, prompt_version;
 #                                                  NULL for a Manual extraction
 #   info, matr_csv
-#   supplement = list(name, sha256): the optional file of MATR IDs and codes read after the questionnaire
+#   supplement = list(name, sha256): the optional file of Variable IDs and codes read after the questionnaire
 #                (service_reading.R), only named (sha256 for a PDF); saved as list(name, sha256, bytes) for a PDF
 #                or list(name, text) for a CSV or text file
 # The questionnaire itself (`questionnaire`), what the AI returned (`ai_original`) and how the reviewed copy
@@ -38,7 +38,7 @@
 # The PDFs aren't in the database: the record keeps their name, size and hash. Each upload is kept
 # in the project's Storage (the bucket `storage_pdf_bucket`, model_storage.R) under its SHA-256, so
 # every copy of the site can reach it, and on this server's disk in `uploads/pdfs/` (the option
-# matr.pdf_dir changes it), where the reading job opens it and the pages show it from. A server that
+# cara.pdf_dir changes it), where the reading job opens it and the pages show it from. A server that
 # hasn't got it (a hosted site loses its disk when it restarts) fetches it from Storage first
 # (extraction_model_local_pdf()). Its pages and size are a PDF_FILE row, which the extraction points at.
 
@@ -60,7 +60,7 @@ extraction_reading_fields <- c(
 )
 
 # What a list of records reads: everything but the questionnaire, the AI's answer and the edits. The file of
-# MATR IDs and codes is only named in a list (a CSV's text can be long, and lists are read every few seconds
+# Variable IDs and codes is only named in a list (a CSV's text can be long, and lists are read every few seconds
 # while a draft is read); extraction_model_supplement() reads all of it.
 extraction_record_select <- c(
   "extraction_id", "status", "summary", "method", "revision", "prepared_by", "saved_by",
@@ -298,7 +298,7 @@ extraction_model_clear_questionnaire <- function(connection, id, staff_id, expec
   invisible(extraction_model_patch(connection, id, changes, expected_revision)$revision)
 }
 
-# A draft's whole file of MATR IDs and codes (a record only names it).
+# A draft's whole file of Variable IDs and codes (a record only names it).
 # Returns: `list(name, sha256, bytes)` for a PDF, `list(name, text)` for text, or `NULL` for none.
 extraction_model_supplement <- function(connection, id) {
   extraction_model_select_one(connection, id, "supplement")$supplement
@@ -395,7 +395,7 @@ extraction_model_wave_files <- function(connection, wave_id) {
 }
 
 # ------ The PDFs --------------------------------------------------------------------
-extraction_model_pdf_dir <- function() getOption("matr.pdf_dir", "uploads/pdfs")
+extraction_model_pdf_dir <- function() getOption("cara.pdf_dir", "uploads/pdfs")
 
 extraction_model_pdf_path <- function(sha256) {
   file.path(extraction_model_pdf_dir(), paste0(sha256, ".pdf"))
@@ -403,7 +403,7 @@ extraction_model_pdf_path <- function(sha256) {
 
 # Keep an uploaded PDF: in Storage, a copy on this server, and its row (pages and size) in the database.
 # Named by its hash, so the same file is only ever kept once: in Storage (`storage_pdf_bucket`), in
-# `uploads/pdfs/` (the option `matr.pdf_dir` changes the folder) and as one PDF_FILE row.
+# `uploads/pdfs/` (the option `cara.pdf_dir` changes the folder) and as one PDF_FILE row.
 # upload_path: Where the upload is now.
 # sha256: Its SHA-256, from `extraction_model_sha256()`.
 # pages: Its page count (`extraction_model_page_count()`), or `NULL` if unknown.
@@ -443,7 +443,7 @@ extraction_model_local_pdf <- function(connection, sha256) {
 }
 
 # Remove a PDF nothing uses any more: its row, its copy in Storage and this server's.
-# A PDF is in use while an extraction (as its questionnaire or its file of MATR IDs and codes) or a wave
+# A PDF is in use while an extraction (as its questionnaire or its file of Variable IDs and codes) or a wave
 # names it.
 # sha256: The PDF's SHA-256, or `NULL`.
 # Returns: `TRUE` if it was removed, `FALSE` if something still uses it (or there is none), invisibly.

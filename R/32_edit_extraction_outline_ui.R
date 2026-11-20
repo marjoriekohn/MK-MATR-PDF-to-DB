@@ -1,7 +1,7 @@
 # The outline of the Edit Extraction page: the questionnaire's blocks as a list, and the picked block's
 # details beside it.
 # The list is for finding and ordering blocks: each row is its kind, its words, how many variables a question
-# has (pointing at the number lists their MATR IDs), what there is to fix, and an arrow that opens it.
+# has (pointing at the number lists their Variable IDs), what there is to fix, and an arrow that opens it.
 # Clicking a section or group opens it, or closes it when it is open. A section's or text block's
 # words are typed in the list once its edit button is pressed, and pointing at its row offers that, to change
 # its kind, and to delete it. A block verified is green, and a section or group once everything in it is. The
@@ -53,7 +53,7 @@ outline_divider <- function() {
 # sections and groups they are in). The page script does it; it isn't a Shiny input. Make an edit's list has one
 # too.
 # label: What it searches, for screen readers.
-outline_search <- function(label = "Search the blocks' words and MATR IDs") {
+outline_search <- function(label = "Search the blocks' words and Variable IDs") {
   span(
     class = "toolbar-field",
     app_icon("search"),
@@ -190,7 +190,7 @@ outline_tree <- function(draft, view, lookups, ns) {
 # takes as long again to rebuild it. So what a click changes without changing the layout is marked on
 # the outline already there instead: which row is selected, which sections and groups are closed, which
 # blocks are checked (a section or group is once everything inside it is), each block's problems and the
-# fields at fault, and each question's MATR IDs (listed when its count of variables is pointed at).
+# fields at fault, and each question's Variable IDs (listed when its count of variables is pointed at).
 # problems: From `draft_service_check()`.
 # selected: The selected block's id, or `NULL`.
 # collapsed: The ids of the closed sections and groups.
@@ -219,18 +219,18 @@ outline_marks <- function(draft, problems, selected, collapsed, ns, changed = NU
     all_checked = as.list(setdiff(checked, not_all)),
     check_titles = as.list(outline_check_titles),
     changed = if (!is.null(changed)) as.list(changed),
-    matr = question_matr_ids(draft)
+    variable = question_variable_ids(draft)
   )
 }
 
-# Each question's variables' MATR IDs, one line each in their order ("No MATR ID yet" for one without), named
+# Each question's variables' Variable IDs, one line each in their order ("No Variable ID yet" for one without), named
 # by the question's id.
-question_matr_ids <- function(draft) {
+question_variable_ids <- function(draft) {
   boxes <- draft$variables[order(draft$variables$component_id, draft$variables$display_order), , drop = FALSE]
   if (nrow(boxes) == 0) {
     return(stats::setNames(list(), character()))
   }
-  ids <- ifelse(is.na(boxes$matr_id) | !nzchar(trimws(boxes$matr_id)), "No MATR ID yet", boxes$matr_id)
+  ids <- ifelse(is.na(boxes$matr_id) | !nzchar(trimws(boxes$matr_id)), "No Variable ID yet", boxes$matr_id)
   as.list(vapply(split(ids, boxes$component_id), paste, character(1), collapse = "\n"))
 }
 
@@ -381,7 +381,7 @@ outline_text_field <- function(block, problems, ns) {
 }
 
 # What is said about the block at the end of its row: how many variables a question has, and what there is to
-# fix. Pointing at the number lists the variables' MATR IDs, which the page script keeps up to date as they are
+# fix. Pointing at the number lists the variables' Variable IDs, which the page script keeps up to date as they are
 # typed (outline_marks()). The problems badge is kept up to date by the page script as the checks run, so its
 # count is drawn as the script expects (data-problems).
 outline_badges <- function(block, draft, problems) {
@@ -475,7 +475,7 @@ duplicate_title <- function(block) {
 revert_title <- function(block) {
   paste0(
     "Put this ", tolower(block$component_type), " back as the AI read it",
-    if (block$component_type == "Question") ": its words, variables and choices. MATR IDs and codes stay" else ""
+    if (block$component_type == "Question") ": its words, variables and choices. Variable IDs and codes stay" else ""
   )
 }
 

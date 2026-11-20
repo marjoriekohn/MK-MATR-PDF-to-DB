@@ -1,4 +1,4 @@
-# The Edit History page: every change made to the MATR metadata database through this site.
+# The Edit History page: every change made to the CARA metadata database through this site.
 edit_history_ui <- function(id) {
   ns <- NS(id)
   div(
@@ -7,7 +7,7 @@ edit_history_ui <- function(id) {
     `data-ns` = ns(""),
     page_header(
       "Edit History",
-      "Every change made to the MATR metadata database through this site, newest first.",
+      "Every change made to the CARA metadata database through this site, newest first.",
       toggle_input(
         ns("kind"), c("All" = "all", stats::setNames(history_actions, history_actions)),
         selected = "all", label = "Kind of change"
@@ -57,6 +57,6 @@ history_counts_ui <- function(lines) {
 no_history <- function(filtered) {
   div(
     class = "list-card is-empty",
-    p(if (filtered) "No change matches that." else "Nothing has been changed in the MATR metadata database through this site yet.")
+    p(if (filtered) "No change matches that." else "Nothing has been changed in the CARA metadata database through this site yet.")
   )
 }

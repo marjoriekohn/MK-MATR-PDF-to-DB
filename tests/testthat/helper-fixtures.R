@@ -124,7 +124,7 @@ short_gold_draft <- function() {
   cached_fixture("short_gold_draft", function() draft_service_from_json(short_gold_json()))
 }
 
-# The gold questionnaire with a MATR ID on every variable (m001, m002...), since a blank one is a
+# The gold questionnaire with a Variable ID on every variable (m001, m002...), since a blank one is a
 # problem to fix: for tests about everything else the checks look at.
 with_matr_ids <- function(draft = gold_draft()) {
   draft$variables$matr_id <- sprintf("m%03d", seq_len(nrow(draft$variables)))
@@ -191,7 +191,7 @@ fake_upload <- function(name = "AHP_wave3.pdf", text = "%PDF-1.4\n<< /Type /Page
 
 local_pdf_cache <- function(env = parent.frame()) {
   dir <- withr::local_tempdir(.local_envir = env)
-  withr::local_options(matr.pdf_dir = dir, .local_envir = env)
+  withr::local_options(cara.pdf_dir = dir, .local_envir = env)
   dir
 }
 

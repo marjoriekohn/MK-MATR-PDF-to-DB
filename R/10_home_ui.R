@@ -19,7 +19,7 @@ home_ui <- function(id) {
     ),
     home_section(
       title = "How it works",
-      text = "From a questionnaire PDF to the MATR metadata database.",
+      text = "From a questionnaire PDF to the CARA metadata database.",
       layout_columns(
         col_widths = breakpoints(sm = 12, md = 6, xl = 3), fill = FALSE,
         home_step(1, "upload", "Upload the questionnaire", "Choose its PDF on New Extraction. Gemini reads it in the background."),
@@ -32,17 +32,17 @@ home_ui <- function(id) {
 }
 
 # The banner across the top: what the site is for, the two ways in, and how much this person has waiting
-# (`output$stats`, home_stats()). Dark, with the MATR logo on the right of a wide window.
+# (`output$stats`, home_stats()). Dark, with the logo on the right of a wide window.
 home_hero <- function(ns) {
   div(
     class = "home-hero",
     div(
       class = "home-hero-text",
-      span(class = "eyebrow is-on-dark", app_icon("metadata"), "Mid-Atlantic Twin Registry"),
-      h1("MATR Metadata Database"),
+      span(class = "eyebrow is-on-dark", app_icon("metadata"), "Cohort and Registry Administration Core"),
+      h1("CARA Metadata Database"),
       p(
         class = "home-hero-lead",
-        "Turn questionnaire PDFs into structured metadata, and keep the registry's studies, questionnaires and ",
+        "Turn questionnaire PDFs into structured metadata, and keep the registries' studies, questionnaires and ",
         "waves up to date, all in one place."
       ),
       div(

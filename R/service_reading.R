@@ -1,5 +1,5 @@
 # ------ Reading a questionnaire PDF ------------------------------------------------
-# Gemini reads the PDF with MATR's extraction prompt (prompts/extraction.md),
+# Gemini reads the PDF with CARA's extraction prompt (prompts/extraction.md),
 # answering with JSON in the shape the prompt describes: the questionnaire's
 # blocks, nested as printed. Gemini can only write so much in one answer, so it
 # reads two pages per request, the requests sent at once, and their answers are
@@ -8,9 +8,9 @@
 # Extraction page loads (tests/testthat/fixtures/gna_gold.json is a hand-checked example), and the draft checks
 # look it over. If they find problems, Gemini reads it once more, told what
 # they were, and the reading with fewer problems is kept. Then Gemini reads the draft's file of
-# MATR IDs and codes (its `supplement`), or without one the questionnaire PDF itself (some print each variable's
+# Variable IDs and codes (its `supplement`), or without one the questionnaire PDF itself (some print each variable's
 # name and codes, as REDCap's data dictionary does), in requests of their own (prompts/assign_codes.md), and the
-# variables get their MATR IDs and the choices their codes, with any choices the file codes that the
+# variables get their Variable IDs and the choices their codes, with any choices the file codes that the
 # questionnaire doesn't print (reading_service_assign()).
 #
 # The job writes the reading's own columns of EXTRACTION (reading_status, reading_claimed_at, reading_pid,
@@ -444,7 +444,7 @@ clean_number <- function(number) {
 reading_service_problems <- function(json, lookups) {
   draft <- draft_service_from_json(json)
   blocks <- draft$components
-  problems <- draft_service_check(draft, lookups, matr_ids = FALSE) # Gemini never reads MATR IDs
+  problems <- draft_service_check(draft, lookups, matr_ids = FALSE) # Gemini never reads Variable IDs
   where <- match(problems$id, blocks$id)
   # A parent named by a number no question has is dropped on loading, so the
   # checks never see it. Each block of the draft is found in the reading by its ref (its place in the reading):
@@ -481,14 +481,14 @@ block_name <- function(blocks) {
   )
 }
 
-# ------ MATR IDs and codes from a second file -------------------------------------------
-# Give a reading's variables their MATR IDs, and its choices their codes, from a file that lists them; and its
+# ------ Variable IDs and codes from a second file -------------------------------------------
+# Give a reading's variables their Variable IDs, and its choices their codes, from a file that lists them; and its
 # questions their measurement scale, when the file names one with the question ("Are you a worrier? (EPQ-R)").
 # Gemini reads the file (a codebook or a list: a PDF, or text; or the questionnaire PDF itself, when it prints
 # them) with the reading's variables, each named by an id (v1, v2... and o1, o2... for the choices, in printed
 # order), and answers with what the file gives for each. The variables go `reading_assign_batch` at a time, each
 # batch with the whole file (or, for a long questionnaire PDF, the pages its variables are on), the requests sent
-# at once. Only what it gives is filled in. A MATR ID it gives two variables, or codes that repeat within a
+# at once. Only what it gives is filled in. A Variable ID it gives two variables, or codes that repeat within a
 # variable, are left out, for staff to give on the Edit Extraction page.
 # json: A reading, as `reading_service_tidy()` returns it.
 # supplement: The file: `list(name, path)` for a PDF, `list(name, text)` for text
@@ -676,7 +676,7 @@ variable_owners <- function(blocks) {
   stats::setNames(owners, paste0("v", seq_along(owners)))
 }
 
-# The MATR IDs (in lower case) Gemini gave more than one variable, which none of them keeps: but the boxes of one
+# The Variable IDs (in lower case) Gemini gave more than one variable, which none of them keeps: but the boxes of one
 # question given one field's name, each with its code (`box_codes`), are one variable once joined.
 names_given_twice <- function(matr_ids, box_codes, owners) {
   if (length(matr_ids) == 0) {
@@ -701,11 +701,11 @@ with_more_choices <- function(choices, more) {
 }
 
 # A question's variables with the boxes of a check-all list that the file codes as one variable joined into one,
-# in the first box's place: the field's name as its MATR ID, and a choice for each box, the box's words (its
+# in the first box's place: the field's name as its Variable ID, and a choice for each box, the box's words (its
 # label; for a box of a person, its subject) coded as the file codes the box. Boxes that can't be joined (two with
 # one code or the same words, or about different times or, beside a label, different people) keep their own
 # choices, and none keeps the field's name.
-# variables: The question's variables, with the MATR IDs given.
+# variables: The question's variables, with the Variable IDs given.
 # ids: Their ids ("v1"...).
 # box_codes: Each box's code, by id.
 join_boxes <- function(variables, ids, box_codes) {
@@ -756,7 +756,7 @@ join_boxes <- function(variables, ids, box_codes) {
 # extraction_status along
 #   queued -> sent -> received -> assigning -> ready      or stops at failed
 # and saves the questionnaire to the draft. `assigning` is a step of its own: the questionnaire has been read
-# and checked, and Gemini is giving its variables their MATR IDs and its choices their codes, from the draft's
+# and checked, and Gemini is giving its variables their Variable IDs and its choices their codes, from the draft's
 # file of Variable Names and Coding or else from the PDF itself. That adds only those, and the choices the file
 # codes that the questionnaire doesn't print; the questionnaire stays as it was read. "Try reading again"
 # sets it back to queued, which starts a new job. Jobs outlive the session that
@@ -835,7 +835,7 @@ reading_service_run <- function(connection, id, reading_started, read = reading_
       reading <- read(pdf$path, lookups, progress = function(status) update(extraction_status = status))
       # Then, as a step of its own, the Variable Names and Coding: from the draft's file of them (it may have been
       # added while the questionnaire was read), or else from the questionnaire PDF itself, which may print them
-      # (REDCap's data dictionary does; if it doesn't, nothing is given). Only MATR IDs, codes, scales and the
+      # (REDCap's data dictionary does; if it doesn't, nothing is given). Only Variable IDs, codes, scales and the
       # choices the file codes are added. If the file can't be read, the questionnaire stands as it was read (why
       # is kept, to show on the step) and the IDs are given on Edit Extraction.
       not_applied <- NULL

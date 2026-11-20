@@ -9,7 +9,7 @@
 # Drawing the whole list takes seconds for a long questionnaire, for the server and again for the
 # browser, so it is drawn only when a draft opens or much of it changes. What a click or keystroke
 # changes without changing the layout (which block is selected, which sections are closed, which blocks
-# are checked, which blocks and fields have problems, and which uploaded MATR IDs are still free) is sent to
+# are checked, which blocks and fields have problems, and which uploaded Variable IDs are still free) is sent to
 # the page script, which marks the rows and fields (`outline_marks()`). When the layout changes (a block or
 # variable added, deleted, moved or picked from a list) only what is different is drawn and put in place
 # (`outline_patch()`). Words being typed are never drawn again, so the field being typed in is left alone.

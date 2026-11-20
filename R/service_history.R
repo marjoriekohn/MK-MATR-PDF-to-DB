@@ -1,5 +1,5 @@
 # ------ Edit History ---------------------------------------------------------------
-# What the Edit History page shows: every change made to the MATR metadata database through this site,
+# What the Edit History page shows: every change made to the CARA metadata database through this site,
 # newest first, who made each, and what each did. Only reads; the database writes the history as it
 # changes the catalog (model_history.R).
 

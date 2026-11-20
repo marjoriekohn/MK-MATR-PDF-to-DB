@@ -1,5 +1,5 @@
 # The Metadata page (the module is called make_edit).
-# Everything staff can add, change, merge, empty or delete in the MATR metadata database, laid out as Edit
+# Everything staff can add, change, merge, empty or delete in the CARA metadata database, laid out as Edit
 # Extraction lays out a questionnaire: a list on the left and the item picked on the right. Each kind of thing is a
 # section of the list (`make_edit_lists`), closed until it is clicked; open, it lists that kind's items, by name,
 # and + Add. The details show the item picked: what it belongs to as tags that open it, what its own form changes

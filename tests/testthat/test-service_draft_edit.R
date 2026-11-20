@@ -272,8 +272,8 @@ test_that("new choices take the next code in their box, counting from 1", {
   expect_true(is.na(codes_in(draft_service_add_choice(blanked, box), other)[1]))
 })
 
-# ------ MATR IDs ---------------------------------------------------------------------
-test_that("a MATR ID goes to one variable only: typed where another has it, it moves there", {
+# ------ Variable IDs ---------------------------------------------------------------------
+test_that("a Variable ID goes to one variable only: typed where another has it, it moves there", {
   draft <- gold_draft()
   boxes <- draft_service_boxes_in_order(draft)
   draft <- draft_service_update(draft, "variables", boxes[1], "matr_id", "AH1")
@@ -451,8 +451,8 @@ test_that("questions are numbered 1, 2, 3... in printed order, and renumbered wh
   expect_identical(draft_service_renumber_questions(draft), draft) # numbering twice changes nothing
 })
 
-# ------ MATR IDs from the questionnaire's earlier waves -------------------------------------------------
-test_that("a question worded like a recorded one gets its variables' MATR IDs, blank ones only, each once", {
+# ------ Variable IDs from the questionnaire's earlier waves -------------------------------------------------
+test_that("a question worded like a recorded one gets its variables' Variable IDs, blank ones only, each once", {
   draft <- gold_draft()
   draft$variables$matr_id <- NA_character_
   q <- draft$components[draft$components$component_type == "Question", ][1, ]
@@ -463,7 +463,7 @@ test_that("a question worded like a recorded one gets its variables' MATR IDs, b
     text = c(toupper(paste0("  ", q$text, " ")), q$text, "Some other question"),
     matr_id = c("AH01", "AH02", "AH99"), display_order = c(1, 2, 1), stringsAsFactors = FALSE
   )
-  expect_message(filled <- draft_service_fill_recorded_matr_ids(draft, recorded), "MATR IDs of 2 variables from the questionnaire's earlier waves")
+  expect_message(filled <- draft_service_fill_recorded_matr_ids(draft, recorded), "Variable IDs of 2 variables from the questionnaire's earlier waves")
   expect_equal(filled$variables$matr_id[match(boxes$id, filled$variables$id)], c("AH01", "AH02"))
   expect_equal(sum(!is.na(filled$variables$matr_id)), 2)
 
@@ -481,11 +481,11 @@ test_that("a question worded like a recorded one gets its variables' MATR IDs, b
   # nothing recorded, nothing said
   expect_no_message(same <- draft_service_fill_recorded_matr_ids(draft, recorded[0, ]))
   expect_identical(same, draft)
-  # from another questionnaire picked in the MATR IDs dialog, the message names it
-  expect_message(draft_service_fill_recorded_matr_ids(draft, recorded, from = "AHP"), "MATR IDs of 2 variables from AHP, where")
+  # from another questionnaire picked in the Variable IDs dialog, the message names it
+  expect_message(draft_service_fill_recorded_matr_ids(draft, recorded, from = "AHP"), "Variable IDs of 2 variables from AHP, where")
 })
 
-test_that("a recorded questionnaire's MATR IDs are listed with their question's words, ready to fill a draft", {
+test_that("a recorded questionnaire's Variable IDs are listed with their question's words, ready to fill a draft", {
   # as extraction_service_recorded() reads them: placements with their component embedded, and the variables
   placements <- list(
     list(placement_id = 10, component = list(kind = "Section", text = "part a")),
@@ -699,7 +699,7 @@ test_that("a duplicated question is a new block right after it, with copies of i
   draft <- with_matr_ids(gold_draft())
   q1a <- block_numbered(draft, "1a")$id
   draft <- with_checked(draft, q1a)
-  expect_message(copied <- draft_service_duplicate(draft, q1a), "Copied the question. The copy is right after it: its variables need MATR IDs of their own.", fixed = TRUE)
+  expect_message(copied <- draft_service_duplicate(draft, q1a), "Copied the question. The copy is right after it: its variables need Variable IDs of their own.", fixed = TRUE)
   new_id <- setdiff(copied$components$id, draft$components$id)
   expect_equal(new_id, draft_service_next_id(draft, "components")) # so the page can pick it
   beside <- draft_service_children(copied, "components", component(draft, q1a)$parent_id)$id
@@ -714,7 +714,7 @@ test_that("a duplicated question is a new block right after it, with copies of i
   was <- draft_service_children(copied, "variables", q1a)
   expect_gt(nrow(was), 0)
   expect_equal(boxes[c("variable_type", "label", "subject", "answer_data_type", "display_order")], was[c("variable_type", "label", "subject", "answer_data_type", "display_order")], ignore_attr = TRUE)
-  expect_true(all(is.na(boxes$matr_id)) && all(is.na(boxes$ref))) # a MATR ID names one variable
+  expect_true(all(is.na(boxes$matr_id)) && all(is.na(boxes$ref))) # a Variable ID names one variable
   expect_false(anyNA(was$matr_id))
   choices <- function(ids) do.call(rbind, lapply(ids, function(id) draft_service_children(copied, "response_options", id)[c("answer_option", "code_value")]))
   expect_equal(choices(boxes$id), choices(was$id), ignore_attr = TRUE)
@@ -755,7 +755,7 @@ test_that("a duplicated section or group brings everything inside it, in order, 
 })
 
 # ------ Going back to what the AI read ------------------------------------------------
-test_that("a block put back is as the AI read it: its words, its variables and their choices, keeping MATR IDs and codes", {
+test_that("a block put back is as the AI read it: its words, its variables and their choices, keeping Variable IDs and codes", {
   original <- gold_draft()
   q1a <- block_numbered(original, "1a")$id
   q1b <- block_numbered(original, "1b")$id
@@ -778,7 +778,7 @@ test_that("a block put back is as the AI read it: its words, its variables and t
   expect_equal(component(back, q1a)$printed_number, component(original, q1a)$printed_number)
   boxes <- draft_service_children(back, "variables", q1a)
   expect_equal(boxes$ref, draft_service_children(original, "variables", q1a)$id) # the AI's variables, and no other
-  expect_equal(boxes$matr_id[1], "GNA_1A") # a MATR ID isn't the AI's: it stays
+  expect_equal(boxes$matr_id[1], "GNA_1A") # a Variable ID isn't the AI's: it stays
   choices <- draft_service_children(back, "response_options", boxes$id[1])
   was <- draft_service_children(original, "response_options", box)
   expect_equal(choices$answer_option, was$answer_option)
@@ -800,7 +800,7 @@ test_that("a block the AI didn't read, or one that is as it read it, has nothing
   expect_error(draft_service_revert_block(reviewed, original, "c9999"), "no longer in the draft")
   expect_message(same <- draft_service_revert_block(reviewed, original, q1a), "already as the AI read it")
   expect_identical(same, reviewed)
-  # moving it, checking it and giving its variables MATR IDs aren't changes to what the AI read
+  # moving it, checking it and giving its variables Variable IDs aren't changes to what the AI read
   ticked <- draft_service_update(original, "components", q1a, "checked", TRUE)
   expect_message(kept <- draft_service_revert_block(ticked, original, q1a), "already as the AI read it")
   expect_true(component(kept, q1a)$checked)

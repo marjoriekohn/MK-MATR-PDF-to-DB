@@ -54,8 +54,8 @@ test_that("the problem form's address is the Google Form", {
 test_that("the site's address is put together from what the browser says, or is blank when it hasn't said", {
   session <- function(...) list(clientData = list(...))
   expect_equal(
-    site_address(session(url_protocol = "https:", url_hostname = "matr.example.org", url_port = "", url_pathname = "/admin/")),
-    "https://matr.example.org/admin/"
+    site_address(session(url_protocol = "https:", url_hostname = "cara.example.org", url_port = "", url_pathname = "/admin/")),
+    "https://cara.example.org/admin/"
   )
   expect_equal(site_address(session(url_protocol = "http:", url_hostname = "localhost", url_port = "5599", url_pathname = "/")), "http://localhost:5599/")
   expect_equal(site_address(session()), "") # not "//"

@@ -3,7 +3,7 @@
 # tag variables with (who a variable is about, when it is about, what unit a number is in) are rows
 # of TAG, one list with a kind each, which the push adds to as staff type new ones. The standard
 # answer choices are ANSWER_OPTION, and the scales a question can belong to MEASUREMENT_SCALE.
-# `connection` is the MATR database (model_database.R).
+# `connection` is the CARA database (model_database.R).
 
 # Every tag: the subjects, time frames and units there are.
 # Returns: A data frame with `tag_id`, `kind` ("subject", "time frame" or "unit") and `name`.

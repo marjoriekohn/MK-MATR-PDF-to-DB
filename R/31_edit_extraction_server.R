@@ -21,10 +21,10 @@ autosave_delay <- 60
 # questionnaire and wave, `extraction_info_server()`), whether the database would take it (it tries the
 # push and undoes it: `extraction_service_push_preview()`) and the questionnaire laid out as a table, with
 # NEW beside what the database doesn't have yet. Push
-# writes it all into the MATR metadata database at once (`service_extraction_push.R`); nothing is added
+# writes it all into the CARA metadata database at once (`service_extraction_push.R`); nothing is added
 # before. Each question shows its place among the questions (worked out from the outline, and kept up to
 # date as blocks move) and the number printed beside it (read off the PDF, and corrected by staff); the wave
-# records both. A draft going into a recorded questionnaire gets the MATR IDs its questions already have.
+# records both. A draft going into a recorded questionnaire gets the Variable IDs its questions already have.
 # One person at a time works on a draft (see `service_draft_row.R`). Opening one here claims it; while
 # someone else has it, opening it asks whether to take it over instead. The page renews the claim while
 # staff are active on the site, and lets it go when they leave the page with nothing unsaved, close it,
@@ -178,7 +178,7 @@ edit_extraction_server <- function(
           # lists drafts, so the page isn't held up by it while staff work
           if (!quietly) extractions$changed()
           if (!quietly) {
-            showNotification("Saved. Nothing is added to the MATR metadata database until you push it.", type = "message")
+            showNotification("Saved. Nothing is added to the CARA metadata database until you push it.", type = "message")
           }
           TRUE
         },
@@ -285,7 +285,7 @@ edit_extraction_server <- function(
 
     # ------ What the recorded questionnaire has already -----------------------------
     # For a wave of a recorded questionnaire: the words its blocks have (offered while typing) and its
-    # questions' MATR IDs (filled in where the question is worded the same). Read when a draft opens,
+    # questions' Variable IDs (filled in where the question is worded the same). Read when a draft opens,
     # from the Basic Info saved with it; a read that fails leaves nothing to offer, with a warning.
     read_recorded <- function(opened, info = extraction_service_info(opened)) {
       recorded(try_showing(
@@ -294,7 +294,7 @@ edit_extraction_server <- function(
       ))
     }
 
-    # Blank MATR IDs of questions the recorded questionnaire already asks are filled in. It is a change
+    # Blank Variable IDs of questions the recorded questionnaire already asks are filled in. It is a change
     # like any other (Undo takes it back, Save keeps it) that doesn't take a check off.
     fill_recorded_matr_ids <- function() {
       known <- recorded()$matr_ids
@@ -574,7 +574,7 @@ edit_extraction_server <- function(
     # NEW beside what the dry run says the database doesn't have yet.
     # Opening it saves anything unsaved first (and a reopened draft not saved since it opened, for its
     # corrections), so the dry run and the push read what is on screen. Push
-    # writes it all into the MATR metadata database at once; until then nothing is added.
+    # writes it all into the CARA metadata database at once; until then nothing is added.
     push_open <- reactiveVal(FALSE)
     dry_run <- reactiveVal(NULL) # the counts the dry run returned, the error it raised, or NULL while it isn't tried
     dry_run_for <- NULL # what the dry run was last tried for, so one change is one dry run
@@ -774,7 +774,7 @@ edit_extraction_server <- function(
       req(record())
       actionButton(
         ns("request"), icon_label("preview", "Preview and push"), class = "btn-primary",
-        title = "See what pushing adds to the MATR metadata database, and push it"
+        title = "See what pushing adds to the CARA metadata database, and push it"
       )
     })
 

@@ -329,10 +329,10 @@
   // the outline was drawn with stay as they are.
   let marks = {
     selected: null, problems: [], fields: [], labels: null, label_list: null,
-    collapsed: null, checked: null, all_checked: null, check_titles: null, changed: null, matr: {}
+    collapsed: null, checked: null, all_checked: null, check_titles: null, changed: null, variable: {}
   };
 
-  // Closed sections, open question panels, checked blocks, and the MATR IDs a question's count lists.
+  // Closed sections, open question panels, checked blocks, and the Variable IDs a question's count lists.
   function applyStateMarks(node, row) {
     const id = row.dataset.id;
     if (marks.collapsed) {
@@ -343,7 +343,7 @@
     if (marks.checked) row.classList.toggle('is-verified', marks.checked.has(id)); // green once verified
     row.classList.toggle('is-changed', !!(marks.changed && marks.changed.has(id))); // its Revert button shows
     const count = row.querySelector(':scope > .outline-badges > .outline-count');
-    if (count) count.dataset.matr = marks.matr[id] || '';
+    if (count) count.dataset.variable = marks.variable[id] || '';
     const check = row.querySelector(':scope > .outline-actions > .outline-check');
     if (!check || !marks.checked) return;
     const checked = marks.checked.has(id);
@@ -573,7 +573,7 @@
 
   // ------ What there is to fix, listed as it is pointed at ---------------------------------
   // A row's "N to fix" badge lists that block's problems, and the toolbar's "N blocks to fix" every block's,
-  // each a link to its block. A question's count of variables lists their MATR IDs the same way (not in red).
+  // each a link to its block. A question's count of variables lists their Variable IDs the same way (not in red).
   // The list is made only when it is shown, from what the marks already hold.
   const problemPop = {
     box: null,
@@ -582,7 +582,7 @@
 
     items: function (owner) {
       if (owner.matches('.outline-count')) {
-        return (owner.dataset.matr || '').split('\n').filter(Boolean).map(function (text) { return { text: text }; });
+        return (owner.dataset.variable || '').split('\n').filter(Boolean).map(function (text) { return { text: text }; });
       }
       if (owner.matches('.outline-problems')) {
         return (owner.dataset.problems || '').split('\n').filter(Boolean).map(function (text) { return { text: text }; });
@@ -654,7 +654,7 @@
     }
   };
 
-  const problemOwners = '.outline-problems:not(.is-hidden), .to-fix-note:not(.is-clear), .outline-count[data-matr]:not([data-matr=""])';
+  const problemOwners = '.outline-problems:not(.is-hidden), .to-fix-note:not(.is-clear), .outline-count[data-variable]:not([data-variable=""])';
   document.addEventListener('mouseover', function (event) {
     const owner = event.target.closest && event.target.closest(problemOwners);
     if (owner && owner !== problemPop.owner) problemPop.show(owner);
@@ -851,7 +851,7 @@
         labels: sent.labels || [], label_list: sent.label_list || null,
         collapsed: set(sent.collapsed), checked: set(sent.checked),
         all_checked: set(sent.all_checked) || new Set(), check_titles: sent.check_titles || null,
-        changed: set(sent.changed), matr: sent.matr && !Array.isArray(sent.matr) ? sent.matr : {}
+        changed: set(sent.changed), variable: sent.variable && !Array.isArray(sent.variable) ? sent.variable : {}
       };
       applyMarks();
     });

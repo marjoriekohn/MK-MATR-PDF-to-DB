@@ -415,8 +415,8 @@ test_that("what stops a question being added is said under the variables field",
     form <- form_for("placement", "add", scope = "1", placement__kind = "Question", placement__text = "Q", placement__asked_in = "1", placement__variables = variables_json(...))
     edit_service_check(form$fields, form$values)$problems$placement__variables
   }
-  expect_equal(problem(list(variable_type = "closed_ended", matr_id = "", response_options = list(choice("1", "Yes")))), "Variable 1: fill in its MATR ID.")
-  expect_equal(problem(list(variable_type = "closed_ended", matr_id = "AH02SM", response_options = list(choice("1", "Yes")))), "Variable 1: AH02SM is already a MATR ID in this questionnaire. Give it one of its own.")
+  expect_equal(problem(list(variable_type = "closed_ended", matr_id = "", response_options = list(choice("1", "Yes")))), "Variable 1: fill in its Variable ID.")
+  expect_equal(problem(list(variable_type = "closed_ended", matr_id = "AH02SM", response_options = list(choice("1", "Yes")))), "Variable 1: AH02SM is already a Variable ID in this questionnaire. Give it one of its own.")
   expect_equal(problem(list(variable_type = "open_ended", matr_id = "X1", answer_data_type = "")), "Variable 1: pick the kind of answer it takes.")
   expect_equal(problem(list(variable_type = "closed_ended", matr_id = "X1", response_options = list())), "Variable 1: add its choices.")
   expect_equal(problem(list(variable_type = "closed_ended", matr_id = "X1", response_options = list(choice("1", "Yes"), choice("1", "No")))), "Variable 1: give each choice its own code.")
@@ -424,7 +424,7 @@ test_that("what stops a question being added is said under the variables field",
   expect_equal(problem(
     list(variable_type = "open_ended", matr_id = "X1", answer_data_type = "TEXT"),
     list(variable_type = "open_ended", matr_id = "X1", answer_data_type = "TEXT")
-  ), "Variable 2: give it a MATR ID no other variable has.")
+  ), "Variable 2: give it a Variable ID no other variable has.")
   expect_null(problem(list(variable_type = "open_ended", matr_id = "X1", answer_data_type = "TEXT")))
   # a question needs a wave that asks it; a questionnaire with none can't have one yet
   form <- form_for("placement", "add", scope = "1", placement__kind = "Question", placement__text = "Q", placement__asked_in = "")

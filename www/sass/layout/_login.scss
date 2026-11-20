@@ -48,7 +48,7 @@
   &.is-problem { @include note($vcu-red, 0.08); }
 }
 
-// ------ The test database, when the site runs on it (MATR_DATABASE=test) -----
+// ------ The test database, when the site runs on it (CARA_DATABASE=test) -----
 .navbar-test-database {
   padding: 0.3rem 0.7rem;
   border-radius: $border-radius-pill;

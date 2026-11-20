@@ -18,7 +18,7 @@ placement_entity <- list(
   group = "In one questionnaire only", table = "placement", scope = questionnaire_scope,
   about = paste0(
     "A block as it's printed in one questionnaire: where it sits in the outline, and for a question the question ",
-    "it depends on, the number it was given in each wave, and its variables with their MATR IDs and choices. ",
+    "it depends on, the number it was given in each wave, and its variables with their Variable IDs and choices. ",
     "Changes here only affect that questionnaire."
   ),
   update_about = "You're changing this questionnaire only. Other questionnaires that print the same block are not affected.",
@@ -218,7 +218,7 @@ edit_placement_add_fields <- function(snap, scope) {
       required = TRUE, default = edit_variables_default(),
       options = edit_variables_options(snap),
       hint = paste(
-        "One for each answer a respondent can record, in printed order, each with its MATR ID. A lone check",
+        "One for each answer a respondent can record, in printed order, each with its Variable ID. A lone check",
         "box has one choice: only choices printed on the form are choices."
       ),
       problem = edit_variables_problem(snap, q)

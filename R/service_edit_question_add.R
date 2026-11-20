@@ -1,6 +1,6 @@
 # ------ A question's variables, typed on Make an edit ----------------------------------------------
 # A question added to a questionnaire on Make an edit comes whole: its wording, where it sits, the waves that ask
-# it, and its variables with their MATR IDs, choices and tags (service_edit_placement.R). The variables are typed
+# it, and its variables with their Variable IDs, choices and tags (service_edit_placement.R). The variables are typed
 # in one field (type "variables"), edited with the Edit Extraction page's variable editor
 # (variable_editor_server()), which keeps the field's value as JSON: a list of variables in the shape an
 # extraction saves (docs/database_design.md): variable_type, matr_id, label, subject, time_frame, unit, and for
@@ -60,7 +60,7 @@ edit_choice_answers <- function(choices) {
 }
 
 # The check of the variables field.
-# The rules the database keeps, for the variables of one question: each has a MATR ID no other variable of the
+# The rules the database keeps, for the variables of one question: each has a Variable ID no other variable of the
 # questionnaire has, and either the kind of answer it takes (a write-in) or its choices, each filled in, listed
 # once and with a code of its own.
 # Returns: A function of `(value, values)` giving the first problem as a sentence, or `NULL`.
@@ -79,13 +79,13 @@ edit_variables_problem <- function(snap, q) {
       box <- variables[[i]]
       say <- function(text) sprintf("Variable %d: %s", i, text)
       if (!nzchar(ids[i])) {
-        return(say("fill in its MATR ID."))
+        return(say("fill in its Variable ID."))
       }
       if (ids[i] %in% ids[seq_len(i - 1)]) {
-        return(say("give it a MATR ID no other variable has."))
+        return(say("give it a Variable ID no other variable has."))
       }
       if (ids[i] %in% taken) {
-        return(say(sprintf("%s is already a MATR ID in this questionnaire. Give it one of its own.", ids[i])))
+        return(say(sprintf("%s is already a Variable ID in this questionnaire. Give it one of its own.", ids[i])))
       }
       if (identical(box$variable_type, "open_ended")) {
         if (!edit_variable_text(box$answer_data_type) %in% c("NUMBER", "TEXT", "DATE", "TIME")) {

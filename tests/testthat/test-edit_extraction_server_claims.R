@@ -15,7 +15,7 @@ test_that("the header is the title and its buttons on one row, with the progress
   expect_false(grepl("btn-sm|form-control-sm|form-select-sm", toolbar))
   # each button is its icon and its words; on a phone only the icon shows (components/_buttons.scss)
   expect_match(html, '<span class="btn-text">Undo</span>')
-  expect_false(grepl('<span class="btn-text">MATR IDs</span>', html, fixed = TRUE)) # reading gives them out
+  expect_false(grepl('<span class="btn-text">Variable IDs</span>', html, fixed = TRUE)) # reading gives them out
   expect_match(as.character(pdf_open_button("http://x/pdf")), '<span class="btn-text">Open PDF</span>')
 })
 

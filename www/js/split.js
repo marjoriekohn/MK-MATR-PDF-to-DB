@@ -13,7 +13,7 @@
 
   function keyOf(split) {
     const module = split.closest('[data-ns]');
-    return 'matr.outline-width.' + (module ? module.dataset.ns : 'page');
+    return 'cara.outline-width.' + (module ? module.dataset.ns : 'page');
   }
 
   function remembered(split) {

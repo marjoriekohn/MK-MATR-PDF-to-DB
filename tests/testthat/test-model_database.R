@@ -152,7 +152,7 @@ test_that("a row the database has already, with the same name or words, says not
   body <- jsonlite::toJSON(list(code = "23505", message = "duplicate key value violates unique constraint \"subject_name_unique\""), auto_unbox = TRUE)
   response <- httr2::response(status_code = 409, headers = list(`Content-Type` = "application/json"), body = charToRaw(as.character(body)))
   said <- database_problem(response)
-  expect_match(said, "^The MATR database already has one with the same name or words, so nothing was changed")
+  expect_match(said, "^The CARA database already has one with the same name or words, so nothing was changed")
   expect_match(said, "subject_name_unique", fixed = TRUE)
   expect_match(said, "try again\\.$")
 })
@@ -165,7 +165,7 @@ test_that("a missing table and an unreachable database are sentences too", {
   # nothing listens on port 1
   expect_error(
     registry_model_get_all(list(url = "http://127.0.0.1:1", key = "sb_secret_x")),
-    "Couldn't reach the MATR database"
+    "Couldn't reach the CARA database"
   )
 })
 
@@ -187,7 +187,7 @@ test_that("the database's description of itself is read from the API's root, and
   }
 })
 
-test_that("MATR_DATABASE picks the live or the test database, and says what's wrong with anything else", {
+test_that("CARA_DATABASE picks the live or the test database, and says what's wrong with anything else", {
   withr::local_envvar(
     SUPABASE_URL = "https://live.supabase.co", SUPABASE_SECRET_KEY = "live-secret", SUPABASE_PUBLISHABLE_KEY = "live-pub",
     TEST_SUPABASE_URL = "https://test.supabase.co", TEST_SUPABASE_SECRET_KEY = "test-secret", TEST_SUPABASE_PUBLISHABLE_KEY = "test-pub"

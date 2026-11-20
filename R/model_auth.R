@@ -99,7 +99,7 @@ auth_model_sign_out <- function(auth, access_token) {
 
 # Make an account, as the project's administrator.
 # The email is marked confirmed, so the account can sign in at once.
-# connection: The MATR database, `list(url, key)`; see `model_database.R`. The secret key.
+# connection: The CARA database, `list(url, key)`; see `model_database.R`. The secret key.
 # email: The account's email.
 # password: Its password.
 # Returns: The account's `id`.
@@ -112,7 +112,7 @@ auth_model_admin_create_user <- function(connection, email, password) {
 }
 
 # Remove an account, as the project's administrator.
-# connection: The MATR database, `list(url, key)`; see `model_database.R`. The secret key.
+# connection: The CARA database, `list(url, key)`; see `model_database.R`. The secret key.
 # user_id: The account's id.
 auth_model_admin_delete_user <- function(connection, user_id) {
   if (!grepl("^[A-Za-z0-9-]+$", user_id %||% "")) stop("That isn't an account id.", call. = FALSE)

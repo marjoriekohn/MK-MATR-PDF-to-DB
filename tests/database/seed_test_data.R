@@ -6,7 +6,7 @@
 # The seed (sql/7_seed.sql) gives the test project its registries, studies, questionnaires and waves, with
 # nothing extracted. This puts made-up content into two of the seed's waves, shaped like the questionnaires
 # staff extract: sections with headings, an introduction and instructions, a grid whose items finish a lead-in,
-# a follow-up that depends on the question before it, MATR IDs in the registry's style, open-ended answers with
+# a follow-up that depends on the question before it, Variable IDs in the registry's style, open-ended answers with
 # units, and the answer choices real questionnaires print.
 #
 # Each goes in through the path the site uses: an `extraction` row (method Manual, prepared by a sample ADMIN,
@@ -203,7 +203,7 @@ check <- function(json, label) {
   }
   visit(json$components)
   repeated <- unique(matr_ids[duplicated(matr_ids)])
-  if (length(repeated) > 0) stop(label, " uses a MATR ID twice: ", paste(repeated, collapse = ", "), call. = FALSE)
+  if (length(repeated) > 0) stop(label, " uses a Variable ID twice: ", paste(repeated, collapse = ", "), call. = FALSE)
   n
 }
 

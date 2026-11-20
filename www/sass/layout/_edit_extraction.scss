@@ -220,7 +220,7 @@
   font-size: $font-size-sm;
   ul { margin: 0; padding-left: 1rem; }
   li + li { margin-top: 0.25rem; }
-  // a question's MATR IDs, listed as its count of variables is pointed at
+  // a question's Variable IDs, listed as its count of variables is pointed at
   &.is-info { border-left-color: $vcu-gray; ul { padding-left: 0; list-style: none; font-family: $font-family-monospace; } }
 }
 .outline-count { cursor: help; }

@@ -1,12 +1,12 @@
-test_that("the hand-checked extraction passes every check once its MATR IDs are filled in", {
+test_that("the hand-checked extraction passes every check once its Variable IDs are filled in", {
   expect_equal(nrow(draft_service_check(with_matr_ids(), test_lookups())), 0)
 })
 
-test_that("every variable without a MATR ID is a problem to fix, named for its question", {
+test_that("every variable without a Variable ID is a problem to fix, named for its question", {
   problems <- draft_service_check(gold_draft(), test_lookups())
   questions <- gold_draft()$components$id[gold_draft()$components$component_type == "Question"]
   expect_setequal(unique(problems$id), questions)
-  expect_true(all(grepl("^Variable [0-9]+: fill in its MATR ID\\.$", problems$message)))
+  expect_true(all(grepl("^Variable [0-9]+: fill in its Variable ID\\.$", problems$message)))
   expect_equal(nrow(problems), nrow(gold_draft()$variables))
   expect_equal(nrow(draft_service_check(gold_draft(), test_lookups(), matr_ids = FALSE)), 0) # as the reading job checks
 })
@@ -46,13 +46,13 @@ test_that("each broken rule is reported against the block to fix", {
   expect_false(problem_for(edit("variables", box, "subject", "Respondents Family"), "Variable"))
   expect_false(problem_for(edit("variables", box, "subject", ""), "Variable"))
   expect_true(problem_for(edit("variables", box, "variable_type", "open_ended"), "kind of answer"))
-  expect_true(problem_for(edit("variables", box, "matr_id", ""), "fill in its MATR ID"))
+  expect_true(problem_for(edit("variables", box, "matr_id", ""), "fill in its Variable ID"))
 
-  # editing refuses a MATR ID another variable has, but a draft can come with one (from the AI, or saved before)
+  # editing refuses a Variable ID another variable has, but a draft can come with one (from the AI, or saved before)
   q1b_box <- draft_service_children(draft, "variables", q1b)$id
   same_ids <- edit("variables", box, "matr_id", "q1a")
   same_ids$variables$matr_id[same_ids$variables$id == q1b_box] <- "q1a"
-  expect_true(problem_for(same_ids, "MATR ID no other variable has"))
+  expect_true(problem_for(same_ids, "Variable ID no other variable has"))
 })
 
 test_that("a problem with one field says which, so the page can outline it", {
@@ -64,7 +64,7 @@ test_that("a problem with one field says which, so the page can outline it", {
     problems <- draft_service_check(broken, test_lookups())
     problems[grepl(message, problems$message, fixed = TRUE), c("table", "row", "field")]
   }
-  expect_equal(unlist(field_of(draft_service_update(draft, "variables", box, "matr_id", ""), "MATR ID")), c(table = "variables", row = box, field = "matr_id"))
+  expect_equal(unlist(field_of(draft_service_update(draft, "variables", box, "matr_id", ""), "Variable ID")), c(table = "variables", row = box, field = "matr_id"))
   expect_equal(unlist(field_of(draft_service_update(draft, "response_options", choices[2], "answer_option", "Yes"), "each choice once")[2, ]), c(table = "response_options", row = choices[2], field = "answer_option"))
   expect_equal(unlist(field_of(draft_service_update(draft, "components", q1a, "text", ""), "printed words")), c(table = "components", row = q1a, field = "text"))
   no_choices <- suppressMessages(draft_service_delete(draft_service_delete(draft, "response_options", choices[2]), "response_options", choices[1]))
@@ -113,7 +113,7 @@ test_that("a section needs its printed heading, a group has none, and a section 
   expect_true(any(problems_of(nested)$id == inner & grepl("can't be inside a group", problems_of(nested)$message)))
 })
 
-test_that("a question's variables are told apart by their MATR IDs, so none is asked for a label", {
+test_that("a question's variables are told apart by their Variable IDs, so none is asked for a label", {
   closed <- function(label = NULL, choices = c("often", "never"), subject = NULL) {
     options <- lapply(choices, function(words) list(answer_option = words))
     list(variable_type = "closed_ended", label = label, subject = subject, response_options = options)
@@ -134,10 +134,10 @@ test_that("a question's variables are told apart by their MATR IDs, so none is a
   measured <- function(unit, ...) list(variable_type = "open_ended", answer_data_type = "NUMBER", unit = unit, ...)
   expect_equal(nrow(problems_of(asked(measured("years"), measured("years"), measured("years", label = "Age started")))), 0)
 
-  # what does tell them apart is checked: two variables can't share a MATR ID
+  # what does tell them apart is checked: two variables can't share a Variable ID
   same_id <- asked(closed(subject = "twin a"), closed(subject = "twin b"))
   same_id$variables$matr_id <- "mq8"
-  expect_equal(problems_of(same_id)$message, sprintf("Variable %d: give it a MATR ID no other variable has.", 1:2))
+  expect_equal(problems_of(same_id)$message, sprintf("Variable %d: give it a Variable ID no other variable has.", 1:2))
 })
 
 test_that("a grid needs the lead-in its questions share, and holds nothing but them and what explains them", {

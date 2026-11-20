@@ -100,7 +100,7 @@ test_that("every block's words are in its row, a section's and a text block's ty
     expect_equal(lengths(regmatches(html, gregexpr('data-action="delete" data-table="components"', html))), length(others))
     expect_match(html, 'data-action="edit_kind" data-id="c2" data-type="Note"')
     expect_false(grepl('data-action="edit_kind"[^>]*data-type="Question"', html))
-    # a question says how many variables it has, the number alone (pointing at it lists their MATR IDs, from the
+    # a question says how many variables it has, the number alone (pointing at it lists their Variable IDs, from the
     # marks); a section or group doesn't count what it holds
     expect_match(html, '<span class="row-badge outline-count" tabindex="0" aria-label="1 variable">1</span>')
     expect_equal(lengths(regmatches(html, gregexpr("outline-count", html))), sum(blocks$component_type == "Question"))
@@ -140,10 +140,10 @@ test_that("a question's details have its variables: one line each, with its choi
     expect_match(html, "question-panel")
     expect_match(text_of(html), "Variables")
     # what a field holds is said in it, and its label is kept for screen readers
-    expect_match(html, 'placeholder="MATR ID"[^>]*aria-label="MATR ID"')
+    expect_match(html, 'placeholder="Variable ID"[^>]*aria-label="Variable ID"')
     # every choice is printed, so there is no check box to say one isn't
     expect_false(grepl('type="checkbox"|data-field="printed"', html))
-    # one line per variable: MATR ID, and its choices in short, open under it until clicked; who it's about (blank is
+    # one line per variable: Variable ID, and its choices in short, open under it until clicked; who it's about (blank is
     # the respondent) and its label show only when they have something in them, or are added
     expect_match(html, "variable-head") # the column names
     expect_match(html, 'data-table="variables" data-id="v1" data-field="matr_id"')
@@ -179,7 +179,7 @@ test_that("marking a block as checked moves on to the next one in printed order,
 })
 
 test_that("a block with something to fix can't be checked, and a section or group has no check of its own", {
-  page <- short_page() # its questions have no MATR IDs yet
+  page <- short_page() # its questions have no Variable IDs yet
   seen <- local_browser()
   shiny::testServer(extraction_outline_server, args = outline_args(page), {
     page$selected("c3")
@@ -391,7 +391,7 @@ test_that("a field the checks find at fault is outlined, says why, and the marks
   shiny::testServer(extraction_outline_server, args = outline_args(page), {
     page$selected("c3")
     html <- detail_html(output)
-    expect_match(html, 'class="form-control form-control-sm has-problem"[^>]*aria-invalid="true" title="Variable 1: fill in its MATR ID."[^>]*data-id="v1" data-field="matr_id"')
+    expect_match(html, 'class="form-control form-control-sm has-problem"[^>]*aria-invalid="true" title="Variable 1: fill in its Variable ID."[^>]*data-id="v1" data-field="matr_id"')
     # the details don't list again what one field is outlined for
     expect_false(grepl("details-problems", html))
   })
@@ -742,7 +742,7 @@ test_that("the picked block's details are drawn: its words, its number and what 
     # its measurement scale is a field of its own, right beside its tags
     expect_lt(regexpr("Measurement Scale", html, fixed = TRUE), regexpr("Question Tags", html, fixed = TRUE))
     expect_match(html, 'data-field="scale"', fixed = TRUE)
-    expect_match(html, 'data-action="check" disabled data-id="c3"') # it has no MATR ID yet
+    expect_match(html, 'data-action="check" disabled data-id="c3"') # it has no Variable ID yet
     # a question's variables are in its details: its arrow picks it
     page$selected("c5")
     session$setInputs(action = list(action = "details", id = "c3"))
@@ -823,12 +823,12 @@ test_that("the toolbar is + Block, Filter, Search, Expand All, Collapse All and 
   expect_match(html, 'id="outline-detail"')
 })
 
-test_that("a variable's line is its MATR ID, response and tags, with a Label column once one has a label, and no kind or number", {
+test_that("a variable's line is its Variable ID, response and tags, with a Label column once one has a label, and no kind or number", {
   draft <- draft_service_add_box(short_gold_draft(), "c3")
   view <- list(problems = draft_service_check(draft, test_lookups()), shown = character(), split = "c3")
   cards <- function(draft) htmltools::renderTags(variable_cards(component(draft, "c3"), draft, view, test_lookups(), shiny::NS("x")))$html
   html <- cards(draft)
-  expect_match(text_of(html), "MATR ID Response Option Set Variable Tags", fixed = TRUE)
+  expect_match(text_of(html), "Variable ID Response Option Set Variable Tags", fixed = TRUE)
   expect_match(html, 'data-label="Response Option Set"', fixed = TRUE) # a phone shows each cell's name instead of the column names
   expect_match(html, 'data-label="Variable Tags"', fixed = TRUE)
   expect_false(grepl("Subject|Label|Kind", regmatches(html, regexpr('<div class="variable-line variable-head".*?</div>', html))))

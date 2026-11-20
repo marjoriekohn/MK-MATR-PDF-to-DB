@@ -26,7 +26,7 @@ test_that("opening a pop-up shows its form, and a table that can't be read is a 
   })
   shiny::testServer(quick_add_server, args = list(connection = list(url = test_connection$url, key = "sb_secret_not_the_key"), me = me, catalog = fixed_catalog()), {
     expect_false(open("respondent_type"))
-    expect_match(notice_texts(seen)[1], "^Couldn't open the form: The MATR database turned down the key")
+    expect_match(notice_texts(seen)[1], "^Couldn't open the form: The CARA database turned down the key")
     expect_length(seen$modals, 1) # no second pop-up
   })
 })

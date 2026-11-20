@@ -1,7 +1,7 @@
 # A questionnaire laid out to read, as the Edit Extraction page's Preview shows it before the extraction is pushed.
 
 
-test_that("the questionnaire is a table: a row for each variable with its MATR ID, its question's words and its coding", {
+test_that("the questionnaire is a table: a row for each variable with its Variable ID, its question's words and its coding", {
   draft <- draft_service_renumber_questions(with_matr_ids())
   rows <- questionnaire_preview_rows(draft)
   questions <- draft$components[draft$components$component_type == "Question", ]
@@ -69,7 +69,7 @@ test_that("the table is a DataTables table, with no No. column, grouped by secti
   expect_match(html, "btn btn-sm btn-outline-dark qt-download", fixed = TRUE)
   expect_match(html, "Download CSV")
   expect_false(grepl("Search:", html, fixed = TRUE)) # not DataTables' own box
-  expect_match(html, "matrPreviewTable", fixed = TRUE)
+  expect_match(html, "caraPreviewTable", fixed = TRUE)
   # with no push tried there is nothing new to mark, so no marks and no choice of rows
   expect_false(grepl('class=\\"new-mark\\"', html, fixed = TRUE)) # (the CSV's formatter names the class too)
   expect_false(grepl("data-qt-filter", html, fixed = TRUE))
@@ -120,7 +120,7 @@ test_that("a write-in says its kind of answer under Variable Coding", {
 
 test_that("blanks are said in words, and an empty questionnaire says so", {
   rows <- questionnaire_preview_rows(gold_draft())
-  expect_true("no MATR ID" %in% rows$missing)
+  expect_true("no Variable ID" %in% rows$missing)
   expect_match(as.character(questionnaire_preview_ui(draft_service_empty())), "no blocks")
 })
 

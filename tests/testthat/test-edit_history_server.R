@@ -47,7 +47,7 @@ test_that("with nothing changed yet, the page says so", {
   local_stub("history_service_get_all", function(connection) list())
   shiny::testServer(edit_history_server, args = history_args(connection = NULL), {
     session$setInputs(kind = "all", search = "")
-    expect_equal(text_of(output$entries), "Nothing has been changed in the MATR metadata database through this site yet.")
+    expect_equal(text_of(output$entries), "Nothing has been changed in the CARA metadata database through this site yet.")
   })
 })
 

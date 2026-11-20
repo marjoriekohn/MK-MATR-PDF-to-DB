@@ -117,7 +117,7 @@ straight_quotes <- function(text) {
 # A questionnaire's words as the database keeps them (a block's words, a variable's label):
 # lower case, so the same words are written one way however the form capitalised them ("NEVER", "Section A:
 # Your Health"), and without a figure in brackets that only repeats the number word before it ("more than five
-# (5) children" is "more than five children"). Names the database lists (subjects), printed numbers and MATR IDs
+# (5) children" is "more than five children"). Names the database lists (subjects), printed numbers and Variable IDs
 # aren't a form's words, and keep their capitals.
 normal_text <- function(text) {
   if (is.null(text)) {
@@ -436,7 +436,7 @@ draft_service_empty <- function() {
 
 # How far a draft's review has got.
 # Returns: A list: `blocks` and how many are `checked`, `boxes` (variables) and how
-#   many have a MATR ID (`matr_ids`).
+#   many have a Variable ID (`matr_ids`).
 draft_service_counts <- function(draft) {
   list(
     blocks = nrow(draft$components), checked = sum(draft$components$checked),

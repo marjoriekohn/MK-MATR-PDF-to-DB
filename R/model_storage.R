@@ -15,7 +15,7 @@ storage_pdf_bucket <- "extraction-pdfs"
 
 storage_request <- function(connection, bucket, name) {
   if (!nzchar(connection$url %||% "") || !nzchar(connection$key %||% "")) {
-    stop("The site doesn't know where the MATR database is, so it can't keep files there.", call. = FALSE)
+    stop("The site doesn't know where the CARA database is, so it can't keep files there.", call. = FALSE)
   }
   httr2::request(connection$url) |>
     httr2::req_url_path_append("storage", "v1", "object", bucket, name) |>
@@ -63,7 +63,7 @@ storage_model_download <- function(connection, bucket, name, path) {
   response <- storage_request(connection, bucket, name) |>
     httr2::req_perform(path = fetching) |>
     tryCatch(error = function(problem) {
-      stop("Couldn't reach the MATR database's file storage: ", conditionMessage(problem), call. = FALSE)
+      stop("Couldn't reach the CARA database's file storage: ", conditionMessage(problem), call. = FALSE)
     })
   if (storage_is_missing(response)) {
     return(FALSE)
@@ -74,7 +74,7 @@ storage_model_download <- function(connection, bucket, name, path) {
 
 storage_perform <- function(request) {
   tryCatch(httr2::req_perform(request), error = function(problem) {
-    stop("Couldn't reach the MATR database's file storage: ", conditionMessage(problem), call. = FALSE)
+    stop("Couldn't reach the CARA database's file storage: ", conditionMessage(problem), call. = FALSE)
   })
 }
 
@@ -99,5 +99,5 @@ storage_problem <- function(response, bucket) {
       bucket
     ))
   }
-  sprintf("The MATR database's file storage had a problem (%d): %s", httr2::resp_status(response), body$message %||% "no reason given")
+  sprintf("The CARA database's file storage had a problem (%d): %s", httr2::resp_status(response), body$message %||% "no reason given")
 }
