@@ -4,6 +4,9 @@
 // narrower window the links and the name fold into the menu button (☰) and open as a list under the bar. A
 // title too long for a phone ends with "…". The signed-in name and its menu are in _login.scss.
 .navbar {
+  // The blur makes the bar a layer of its own, so without a z-index anything placed after it (Edit Extraction's
+  // progress bar, a card) is drawn over its menus. Above the page, under a dialog (modals are 1055).
+  z-index: $zindex-fixed;
   padding: 0;
   border-bottom: 1px solid $line-light;
   background: rgba($vcu-white, 0.92) !important;

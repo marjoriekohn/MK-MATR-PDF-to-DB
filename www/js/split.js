@@ -52,6 +52,23 @@
     return list ? list.getBoundingClientRect().width : 0;
   }
 
+  // The list takes the width kept for it, as much of it as the room allows. A page not shown has no room to
+  // measure, so its list is left as it is until the page shows: measured then it would have no width, and be
+  // squeezed to the smallest (a window resized while Edit Extraction was hidden left its question rows a letter
+  // wide). With room again (a window made wider), the list goes back to the width kept for it.
+  function fit(split) {
+    if (split.getBoundingClientRect().width === 0) return;
+    const list = split.querySelector(':scope > .outline-body');
+    if (!list || !list.style.flexBasis) return;
+    const width = remembered(split);
+    setWidth(split, isNaN(width) ? listWidth(split) : width);
+  }
+
+  // A split's room changes with the window, and when its page is shown or hidden.
+  const roomWatcher = window.ResizeObserver && new ResizeObserver(function (entries) {
+    entries.forEach(function (entry) { if (entry.contentRect.width > 0) fit(entry.target); });
+  });
+
   // A page's split gets the width kept for it once it is on the page (Shiny draws the pages after loading).
   function restore(root) {
     (root || document).querySelectorAll('.outline-split').forEach(function (split) {
@@ -59,6 +76,7 @@
       split.dataset.widthRestored = 'yes';
       const width = remembered(split);
       if (!isNaN(width)) setWidth(split, width);
+      if (roomWatcher) roomWatcher.observe(split);
     });
   }
 
@@ -111,11 +129,10 @@
     event.preventDefault();
   });
 
-  // A window made narrower keeps the details their room.
-  window.addEventListener('resize', function () {
-    document.querySelectorAll('.outline-split').forEach(function (split) {
-      const list = split.querySelector(':scope > .outline-body');
-      if (list && list.style.flexBasis) setWidth(split, listWidth(split));
+  // A window made narrower keeps the details their room (roomWatcher above, where the browser has one).
+  if (!roomWatcher) {
+    window.addEventListener('resize', function () {
+      document.querySelectorAll('.outline-split').forEach(fit);
     });
-  });
+  }
 })();
