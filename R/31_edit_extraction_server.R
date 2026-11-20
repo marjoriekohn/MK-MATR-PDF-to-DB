@@ -18,8 +18,9 @@ autosave_delay <- 60
 # have done nothing for a minute (`autosave_delay`), or at once with Save; after a save is refused, only
 # Save tries again.
 # Preview and push opens one dialog: where the extraction goes (its Basic Info: registry, study,
-# questionnaire and wave, `extraction_info_server()`), what pushing it would add (the database tries the
-# push and undoes it: `extraction_service_push_preview()`) and the questionnaire laid out as a table. Push
+# questionnaire and wave, `extraction_info_server()`), whether the database would take it (it tries the
+# push and undoes it: `extraction_service_push_preview()`) and the questionnaire laid out as a table, with
+# NEW beside what the database doesn't have yet. Push
 # writes it all into the MATR metadata database at once (`service_extraction_push.R`); nothing is added
 # before. Each question shows its place among the questions (worked out from the outline, and kept up to
 # date as blocks move) and the number printed beside it (read off the PDF, and corrected by staff); the wave
@@ -58,10 +59,21 @@ edit_extraction_server <- function(
 
     # ------ REACTIVE ----------------------------------------------------------
     record_id <- reactiveVal(NULL) # the extraction draft open on this page
-    record <- reactive(extractions$all()[[req(record_id())]]) # as last saved, by anyone
+    # as last saved, by anyone. Steady: the drafts are read again every few seconds while one is being read by
+    # Gemini, and what is drawn from this one's record is drawn again only when the record changed
+    kept_record <- steady_reactive(function() extractions$all()[[req(record_id())]])
+    record <- reactive({
+      id <- req(record_id())
+      kept <- kept_record()
+      # (just after another draft is opened, what is kept is the last one's until it catches up)
+      if (identical(as.character(kept$id), as.character(id))) kept else extractions$all()[[id]]
+    })
     draft <- reactiveVal(NULL) # its questionnaire as it is on screen
     saved <- reactiveVal(NULL) # its questionnaire as it was last saved
     original <- reactiveVal(NULL) # what the AI returned for it (NULL for a Manual extraction); see extraction_service_open_draft()
+    # a draft reopened from a wave, its rows matched to the AI's reading as it opened and not saved since: it is
+    # saved before it is pushed, changed or not, so its corrections are kept for the AI Monitor
+    matched_unsaved <- reactiveVal(FALSE)
     undo_stack <- reactiveVal(list()) # earlier drafts, newest first
     selected <- reactiveVal(NULL) # id of the selected block
     layout_version <- reactiveVal(0L) # ticks when the outline must rebuild its inputs
@@ -159,6 +171,7 @@ edit_extraction_server <- function(
           )
           loaded_revision(revision)
           saved(draft())
+          matched_unsaved(FALSE)
           saved_at(Sys.time())
           autosave_off(FALSE)
           # Save reads the list of drafts again at once; a save by itself leaves that to the next page that
@@ -250,6 +263,7 @@ edit_extraction_server <- function(
         return(FALSE)
       }
       original(loaded$original)
+      matched_unsaved(isTRUE(loaded$matched))
       loaded <- draft_service_check_containers(loaded$draft) # drafts saved before sections were worked out
       record_id(opened$id)
       loaded_revision(revision)
@@ -534,6 +548,7 @@ edit_extraction_server <- function(
       draft(NULL)
       saved(NULL)
       original(NULL)
+      matched_unsaved(FALSE)
       recorded(NULL)
       undo_stack(list())
       selected(NULL)
@@ -554,9 +569,11 @@ edit_extraction_server <- function(
 
     # ------ Previewing and pushing ------------------------------------------------------------
     # One dialog (`push_dialog()`): what stops the push, if anything; where the extraction goes (its Basic
-    # Info, the form of `extraction_info_server()`, filled from the record when the dialog opens); what the
-    # push would add, from a dry run the database does and undoes; and the questionnaire laid out as a table.
-    # Opening it saves anything unsaved first, so the dry run and the push read what is on screen. Push
+    # Info, the form of `extraction_info_server()`, filled from the record when the dialog opens); whether the
+    # database would take it, from a dry run it does and undoes; and the questionnaire laid out as a table, with
+    # NEW beside what the dry run says the database doesn't have yet.
+    # Opening it saves anything unsaved first (and a reopened draft not saved since it opened, for its
+    # corrections), so the dry run and the push read what is on screen. Push
     # writes it all into the MATR metadata database at once; until then nothing is added.
     push_open <- reactiveVal(FALSE)
     dry_run <- reactiveVal(NULL) # the counts the dry run returned, the error it raised, or NULL while it isn't tried
@@ -566,23 +583,27 @@ edit_extraction_server <- function(
     # keeps what was picked, and picks the new row itself.
     reopen_dialog <- function() {
       push_open(TRUE)
-      showModal(push_dialog(ns, isolate(draft())))
+      updating <- isolate(reopened_info())
+      showModal(push_dialog(ns, isolate(draft()), updates = if (!is.null(updating)) extraction_service_title(list(info = updating), isolate(catalog$get()))))
     }
     info <- extraction_info_server("info", catalog, extractions, record_id, me, connection, reopen = reopen_dialog)
 
     observeEvent(input$request, {
       req(record_id(), draft())
-      if (has_unsaved_changes() && !save_draft()) {
+      if ((has_unsaved_changes() || matched_unsaved()) && !save_draft()) {
         return()
       }
       dry_run_for <<- NULL
       dry_run(NULL)
       reopen_dialog()
-      info$show(record())
+      if (is.null(reopened_info())) info$show(record()) # (a reopened draft's dialog has no form to fill)
     })
 
-    # The form's picks, once they have settled: a dry run per keystroke would ask the database too often.
-    settled_info <- debounce(info$info, 500)
+    # Where it goes. A draft reopened from a wave goes back into it, so its dialog has no form; any other, the
+    # form's picks once they have settled: a dry run per keystroke would ask the database too often.
+    reopened_info <- reactive(extraction_service_reopened_info(req(record()), catalog$get()))
+    form_info <- debounce(info$info, 500)
+    settled_info <- reactive(reopened_info() %||% form_info())
 
     # How many questions each wave of the picked questionnaire asks: a wave that asks any has to be emptied
     # first. If it can't be read, the dry run says so instead.
@@ -590,8 +611,10 @@ edit_extraction_server <- function(
       tryCatch(questionnaire_service_wave_question_counts(connection, settled_info()$questionnaire_id), error = function(problem) integer())
     })
 
-    # What stops the push: the questionnaire first (blocks to fix), then its Basic Info.
-    push_blockers <- reactive({
+    # What stops the push: the questionnaire first (blocks to fix), then its Basic Info. Steady, as the drafts
+    # are read again every few seconds while one is being read (another draft may be going into the same wave):
+    # what is drawn from it is drawn again only when it changed.
+    push_blockers <- steady_reactive(function() {
       req(push_open(), draft())
       c(
         extraction_service_draft_blockers(draft(), lookups),
@@ -636,14 +659,21 @@ edit_extraction_server <- function(
     # A draft reopened from a wave: the blocks reworded while other places print the same wording, each to be
     # changed everywhere or only here (the Push dialog's choice; only here until chosen). Read when the dialog
     # opens and again as the draft changes; none for any other draft, or if they can't be read.
+    # (The record only says which questionnaire it is in, which a draft reopened from a wave keeps: isolated, so
+    # the wordings aren't read again each time the drafts are.)
     rewordings <- reactive({
       req(push_open(), draft())
       tryCatch(
-        extraction_service_read_rewordings(connection, record(), draft(), catalog$get()),
+        extraction_service_read_rewordings(connection, isolate(record()), draft(), catalog$get()),
         error = function(problem) data.frame(id = character(), was = character()) # nothing to choose: each stays only here
       )
     })
-    output$push_rewordings <- renderUI(rewordings_ui(rewordings()))
+    # Only while it goes back into that wave: pushed into another, it updates nothing (the database only
+    # rewords when it updates the wave the draft came from), and a changed wording is a wording of its own.
+    output$push_rewordings <- renderUI({
+      req(identical(as.character(settled_info()$wave_id %||% ""), extraction_service_updates_wave(isolate(record()))))
+      rewordings_ui(rewordings())
+    })
 
     # What is in the way, above the form.
     output$push_blockers <- renderUI({
@@ -653,16 +683,27 @@ edit_extraction_server <- function(
       }
     })
 
-    # What the push would add, or why the database would refuse it; nothing while something is in the way.
+    # Why the database would refuse the push, if it would; nothing while something is in the way.
     output$push_what <- renderUI({
       req(push_open(), draft(), length(push_blockers()) == 0)
       preview <- extraction_service_push_preview_ui(draft(), settled_info(), catalog$get(), dry_run())
       extraction_request_ui(preview, NULL, questionnaire = FALSE)
     })
 
+    # The questionnaire as a table, with NEW beside what the push would add once the dry run has said (it is drawn
+    # again then: before, and while something is in the way, it has no marks).
+    # (with the catalog's instructions, definitions and notes, read again with each dry run, which doesn't name
+    # them; if they can't be read, those rows are left unmarked)
+    other_blocks <- reactive({
+      req(push_open())
+      if (is.null(dry_run()) || inherits(dry_run(), "error")) {
+        return(NULL)
+      }
+      tryCatch(component_model_other_blocks(connection), error = function(problem) NULL)
+    })
     output$preview_table <- renderUI({
       req(push_open())
-      questionnaire_preview_ui(req(draft()))
+      questionnaire_preview_ui(req(draft()), extraction_service_known(dry_run(), other_blocks()))
     })
 
     output$push_blocker <- renderUI({
@@ -679,7 +720,7 @@ edit_extraction_server <- function(
 
     observeEvent(input$push, {
       req(can_push(), record_id(), can_change())
-      if (has_unsaved_changes() && !save_draft()) {
+      if ((has_unsaved_changes() || matched_unsaved()) && !save_draft()) {
         return()
       }
       # As this page has it: refused if someone else saved it since.
@@ -693,7 +734,8 @@ edit_extraction_server <- function(
       release_draft(record_id())
       put_aside()
       extractions$changed()
-      showNotification(paste("Pushed.", extraction_service_push_summary(outcome$counts)), type = "message")
+      pushed <- if (has_text(outcome$record$summary)) outcome$record$summary else "the extraction"
+      showNotification(paste0("Pushed ", pushed, " into the database."), type = "message")
       show_page("drafts")
     })
 

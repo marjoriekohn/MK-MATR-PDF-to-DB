@@ -166,8 +166,7 @@ fields that differ.
 
 **Hidden from the dashboard.** `study.hidden`, `questionnaire.hidden` and `wave.hidden` (boolean, false
 unless staff say otherwise) say that the row is kept off the dashboard researchers search. This site only
-records it: staff set it on the Metadata page (the row's own form) or in the Push dialog, under the study,
-questionnaire and wave picked, where a press changes it at once through `apply_change` like any edit. The
+records it: staff set it on the Metadata page (the row's own form), through `apply_change` like any edit. The
 row stays in the database and on this site either way. The database's policies keep a hidden row, and
 everything that is there only because of it (a hidden study's questionnaires, a question only hidden waves
 asked), from the dashboard's keys (`sql/5_permissions.sql`); the site's secret key skips them.

@@ -8,7 +8,7 @@
 // what was done to the catalog (Pushed, Emptied, Added, Updated, Deleted); the AI Monitor's say what staff did to
 // the AI's reading (edited, added, deleted, moved).
 .row-badge {
-  &.is-pushed, &.is-added, &.is-add { background: rgba($vcu-green, 0.15); color: $vcu-green; font-weight: 700; } // is-add: the preview's NEW rows
+  &.is-pushed, &.is-added, &.is-add { background: rgba($vcu-green, 0.15); color: $vcu-green; font-weight: 700; }
   &.is-updated, &.is-edited { background: $gold-highlight; font-weight: 700; }
   &.is-deleted { background: rgba($vcu-red, 0.12); color: $vcu-red; font-weight: 700; }
   &.is-emptied, &.is-moved { background: $gray-tint; font-weight: 700; }
@@ -23,93 +23,6 @@
   margin-top: 1.25rem;
   h3 { margin: 0 0 0.5rem; font-size: $font-size-base; }
 }
-// A chip that lists what it counts when pointed at (the option sets, answer choices or tags a push adds or
-// finds), and its tooltip: every name with a bullet of its own, in columns as long as its class says (is-rows-23,
-// from request_names_ui(), at most request_names_per_column there: 30), the tooltip as wide as its names so none
-// wraps until the screen has no more room
-.row-badge.has-list { cursor: help; text-decoration: underline dotted; text-underline-offset: 0.15em; }
-.list-tooltip {
-  --bs-tooltip-max-width: 96vw;
-  // small type, so a column of thirty names is about half a screen tall
-  .tooltip-inner { width: max-content; max-width: 96vw; padding: 0.5rem 0.75rem; font-size: $font-size-xs; line-height: 1.35; text-align: left; }
-  .list-tooltip-lines {
-    display: grid;
-    grid-auto-flow: column;
-    column-gap: 2rem;
-    margin: 0;
-    padding-left: 1.1rem;
-    @for $rows from 1 through 30 {
-      &.is-rows-#{$rows} { grid-template-rows: repeat(#{$rows}, auto); }
-    }
-  }
-}
-
-.request-cards {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(14rem, 1fr));
-  gap: 0.75rem;
-}
-// A card for a row, as Make an edit draws one; a NEW row has the certificate in its corner
-.request-card {
-  position: relative;
-  margin: 0;
-  padding-right: 3rem;
-  &.is-new { border-color: $vcu-black; }
-  &.is-missing { border-style: dashed; color: $vcu-gray; }
-}
-.request-card-kind {
-  color: $vcu-gray;
-  font-size: $font-size-xs;
-  font-weight: 700;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-}
-.new-badge {
-  position: absolute;
-  top: -0.6rem;
-  right: -0.6rem;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 3rem;
-  height: 3rem;
-  .fa-certificate { position: absolute; color: $vcu-black; font-size: $icon-font-size-xl; }
-  .new-badge-text { position: relative; color: $vcu-gold; font-size: $font-size-xxs; font-weight: 900; letter-spacing: 0.04em; }
-}
-
-// Under the cards, each row they count, a list for each card to open
-.request-rows {
-  margin-top: 1rem;
-  > .form-text { margin: 0 0 0.4rem; }
-}
-.request-rows-list {
-  border: 1px solid $line;
-  border-radius: $border-radius;
-  & + & { margin-top: 0.4rem; }
-  > summary {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: baseline;
-    gap: 0.25rem 0.75rem;
-    padding: 0.5rem 0.75rem;
-    cursor: pointer;
-    &:hover { background: mix($vcu-gold, $vcu-white, 8%); }
-  }
-  &[open] > summary { border-bottom: 1px solid $line; }
-}
-.request-rows-kind { font-weight: 700; }
-.request-rows-count { color: $vcu-gray; font-size: $font-size-sm; }
-.request-rows-table {
-  max-height: 22rem;
-  overflow-y: auto;
-  font-size: $font-size-sm;
-  .table { margin: 0; }
-  th { position: sticky; top: 0; z-index: 1; } // black, as every table's (components/_grid-table.scss)
-  th, td { padding: 0.35rem 0.75rem; vertical-align: top; }
-  .is-status { white-space: nowrap; }
-  .is-count { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
-}
-
 // ------ An extraction's questionnaire, laid out to read ---------------------------------------
 .change-request-questionnaire-head {
   display: flex;
@@ -128,11 +41,11 @@
   border-radius: $border-radius;
   overflow-y: auto;
 }
-// A codebook-style table (DataTables, from the DT package): Kind | Variable ID | Question Text | Variable Coding,
-// its rows grouped under the section they are printed in, with search and Download CSV above it
+// A codebook-style table (DataTables, from the DT package): Variable ID | Question Text | Tags | Variable Coding,
+// its rows grouped under the section they are printed in, with the site's own toolbar above it (www/js/preview.js)
 .questionnaire-preview {
   font-size: $font-size-sm;
-  table.dataTable { margin: 0.5rem 0 !important; }
+  table.dataTable { margin: 0 0 0.5rem !important; }
   table.dataTable th, table.dataTable td { padding: 0.4rem 0.6rem; vertical-align: top; }
   // the section heading over its rows
   table.dataTable tr.dtrg-group th, table.dataTable tr.dtrg-group td {
@@ -142,8 +55,61 @@
     font-weight: 700;
   }
   em { color: $vcu-gray; }
+  // DataTables' own CSV button: the toolbar's presses it
+  .dt-buttons { display: none; }
+  .dataTables_info, .dt-info { padding: 0.5rem 0.75rem; color: $vcu-gray; font-size: $font-size-xs; }
+  .dataTables_paginate, .dt-paging { padding: 0.25rem 0.75rem 0.5rem; font-size: $font-size-xs; }
 }
-.qt-tags { color: $vcu-gray; }
+// Which rows, Search and Download CSV in one row, as the Edit Extraction outline's toolbar is drawn
+// (components/_outline.scss): it stays at the top while the table scrolls under it
+.qt-toolbar {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: $control-gap;
+  padding: 0.6rem 0.75rem;
+  border-bottom: 1px solid $line-light;
+  background: $vcu-white;
+  > .qt-search-field { flex: 1 1 12rem; max-width: 18rem; margin-left: auto; }
+  > .qt-download { display: inline-flex; align-items: center; gap: 0.4rem; white-space: nowrap; }
+}
+// the variable's label after the question's words, and its tags, a pill each (one under another in the CSV: the
+// line breaks between them are only for it)
+.qt-label { color: $vcu-gray; }
+.qt-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  margin: 0 0.25rem 0.25rem 0;
+  padding: 0.05rem 0.5rem;
+  border-radius: $border-radius-pill;
+  background: $gray-tint;
+  font-size: $font-size-xs;
+  white-space: nowrap;
+  &.is-new { background: rgba($vcu-green, 0.12); }
+}
+td > br:has(+ .qt-tag) { display: none; }
+// NEW beside what the push adds: the certificate, as on a new row elsewhere, and the word
+.new-mark {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.2rem;
+  margin-left: 0.15rem;
+  padding: 0 0.4rem;
+  border-radius: $border-radius-pill;
+  background: $vcu-black;
+  color: $vcu-gold;
+  font-size: $font-size-xxs;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  line-height: 1.6;
+  vertical-align: 0.1em;
+  white-space: nowrap;
+  &[title] { cursor: help; } // pointing at it says what is new
+}
 
 // ------ The changed rows ------------------------------------------------------------------
 .change-list { display: flex; flex-direction: column; gap: 0.5rem; max-height: 55vh; overflow-y: auto; }

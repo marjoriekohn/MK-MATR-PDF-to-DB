@@ -37,6 +37,7 @@ app_icons <- c(
   matr_id = "fingerprint",
   pdf = "file-pdf",
   csv = "file-lines",
+  download = "download",
   choices = "list-ul",
   write_in = "keyboard",
   choices_open = "caret-down",

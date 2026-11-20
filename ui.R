@@ -23,6 +23,7 @@ page_navbar(
       page_script("js/split.js"),
       page_script("js/extraction.js"),
       page_script("js/monitor.js"),
+      page_script("js/preview.js"),
       page_script("js/busy.js")
     ),
     # While the server is working: a bar across the top of the page, and nothing else (no spinners, no

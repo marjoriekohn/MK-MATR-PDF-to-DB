@@ -10,8 +10,8 @@ test_that("the questionnaire is a table: a row for each variable with its MATR I
   others <- draft$components[!draft$components$component_type %in% c("Question", container_types), ]
   expect_equal(sum(rows$kind != "Question"), nrow(others))
   expect_false(any(rows$kind %in% container_types))
-  # the question's words, without its number, then who the variable is about in square brackets (nothing
-  # for the respondent)
+  # the question's words, without its number; who the variable is about is one of its tags (nothing for the
+  # respondent)
   first <- draft$variables[draft$variables$component_id == questions$id[1], ][1, ]
   row <- rows[rows$matr_id %in% first$matr_id, ][1, ]
   expect_equal(row$text, questions$text[1])
@@ -51,21 +51,31 @@ test_that("each group is named apart from the others, so where one ends shows as
   expect_equal(rows$section, c(rep("Part A \u203a Group 1", 2), rep("Part A \u203a Group 2", 2), "Part A"))
 })
 
-test_that("the table is a DataTables table, with no No. column, grouped by section, with Download CSV", {
+test_that("the table is a DataTables table, with no No. column, grouped by section, with the site's own toolbar", {
   draft <- draft_service_renumber_questions(with_matr_ids())
   html <- htmltools::renderTags(questionnaire_preview_ui(draft))$html
   expect_match(html, "questionnaire-table")
   expect_match(html, "datatables")
   expect_match(html, "Variable ID")
   expect_match(html, "Question Text")
+  expect_match(html, "Tags")
   expect_match(html, "Variable Coding")
   expect_false(grepl("<th>No\\.|qt-number", html)) # no such column (the words may say "Yes or No.")
-  expect_match(html, "Download CSV")
   expect_match(html, '"rowGroup"')
   expect_false(grepl("data-field", html)) # nothing to edit
+  # Search and Download CSV are the site's own, above the table (www/js/preview.js works them)
+  expect_match(html, 'class="qt-toolbar"', fixed = TRUE)
+  expect_match(html, 'class="form-control form-control-sm qt-search"', fixed = TRUE)
+  expect_match(html, "btn btn-sm btn-outline-dark qt-download", fixed = TRUE)
+  expect_match(html, "Download CSV")
+  expect_false(grepl("Search:", html, fixed = TRUE)) # not DataTables' own box
+  expect_match(html, "matrPreviewTable", fixed = TRUE)
+  # with no push tried there is nothing new to mark, so no marks and no choice of rows
+  expect_false(grepl('class=\\"new-mark\\"', html, fixed = TRUE)) # (the CSV's formatter names the class too)
+  expect_false(grepl("data-qt-filter", html, fixed = TRUE))
 })
 
-test_that("a variable's label and subject go in square brackets, and a number read with the words is left off", {
+test_that("a variable's label goes in square brackets, its subject is a tag, and a number read with the words is left off", {
   draft <- draft_service_renumber_questions(with_matr_ids())
   question <- draft$components$id[draft$components$component_type == "Question"][1]
   number <- draft_service_question_number(draft$components[draft$components$id == question, ]) # as printed: 1a
@@ -78,12 +88,18 @@ test_that("a variable's label and subject go in square brackets, and a number re
   row <- questionnaire_preview_rows(draft)
   row <- row[row$matr_id %in% matr, ]
   expect_equal(row$text, words)
-  expect_equal(row$tags, "[Lifetime] [siblings]")
-  # a unit and a time frame are shown too: label, unit, time frame, subject
+  expect_equal(row$label, "Lifetime")
+  expect_equal(row$tags, "[siblings]")
+  expect_equal(row$tag_names[[1]], "siblings")
+  # a unit and a time frame are tags too: unit, time frame, subject
   draft$variables$unit[draft$variables$id == box] <- "hours"
   draft$variables$time_frame[draft$variables$id == box] <- "past 30 days"
   row <- questionnaire_preview_rows(draft)
-  expect_equal(row$tags[row$matr_id %in% matr], "[Lifetime] [hours] [past 30 days] [siblings]")
+  expect_equal(row$tags[row$matr_id %in% matr], "[hours] [past 30 days] [siblings]")
+  html <- htmltools::renderTags(questionnaire_preview_ui(draft))$html
+  # (the table's rows are written as JSON, which writes "</" as "<\\/")
+  expect_match(html, '<span class=\\"qt-label\\">[Lifetime]<\\/span>', fixed = TRUE)
+  expect_match(html, '<span class=\\"qt-tag\\">hours<\\/span><br><span class=\\"qt-tag\\">past 30 days<\\/span>', fixed = TRUE)
 
   draft$variables$subject[draft$variables$id == box] <- NA
   draft$variables$label[draft$variables$id == box] <- NA
@@ -91,6 +107,7 @@ test_that("a variable's label and subject go in square brackets, and a number re
   draft$variables$time_frame[draft$variables$id == box] <- NA
   row <- questionnaire_preview_rows(draft)
   expect_equal(row$tags[row$matr_id %in% matr], "")
+  expect_equal(row$label[row$matr_id %in% matr], "")
 })
 
 test_that("a write-in says its kind of answer under Variable Coding", {
@@ -116,23 +133,81 @@ test_that("the Edit Extraction preview shows the questionnaire and its note; the
   dialog <- htmltools::renderTags(push_dialog(shiny::NS("edit"), draft))$html
   expect_match(dialog, "Basic Info") # where it goes is picked here, before the push
   expect_match(dialog, "edit-info-")
+  # a draft reopened from a wave goes back into it: no form, only which wave it updates
+  updating <- htmltools::renderTags(push_dialog(shiny::NS("edit"), draft, updates = "Kid Questionnaire (KQ) · Wave 1"))$html
+  expect_false(grepl("Basic Info|edit-info-", updating))
+  expect_match(updating, "Updating")
+  expect_match(updating, "Pushing replaces what\\s*<strong>Kid Questionnaire \\(KQ\\) · Wave 1</strong>\\s*asks with this draft\\.")
 })
 
-test_that("what a push adds is cards with counts; the rows to open are listed only when the cards come with them", {
-  cards <- list(
-    list(kind = "Answer choices", title = "40 answer choices", subtitle = "", facts = "40 new", is_new = TRUE),
-    list(kind = "Questions", title = "12 questions", subtitle = "", facts = list(), is_new = FALSE)
-  )
-  html <- htmltools::renderTags(extraction_request_ui(list(what = cards, summary = "Adds the wave."), with_matr_ids(), questionnaire = FALSE))$html
-  expect_match(html, "What it adds")
-  expect_match(html, "Adds the wave.")
-  expect_match(html, "fa-certificate") # NEW on the card of a row the push adds
-  expect_false(grepl("questionnaire-table|request-rows", html))
-  expect_null(request_rows_ui(cards)) # the push's preview comes back as counts only
-  with_rows <- cards
-  with_rows[[1]]$rows <- data.frame(text = c("yes", "no"), is_new = c(TRUE, FALSE), status = c("", "used by 3"), stringsAsFactors = FALSE)
-  with_rows[[1]]$columns <- c(text = "Choice")
-  listed <- htmltools::renderTags(request_rows_ui(with_rows))$html
-  expect_match(listed, "1 new row, 1 already there")
-  expect_match(listed, "used by 3")
+test_that("the dialog has no sentence of what a push adds: what is new is marked in the table", {
+  html <- htmltools::renderTags(extraction_request_ui(list(problem = NULL, unchecked = 0), with_matr_ids(), questionnaire = FALSE))$html
+  expect_false(grepl("What it adds|request-card|Adds ", html))
+  refused <- htmltools::renderTags(extraction_request_ui(list(problem = "The wave asks questions already."), NULL, questionnaire = FALSE))$html
+  expect_match(refused, "This can't be pushed as it is", fixed = TRUE)
+  expect_match(refused, "The wave asks questions already.", fixed = TRUE)
+})
+
+test_that("once the push has been tried, NEW marks what it adds row by row, and the rows can be shown by it", {
+  draft <- test_questionnaire_draft()
+  questions <- draft$components[draft$components$component_type == "Question", ]
+  smoke <- questions$text[grepl("smoke", questions$text, ignore.case = TRUE)]
+  answers <- draft$response_options$answer_option
+  yes <- answers[grepl("yes$", answers, ignore.case = TRUE)]
+  no <- answers[grepl("no$", answers, ignore.case = TRUE)]
+  unit <- draft$variables$unit[!is.na(draft$variables$unit)]
+  # as the dry run names them: the wordings it found, and the choices, sets and tags it adds
+  counts <- list(questions = 2L, names = list(
+    question_reused = list(paste0("  ", smoke, " ")), # spaces don't matter
+    answer_option_new = list(no),
+    option_set_new = list(paste(no, yes, sep = " | ")), # nor the order of a set's choices
+    tag_new = list(toupper(unit)) # nor a tag's capitals
+  ))
+  # and the catalog's instructions, definitions and notes, read apart: this instruction is there already
+  instruction <- draft$components$text[draft$components$component_type == "Instruction"]
+  blocks <- data.frame(kind = c("Instruction", "Definition"), text = c(paste0(" ", instruction), "a definition"))
+  known <- extraction_service_known(counts, blocks)
+  rows <- questionnaire_preview_rows(draft, known)
+  smoking <- rows[rows$kind == "Question" & grepl("smoke", rows$text, ignore.case = TRUE), ]
+  expect_false(smoking$text_new) # its wording is in the database
+  expect_equal(smoking$coding_new[[1]], c(FALSE, TRUE)) # "no" is new, "yes" isn't
+  expect_true(smoking$set_new)
+  expect_equal(smoking$status, "new")
+  how_many <- rows[grepl("how many", rows$text, ignore.case = TRUE), ]
+  expect_true(how_many$text_new)
+  expect_equal(how_many$tag_new[[1]], TRUE)
+  expect_equal(how_many$status, "new")
+  expect_equal(rows$status[rows$kind == "Instruction"], "found")
+  expect_false(rows$text_new[rows$kind == "Instruction"])
+  # one the catalog hasn't got is new; and when the catalog's couldn't be read, only All shows it
+  other <- questionnaire_preview_rows(draft, extraction_service_known(counts, blocks[2, ]))
+  expect_equal(other$status[other$kind == "Instruction"], "new")
+  expect_true(other$text_new[other$kind == "Instruction"])
+  unread <- questionnaire_preview_rows(draft, extraction_service_known(counts))
+  expect_equal(unread$status[unread$kind == "Instruction"], "")
+  # a question with nothing new is already in the database
+  found <- questionnaire_preview_rows(draft, extraction_service_known(list(names = list(question_reused = as.list(questions$text)))))
+  expect_equal(found$status[found$kind == "Question"], c("found", "found"))
+  # with no dry run, or one refused, nothing is marked
+  expect_null(extraction_service_known(NULL))
+  expect_null(extraction_service_known(simpleError("The wave asks questions already.")))
+  expect_null(extraction_service_known(list(questions = 2L)))
+  plain <- questionnaire_preview_rows(draft)
+  expect_true(all(plain$status == ""))
+  expect_false(any(plain$text_new))
+
+  html <- htmltools::renderTags(questionnaire_preview_ui(draft, known))$html
+  expect_match(html, 'class=\\"new-mark\\"', fixed = TRUE)
+  expect_match(html, "NEW option set", fixed = TRUE)
+  expect_match(html, 'class=\\"qt-tag is-new\\"', fixed = TRUE)
+  expect_match(html, "New (2)", fixed = TRUE)
+  expect_match(html, "Already in the database (1)", fixed = TRUE) # the instruction: every row is one or the other
+  expect_match(html, "All (3)", fixed = TRUE)
+  other_html <- htmltools::renderTags(questionnaire_preview_ui(draft, extraction_service_known(counts, blocks[2, ])))$html
+  expect_match(other_html, "This instruction isn&#39;t in the database yet", fixed = TRUE)
+  expect_match(html, 'data-qt-filter=""', fixed = TRUE)
+  expect_match(html, 'data-status-column="5"', fixed = TRUE)
+  # the CSV leaves the marks and the status out
+  expect_match(html, "new-mark[^", fixed = TRUE)
+  expect_match(html, '"columns":[0,1,2,3,4]', fixed = TRUE)
 })

@@ -98,103 +98,21 @@ again_counts <- list(
   names = list(question_reused = list("do you smoke?", "how tall are you?"), option_set_reused = list("yes | no"))
 )
 
-test_that("a push is described in words", {
-  expect_equal(
-    extraction_service_push_summary(first_counts),
-    "Adds 4 new blocks, 2 questions asked in the wave, 2 new variables, 2 response options, 1 new option set, 2 new answer choices and 1 new subject, time frame or unit."
-  )
-  expect_equal(
-    extraction_service_push_summary(again_counts),
-    "Adds 4 blocks already there, 4 blocks the questionnaire prints already, 2 questions asked in the wave, 2 variables already there and 1 option set already there."
-  )
-  mixed <- list(component_new = 1L, component_reused = 3L, questions = 2L, answer_option_reused = 2L, tag_new = 2L, tag_reused = 1L)
-  expect_equal(
-    extraction_service_push_summary(mixed),
-    paste(
-      "Adds 1 new block, 3 blocks already there, 2 questions asked in the wave, 2 answer choices already there,",
-      "2 new subjects, time frames or units and 1 subject, time frame or unit already there."
-    )
-  )
-  expect_equal(extraction_service_push_summary(list()), "Adds nothing.")
-})
-
-test_that("the cards for what a push adds count each question, answer choice and tag once, new or already there, and name them", {
-  cards <- extraction_service_what_cards(first_counts)
-  expect_equal(vapply(cards, function(card) card$kind, character(1)), c("Questions", "Option sets", "Answer choices", "Subjects, time frames and units"))
-  expect_equal(cards[[1]][c("title", "facts", "is_new")], list(title = "2 different questions", facts = "2 new", is_new = TRUE))
-  expect_equal(cards[[2]][c("title", "facts", "is_new")], list(title = "1 option set", facts = "1 new", is_new = TRUE))
-  expect_equal(cards[[3]][c("title", "facts", "is_new")], list(title = "2 different answer choices", facts = "2 new", is_new = TRUE))
-  expect_equal(cards[[4]][c("title", "facts", "is_new")], list(title = "1 tag", facts = "1 new", is_new = TRUE))
-  expect_true(all(vapply(cards, function(card) identical(card$subtitle, ""), logical(1))))
-  # what each chip counts is listed for pointing at it: the option set by its choices, the choices and the tag by name
-  expect_equal(cards[[2]]$lists, list("1 new" = "yes | no"))
-  expect_equal(cards[[3]]$lists, list("2 new" = c("no", "yes")))
-  expect_equal(cards[[4]]$lists, list("1 new" = "years"))
-  expect_length(cards[[1]]$lists, 0) # new questions aren't listed: they are the questionnaire below
-
-  # a second wave of a questionnaire adds no question, and finds the ones the questionnaire prints
-  again <- extraction_service_what_cards(again_counts)
-  expect_equal(again[[1]]$title, "2 different questions")
-  expect_equal(again[[1]]$facts, c("2 already in the database", "4 blocks printed by this questionnaire already"))
-  expect_equal(again[[1]]$lists, list("2 already in the database" = c("do you smoke?", "how tall are you?")))
-  expect_false(again[[1]]$is_new)
-  expect_equal(again[[2]][c("title", "facts", "is_new")], list(title = "1 option set", facts = "1 already in the database", is_new = FALSE))
-  expect_equal(again[[3]]$title, "0 different answer choices")
-  expect_length(again[[3]]$facts, 0)
-  expect_false(again[[3]]$is_new)
-
-  # the tags the questionnaire uses, each once: 5 it adds and 7 the database has, however many variables use them
-  mq <- extraction_service_what_cards(list(
-    question_new = 234L, questions = 239L, tag_new = 5L, tag_reused = 7L,
-    names = list(tag_new = list("past month", "spouse/partner"), tag_reused = list("lifetime", "twin a", "twin b"))
-  ))
-  expect_equal(mq[[4]][c("title", "facts", "is_new")], list(title = "12 tags", facts = c("5 new", "7 already in the database"), is_new = TRUE))
-  expect_equal(mq[[4]]$lists[["7 already in the database"]], c("lifetime", "twin a", "twin b"))
-  expect_equal(mq[[1]]$title, "234 different questions")
-
-  # a card is drawn with its NEW badge only when it adds rows, and a chip that has a list says it in a tooltip
-  html <- as.character(request_card_ui(mq[[4]]))
-  expect_match(html, "NEW")
-  expect_false(grepl("NEW", as.character(request_card_ui(again[[1]]))))
-  # every name has a bullet of its own, in the tooltip of the chip that counts it
-  expect_match(html, "<bslib-tooltip[^>]*>.*<li>lifetime</li>\\s*<li>twin a</li>\\s*<li>twin b</li>.*7 already in the database")
-  expect_match(html, 'class="row-badge has-list" tabindex="0"', fixed = TRUE)
-  expect_match(as.character(request_card_ui(again[[1]])), "<li>do you smoke\\?</li>")
-  expect_match(as.character(request_card_ui(again[[2]])), "<li>yes \\| no</li>")
-  # a long list is shown whole, however long a name is, in columns of at most 30 so it stays on the screen
-  long <- strrep("a very long answer choice ", 8)
-  many <- as.character(request_names_ui(c(sprintf("choice %03d", 1:149), long)))
-  expect_equal(lengths(regmatches(many, gregexpr("<li>", many))), 150)
-  expect_match(many, trimws(long), fixed = TRUE)
-  expect_false(grepl("more|\u2026", many))
-  expect_match(many, 'class="list-tooltip-lines is-rows-30"', fixed = TRUE) # 150 names: five columns of thirty
-  expect_match(as.character(request_names_ui(sprintf("choice %d", 1:31))), "is-rows-16") # two even columns, not 30 and 1
-  expect_match(as.character(request_names_ui(c("yes", "no"))), "is-rows-2")
-  # the stylesheet has a class for every length a column can be
-  styles <- paste(readLines(app_file("www", "sass", "layout", "_history.scss"), warn = FALSE), collapse = "\n")
-  expect_match(styles, sprintf("@for $rows from 1 through %d", request_names_per_column), fixed = TRUE)
-
-  # the database's older answer (no questions counted apart) still says how many the wave asks
-  older <- extraction_service_what_cards(list(component_new = 4L, questions = 2L))
-  expect_equal(older[[1]][c("title", "facts")], list(title = "2 questions", facts = character()))
-})
-
-test_that("a push that puts questions in a measurement scale says so, with a card that names the scales", {
-  counts <- list(
-    questions = 3L, question_new = 3L, measurement_scale_new = 1L, measurement_scale_reused = 1L, scale_item_new = 3L,
-    names = list(measurement_scale_new = list("XYZ"), measurement_scale_reused = list("EPQ-R"))
-  )
-  expect_match(extraction_service_push_summary(counts), "1 new measurement scale and 3 questions put in a measurement scale\\.$")
-  cards <- extraction_service_what_cards(counts)
-  expect_length(cards, 5)
-  expect_equal(cards[[5]]$kind, "Measurement scales")
-  expect_equal(cards[[5]]$title, "2 measurement scales")
-  expect_equal(cards[[5]]$facts, c("1 new", "1 already in the database"))
-  expect_equal(cards[[5]]$lists, list("1 new" = "XYZ", "1 already in the database" = "EPQ-R"))
-  expect_true(cards[[5]]$is_new)
-  # a questionnaire that names no scale has no such card, and its sentence says nothing of scales
-  expect_length(extraction_service_what_cards(list(questions = 3L, question_new = 3L)), 4)
-  expect_false(grepl("scale", extraction_service_push_summary(list(questions = 3L))))
+test_that("what the database has already is put the way the database names it, for the table's NEW marks", {
+  known <- extraction_service_known(first_counts)
+  expect_equal(known$answer_new, c("no", "yes"))
+  expect_equal(known$option_set_new, extraction_service_option_set_key(c("no", "yes"))) # its choices, in any order
+  expect_equal(known$tag_new, "years")
+  expect_length(known$question_found, 0) # a first push finds no question: every wording is new
+  again <- extraction_service_known(again_counts)
+  expect_equal(again$question_found, c("do you smoke?", "how tall are you?"))
+  expect_length(again$answer_new, 0)
+  expect_equal(extraction_service_tag_key(c(" Spouse\u2019s  Parents ", "TWIN A")), c("spouse's parents", "twin a"))
+  # the blocks that aren't questions, by kind and words, when the catalog's were read
+  expect_null(known$block_found)
+  read <- extraction_service_known(first_counts, data.frame(kind = "Note", text = " see  page 2 "))
+  expect_equal(read$block_found, extraction_service_block_key("Note", "see page 2"))
+  expect_false(extraction_service_block_key("Instruction", "see page 2") %in% read$block_found) # another kind
 })
 
 test_that("the cards for where a push goes name what is picked, and say what isn't picked yet", {
@@ -221,29 +139,25 @@ test_that("the cards for where a push goes name what is picked, and say what isn
   expect_equal(vapply(some, function(card) isTRUE(card$is_missing), logical(1)), c(FALSE, TRUE, TRUE, TRUE))
 })
 
-test_that("the preview puts the cards, the sentence and the problem together, and says when nothing was tried", {
+test_that("the preview says why the database would refuse the push, and nothing more: what is new is in the table", {
   catalog <- test_catalog()
   draft <- test_questionnaire_draft()
   info <- extraction_service_info(complete_info())
 
   preview <- extraction_service_push_preview_ui(draft, info, catalog, first_counts)
-  expect_equal(names(preview), c("where", "what", "summary", "problem", "unchecked"))
+  expect_equal(names(preview), c("where", "problem", "unchecked"))
   expect_length(preview$where, 4)
-  expect_length(preview$what, 4) # questions, option sets, answer choices, tags
-  expect_match(preview$summary, "^Adds 4 new blocks, ")
   expect_null(preview$problem)
   expect_equal(preview$unchecked, 4)
   html <- htmltools::renderTags(extraction_request_ui(preview, draft, questionnaire = FALSE))$html
-  expect_match(html, "What it adds")
-  expect_match(html, "NEW")
+  # no sentence of counts, and no cards: they count rows, not what changes; what is new is marked in the table
+  expect_false(grepl("What it adds|request-card|Adds ", html))
   expect_false(grepl("can't be pushed", html, fixed = TRUE))
 
   # the database refused: its sentence is the problem, and there is nothing to add
   refusal <- "The wave Wave 2 of Adult Health and Personality already asks 12 question(s). Empty it first (Metadata > the wave > Empty), or pick a wave that asks none."
   refused <- extraction_service_push_preview_ui(with_checked(draft, draft$components$id), info, catalog, simpleError(refusal))
   expect_equal(refused$problem, refusal)
-  expect_length(refused$what, 0)
-  expect_equal(refused$summary, "")
   expect_equal(refused$unchecked, 0)
   html <- htmltools::renderTags(extraction_request_ui(refused, draft, questionnaire = FALSE))$html
   expect_match(html, "This can't be pushed as it is", fixed = TRUE)
@@ -253,8 +167,6 @@ test_that("the preview puts the cards, the sentence and the problem together, an
   # not tried, as the Basic Info isn't complete: the cards say what to pick, and nothing is worked out
   not_tried <- extraction_service_push_preview_ui(draft, extraction_service_info(), catalog, NULL)
   expect_true(all(vapply(not_tried$where, function(card) isTRUE(card$is_missing), logical(1))))
-  expect_length(not_tried$what, 0)
-  expect_equal(not_tried$summary, "")
   expect_null(not_tried$problem)
 })
 
@@ -433,7 +345,9 @@ test_that("a second wave of the same questionnaire reuses its blocks and variabl
   expect_length(unlist(counts$names$question_reused), 2)
   expect_equal(counts$option_set_reused, 1) # and so is the set of choices the variable found again offers
   expect_equal(outcome$record$status, "Pushed")
-  expect_match(extraction_service_push_summary(counts), "^Adds 4 blocks already there, 4 blocks the questionnaire prints already, 2 questions asked in the wave, 2 variables already there and 1 option set already there\\.$")
+  expect_equal(counts$component_reused, 4) # its four wordings are the database's already
+  expect_equal(counts$placement_reused, 4) # and the questionnaire prints all four already
+  expect_equal(counts$variable_reused, 2)
 
   # the questionnaire prints the four blocks once, with two variables, and each wave asks the two questions
   questionnaire <- list(questionnaire_id = database_eq(tree$questionnaire$questionnaire_id))
@@ -513,16 +427,12 @@ test_that("a reopened block reworded while other places print its component is l
   expect_equal(extraction_service_rewordings(as_note, catalog_words(), catalog, "1")$id, id_of("1"))
 
   html <- htmltools::renderTags(rewordings_ui(choices))$html
+  expect_match(html, "Similar Wording")
+  expect_match(html, "Choose whether to update only this questionnaire's wording or update the wording in every questionnaire.", fixed = TRUE)
   expect_match(html, "Kid Questionnaire and Mother(&#39;|')s Questionnaire")
   expect_match(html, sprintf('data-action="reword" data-id="%s" data-everywhere="true"', id_of("1")), fixed = TRUE)
   expect_match(html, sprintf('data-action="reword" data-id="%s" data-everywhere="false"', id_of("3")), fixed = TRUE)
   expect_null(rewordings_ui(choices[0, ]))
-})
-
-test_that("a push that replaces what a wave asked says so", {
-  counts <- list(questions = 188L, questions_before = 190L, component_reused = 219L, variable_new = 336L)
-  expect_match(extraction_service_push_summary(counts), "^Replaces the 190 questions the wave asks now\\. Adds 219 blocks already there, ")
-  expect_false(grepl("Replaces", extraction_service_push_summary(counts[-2])))
 })
 
 test_that("a pushed wave is reopened as a draft of what it asks, and pushing that replaces it, keeping its components", {
@@ -594,6 +504,9 @@ test_that("a wave the AI read is reopened as an AI-Powered draft with that readi
   extraction_service_save_draft(test_connection, read, reviewed, first$original, me)
   catalog <- questionnaire_service_get_catalog(test_connection)
   extraction_service_push(test_connection, extraction_model_get(test_connection, read$id), me, catalog)
+  is_text <- function(edits) vapply(edits, function(edit) identical(edit$field, "text"), logical(1))
+  first_push <- monitor_model_get_pushed(test_connection)[[as.character(read$id)]]
+  expect_true(any(is_text(first_push$edits))) # the rewording counts against the prompt
 
   reopened <- extraction_service_reopen_wave(test_connection, tree$wave$wave_id, me)
   withr::defer(test_delete_extraction(reopened$id))
@@ -605,6 +518,8 @@ test_that("a wave the AI read is reopened as an AI-Powered draft with that readi
   opened <- extraction_service_open_draft(test_connection, reopened)
   expect_false(is.null(opened$original))
   expect_false(anyNA(opened$draft$components$ref))
+  expect_true(opened$matched) # not saved yet: the page saves it before the push, so its corrections are kept
+  expect_length(review_edits_of(test_connection, reopened$id), 0)
   reworded <- asked_first(opened$draft)
   expect_length(reworded, 1)
   expect_equal(component(opened$draft, reworded)$text, component(reviewed, asked_first(reviewed))$text)
@@ -618,15 +533,21 @@ test_that("a wave the AI read is reopened as an AI-Powered draft with that readi
   extraction_service_save_draft(test_connection, reopened, back, opened$original, me)
   again <- extraction_service_open_draft(test_connection, extraction_model_get(test_connection, reopened$id))
   expect_false(anyNA(again$draft$components$ref))
+  expect_false(again$matched)
   expect_false(any(vapply(review_edits_of(test_connection, reopened$id), function(edit) identical(edit$field, "text"), logical(1))))
 
-  # it isn't read again from here (that is the wave's own Re-extract), and the AI Monitor counts the reading once
+  # it isn't read again from here (that is the wave's own Re-extract), and the AI Monitor counts the reading once, as
+  # of its latest push: the rewording put back no longer counts against the prompt
   expect_match(error_text(extraction_service_reextract(test_connection, reopened$id, me)), "Re-extract on the wave")
   outcome <- extraction_service_push(
     test_connection, extraction_model_get(test_connection, reopened$id), me, questionnaire_service_get_catalog(test_connection)
   )
   expect_equal(outcome$record$status, "Pushed")
-  listed <- names(monitor_model_get_pushed(test_connection))
-  expect_true(as.character(read$id) %in% listed)
-  expect_false(as.character(reopened$id) %in% listed)
+  monitor <- monitor_model_get_pushed(test_connection)
+  expect_true(as.character(read$id) %in% names(monitor))
+  expect_false(as.character(reopened$id) %in% names(monitor))
+  latest <- monitor[[as.character(read$id)]]
+  expect_false(any(is_text(latest$edits)))
+  expect_equal(latest$latest_id, as.character(reopened$id))
+  expect_equal(latest[c("applied", "prompt_version")], first_push[c("applied", "prompt_version")])
 })

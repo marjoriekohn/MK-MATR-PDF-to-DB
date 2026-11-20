@@ -1,54 +1,138 @@
 # ------ A questionnaire, laid out to read -----------------------------------------------------
 # A draft's questionnaire drawn as a table to read, with nothing to edit, the way a codebook lists it: one
-# row for each variable, with its MATR ID (Variable ID), the words of its question with the variable's label
-# and who it is about in square brackets (Question Text), and its codes and choices, or a write-in's kind of
-# answer (Variable Coding). Blocks that aren't questions (an instruction, a note) have a row each, in printed order.
-# The rows are grouped under the section (and group) they are printed in. It is a DataTables table
-# (the DT package): it can be searched, and downloaded as a CSV. The Edit Extraction page's Preview shows it
-# before the extraction is pushed into the database.
+# row for each variable, with its MATR ID (Variable ID), the words of its question with the variable's label in
+# square brackets (Question Text), its subjects, time frames and units (Tags), and its codes and choices, or a
+# write-in's kind of answer (Variable Coding). Blocks that aren't questions (an instruction, a note) have a row
+# each, in printed order. The rows are grouped under the section (and group) they are printed in. It is a
+# DataTables table (the DT package). The Push dialog shows it before the extraction is pushed into the database:
+# once the push has been tried (`extraction_service_known()`), NEW marks each question wording, option set,
+# answer choice and tag the database doesn't have yet. Above it, a toolbar drawn like the site's others: All /
+# New / Already in the database (once there are marks), Search, and Download CSV (www/js/preview.js works them).
 
 # A draft's questionnaire, laid out to read as a table.
-questionnaire_preview_ui <- function(draft) {
+# known: What the database has already, from `extraction_service_known()`, or `NULL` for no marks.
+questionnaire_preview_ui <- function(draft, known = NULL) {
   if (nrow(draft$components) == 0) {
     return(p(class = "form-text", "This questionnaire has no blocks."))
   }
-  rows <- questionnaire_preview_rows(draft)
+  rows <- questionnaire_preview_rows(draft, known)
   shown <- data.frame(
     Section = htmltools::htmlEscape(rows$section),
     `Variable ID` = ifelse(is.na(rows$matr_id), preview_blank(rows$missing), htmltools::htmlEscape(rows$matr_id)),
     `Question Text` = paste0(
       htmltools::htmlEscape(rows$text),
-      ifelse(nzchar(rows$tags), paste0(' <span class="qt-tags">', htmltools::htmlEscape(rows$tags), "</span>"), "")
+      ifelse(rows$text_new, paste0(" ", vapply(rows$kind, function(kind) {
+        preview_new_mark(if (kind == "Question") "This question's wording" else paste("This", tolower(kind)))
+      }, character(1), USE.NAMES = FALSE)), ""),
+      ifelse(nzchar(rows$label), paste0(' <span class="qt-label">[', htmltools::htmlEscape(rows$label), "]</span>"), "")
     ),
-    `Variable Coding` = vapply(rows$coding, function(lines) paste(htmltools::htmlEscape(lines), collapse = "<br>"), character(1)),
+    Tags = as.character(unlist(Map(preview_tags_html, rows$tag_names, rows$tag_new))),
+    `Variable Coding` = as.character(unlist(Map(preview_coding_html, rows$coding, rows$coding_new, rows$set_new))),
+    Status = rows$status,
     check.names = FALSE, stringsAsFactors = FALSE
   )
+  status_column <- which(names(shown) == "Status") - 1L # DataTables counts from 0
   div(
-    class = "questionnaire-preview",
+    class = "questionnaire-preview", `data-status-column` = status_column,
+    preview_toolbar(rows),
     DT::datatable(
       shown,
       class = "compact questionnaire-table", rownames = FALSE, escape = FALSE,
       extensions = c("Buttons", "RowGroup"),
+      # the toolbar above works the table (www/js/preview.js)
+      callback = DT::JS("if (window.matrPreviewTable) window.matrPreviewTable(table);"),
       options = list(
-        dom = "Bfrtip", ordering = FALSE, pageLength = 50, autoWidth = FALSE,
+        # the CSV button is DataTables' own, pressed by the toolbar's (its own is hidden: _history.scss)
+        dom = "Brtip", ordering = FALSE, pageLength = 50, autoWidth = FALSE,
         # the rows stay in printed order, grouped under their section
         rowGroup = list(dataSrc = 0, emptyDataGroup = "Not in a section"),
         columnDefs = list(
           list(targets = 0, visible = FALSE),
-          list(targets = 1, width = "9rem"), list(targets = 3, width = "32%")
+          list(targets = status_column, visible = FALSE, searchable = FALSE),
+          list(targets = 1, width = "9rem"), list(targets = 3, width = "14%"), list(targets = 4, width = "28%")
         ),
         buttons = list(list(
           extend = "csv", text = "Download CSV", filename = preview_file_name(draft),
-          # every column, the section too, with a choice on each line and no markup
-          exportOptions = list(columns = 0:3, format = list(body = DT::JS(
-            "function (data) { return String(data).replace(/<br\\s*\\/?>/g, '\\n').replace(/<[^>]+>/g, '')",
+          # every column but the status, the section too, with a choice or a tag on each line, and no markup or NEW
+          exportOptions = list(columns = 0:(status_column - 1L), format = list(body = DT::JS(
+            "function (data) { return String(data).replace(/<span class=\"new-mark[^\"]*\"[^>]*>[\\s\\S]*?<\\/span>/g, '')",
+            ".replace(/<br\\s*\\/?>/g, '\\n').replace(/<[^>]+>/g, '').replace(/ +\\n/g, '\\n').trim()",
             ".replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '\"').replace(/&#39;/g, \"'\").replace(/&amp;/g, '&'); }"
           )))
         )),
-        language = list(search = "Search:", info = "_START_ to _END_ of _TOTAL_ rows", emptyTable = "No rows")
+        language = list(info = "_START_ to _END_ of _TOTAL_ rows", infoFiltered = "(of _MAX_)", emptyTable = "No rows", zeroRecords = "No rows match")
       )
     )
   )
+}
+
+# The table's toolbar: which rows to show (only once the push has been tried, so there are NEW marks: all of
+# them, those with something new, or those with nothing new), a search box and Download CSV. They work the table
+# in the browser (www/js/preview.js), so none is a Shiny input.
+# rows: From `questionnaire_preview_rows()`.
+preview_toolbar <- function(rows) {
+  n_new <- sum(rows$status == "new")
+  n_found <- sum(rows$status == "found")
+  count <- function(label, n) paste0(label, " (", format(n, big.mark = ","), ")")
+  div(
+    class = "qt-toolbar",
+    if (n_new + n_found > 0) {
+      toggle_buttons(
+        "qt-filter",
+        stats::setNames(c("all", "new", "found"), c(
+          count("All", nrow(rows)), count("New", n_new), count("Already in the database", n_found)
+        )),
+        "all", "Which rows to show", attributes = list(`data-qt-filter` = ""), small = TRUE
+      )
+    },
+    div(
+      class = "toolbar-field qt-search-field",
+      app_icon("search"),
+      tags$input(
+        type = "search", class = "form-control form-control-sm qt-search",
+        placeholder = "Search", `aria-label` = "Search the questionnaire", autocomplete = "off"
+      )
+    ),
+    tags$button(type = "button", class = "btn btn-sm btn-outline-dark qt-download", app_icon("download"), "Download CSV")
+  )
+}
+
+# The mark beside what the push adds: the certificate, and NEW. Written as one string, with no line breaks in
+# it, so the CSV's formatter can take it out whole.
+# what: What is new, said when it is pointed at ("This answer choice"), or `NULL` to say nothing.
+# label: Its words.
+preview_new_mark <- function(what = NULL, label = "NEW") {
+  title <- if (!is.null(what)) {
+    paste0(' title="', htmltools::htmlEscape(paste(what, "isn't in the database yet: the push adds it"), attribute = TRUE), '"')
+  }
+  paste0('<span class="new-mark"', title, ">", as.character(app_icon("new")), htmltools::htmlEscape(label), "</span>")
+}
+
+# A row's tags, each a pill, a new one marked; nothing for none. The pills are set in a line, but there is a line
+# break between each, so the CSV has a tag on each line.
+preview_tags_html <- function(names, new) {
+  if (length(names) == 0) {
+    return("")
+  }
+  pills <- vapply(seq_along(names), function(i) {
+    paste0(
+      '<span class="qt-tag', if (isTRUE(new[i])) " is-new", '">', htmltools::htmlEscape(names[i]),
+      if (isTRUE(new[i])) paste0(" ", preview_new_mark("This tag")), "</span>"
+    )
+  }, character(1))
+  paste(pills, collapse = "<br>")
+}
+
+# A row's coding, a line each: a new answer choice marked, and a new option set (a set of choices no variable in
+# the database offers yet) marked over them.
+preview_coding_html <- function(lines, new, set_new) {
+  lines <- as.character(htmltools::htmlEscape(lines))
+  marked <- seq_along(lines) %in% which(new %in% TRUE)
+  lines[marked] <- paste0(lines[marked], " ", preview_new_mark("This answer choice"))
+  if (isTRUE(set_new)) {
+    lines <- c(preview_new_mark("This set of choices", "NEW option set"), lines)
+  }
+  paste(lines, collapse = "<br>")
 }
 
 # "no MATR ID" or "no variables", in italics.
@@ -65,15 +149,27 @@ preview_file_name <- function(draft) {
 # The rows of the questionnaire's table, in printed order.
 # A question has a row for each of its variables (or one, saying it has none); any other block that isn't a
 # section or group has one row. Each row names the sections and groups it is in.
+# known: What the database has already (`extraction_service_known()`), to say what each row adds, or `NULL`.
 # Returns: A data frame: `section` (e.g. "PART B. YOUR HABITS › Group 1", or "" at the top level),
 #   `kind`, `matr_id` (NA when there is none), `missing` ("no MATR ID", "no variables" or ""), `text`,
-#   `tags` ("[Lifetime] [Siblings]", or "") and `coding` (a list of lines: "1 = Yes", or the write-in's kind of
-#   answer).
-questionnaire_preview_rows <- function(draft) {
+#   `label` (the variable's, or ""), `tags` ("[past 30 days] [siblings]", or ""), `tag_names` (a list of the
+#   tags), `coding` (a list of lines: "1 = Yes", or the write-in's kind of answer), and what the push adds:
+#   `text_new` (the question's wording, or another block's words), `tag_new` and `coding_new` (a list, a TRUE or
+#   FALSE for each tag and each line), `set_new` (the variable's set of choices) and `status`: "new" for a row with
+#   any of those, "found" for one with none, and "" when `known` is `NULL` (and for a block that isn't a question
+#   when the catalog's other blocks couldn't be read).
+questionnaire_preview_rows <- function(draft, known = NULL) {
   rows <- list()
-  add <- function(section, kind, matr_id = NA_character_, missing = "", text = "", tags = "", coding = character()) {
+  add <- function(section, kind, matr_id = NA_character_, missing = "", text = "", label = "", tag_names = character(),
+                  coding = character(), text_new = FALSE, tag_new = logical(), coding_new = logical(), set_new = FALSE) {
+    adds <- text_new || set_new || any(tag_new) || any(coding_new)
+    unknown <- is.null(known) || (kind != "Question" && is.null(known$block_found))
     rows[[length(rows) + 1]] <<- list(
-      section = section, kind = kind, matr_id = matr_id, missing = missing, text = text, tags = tags, coding = list(coding)
+      section = section, kind = kind, matr_id = matr_id, missing = missing, text = text, label = label,
+      tags = if (length(tag_names) > 0) paste0("[", tag_names, "]", collapse = " ") else "",
+      tag_names = list(tag_names), coding = list(coding), text_new = text_new, tag_new = list(tag_new),
+      coding_new = list(coding_new), set_new = set_new,
+      status = if (unknown) "" else if (adds) "new" else "found"
     )
   }
   walk <- function(parent_id, path) {
@@ -88,34 +184,59 @@ questionnaire_preview_rows <- function(draft) {
       }
       section <- paste(path, collapse = " \u203a ")
       if (block$component_type != "Question") {
-        add(section, block$component_type, text = preview_words(block))
+        # (words the catalog doesn't have, once its other blocks are read, are new)
+        words_new <- !is.null(known$block_found) && !is.na(block$text) &&
+          !extraction_service_block_key(block$component_type, block$text) %in% known$block_found
+        add(section, block$component_type, text = preview_words(block), text_new = words_new)
         next
       }
       words <- preview_question_words(block)
+      text_new <- !is.null(known) && !is.na(block$text) && !squish(block$text) %in% known$question_found
       boxes <- draft_service_children(draft, "variables", block$id)
-      if (nrow(boxes) == 0) add(section, "Question", missing = "no variables", text = words)
+      if (nrow(boxes) == 0) add(section, "Question", missing = "no variables", text = words, text_new = text_new)
       for (j in seq_len(nrow(boxes))) {
         box <- boxes[j, , drop = FALSE]
+        tag_names <- preview_variable_tag_list(box, block)
+        coding <- preview_coding(box, draft)
+        choices <- if (box$variable_type == "closed_ended") draft_service_children(draft, "response_options", box$id)
+        answers <- if (NROW(choices) > 0) choices$answer_option[!is.na(choices$answer_option)] else character()
         add(
           section, "Question",
           matr_id = box$matr_id, missing = if (is.na(box$matr_id)) "no MATR ID" else "",
-          text = words, tags = preview_variable_tags(box, block), coding = preview_coding(box, draft)
+          text = words, label = if (is.na(box$label)) "" else trimws(box$label), tag_names = tag_names, coding = coding,
+          text_new = text_new,
+          tag_new = !is.null(known) & extraction_service_tag_key(tag_names) %in% known$tag_new,
+          coding_new = if (!is.null(known) && NROW(choices) > 0) choices$answer_option %in% known$answer_new else rep(FALSE, length(coding)),
+          set_new = !is.null(known) && length(answers) > 0 && extraction_service_option_set_key(answers) %in% known$option_set_new
         )
       }
     }
   }
   walk(NA, character())
   if (length(rows) == 0) {
-    return(data.frame(section = character(), kind = character(), matr_id = character(), missing = character(), text = character(), tags = character(), coding = I(list())))
+    return(data.frame(
+      section = character(), kind = character(), matr_id = character(), missing = character(), text = character(),
+      label = character(), tags = character(), tag_names = I(list()), coding = I(list()), text_new = logical(),
+      tag_new = I(list()), coding_new = I(list()), set_new = logical(), status = character()
+    ))
   }
+  column <- function(name, type) vapply(rows, function(row) row[[name]], type)
+  listed <- function(name) I(lapply(rows, function(row) row[[name]][[1]]))
   data.frame(
-    section = vapply(rows, `[[`, "", "section"),
-    kind = vapply(rows, `[[`, "", "kind"),
+    section = column("section", ""),
+    kind = column("kind", ""),
     matr_id = vapply(rows, function(row) as.character(row$matr_id), ""),
-    missing = vapply(rows, `[[`, "", "missing"),
-    text = vapply(rows, `[[`, "", "text"),
-    tags = vapply(rows, `[[`, "", "tags"),
-    coding = I(lapply(rows, function(row) row$coding[[1]])),
+    missing = column("missing", ""),
+    text = column("text", ""),
+    label = column("label", ""),
+    tags = column("tags", ""),
+    tag_names = listed("tag_names"),
+    coding = listed("coding"),
+    text_new = column("text_new", TRUE),
+    tag_new = listed("tag_new"),
+    coding_new = listed("coding_new"),
+    set_new = column("set_new", TRUE),
+    status = column("status", ""),
     stringsAsFactors = FALSE
   )
 }
@@ -148,15 +269,21 @@ preview_question_words <- function(block) {
   if (nzchar(trimmed)) trimmed else block$text
 }
 
-# "[Drinks] [hours] [past 30 days] [siblings]": the variable's label, a write-in's unit, then when and who its
-# answer is about (its own tag of each kind, or else its question's), each when there is one (a variable about the
-# respondent has no subject), or "".
+# A variable's tags, the way the database keeps them (a tag is a subject, a time frame or a unit): a write-in's
+# unit, then when and who its answer is about (its own tag of each kind, or else its question's), each when there
+# is one (a variable about the respondent has no subject).
 # block: The variable's question, whose own tags are about all its variables.
-preview_variable_tags <- function(box, block = NULL) {
+# Returns: A character vector, e.g. `c("hours", "past 30 days", "siblings")`; empty for none.
+preview_variable_tag_list <- function(box, block = NULL) {
   of_kind <- function(kind) if (is.na(box[[kind]])) block[[kind]] %||% NA_character_ else box[[kind]]
-  tags <- c(box$label, box$unit, of_kind("time_frame"), of_kind("subject"))
+  tags <- c(box$unit, of_kind("time_frame"), of_kind("subject"))
   tags <- trimws(tags[!is.na(tags)])
-  tags <- tags[nzchar(tags)]
+  tags[nzchar(tags)]
+}
+
+# The same, in words: "[hours] [past 30 days] [siblings]", or "".
+preview_variable_tags <- function(box, block = NULL) {
+  tags <- preview_variable_tag_list(box, block)
   if (length(tags) > 0) paste0("[", tags, "]", collapse = " ") else ""
 }
 
@@ -177,15 +304,13 @@ preview_coding <- function(box, draft) {
 
 # ------ An extraction's push, laid out to read --------------------------------------------------------
 # What pushing an extraction into the database comes to, shown to whoever reviewed it before they push it
-# (there is no second approval): its Basic Info (the registry, study, questionnaire and wave it goes into),
-# what it adds (a card for each kind of row that is kept once, saying how many rows are new and how many are
-# already in the database and are used again, with a list of each row to open under them when the rows are
-# given), and the questionnaire itself.
+# (there is no second approval): its Basic Info (the registry, study, questionnaire and wave it goes into), why
+# the database would refuse it if it would, and the questionnaire itself, with NEW beside what the database
+# doesn't have yet.
 
 # What pushing an extraction comes to, laid out to read.
-# preview: A list: `what` (a list of cards, from the push's preview),
-#   `summary` (a sentence), `problem` (why it can't be pushed, or `NULL`) and `unchecked` (how many
-#   blocks haven't been marked as checked). Any can be left out.
+# preview: A list: `problem` (why it can't be pushed, or `NULL`) and `unchecked` (how many blocks haven't been
+#   marked as checked). Either can be left out.
 # draft: The questionnaire, or `NULL` if it couldn't be read.
 # pdf_url: The address of its PDF, or `NULL`.
 # basic_info: The Basic Info form, to show first, or `NULL`.
@@ -201,15 +326,6 @@ extraction_request_ui <- function(preview, draft, pdf_url = NULL, basic_info = N
     if (!is.null(preview$problem)) {
       edit_callout("danger", title = "This can't be pushed as it is", preview$problem)
     },
-    if (length(preview$what) > 0) {
-      div(
-        class = "request-section",
-        h3("What it adds"),
-        if (nzchar(preview$summary %||% "")) p(class = "form-text", preview$summary),
-        div(class = "request-cards", lapply(preview$what, request_card_ui)),
-        request_rows_ui(preview$what)
-      )
-    },
     if (questionnaire && isTRUE(preview$unchecked > 0)) {
       p(class = "form-text", sprintf("%s haven't been marked as checked yet.", plural(preview$unchecked, "block")))
     },
@@ -224,111 +340,5 @@ extraction_request_ui <- function(preview, draft, pdf_url = NULL, basic_info = N
         }
       )
     }
-  )
-}
-
-# One card of what a push adds: a row that is there, or a NEW one, the way Make an edit shows a row.
-# card: A list: `kind` (e.g. `"Study"`), `title`, `subtitle`, `facts` (short notes, each a chip), `lists` (what
-#   a chip counts, by the chip's words, if it is listed: `request_fact_ui()`) and `is_new`.
-request_card_ui <- function(card) {
-  div(
-    class = c("edit-card", "request-card", if (isTRUE(card$is_new)) "is-new", if (isTRUE(card$is_missing)) "is-missing"),
-    if (isTRUE(card$is_new)) new_badge(),
-    div(class = "edit-card-head", span(class = "request-card-kind", card$kind)),
-    h3(class = "edit-card-title", card$title),
-    if (nzchar(card$subtitle %||% "")) p(class = "edit-card-subtitle", card$subtitle),
-    if (length(card$facts) > 0) {
-      div(class = "edit-card-facts", lapply(card$facts, function(fact) request_fact_ui(fact, card$lists[[fact]])))
-    }
-  )
-}
-
-# One chip of a card ("5 new", "7 already in the database"). When the card says what the chip counts
-# (`card$lists`), pointing at the chip, or reaching it with the keyboard, lists them.
-# names: What it counts, by name, or `NULL`.
-request_fact_ui <- function(fact, names = NULL) {
-  if (length(names) == 0) {
-    return(row_badge(fact))
-  }
-  bslib::tooltip(
-    row_badge(fact, class = "has-list", tabindex = "0"),
-    request_names_ui(names),
-    options = list(customClass = "list-tooltip")
-  )
-}
-
-# The most names in one column of a chip's tooltip: more go in further columns beside it, so a long list is as
-# tall as the screen allows and no taller. _history.scss has a class for each length up to this one.
-request_names_per_column <- 30
-
-# Names for a chip's tooltip: every one, in the order given, each with a bullet of its own. A list longer than
-# `request_names_per_column` is set in columns of even length (its class says how long, `is-rows-23`:
-# _history.scss lays them out), and the tooltip is as wide as its names need, so none is cut or wrapped while the
-# screen has room.
-request_names_ui <- function(names) {
-  columns <- ceiling(length(names) / request_names_per_column)
-  rows <- ceiling(length(names) / max(columns, 1))
-  tags$ul(class = c("list-tooltip-lines", paste0("is-rows-", rows)), lapply(names, tags$li))
-}
-
-# Each row the cards count, a list for each card to open, in the order of their words: which are added and which
-# are already in the database and pointed at again, and how often each is used. A group has no words, so it isn't
-# listed.
-# cards: The cards; those with no `rows` are left out (the push's preview comes back as counts only, so there
-#   may be none to list).
-# Returns: A UI element, or `NULL` if no card has rows.
-request_rows_ui <- function(cards) {
-  cards <- Filter(function(card) NROW(card$rows) > 0, cards)
-  if (length(cards) == 0) {
-    return(NULL)
-  }
-  div(
-    class = "request-rows",
-    p(class = "form-text", "Open a list to see each row: the new ones are added, and the others are already in the database."),
-    lapply(cards, function(card) {
-      rows <- card$rows[order(tolower(card$rows$text)), , drop = FALSE] # by its words
-      columns <- card$columns
-      n_new <- sum(rows$is_new)
-      tags$details(
-        class = "request-rows-list",
-        tags$summary(
-          span(class = "request-rows-kind", card$kind),
-          span(class = "request-rows-count", paste0(
-            plural(n_new, "new row", big_mark = ","),
-            if (n_new < nrow(rows)) paste0(", ", format(nrow(rows) - n_new, big.mark = ","), " already there")
-          ))
-        ),
-        div(
-          class = "request-rows-table",
-          tags$table(
-            class = "table table-sm",
-            tags$thead(tags$tr(
-              tags$th(columns[["text"]]),
-              if ("detail" %in% names(columns)) tags$th(columns[["detail"]]),
-              tags$th(class = "is-status", "In the database"),
-              if ("uses" %in% names(columns)) tags$th(class = "is-count", columns[["uses"]])
-            )),
-            tags$tbody(lapply(seq_len(nrow(rows)), function(i) {
-              row <- rows[i, ]
-              tags$tr(
-                tags$td(if (nzchar(row$text)) shorten(row$text, 160) else span(class = "text-muted", "(no words)")),
-                if ("detail" %in% names(columns)) tags$td(shorten(row$detail, 120)),
-                tags$td(class = "is-status", if (row$is_new) row_badge("New", class = "is-added") else span(class = "text-muted", row$status)),
-                if ("uses" %in% names(columns)) tags$td(class = "is-count", format(row$uses, big.mark = ","))
-              )
-            }))
-          )
-        )
-      )
-    })
-  )
-}
-
-# The mark on a card for a row the push adds: a certificate with NEW on it.
-new_badge <- function() {
-  span(
-    class = "new-badge", role = "img", `aria-label` = "New: the push adds it",
-    app_icon("new", class = "fa-solid"),
-    span(class = "new-badge-text", `aria-hidden` = "true", "NEW")
   )
 }

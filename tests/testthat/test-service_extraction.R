@@ -281,7 +281,23 @@ test_that("a recorded wave has to be the questionnaire's, ask no questions yet (
     c("Wave 1 · given 05/01/2019 · asks 3 questions: empty it first" = "1", "Wave 2 · given 04/15/2022 · no questions yet" = "2")
   )
   expect_equal(unname(questionnaire_service_wave_choices(catalog, "1")), c("1", "2"))
+  # the wave a draft was reopened from says the draft updates it, not that it has to be emptied
+  expect_equal(
+    names(questionnaire_service_wave_choices(catalog, "1", c("1" = 3L), updates_wave_id = "1")),
+    c("Wave 1 · given 05/01/2019 · asks 3 questions, which this draft updates", "Wave 2 · given 04/15/2022 · no questions yet")
+  )
   expect_length(questionnaire_service_wave_choices(catalog, "99"), 0)
+})
+
+test_that("a draft reopened from a wave goes back into that wave, whatever Basic Info it saved", {
+  catalog <- test_catalog()
+  # saved as if staff had picked another wave of the questionnaire (an earlier site let them)
+  drifted <- list(info = c(picked_info(wave_id = "1"), list(updates_wave_id = "2")))
+  expect_equal(extraction_service_reopened_info(drifted, catalog), picked_info(wave_id = "2"))
+  # its study and registry are the questionnaire's, filled in from the catalog
+  bare <- list(info = list(updates_wave_id = "2"))
+  expect_equal(extraction_service_reopened_info(bare, catalog), picked_info(wave_id = "2"))
+  expect_null(extraction_service_reopened_info(list(info = picked_info()), catalog)) # any other draft: the form's picks
 })
 
 test_that("the Edit Extraction page is headed by where it goes, else the PDF's name, never what Gemini read", {

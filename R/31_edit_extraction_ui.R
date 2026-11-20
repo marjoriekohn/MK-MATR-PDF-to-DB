@@ -119,18 +119,33 @@ reextract_dialog <- function(ns) {
 }
 
 # The Push to the database dialog, built from the pieces of `extraction_request_ui()`: what is in the way, the
-# Basic Info form (where the extraction goes), what the push would add, and the questionnaire laid out as a
-# table. The form is drawn once, here, so its picks stay while the parts around it are drawn again by the
-# page (`push_blockers`, `push_what`, `preview_table`). Push adds it all to the MATR metadata database at once;
-# Cancel closes the dialog with nothing added.
+# Basic Info form (where the extraction goes), why the database would refuse it if it would, and the
+# questionnaire laid out as a table, with NEW beside what the push adds. The form is drawn once, here, so its
+# picks stay while the parts around it are drawn again by the page (`push_blockers`, `push_what`,
+# `preview_table`). Push adds it all to the MATR metadata database at once; Cancel closes the dialog with
+# nothing added. A draft reopened from a wave (Edit extraction on the Metadata page) goes back into that wave
+# and nowhere else (`extraction_service_reopened_info()`), so its dialog says which wave it updates instead.
 # draft: The questionnaire on screen, for how many of its blocks haven't been marked as checked.
-push_dialog <- function(ns, draft) {
+# updates: For a reopened draft, the wave it updates in words ("Kid Questionnaire (KQ) · Wave 1"); `NULL` for
+#   any other, whose dialog has the form.
+push_dialog <- function(ns, draft, updates = NULL) {
   modalDialog(
     title = "Push to the database",
     size = "xl",
     easyClose = FALSE,
     uiOutput(ns("push_blockers")),
-    extraction_request_ui(list(), NULL, basic_info = extraction_info_ui(ns("info")), questionnaire = FALSE),
+    if (is.null(updates)) {
+      extraction_request_ui(list(), NULL, basic_info = extraction_info_ui(ns("info")), questionnaire = FALSE)
+    } else {
+      div(
+        class = "request-preview",
+        div(
+          class = "request-section",
+          h3("Updating"),
+          p(class = "form-text", "Pushing replaces what ", strong(updates), " asks with this draft.")
+        )
+      )
+    },
     div(class = "edit-extraction-rewordings", `data-ns` = ns(""), uiOutput(ns("push_rewordings"))),
     uiOutput(ns("push_what")),
     extraction_request_ui(list(unchecked = extraction_service_unchecked(draft)), draft, table = uiOutput(ns("preview_table"))),
@@ -161,12 +176,10 @@ rewordings_ui <- function(choices) {
   }
   div(
     class = "request-section",
-    h3("Wordings other places print too"),
+    h3("Similar Wording"),
     p(
       class = "form-text",
-      "You changed these words, and other places print the same wording. Choose where the new words go: ",
-      strong("only here"), " gives this questionnaire a wording of its own and leaves the others as they are; ",
-      strong("everywhere"), " changes the wording itself, in every place that prints it."
+      "You changed these words but other places print them. Choose whether to update only this questionnaire's wording or update the wording in every questionnaire."
     ),
     tags$table(
       class = "table table-sm rewordings-table",

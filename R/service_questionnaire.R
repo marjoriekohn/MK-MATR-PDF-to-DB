@@ -104,14 +104,20 @@ questionnaire_service_study_choices <- function(catalog, registry_id) {
 # A questionnaire's waves, for a drop-down, each saying whether it asks questions yet.
 # An extraction can only go into a wave that asks none (a wave added on Make an edit before its questionnaire
 # was extracted, or one emptied there): one that asks questions already is offered so staff see why it won't
-# do, and told to empty it first.
+# do, and told to empty it first. The exception is the wave a draft was reopened from (Edit extraction on the
+# Metadata page): pushed there, the draft updates what it asks, so it says so instead.
 # question_counts: From `questionnaire_service_wave_question_counts()`.
-questionnaire_service_wave_choices <- function(catalog, questionnaire_id, question_counts = integer()) {
+# updates_wave_id: The wave the draft was reopened from (`extraction_service_updates_wave()`), or "".
+questionnaire_service_wave_choices <- function(catalog, questionnaire_id, question_counts = integer(), updates_wave_id = "") {
   waves <- catalog$waves[catalog$waves$questionnaire_id %in% questionnaire_id, , drop = FALSE]
   n <- question_counts[as.character(waves$wave_id)]
   n[is.na(n)] <- 0L
   dates <- ifelse(is.na(waves$administered_date), "", paste0(" · given ", format(as.Date(waves$administered_date), "%m/%d/%Y")))
-  asks <- ifelse(n == 0, " · no questions yet", paste0(" · asks ", vapply(n, plural, character(1), "question"), ": empty it first"))
+  asks_words <- vapply(n, plural, character(1), "question")
+  updated <- as.character(waves$wave_id) %in% updates_wave_id & n > 0
+  asks <- ifelse(n == 0, " · no questions yet", ifelse(
+    updated, paste0(" · asks ", asks_words, ", which this draft updates"), paste0(" · asks ", asks_words, ": empty it first")
+  ))
   stats::setNames(as.character(waves$wave_id), paste0(waves$name, dates, asks, recycle0 = TRUE))
 }
 

@@ -845,9 +845,9 @@ edit_usage_groups <- function(snap, table, rows, labels) {
   }, names(by_name), by_name))
 }
 
-# What each variable records, its unit, when and who it is about, as the questionnaire's preview shows them:
-# "[Smokes now] [hours] [in the past 30 days] [Respondent]", each part when it has one. A variable's tags say
-# the last three (variable_tag).
+# What each variable records (its label), then its unit, when and who it is about (its tags, as the
+# questionnaire's preview shows them): "[Smokes now] [hours] [in the past 30 days] [Respondent]", each part when
+# it has one. A variable's tags say the last three (variable_tag).
 # variables: Rows of `variable`.
 # Returns: One string per variable; `""` for one with neither.
 edit_variable_tags <- function(snap, variables) {
@@ -861,9 +861,9 @@ edit_variable_tags <- function(snap, variables) {
   }
   vapply(seq_len(nrow(variables)), function(i) {
     key <- variables$variable_key[i]
-    preview_variable_tags(list(
-      label = variables$label[i], unit = tag_of(key, "unit"), time_frame = tag_of(key, "time frame"), subject = tag_of(key, "subject")
-    ))
+    label <- trimws(variables$label[i])
+    tags <- preview_variable_tags(list(unit = tag_of(key, "unit"), time_frame = tag_of(key, "time frame"), subject = tag_of(key, "subject")))
+    paste(c(if (!is.na(label) && nzchar(label)) paste0("[", label, "]"), if (nzchar(tags)) tags), collapse = " ")
   }, character(1))
 }
 

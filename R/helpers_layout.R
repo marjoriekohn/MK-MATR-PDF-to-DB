@@ -144,6 +144,19 @@ last_good_read <- function(read) {
   }
 }
 
+# A reactive that tells what reads it only when its value changes. Shiny runs again whatever reads a reactive
+# each time what that reactive reads changes, even when it comes out the same, and an output drawn again is
+# greyed out while it is: the drafts are read again every few seconds while one is being read by Gemini, so
+# everything drawn from a draft's record blinked. What reads this runs again only when `value()` gives something
+# different (`identical()`). While `value()` can't give anything (a `req()` in it fails), it keeps the last.
+# value: A function of no arguments, read reactively.
+# Returns: A reactive: what `value()` last gave, `NULL` until it has given something.
+steady_reactive <- function(value) {
+  kept <- reactiveVal(NULL) # setting it to what it holds already tells nobody
+  observe(kept(value()), priority = 100) # first in its turn, so what reads it in the same turn gets the new value
+  reactive(kept())
+}
+
 # A change to a draft, as a service function makes it, with what it says shown to staff.
 # Service functions explain themselves: their message()s are shown as notes, and when one stop()s, why is
 # shown and nothing changes.

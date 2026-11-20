@@ -81,6 +81,16 @@ respondent_type_model_get_all <- function(connection) {
   )
 }
 
+# ------ The wordings that aren't questions ----------------------------------------------------
+# Every instruction, definition, note and the like the catalog keeps (not questions, and not sections, grids or
+# groups): a few dozen at most, read whole for the Push dialog to say which of a draft's are there already.
+# Returns: A data frame with `kind` and `text`; no rows if there are none.
+component_model_other_blocks <- function(connection) {
+  not_these <- paste0("not.", database_in(c("Question", container_types)))
+  rows <- database_model_get(connection, "component", c("kind", "text"), order_by = c("kind", "text"), filters = list(kind = not_these))
+  if (nrow(rows) == 0) no_rows(c("kind", "text")) else rows
+}
+
 # ------ Where components are printed --------------------------------------------------------
 # Some components as the catalog has them, and every place that prints one of them.
 # component_ids: Component ids; anything that isn't a number is left out.

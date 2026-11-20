@@ -12,8 +12,9 @@
 # (Empty it first on the Metadata page), no questions, Basic Info missing.
 #
 # The push is previewed and done on the Edit Extraction page. The preview is the same function told
-# only to try (`p_dry_run`): it does everything and undoes it, and the counts come back, so what the
-# page shows is exactly what the push will do.
+# only to try (`p_dry_run`): it does everything and undoes it, so the page knows whether the push would
+# be refused, and, from the names that come back with the counts, what in the questionnaire is new to the
+# database (its NEW marks).
 
 # ------ Before pushing -----------------------------------------------------------------
 # What stops an extraction being pushed because of its questionnaire.
@@ -105,38 +106,6 @@ extraction_service_save_info <- function(connection, record, info, me, catalog) 
   extraction_model_save(connection, placed, changed, me$staff_id, expected_revision = record$revision)
 }
 
-# ------ Said in words ---------------------------------------------------------------------------
-# What a push comes to, in words.
-# For example "Adds 14 new blocks, 9 questions asked in the wave, 11 new variables, 20 answer choices
-# already there and 2 new subjects, time frames or units."
-# counts: From `extraction_service_push()` or `extraction_service_push_preview()`.
-extraction_service_push_summary <- function(counts) {
-  n <- function(key) as.integer(counts[[key]] %||% 0L)
-  parts <- c(
-    if (n("component_new") > 0) plural(n("component_new"), "new block"),
-    if (n("component_reused") > 0) paste0(plural(n("component_reused"), "block"), " already there"),
-    if (n("placement_reused") > 0) paste0(plural(n("placement_reused"), "block"), " the questionnaire prints already"),
-    if (n("questions") > 0) paste(plural(n("questions"), "question"), "asked in the wave"),
-    if (n("variable_new") > 0) plural(n("variable_new"), "new variable"),
-    if (n("variable_reused") > 0) paste0(plural(n("variable_reused"), "variable"), " already there"),
-    if (n("response_option_new") > 0) plural(n("response_option_new"), "response option"),
-    if (n("option_set_new") > 0) plural(n("option_set_new"), "new option set"),
-    if (n("option_set_reused") > 0) paste0(plural(n("option_set_reused"), "option set"), " already there"),
-    if (n("answer_option_new") > 0) plural(n("answer_option_new"), "new answer choice"),
-    if (n("answer_option_reused") > 0) paste0(plural(n("answer_option_reused"), "answer choice"), " already there"),
-    if (n("tag_new") > 0) paste(plural(n("tag_new"), "new subject, time frame or unit", plural_form = "new subjects, time frames or units")),
-    if (n("tag_reused") > 0) paste0(plural(n("tag_reused"), "subject, time frame or unit", plural_form = "subjects, time frames or units"), " already there"),
-    if (n("measurement_scale_new") > 0) plural(n("measurement_scale_new"), "new measurement scale"),
-    if (n("scale_item_new") > 0) paste0(plural(n("scale_item_new"), "question"), " put in a measurement scale")
-  )
-  # a draft reopened from the wave takes the place of what the wave asks
-  replaces <- if (n("questions_before") > 0) paste0("Replaces the ", plural(n("questions_before"), "question"), " the wave asks now. ") else ""
-  if (length(parts) == 0) {
-    return(paste0(replaces, "Adds nothing."))
-  }
-  paste0(replaces, "Adds ", word_list(parts), ".")
-}
-
 # ------ Wordings other places print too ---------------------------------------------------------------
 # The blocks of a reopened draft that staff reworded while other places print the same wording: each needs a
 # choice before it is pushed, since a wording is kept once (a component) and shared by every place that prints
@@ -188,7 +157,8 @@ extraction_service_read_rewordings <- function(connection, record, draft, catalo
 
 # ------ The preview -------------------------------------------------------------------------------
 # The cards for where an extraction goes: its registry, study, questionnaire and wave, all recorded.
-# Returns: A list of four cards (see `request_card_ui()`); one not picked yet says so.
+# Returns: A list of four cards, each a list: `kind`, `title`, `subtitle`, `facts` (short notes) and
+#   `is_new` or `is_missing` (one not picked yet says so).
 extraction_service_where_cards <- function(info, catalog) {
   not_picked <- function(kind) list(kind = kind, title = "Not picked yet", subtitle = "", facts = character(), is_missing = TRUE)
   registry <- catalog$registries[as.character(catalog$registries$registry_id) %in% info$registry_id, , drop = FALSE]
@@ -238,73 +208,65 @@ extraction_service_where_cards <- function(info, catalog) {
   )
 }
 
-# The cards for what a push adds: the questions, option sets, answer choices and tags (subjects, time frames and
-# units) the questionnaire uses, and the measurement scales its questions name, each counted once however often
-# it is used, as new or as already in the database. A wording, a choice and a tag are each kept once and shared, so "7 already in the database" is seven
-# tags the database has, not the places that use them. An option set is the choices one variable offers, whatever
-# their order or codes ("yes | no"); it is already in the database when a variable there offers the same ones.
-# Each chip lists what it counts when pointed at: the option sets by their choices, the answer choices and tags by
-# name, and the questions the database has already (the new ones are the questionnaire itself, laid out
-# below). Variables, the wave's questions and response options are new each time, so they are only in the
-# sentence above the cards.
-# counts: From `extraction_service_push_preview()`: its counts, and `names` (what the lists name).
-# Returns: A list of cards (see `request_card_ui()`), each with `lists`: the names a chip stands for, by the
-#   chip's words. A card is NEW when its rows are added.
-extraction_service_what_cards <- function(counts) {
-  n <- function(key) as.integer(counts[[key]] %||% 0L)
-  count <- function(x) format(x, big.mark = ",")
+# ------ What is new, row by row ----------------------------------------------------------------------
+# Which of the questionnaire's question wordings, option sets, answer choices and tags (subjects, time frames and
+# units) a push adds, for the NEW marks in the Push dialog's table. The dry run names them (`counts$names`, from
+# push_run() in sql/4_functions.sql): the answer choices, option sets and tags it adds by name, and the question
+# wordings the database has already (a question wording it doesn't name is new). They are named as the database
+# keeps them, so the questionnaire's words are put the same way before they are looked up: a question's words
+# with their spaces squished, a tag also in lower case with straight quotes (tags are matched ignoring case), and
+# an option set as its choices, whatever their order ("yes | no" is "no | yes").
+# The dry run doesn't name the blocks that aren't questions (an instruction, a definition, a note), so those the
+# catalog has are read apart (`component_model_other_blocks()`, before the push, since the dry run is undone): a
+# block is there already when the catalog has one of the same kind and words, as the push matches them.
+# counts: From `extraction_service_push_preview()`, or an error it raised, or `NULL`.
+# blocks: The catalog's other blocks (`kind` and `text`), or `NULL` if they couldn't be read.
+# Returns: `NULL` when there is nothing to go by (no dry run, or one that was refused), else a list:
+#   `question_found` (the wordings there already), `answer_new`, `option_set_new` (each set's key, as
+#   `extraction_service_option_set_key()` makes it), `tag_new` and `block_found` (the other blocks there already,
+#   as `extraction_service_block_key()` makes them; `NULL` when they couldn't be read).
+extraction_service_known <- function(counts, blocks = NULL) {
+  if (!is.list(counts) || inherits(counts, "error") || is.null(counts$names)) {
+    return(NULL)
+  }
   named <- function(key) as.character(unlist(counts$names[[key]]))
-  card <- function(kind, what, title, list_new = TRUE) {
-    n_new <- n(paste0(what, "_new"))
-    n_found <- n(paste0(what, "_reused"))
-    new <- if (n_new > 0) paste(count(n_new), "new")
-    found <- if (n_found > 0) paste(count(n_found), "already in the database")
-    lists <- list()
-    if (list_new && !is.null(new) && length(named(paste0(what, "_new"))) > 0) lists[[new]] <- named(paste0(what, "_new"))
-    if (!is.null(found) && length(named(paste0(what, "_reused"))) > 0) lists[[found]] <- named(paste0(what, "_reused"))
-    list(
-      kind = kind, title = plural(n_new + n_found, title, big_mark = ","), subtitle = "",
-      facts = as.character(c(new, found)), lists = lists, is_new = n_new > 0
-    )
-  }
-  questions <- card("Questions", "question", "different question", list_new = FALSE)
-  if (n("question_new") + n("question_reused") == 0) {
-    # an answer from before questions were counted apart: how many the wave asks
-    questions$title <- plural(n("questions"), "question", big_mark = ",")
-  }
-  if (n("placement_reused") > 0) {
-    questions$facts <- c(questions$facts, paste(plural(n("placement_reused"), "block", big_mark = ","), "printed by this questionnaire already"))
-  }
-  c(
-    list(
-      questions,
-      card("Option sets", "option_set", "option set"),
-      card("Answer choices", "answer_option", "different answer choice"),
-      card("Subjects, time frames and units", "tag", "tag")
-    ),
-    # only when the questionnaire names a scale: most don't
-    if (n("measurement_scale_new") + n("measurement_scale_reused") > 0) {
-      list(card("Measurement scales", "measurement_scale", "measurement scale"))
-    }
+  list(
+    question_found = squish(named("question_reused")),
+    answer_new = named("answer_option_new"),
+    option_set_new = vapply(strsplit(named("option_set_new"), " | ", fixed = TRUE), extraction_service_option_set_key, character(1)),
+    tag_new = extraction_service_tag_key(named("tag_new")),
+    block_found = if (!is.null(blocks)) extraction_service_block_key(blocks$kind, blocks$text)
   )
 }
 
-# What a push comes to, for `extraction_request_ui()`.
+# A block that isn't a question by its kind and words, as the push matches them (its words with their spaces
+# squished).
+extraction_service_block_key <- function(kind, text) {
+  paste(as.character(kind), squish(as.character(text)), sep = "\r")
+}
+
+# An option set by its choices, whatever their order: one string for the same choices.
+extraction_service_option_set_key <- function(choices) {
+  paste(sort(unique(as.character(choices))), collapse = "\r")
+}
+
+# A tag's name as tags are matched: straight quotes, one space between words, lower case.
+extraction_service_tag_key <- function(names) {
+  tolower(squish(straight_quotes(as.character(names))))
+}
+
+# What a push comes to, for `extraction_request_ui()`: whether the database would refuse it. What is new, row
+# by row, is marked in the questionnaire's table (`extraction_service_known()`). There is no sentence of counts:
+# they are rows, not what changes (a wave reopened and pushed again has every question, variable and choice
+# taken out and put back, so they all count, however few staff changed).
 # counts: From `extraction_service_push_preview()`, or an error it raised, or `NULL` when it wasn't tried
 #   (the Basic Info isn't complete).
-# Returns: A list: `where` and `what` (lists of cards), `summary` (a sentence), `problem` (why the push
-#   would be refused, or `NULL`) and `unchecked`.
+# Returns: A list: `where` (a list of cards), `problem` (why the push would be refused, or `NULL`) and
+#   `unchecked`.
 extraction_service_push_preview_ui <- function(draft, info, catalog, counts = NULL) {
-  preview <- list(
+  list(
     where = extraction_service_where_cards(info, catalog),
-    what = list(), summary = "", problem = NULL,
+    problem = if (inherits(counts, "error")) conditionMessage(counts),
     unchecked = extraction_service_unchecked(draft)
   )
-  if (inherits(counts, "error")) {
-    preview$problem <- conditionMessage(counts)
-  } else if (!is.null(counts)) {
-    preview$summary <- extraction_service_push_summary(counts)
-    preview$what <- extraction_service_what_cards(counts)
-  }
-  preview
 }

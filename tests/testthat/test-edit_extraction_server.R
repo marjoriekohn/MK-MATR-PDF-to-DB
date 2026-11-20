@@ -336,12 +336,19 @@ test_that("with nothing in the way the dialog shows what the push adds, and Push
     expect_false(has_unsaved_changes())
     pick_basic_info(session, picked_basic_info(tree))
     expect_equal(text_of(output$push_blockers), "")
-    # the dry run: what the push would add, without adding it
+    # the dry run: the push tried without being kept; nothing in the way, so no sentence above the table
     expect_false(inherits(dry_run(), "error"))
     expect_equal(dry_run()$questions, 2)
-    what <- text_of(output$push_what)
-    expect_match(what, "What it adds")
-    expect_match(what, "Adds 4 new blocks, 2 questions asked in the wave, 2 new variables")
+    expect_equal(dry_run()$component_new, 4)
+    expect_equal(text_of(output$push_what), "")
+    # and the table marks it: the reworded question is new to the database (the other question and the
+    # instruction may have been pushed by another test of the run); every row is new or already there
+    table <- paste(output$preview_table$html, collapse = "")
+    expect_match(table, 'class=\\"new-mark\\"', fixed = TRUE)
+    expect_match(table, "New \\([1-3]\\)")
+    expect_match(table, "All \\(3\\)")
+    shown <- function(label) as.integer(sub(paste0(".*", label, " \\(([0-9]+)\\).*"), "\\1", table))
+    expect_equal(shown("New") + shown("Already in the database"), 3)
     expect_match(seen$modals[[length(seen$modals)]], "4 blocks haven't been marked as checked yet")
     expect_length(questionnaire_service_wave_question_counts(test_connection, tree$questionnaire$questionnaire_id), 0)
     expect_false(last_update(seen, "push")$disabled)
@@ -354,11 +361,42 @@ test_that("with nothing in the way the dialog shows what the push adds, and Push
     expect_equal(questionnaire_service_wave_question_counts(test_connection, tree$questionnaire$questionnaire_id)[[as.character(tree$wave$wave_id)]], 2L)
     printed <- extraction_service_recorded(test_connection, list(info = picked_basic_info(tree)))$texts$text
     expect_true(tolower(paste(test_marker, "Do you smoke now?")) %in% tolower(printed)) # as reworded on the page, saved before the push
-    expect_match(notice_texts(seen), "^Pushed\\. Adds 4 new blocks", all = FALSE)
+    expect_match(notice_texts(seen), paste0("Pushed ", after$summary, " into the database."), fixed = TRUE, all = FALSE)
     expect_equal(seen$pages, "drafts")
     expect_null(record_id())
     expect_false(push_open())
     expect_gte(seen$closed, 1)
+    expect_length(errors(), 0)
+  })
+})
+
+test_that("a draft reopened from a wave goes back into it: its dialog asks for no Basic Info and says which wave it updates", {
+  me <- local_staff()
+  tree <- local_tree()
+  seen <- local_browser()
+  typed <- do.call(local_manual_extraction, c(list(me), picked_basic_info(tree), list(env = environment())))
+  draft_service_save(test_connection, typed$id, test_questionnaire_draft(), me$staff_id)
+  extraction_service_push(
+    test_connection, extraction_model_get(test_connection, typed$id), me, questionnaire_service_get_catalog(test_connection)
+  )
+  reopened <- extraction_service_reopen_wave(test_connection, tree$wave$wave_id, me)
+  withr::defer(test_delete_extraction(reopened$id))
+  shiny::testServer(edit_extraction_server, args = push_page(me, seen, catalog = test_live_catalog()), {
+    errors <- collect_errors(session)
+    open(reopened)
+    session$setInputs(request = 1)
+    session$elapse(600)
+    dialog <- seen$modals[[length(seen$modals)]]
+    expect_no_match(dialog, "Basic Info")
+    expect_no_match(dialog, "edit-info-registry_id", fixed = TRUE)
+    expect_match(dialog, "Updating")
+    expect_match(dialog, tree$wave$name, fixed = TRUE)
+    # nothing picked, and nothing to pick: it goes into the wave it came from, and can be pushed there
+    expect_equal(settled_info()$wave_id, as.character(tree$wave$wave_id))
+    expect_equal(text_of(output$push_blockers), "")
+    expect_false(inherits(dry_run(), "error"))
+    expect_equal(dry_run()$questions_before, 2) # in place of what the wave asks
+    expect_false(last_update(seen, "push")$disabled)
     expect_length(errors(), 0)
   })
 })

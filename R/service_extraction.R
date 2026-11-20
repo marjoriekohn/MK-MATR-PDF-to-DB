@@ -185,6 +185,22 @@ extraction_service_updates_wave <- function(record) {
   as.character(record$info$updates_wave_id %||% "")
 }
 
+# Where a draft reopened from a wave goes: back into that wave, and nowhere else. It is there to change what
+# the wave asks (staff start a New Extraction for another wave), so its Basic Info isn't asked for: it is the
+# wave's own, with the questionnaire, study and registry the catalog has it under, whatever the draft saved
+# before (an earlier version of the site let staff pick another).
+# Returns: Basic Info, as `extraction_service_basic_info()` shapes it; `NULL` for a draft that wasn't reopened.
+extraction_service_reopened_info <- function(record, catalog) {
+  wave_id <- extraction_service_updates_wave(record)
+  if (!nzchar(wave_id)) {
+    return(NULL)
+  }
+  wave <- catalog$waves[as.character(catalog$waves$wave_id) %in% wave_id, , drop = FALSE]
+  # (a wave the catalog no longer has: the questionnaire it was saved with, and the push says the wave is gone)
+  questionnaire_id <- if (nrow(wave) == 1) as.character(wave$questionnaire_id) else extraction_service_info(record)$questionnaire_id
+  extraction_service_place(extraction_service_basic_info(list(questionnaire_id = questionnaire_id, wave_id = wave_id)), catalog)
+}
+
 # Start a Manual draft: the questionnaire is typed by hand.
 # There is no reading. The PDF is optional: if staff give one, it is kept with the draft so the
 # Edit Extraction page can show it beside what they type. The questionnaire starts empty.
@@ -313,20 +329,24 @@ extraction_service_load_draft <- function(connection, record) {
 # questionnaire came back from the database, which doesn't keep which of the AI's rows each row was. Until its
 # rows say (they do once it is saved), they are matched through the copy the wave was pushed from
 # (`draft_service_adopt_refs()`), so the page can show what differs from the reading and put a block back to it.
-# Returns: A list: `draft` (see `extraction_service_load_draft()`) and `original`, what the AI returned
-#   as a draft (`NULL` for a Manual extraction). An error if reading hasn't finished.
+# Until it is saved its corrections aren't worked out either (`review_edits` is empty), so the page saves it
+# before it is pushed, changed or not: the AI Monitor counts a reading by its latest push (model_monitor.R).
+# Returns: A list: `draft` (see `extraction_service_load_draft()`), `original`, what the AI returned
+#   as a draft (`NULL` for a Manual extraction), and `matched`: whether its rows were matched here, so it has to
+#   be saved for its corrections to be kept. An error if reading hasn't finished.
 extraction_service_open_draft <- function(connection, record) {
   json <- extraction_model_questionnaire(connection, record$id)
   if (is.null(json$questionnaire %||% json$original)) stop("This draft hasn't been read yet.", call. = FALSE)
   draft <- draft_service_from_json(json$questionnaire %||% json$original)
   original <- if (identical(record$method, extraction_ai) && !is.null(json$original)) draft_service_from_json(json$original)
   pushed_from <- as.character(record$info$reopened_from %||% "")
-  if (!is.null(original) && nzchar(pushed_from) && all(is.na(draft$components$ref))) {
+  matched <- !is.null(original) && nzchar(pushed_from) && all(is.na(draft$components$ref))
+  if (matched) {
     pushed <- tryCatch(extraction_model_questionnaire(connection, pushed_from)$questionnaire, error = function(problem) NULL)
     # (pushed without a reviewed copy of its own, or one that can't be read: matched to the reading itself)
     draft <- draft_service_adopt_refs(draft, if (is.null(pushed)) original else draft_service_from_json(pushed))
   }
-  list(draft = draft, original = original)
+  list(draft = draft, original = original, matched = matched)
 }
 
 # Save staff's reviewed copy of the questionnaire.

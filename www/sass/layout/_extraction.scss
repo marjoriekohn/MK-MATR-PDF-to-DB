@@ -30,26 +30,6 @@
   .shiny-input-container { width: 100%; }
 }
 
-// Under a Basic Info drop-down: whether what is picked shows on the dashboard, as a quiet button with an eye
-// (struck through, and dark, once it is hidden). With nothing picked it takes no room, but stays displayed, as a
-// field's note does.
-.visibility-slot { display: block; margin: -0.35rem 0 0.75rem; &:empty { margin: 0; } }
-.visibility-toggle {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.4rem;
-  padding: 0.15rem 0.6rem;
-  border: 1px solid $line;
-  border-radius: $border-radius-pill;
-  background: $vcu-white;
-  color: $vcu-black;
-  font-size: $font-size-xs;
-  font-weight: 500;
-  &:hover, &:focus-visible { border-color: $gold-border; background: $gold-tint; color: $vcu-black; }
-  &.is-hidden { border-color: $vcu-black; background: $vcu-black; color: $vcu-white; }
-  &.is-hidden:hover, &.is-hidden:focus-visible { background: $vcu-gray; color: $vcu-white; }
-}
-
 // The line under a field: what to fix, if anything. With nothing to say it
 // takes no room, but stays displayed: Shiny doesn't update hidden outputs.
 .field-note {
